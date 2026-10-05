@@ -10,3 +10,22 @@ body,
   height: 100%;
   margin: 0;
 }
+
+body {
+  font-family: var(--font-body, 'Mulish', system-ui, sans-serif);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-navy, #113b54);
+  background: var(--color-white, #fff);
+  -webkit-font-smoothing: antialiased;
+}
+
+p {
+  margin: 0;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

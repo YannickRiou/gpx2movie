@@ -8,7 +8,11 @@ import react from '@vitejs/plugin-react'
  * Keep this list in sync with src/terrain/sources.ts.
  */
 const TILE_PROXIES: Record<string, string> = {
-  // example: 'ign-ortho': 'https://data.geopf.fr',
+  // Empty on purpose: every catalogue source (Mapterhorn, AWS Terrain Tiles, IGN Géoplateforme,
+  // swisstopo, Esri World Imagery, EOX) sent Access-Control-Allow-Origin for http://127.0.0.1:5173
+  // on 2026-10-05 (see docs/sources.md). If a provider drops CORS, add it here, e.g.
+  //   'ign-ortho': 'https://data.geopf.fr',
+  // and set that source's urlTemplate to '/tiles/ign-ortho/wmts?...' (the query string is preserved).
 }
 
 const proxy = Object.fromEntries(

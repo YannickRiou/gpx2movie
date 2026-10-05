@@ -1,0 +1,125 @@
+/* OpenFlyover — charte graphique (variables, typographie, focus). */
+:root {
+  --color-navy: #113b54;
+  --color-chartreuse: #dbe64c;
+  --color-white: #ffffff;
+  --color-periwinkle: #bbd1ff;
+  --color-water-green: #e2f4df;
+  --color-pine: #024442;
+  --color-black: #000;
+
+  --font-heading: 'Funnel Display', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-body: 'Mulish', system-ui, sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
+  --sidebar-width: 340px;
+  --focus-ring: 2px solid var(--color-chartreuse);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--color-black);
+  margin: 0;
+  line-height: 1.2;
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* Chartreuse ring with a navy inner line so the indicator keeps ≥ 3:1 on white backgrounds. */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px var(--color-navy);
+}
+
+/* Buttons --------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    transform 80ms ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.btn--primary {
+  background: var(--color-chartreuse);
+  color: var(--color-black);
+}
+
+/* Hover states stay inside the palette: a navy border instead of a darkened fill. */
+.btn--primary:hover:not(:disabled) {
+  border-color: var(--color-navy);
+}
+
+.btn--secondary {
+  background: var(--color-periwinkle);
+  color: var(--color-navy);
+}
+
+.btn--secondary:hover:not(:disabled) {
+  border-color: var(--color-navy);
+}
+
+.btn--block {
+  width: 100%;
+}
+
+/* Form controls --------------------------------------------------------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.select,
+.input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-periwinkle);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-black);
+}
