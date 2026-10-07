@@ -8,6 +8,7 @@
  * to `SETTING_CHECKS` only when a value of the right type can still be invalid (enum, catalogue id, range).
  */
 import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'
+import { isValidFilm } from '../film/model'
 import { FLYOVER_DURATION_RANGE, isValidCamera } from '../flyover/cameraSettings'
 import { isValidPacing } from '../flyover/pacing'
 import { isValidRace } from '../flyover/race'
@@ -93,6 +94,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   camera: isValidCamera,
   flyoverDurationS: (v) => v >= FLYOVER_DURATION_RANGE.min && v <= FLYOVER_DURATION_RANGE.max,
   pacing: isValidPacing,
+  film: isValidFilm,
   exposureEv: (v) => v >= -4 && v <= 4,
   weatherScene: (v) => v.strength >= 0 && v.strength <= 1,
   trackColorBy: (v) => (TRACK_COLOR_MODES as readonly string[]).includes(v),

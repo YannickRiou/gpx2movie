@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { LonLatBounds } from '../core/types'
+import { DEFAULT_FILM } from '../film/model'
 import { DEFAULT_OVERLAY } from '../overlay/settings'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
 
@@ -70,6 +71,7 @@ describe('engine options from settings', () => {
     camera: { style: 'chase' as const, distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
     flyoverDurationS: 60,
     pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true },
+    film: DEFAULT_FILM,
     labels: { climbs: true, waypoints: true },
     weather: { enabled: true },
     weatherScene: { enabled: true, strength: 1 },

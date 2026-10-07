@@ -156,6 +156,8 @@ export interface CameraViewOptions {
   durationS?: number
   /** film time (seconds at x1, pacing included) of the time-based motions (orbit, cinematic swing) */
   timeS?: number
+  /** extra rotation of the viewing direction around the marker (radians, > 0 = right): orbit of a film stop */
+  orbitRad?: number
 }
 
 /** Styles whose view also moves with the film time (they keep moving during a pause of the pacing). */
@@ -240,7 +242,8 @@ export function computeCameraView(
   const ground = (sample?.(at.lon, at.lat) ?? at.ele ?? 0) * exaggeration
   const target = frame.toLocal(at.lon, at.lat, ground + liftM)
 
-  const { reference, viewAngle, pitchDeg, distance } = placement(path, d, timeS, frame, camera)
+  const { reference, pitchDeg, distance, ...rest } = placement(path, d, timeS, frame, camera)
+  const viewAngle = rest.viewAngle + (options.orbitRad ?? 0)
   const pitch = clamp(pitchDeg, PITCH_MIN_DEG, PITCH_MAX_DEG) * DEG
   // viewing direction = reference turned clockwise (seen from above) by viewAngle; right = (-z, 0, x)
   const cos = Math.cos(viewAngle)
