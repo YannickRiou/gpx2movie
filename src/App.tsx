@@ -3,6 +3,7 @@ import { useAppStore } from './state/store'
 import { ImportPanel } from './ui/ImportPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
 import { StatusBar } from './ui/StatusBar'
+import { Timeline } from './ui/Timeline'
 import { TrackList } from './ui/TrackList'
 import './ui/app.css'
 
@@ -37,6 +38,7 @@ export default function App() {
 
       <main className="view" aria-label="Vue 3D">
         <FlyoverCanvas />
+        <Timeline />
       </main>
     </div>
   )

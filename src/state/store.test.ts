@@ -163,3 +163,35 @@ describe('settings and misc', () => {
     expect(st.importError).toBe('Fichier illisible')
   })
 })
+
+describe('playback', () => {
+  it('starts paused at 0 and clamps the progress', () => {
+    const s = useAppStore.getState()
+    expect(s.playback).toEqual({ playing: false, progress: 0, speed: 1 })
+    s.setProgress(1.5)
+    expect(useAppStore.getState().playback.progress).toBe(1)
+    s.setProgress(-1)
+    expect(useAppStore.getState().playback.progress).toBe(0)
+  })
+
+  it('stops at the end and rewinds when played again', () => {
+    const s = useAppStore.getState()
+    s.setPlaying(true)
+    s.setProgress(1)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: false, progress: 1 })
+    s.setPlaying(true)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 0 })
+  })
+
+  it('pauses on a fit request and resets when a track is removed', () => {
+    const s = useAppStore.getState()
+    s.addTracks([FR])
+    s.setSpeed(2)
+    s.setProgress(0.4)
+    s.setPlaying(true)
+    s.requestFit()
+    expect(useAppStore.getState().playback).toEqual({ playing: false, progress: 0.4, speed: 2 })
+    s.removeTrack('fr')
+    expect(useAppStore.getState().playback).toEqual({ playing: false, progress: 0, speed: 2 })
+  })
+})

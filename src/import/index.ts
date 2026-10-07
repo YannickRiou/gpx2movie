@@ -9,8 +9,8 @@ export { parseGpx } from './gpx'
 export { parseFit, semicirclesToDegrees } from './fit'
 export { computeStats, computeBounds, densify } from './stats'
 
-/** Palette for track lines and UI swatches (charte: chartreuse, pervenche, then contrasting accents). */
-export const TRACK_COLORS: readonly string[] = ['#DBE64C', '#BBD1FF', '#FF7A59', '#FFFFFF', '#7FE3FF', '#F2B8FF']
+/** Palette for track lines and UI swatches: bright enough to read over orthophotos (balise red first). */
+export const TRACK_COLORS: readonly string[] = ['#FF5A36', '#FFC53D', '#5BC0EB', '#FFFFFF', '#B79CFF', '#7AD9A0']
 
 export type SupportedExtension = 'gpx' | 'fit'
 
