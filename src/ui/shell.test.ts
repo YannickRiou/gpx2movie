@@ -6,6 +6,7 @@ import {
   frameRect,
   isFileDrag,
   isProjectDirty,
+  nextGridIndex,
   nextTabIndex,
   parseShellPrefs,
   routeOpenedFiles,
@@ -81,6 +82,22 @@ describe('nextTabIndex', () => {
   })
 })
 
+describe('nextGridIndex', () => {
+  it('moves one cell in a 3 × 3 grid, stops at the edges, jumps with Home / End', () => {
+    expect(nextGridIndex(4, 'ArrowLeft', 3, 9)).toBe(3)
+    expect(nextGridIndex(4, 'ArrowRight', 3, 9)).toBe(5)
+    expect(nextGridIndex(4, 'ArrowUp', 3, 9)).toBe(1)
+    expect(nextGridIndex(4, 'ArrowDown', 3, 9)).toBe(7)
+    expect(nextGridIndex(3, 'ArrowLeft', 3, 9)).toBe(3)
+    expect(nextGridIndex(5, 'ArrowRight', 3, 9)).toBe(5)
+    expect(nextGridIndex(1, 'ArrowUp', 3, 9)).toBe(1)
+    expect(nextGridIndex(7, 'ArrowDown', 3, 9)).toBe(7)
+    expect(nextGridIndex(4, 'Home', 3, 9)).toBe(0)
+    expect(nextGridIndex(4, 'End', 3, 9)).toBe(8)
+    expect(nextGridIndex(4, ' ', 3, 9)).toBeNull()
+  })
+})
+
 describe('project name and save state', () => {
   it('falls back on the first track then « Sans titre »', () => {
     expect(effectiveProjectName('  Mon film ', 'Trace')).toBe('Mon film')
@@ -99,7 +116,7 @@ describe('project name and save state', () => {
 })
 
 describe('shellReducer', () => {
-  const base: ShellState = { tab: 'trace', collapsed: false, dockOpen: false, collapsedByDock: false }
+  const base: ShellState = { tab: 'trace', collapsed: false, dockOpen: false, collapsedByDock: false, inspecting: false }
 
   it('a click on the open tab folds the panel, another tab unfolds it', () => {
     const folded = shellReducer(base, { type: 'click-tab', tab: 'trace', narrow: false })
@@ -134,6 +151,31 @@ describe('shellReducer', () => {
   it('unfolding the panel on a narrow window closes the dock', () => {
     const open = shellReducer(base, { type: 'toggle-dock', narrow: true })
     expect(shellReducer(open, { type: 'toggle-panel', narrow: true })).toMatchObject({ collapsed: false, dockOpen: false })
+  })
+
+  it('on a narrow window the inspector folds the panel like the dock, and gives it back once deselected', () => {
+    const shown = shellReducer(base, { type: 'inspect', open: true, narrow: true })
+    expect(shown).toMatchObject({ inspecting: true, collapsed: true, collapsedByDock: true })
+    expect(shellReducer(shown, { type: 'inspect', open: true, narrow: true })).toBe(shown)
+    expect(shellReducer(shown, { type: 'inspect', open: false, narrow: true })).toMatchObject({ inspecting: false, collapsed: false })
+    expect(shellReducer(base, { type: 'inspect', open: true, narrow: false })).toMatchObject({ inspecting: true, collapsed: false })
+  })
+
+  it('the export drawer goes over the inspector: the panel stays folded until both are gone', () => {
+    const shown = shellReducer(base, { type: 'inspect', open: true, narrow: true })
+    const drawer = shellReducer(shown, { type: 'toggle-dock', narrow: true })
+    expect(drawer).toMatchObject({ dockOpen: true, inspecting: true, collapsed: true })
+    const back = shellReducer(drawer, { type: 'close-dock' })
+    expect(back).toMatchObject({ dockOpen: false, inspecting: true, collapsed: true })
+    const deselected = shellReducer(drawer, { type: 'inspect', open: false, narrow: true })
+    expect(deselected).toMatchObject({ dockOpen: true, inspecting: false, collapsed: true })
+    expect(shellReducer(deselected, { type: 'close-dock' })).toMatchObject({ collapsed: false, collapsedByDock: false })
+  })
+
+  it('unfolding the panel on a narrow window hides the inspector too', () => {
+    const shown = shellReducer(base, { type: 'inspect', open: true, narrow: true })
+    expect(shellReducer(shown, { type: 'toggle-panel', narrow: true })).toMatchObject({ collapsed: false, inspecting: false })
+    expect(shellReducer(shown, { type: 'click-tab', tab: 'carte', narrow: false })).toMatchObject({ collapsed: false, inspecting: true })
   })
 })
 

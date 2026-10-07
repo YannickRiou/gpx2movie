@@ -188,3 +188,35 @@ export function distanceAtTime(path: TrackPath, timeMs: number, toleranceMs = 0)
   }
   return previous >= 0 && timeMs <= time[previous] + toleranceMs ? dist[previous] : undefined
 }
+
+/**
+ * Distance along the path (metres) of the point of its on-screen polyline nearest to the pointer (`px`, `py`), within
+ * `maxPx`; undefined when none (click on the track in the 3D view). `screen` holds x, y per sample in pixels (NaN for a
+ * sample behind the camera), `distM` the distance of each sample along the path. The segments between two visible
+ * samples are tested, so a click between two samples gives an interpolated distance.
+ */
+export function pickProjectedPath(screen: ArrayLike<number>, distM: ArrayLike<number>, px: number, py: number, maxPx: number): number | undefined {
+  const visible = (i: number) => i < distM.length && !Number.isNaN(screen[2 * i]) && !Number.isNaN(screen[2 * i + 1])
+  let best: number | undefined
+  let bestD2 = maxPx * maxPx
+  for (let i = 0; i < distM.length; i++) {
+    if (!visible(i)) continue
+    const ax = screen[2 * i]
+    const ay = screen[2 * i + 1]
+    let t = 0
+    let bx = ax
+    let by = ay
+    if (visible(i + 1)) {
+      bx = screen[2 * i + 2]
+      by = screen[2 * i + 3]
+      const len2 = (bx - ax) ** 2 + (by - ay) ** 2
+      t = len2 > 0 ? Math.min(1, Math.max(0, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / len2)) : 0
+    }
+    const d2 = (ax + t * (bx - ax) - px) ** 2 + (ay + t * (by - ay) - py) ** 2
+    if (d2 <= bestD2) {
+      bestD2 = d2
+      best = t > 0 ? distM[i] + t * (distM[i + 1] - distM[i]) : distM[i]
+    }
+  }
+  return best
+}

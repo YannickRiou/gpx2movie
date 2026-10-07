@@ -29,6 +29,15 @@ describe('matchShortcut', () => {
     expect(matchShortcut(key('?', { ctrlKey: true }), 'other')).toBeNull()
   })
 
+  it('maps S and T to adding a stop and a text, not with a modifier', () => {
+    expect(matchShortcut(key('s'), 'other')).toBe('add-stop')
+    expect(matchShortcut(key('T'), 'other')).toBe('add-text')
+    expect(matchShortcut(key('S', { shiftKey: true }), 'other')).toBeNull()
+    expect(matchShortcut(key('t', { altKey: true }), 'other')).toBeNull()
+    expect(matchShortcut(key('t', { ctrlKey: true }), 'other')).toBeNull()
+    expect(matchShortcut(key('s'), 'text')).toBeNull()
+  })
+
   it('maps Escape, the arrows (Shift: longer), Home and End', () => {
     expect(matchShortcut(key('Escape'), 'other')).toBe('close')
     expect(matchShortcut(key('ArrowLeft'), 'other')).toBe('seek-back')
@@ -45,6 +54,7 @@ describe('matchShortcut', () => {
     expect(matchShortcut(key('ArrowLeft'), 'arrows')).toBeNull()
     expect(matchShortcut(key('Home'), 'arrows')).toBeNull()
     expect(matchShortcut(key('f'), 'arrows')).toBe('fit')
+    expect(matchShortcut(key('s'), 'arrows')).toBe('add-stop')
     expect(matchShortcut(key('Escape'), 'arrows')).toBe('close')
   })
 
@@ -103,5 +113,6 @@ describe('registry', () => {
   it('adds the first key combination to a tooltip', () => {
     expect(withShortcut('Annuler', 'undo')).toBe('Annuler (Ctrl+Z)')
     expect(withShortcut('Rétablir', 'redo')).toBe('Rétablir (Ctrl+Maj+Z)')
+    expect(withShortcut('Arrêt', 'add-stop')).toBe('Arrêt (S)')
   })
 })

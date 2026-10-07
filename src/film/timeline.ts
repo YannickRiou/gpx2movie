@@ -287,14 +287,21 @@ export function photoFilmTime(path: TrackPath, clock: FilmClock, place: { lon?: 
   return atM === undefined ? undefined : roundS(clock.timeAtProgress(atM / path.lengthM))
 }
 
-/** `film` without the stop, text or media `id` (the shots cannot be removed: style 'aucune'). */
+/** `film` without the stop, text or media `id`; a shot cannot be removed: it goes to style 'aucune'. */
 export function removeFilmItem(film: Film, id: TimelineItem): Film {
+  if (id === 'opening' || id === 'closing') return updateShot(film, id, { style: 'aucune' })
   return {
     ...film,
     stops: film.stops.filter((s) => s.id !== id),
     texts: film.texts.filter((t) => t.id !== id),
     media: film.media.filter((m) => m.id !== id),
   }
+}
+
+/** `item` is in the film: a shot (always there), one of the clock's `stops` (generated ones included), a text or a medium. */
+export function hasFilmItem(film: Film, stops: readonly { id: string }[], item: TimelineItem): boolean {
+  if (item === 'opening' || item === 'closing') return true
+  return stops.some((s) => s.id === item) || film.texts.some((t) => t.id === item) || film.media.some((m) => m.id === item)
 }
 
 /** Stop `id` with `patch`, duration clamped to its range. */

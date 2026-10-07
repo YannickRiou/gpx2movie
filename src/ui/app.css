@@ -460,9 +460,7 @@
   flex: 1 1 0;
 }
 
-.film-tl__btn,
-.film-tl__select,
-.film-tl__zoom {
+.film-tl__select {
   min-height: 26px;
   padding: 0 var(--space-2);
   border: 1px solid var(--color-ink-soft);
@@ -479,15 +477,8 @@
   padding: 0 var(--space-1);
 }
 
-.film-tl__btn:hover,
-.film-tl__select:hover,
-.film-tl__zoom:hover:not(:disabled) {
+.film-tl__select:hover {
   border-color: var(--color-white);
-}
-
-.film-tl__btn:disabled {
-  cursor: progress;
-  opacity: 0.6;
 }
 
 .film-tl__check {
@@ -514,21 +505,6 @@
   color: var(--color-accent-light);
 }
 
-/* after adding photos: what was added, offer to place them on the track */
-.film-tl__notice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border-top: 1px solid var(--color-ink-soft);
-}
-
-.film-tl__notice-text {
-  flex: 1 1 240px;
-  color: var(--color-white);
-}
-
 .film-tl__body {
   display: flex;
   border-top: 1px solid var(--color-ink-soft);
@@ -552,21 +528,6 @@
 
 .film-tl__head--ruler {
   height: 20px;
-  gap: 2px;
-  padding: 0 var(--space-1);
-}
-
-.film-tl__zoom {
-  min-height: 0;
-  width: 24px;
-  height: 18px;
-  padding: 0;
-  line-height: 1;
-}
-
-.film-tl__zoom:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
 }
 
 .film-tl__scroller {
@@ -766,54 +727,7 @@
   border-top: 6px solid var(--color-accent-light);
 }
 
-/* settings of the selected item, above the timeline at the right of the view */
-.film-inspector {
-  position: absolute;
-  right: var(--space-3);
-  bottom: calc(100% + var(--space-2));
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  width: 300px;
-  max-width: calc(100% - 2 * var(--space-3));
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: var(--space-3);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-paper);
-  color: var(--color-ink);
-  font-size: 13px;
-  box-shadow: 0 6px 20px rgb(28 42 51 / 0.25);
-}
-
-.film-inspector__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.film-inspector__title {
-  font-size: 16px;
-}
-
-.film-inspector__close {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.film-inspector__close:hover {
-  border-color: var(--color-line);
-}
-
+/* settings of the selected item, in the right dock (header: `.dock > .settings` in shell.css) */
 .film-inspector__row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -821,14 +735,14 @@
 }
 
 .film-inspector__thumb {
-  align-self: flex-start;
+  justify-self: start;
   max-width: 100%;
   max-height: 96px;
   border-radius: var(--radius-sm);
 }
 
 .film-inspector__remove {
-  align-self: flex-start;
+  justify-self: start;
   min-height: 32px;
 }
 

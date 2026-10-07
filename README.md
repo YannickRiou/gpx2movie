@@ -122,9 +122,17 @@ suivent la première trace.
 
 - Clic gauche glissé : tourner. Clic droit glissé : déplacer. Molette : zoomer.
 - Le bouton en forme de viseur, en haut à droite de la vue (ou la touche F), revient à la vue d'ensemble.
-- Dans la timeline, ▶ (ou Espace) lance le survol. Cliquez ou glissez sur le profil pour vous déplacer, ou utilisez les
-  flèches ← → (une seconde, cinq avec Maj), Début et Fin. La vitesse va de ×0,5 à ×4.
+- Dans la timeline, ▶ (ou Espace) lance le survol et ■ revient au début. Cliquez ou glissez sur le profil pour vous
+  déplacer, ou utilisez les flèches ← → (une seconde, cinq avec Maj), Début et Fin. La vitesse va de ×0,5 à ×4.
+- Cliquez sur la trace, dans la vue 3D, pour y placer la tête de lecture.
 - En pause, vous tournez librement autour du marqueur.
+
+### Monter le film
+
+- Cliquez sur un bloc de la timeline : ses réglages s'ouvrent dans le panneau de droite. Échap le referme.
+- « Arrêt » (ou la touche S) ajoute un arrêt à la position du marqueur, « Texte » (ou T) un texte à la tête de lecture.
+- Clic droit sur la trace, dans la vue 3D : « Ajouter un arrêt ici » ou « Ajouter un texte ici ».
+- Le curseur de zoom et « Ajuster » règlent la largeur de la timeline. « Options » règle les arrêts automatiques.
 
 ### Le format de sortie
 

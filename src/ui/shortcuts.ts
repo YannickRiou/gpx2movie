@@ -24,8 +24,11 @@ export const SHORTCUTS = [
   { id: 'undo', keys: ['Ctrl+Z'], label: 'Annuler', group: 'Montage' },
   { id: 'redo', keys: ['Ctrl+Maj+Z', 'Ctrl+Y'], label: 'Rétablir', group: 'Montage' },
   { id: 'nudge', keys: ['←', '→'], label: 'Décaler le bloc sélectionné d’une seconde (Maj : d’un dixième)', group: 'Montage' },
+  { id: 'add-stop', keys: ['S'], label: 'Ajouter un arrêt à la position du marqueur', group: 'Montage' },
+  { id: 'add-text', keys: ['T'], label: 'Ajouter un texte à la tête de lecture', group: 'Montage' },
   { id: 'remove', keys: ['Suppr'], label: 'Supprimer le bloc sélectionné', group: 'Montage' },
   { id: 'zoom', keys: ['Ctrl+molette'], label: 'Zoomer dans la timeline', group: 'Montage' },
+  { id: 'pick', keys: ['Clic sur la trace'], label: 'Placer la tête de lecture à cet endroit (clic droit : ajouter un arrêt ou un texte)', group: 'Montage' },
   { id: 'open', keys: ['Ctrl+O'], label: 'Ouvrir une trace ou un projet', group: 'Projet' },
   { id: 'save', keys: ['Ctrl+S'], label: 'Enregistrer le projet', group: 'Projet' },
   { id: 'export', keys: ['Ctrl+E'], label: 'Ouvrir ou fermer le tiroir d’export', group: 'Projet' },
@@ -51,6 +54,8 @@ export type ShortcutAction =
   | 'toggle-panel'
   | 'help'
   | 'close'
+  | 'add-stop'
+  | 'add-text'
   | 'seek-back'
   | 'seek-forward'
   | 'seek-back-long'
@@ -83,7 +88,7 @@ export function keyFocus(target: EventTarget | null): KeyFocus {
 /**
  * Shortcut of the shell for a key press, null when none: Ctrl/Cmd+S save, Ctrl/Cmd+O open, Ctrl/Cmd+E export drawer,
  * F fit the view, [ fold the panel and ? the help (whatever the modifiers that type them: AltGr, Shift), Escape close,
- * ← / → seek (Shift: longer), Home / End.
+ * S / T add a stop / a text, ← / → seek (Shift: longer), Home / End.
  */
 export function matchShortcut(e: KeyLike, focus: KeyFocus): ShortcutAction | null {
   if (focus === 'text') return null
@@ -101,6 +106,8 @@ export function matchShortcut(e: KeyLike, focus: KeyFocus): ShortcutAction | nul
   }
   if (e.key === 'Escape') return e.shiftKey ? null : 'close'
   if (key === 'f') return e.shiftKey ? null : 'fit'
+  if (key === 's') return e.shiftKey ? null : 'add-stop'
+  if (key === 't') return e.shiftKey ? null : 'add-text'
   if (focus === 'arrows') return null
   if (e.key === 'ArrowLeft') return e.shiftKey ? 'seek-back-long' : 'seek-back'
   if (e.key === 'ArrowRight') return e.shiftKey ? 'seek-forward-long' : 'seek-forward'

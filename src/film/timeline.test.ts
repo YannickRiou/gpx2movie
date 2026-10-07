@@ -14,6 +14,7 @@ import {
   dragFilm,
   fitPxPerS,
   formatFilmTime,
+  hasFilmItem,
   photoFilmTime,
   removeFilmItem,
   rulerStep,
@@ -211,7 +212,9 @@ describe('edits', () => {
   it('removes a stop or a text; updates clamp to the model ranges', () => {
     expect(removeFilmItem(film, 'stop-1').stops.map((s) => s.id)).toEqual(['stop-2'])
     expect(removeFilmItem(film, 'text-2').texts.map((t) => t.id)).toEqual(['text-1'])
-    expect(removeFilmItem(film, 'opening')).toEqual(film)
+    // a shot is not removed: it goes to « aucune »
+    expect(removeFilmItem(film, 'opening').opening.style).toBe('aucune')
+    expect(removeFilmItem(film, 'opening').stops).toEqual(film.stops)
     expect(updateStop(film, 'stop-1', { durationS: 99, camera: 'fixe', label: 'Sommet' }).stops[0]).toMatchObject({
       durationS: 60,
       camera: 'fixe',
@@ -223,6 +226,15 @@ describe('edits', () => {
       text: 'Titre',
     })
     expect(updateShot(film, 'closing', { style: 'saut', durationS: 0 }).closing).toEqual({ style: 'saut', durationS: 1 })
+  })
+
+  it('tells whether a selected item is still in the film', () => {
+    const { stops } = contextOf(film).clock
+    for (const id of ['opening', 'closing', 'stop-2', 'text-1', 'media-1']) expect(hasFilmItem(film, stops, id)).toBe(true)
+    expect(hasFilmItem(film, stops, 'text-9')).toBe(false)
+    expect(hasFilmItem(removeFilmItem(film, 'media-1'), stops, 'media-1')).toBe(false)
+    // a generated stop is only in the clock
+    expect(hasFilmItem(film, [{ id: 'auto-1500' }], 'auto-1500')).toBe(true)
   })
 })
 

@@ -209,6 +209,63 @@ const PATHS = {
       <path d="m6.18 5.276 3.1 3.899" />
     </>
   ),
+  play: <polygon points="6 3 20 12 6 21 6 3" />,
+  pause: (
+    <>
+      <rect x="14" y="4" width="4" height="16" rx="1" />
+      <rect x="6" y="4" width="4" height="16" rx="1" />
+    </>
+  ),
+  square: <rect width="18" height="18" x="3" y="3" rx="2" />,
+  'zoom-in': (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" x2="16.65" y1="21" y2="16.65" />
+      <line x1="11" x2="11" y1="8" y2="14" />
+      <line x1="8" x2="14" y1="11" y2="11" />
+    </>
+  ),
+  'zoom-out': (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" x2="16.65" y1="21" y2="16.65" />
+      <line x1="8" x2="14" y1="11" y2="11" />
+    </>
+  ),
+  'move-horizontal': (
+    <>
+      <polyline points="18 8 22 12 18 16" />
+      <polyline points="6 8 2 12 6 16" />
+      <line x1="2" x2="22" y1="12" y2="12" />
+    </>
+  ),
+  'map-pin': (
+    <>
+      <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" />
+      <circle cx="12" cy="10" r="3" />
+    </>
+  ),
+  type: (
+    <>
+      <polyline points="4 7 4 4 20 4 20 7" />
+      <line x1="9" x2="15" y1="20" y2="20" />
+      <line x1="12" x2="12" y1="4" y2="20" />
+    </>
+  ),
+  'panel-bottom-close': (
+    <>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M3 15h18" />
+      <path d="m15 8-3 3-3-3" />
+    </>
+  ),
+  'panel-bottom-open': (
+    <>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M3 15h18" />
+      <path d="m9 10 3-3 3 3" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>
 
 export type IconName = keyof typeof PATHS

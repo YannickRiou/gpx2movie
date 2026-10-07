@@ -121,6 +121,9 @@ export interface AppState {
   /** settings, tracks and name at the last save or open (compared by reference: « Modifié » / « Enregistré ») */
   savedProject: { settings: Settings; tracks: Track[]; name: string }
   markProjectSaved(): void
+  /** block selected on the timeline ('opening', 'closing' or a stop, text or medium id), shown by the inspector of the right dock */
+  filmSelection: string | null
+  setFilmSelection(id: string | null): void
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -306,6 +309,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const { settings, tracks, projectName } = get()
     set({ savedProject: { settings, tracks, name: projectName } })
   },
+  filmSelection: null,
+  setFilmSelection(id) {
+    if (get().filmSelection !== id) set({ filmSelection: id })
+  },
 }))
 
 /** Restore the initial state (tests). */
@@ -324,5 +331,6 @@ export function resetAppStore(): void {
     projectName: '',
     freeFraming: false,
     savedProject: { settings: DEFAULT_SETTINGS, tracks: [], name: '' },
+    filmSelection: null,
   })
 }

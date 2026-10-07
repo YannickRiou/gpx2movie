@@ -5,7 +5,8 @@
  * real sun position and tone-maps the frame. Without it, the canvas is transparent (alpha) over a CSS sky
  * gradient (glacier blue at the top, map paper at the horizon) and lit by a fixed hemisphere + a sun from
  * the south-east. With no track loaded the scene is left empty; otherwise the terrain layer provides the
- * engine to the track lines, the camera rigs and the atmosphere.
+ * engine to the track lines, the camera rigs and the atmosphere. `TrackPicker` makes the first track clickable (playhead,
+ * right-click menu drawn by `TrackMenu` over the canvas).
  *
  * Shadow maps are enabled (PCF) but only the atmosphere's sun casts them (terrainShadow.ts); the fixed lights do not.
  *
@@ -27,6 +28,7 @@ import { Labels } from './Labels'
 import { RaceMarkers } from './RaceMarkers'
 import { TerrainLayer } from './TerrainLayer'
 import { TrackLines } from './TrackLines'
+import { TrackMenu, TrackPicker } from './TrackPicker'
 
 export const SKY_TOP_COLOR = '#A9CCD9'
 export const SKY_HORIZON_COLOR = '#F5F2EA'
@@ -80,11 +82,13 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
             <FlyoverRig />
             <RaceMarkers />
             <Labels />
+            <TrackPicker />
             {atmosphere && <AtmosphereLayer />}
             <ExportController drawOverlay={overlayDrawer.draw} />
           </TerrainLayer>
         )}
       </Canvas>
+      {hasTracks && <TrackMenu />}
     </div>
   )
 }
