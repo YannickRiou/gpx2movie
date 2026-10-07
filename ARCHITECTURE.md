@@ -43,13 +43,13 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/camera.ts` | caméra de survol | `computeCameraView(path, progress, frame, sampler, exaggeration, camera, durationS)`, `smoothedTurn` |
 | `src/flyover/cameraSettings.ts` | styles et préréglages caméra | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
 | `src/flyover/climbs.ts` | montées détectées | `detectClimbs`, `climbsOf(track)` (cache par trace), seuils exportés, `CATEGORY_THRESHOLDS` |
-| `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
+| `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
 | `src/flyover/sun.ts` | date du soleil | `solarHourToDate(dayMs, lon, solarHour)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
 | `src/weather/*` | météo historique de la sortie | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
 | `src/osm/*` | repères OpenStreetMap | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures` ; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `LANDMARK_DISTANCE_RANGE` ; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
-| `src/overlay/*` | habillage du film | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `DEFAULT_OVERLAY`, `isValidOverlay`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (pont vers l'export), `OverlayCanvas` |
+| `src/overlay/*` | habillage du film | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (pont vers l'export), `OverlayCanvas` |
 | `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` ; `importFlow.ts` (orchestration d'import sans React, testée) |
@@ -288,7 +288,9 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   `setLabelSource(id, LandmarkLabel[])` (ex. `'osm'`). Hauteur = terrain (ou altitude enregistrée) × exagération, replaquée sur
   `engine.onChange` (même debounce que la trace). Fondu quand la ligne de visée passe sous le relief (24 échantillons, ±20 m) et
   entre 35 et 70 km ; en cas de chevauchement, la priorité la plus haute l'emporte. Opacité fonction de la vue seule (pas de
-  lissage temporel) : chaque image d'export est rendue isolément. Réglage `settings.labels { climbs, waypoints }`, section
+  lissage temporel) : chaque image d'export est rendue isolément. Habillage actif : opacité multipliée par
+  1 − `cardOpacityAt(progression, settings.overlay)` (`labelOpacity`), les étiquettes s'effacent derrière les cartes d'ouverture
+  et de clôture. Réglage `settings.labels { climbs, waypoints }`, section
   « Montées » (`ClimbList`, un clic place le survol au pied de la montée).
 
 ## Repères OpenStreetMap (phase 7)
@@ -322,10 +324,14 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   transformation du contexte (devicePixelRatio). Les widgets qui partagent l'une des 9 ancres s'empilent.
 - **Données** (`data.ts`) : `prepareOverlayTrack(track, weather?)` une fois par trace : chemin, D+ cumulé (même lissage et même
   hystérésis de 3 m que `computeStats`, donc la dernière valeur vaut `stats.ascentM`), vitesse et fréquence cardiaque lissées,
-  profil, statistiques de clôture, résumé météo. `overlayFrameAt(data, progress)` est une fonction pure de la progression.
+  profil, statistiques de clôture, résumé météo, contour de la mini-carte (`miniMapOutline` : projection équirectangulaire
+  locale, x est / y sud, plus grand côté = 1, proportions conservées, au plus 1 500 points). `overlayFrameAt(data, progress)` est
+  une fonction pure de la progression (dont `mapPoint`, la position du marqueur sur la mini-carte).
 - **Réglages** : `settings.overlay` (`src/overlay/settings.ts`, désactivé par défaut) : style (`editorial`, `broadcast`, `app`) et
-  widgets — carte d'ouverture, carte de clôture, compteurs, profil, logo, texte libre, météo — chacun avec `enabled`, `anchor`,
-  `size`. Les temps sont des fractions du survol (fondus de 1 % et 2,5 %) ; les widgets en direct s'effacent pendant les cartes.
+  widgets — carte d'ouverture, carte de clôture, compteurs, profil, mini-carte (flèche du nord en option), logo, texte libre,
+  météo — chacun avec `enabled`, `anchor`, `size`. Les widgets ajoutés après le premier format (`minimap`) sont complétés par
+  leur défaut avant validation (`withOverlayDefaults`, via `SETTING_UPGRADES` dans `src/project/document.ts`) : anciens projets
+  et préréglages se chargent toujours. Les temps sont des fractions du survol (fondus de 1 % et 2,5 %) ; les widgets en direct s'effacent pendant les cartes.
   Logo en data URL PNG d'au plus 512 px (projets autonomes). Validation : `isValidOverlay` (`SETTING_CHECKS`).
 - **Polices** : un canvas ne déclenche pas seul le téléchargement des polices web ; `loadOverlayFonts()` les demande avant la
   première image, l'export doit l'attendre aussi. Polices Google Fonts (Fraunces 300–700, IBM Plex Sans et Sans Condensed) :

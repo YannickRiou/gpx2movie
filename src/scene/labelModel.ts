@@ -116,6 +116,14 @@ export function occlusionFade(clearanceM: number): number {
 }
 
 /**
+ * Final opacity of a label: its view opacity (distance, occlusion) times what the film overlay's opening or
+ * closing card leaves (`cardOpacity` in [0, 1], see `cardOpacityAt`), so labels fade out under a card and back.
+ */
+export function labelOpacity(viewOpacity: number, cardOpacity: number): number {
+  return viewOpacity * (1 - Math.min(1, Math.max(0, cardOpacity)))
+}
+
+/**
  * Sprite scale (sizeAttenuation off) that makes `px` CSS pixels on screen: three draws such a sprite
  * `scale × projection[5] × viewportHeight / 2` pixels tall (and wide, per unit of scale).
  */

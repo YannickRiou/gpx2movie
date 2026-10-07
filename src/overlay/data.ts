@@ -16,6 +16,30 @@ import type { WeatherSeries, WeatherSummary, WeatherWidgetData } from '../weathe
 
 /** Samples of the overlay elevation profile over the track. */
 export const OVERLAY_PROFILE_SAMPLES = 240
+/** Most points kept in the mini-map outline (every n-th point of the path, plus the last one). */
+export const OVERLAY_MINIMAP_POINTS = 1500
+/** metres per degree of latitude (spherical Earth, enough for a plan view) */
+const M_PER_DEG = (6371008.8 * Math.PI) / 180
+
+/**
+ * Plan view of the track for the mini-map: local equirectangular projection (x east, y south, like a canvas)
+ * normalised so the longer side of the bounding box measures 1. Aspect ratio preserved.
+ */
+export interface MiniMapOutline {
+  /** projected points, every n-th point of the path and the last one */
+  x: Float64Array
+  y: Float64Array
+  /** cumulative distance along the path at each kept point (metres) */
+  dist: Float64Array
+  /** size of the bounding box (longer side = 1, both 0 for a track that does not move) */
+  width: number
+  height: number
+  /** projection: x = (lon - west) * kx, y = (north - lat) * ky */
+  west: number
+  north: number
+  kx: number
+  ky: number
+}
 
 export interface OverlayTrackStats {
   distanceM: number
@@ -42,6 +66,8 @@ export interface OverlayTrack {
   /** heart rate averaged over a few seconds at each path point (bpm), NaN when unknown */
   heartRate: Float64Array
   profile?: ElevationProfile
+  /** plan view of the track (mini-map), undefined without points */
+  outline?: MiniMapOutline
   /** historical weather along the track (Open-Meteo), when fetched */
   weatherSeries?: WeatherSeries
   stats: OverlayTrackStats
@@ -60,6 +86,8 @@ export interface OverlayFrame {
   heartRate?: number
   /** weather under the marker, when the track has a weather series */
   weather?: WeatherWidgetData
+  /** position of the marker on the mini-map outline (same units as `track.outline`) */
+  mapPoint?: { x: number; y: number }
 }
 
 /**
@@ -116,6 +144,41 @@ function maxOf(values: Float64Array): number | undefined {
   return max > -Infinity ? max : undefined
 }
 
+/** Plan view of the path for the mini-map (see `MiniMapOutline`); undefined when the path has no point. */
+export function miniMapOutline(path: TrackPath, maxPoints = OVERLAY_MINIMAP_POINTS): MiniMapOutline | undefined {
+  const { count, lon, lat, dist } = path
+  if (count === 0) return undefined
+  let west = Infinity
+  let east = -Infinity
+  let south = Infinity
+  let north = -Infinity
+  for (let i = 0; i < count; i++) {
+    west = Math.min(west, lon[i])
+    east = Math.max(east, lon[i])
+    south = Math.min(south, lat[i])
+    north = Math.max(north, lat[i])
+  }
+  const widthM = (east - west) * M_PER_DEG * Math.cos((((south + north) / 2) * Math.PI) / 180)
+  const heightM = (north - south) * M_PER_DEG
+  const longerM = Math.max(widthM, heightM)
+  const unit = longerM > 0 ? 1 / longerM : 0
+  const kx = (widthM > 0 ? widthM / (east - west) : 0) * unit
+  const ky = M_PER_DEG * unit
+  const step = Math.max(1, Math.ceil(count / Math.max(2, maxPoints - 1)))
+  const kept: number[] = []
+  for (let i = 0; i < count; i += step) kept.push(i)
+  if (kept[kept.length - 1] !== count - 1) kept.push(count - 1)
+  const x = new Float64Array(kept.length)
+  const y = new Float64Array(kept.length)
+  const keptDist = new Float64Array(kept.length)
+  kept.forEach((i, k) => {
+    x[k] = (lon[i] - west) * kx
+    y[k] = (north - lat[i]) * ky
+    keptDist[k] = dist[i]
+  })
+  return { x, y, dist: keptDist, width: widthM * unit, height: heightM * unit, west, north, kx, ky }
+}
+
 /** Per-track data of the overlay; `weather` is the series of the outing (`useWeatherStore`), when fetched. */
 export function prepareOverlayTrack(track: Track, weather?: WeatherSeries | null): OverlayTrack {
   const path = buildTrackPath(track)
@@ -138,6 +201,7 @@ export function prepareOverlayTrack(track: Track, weather?: WeatherSeries | null
     speed,
     heartRate,
     profile: path.count > 0 ? elevationProfile(path, OVERLAY_PROFILE_SAMPLES) : undefined,
+    outline: miniMapOutline(path),
     stats: {
       distanceM: path.lengthM,
       ascentM: hasEle ? track.stats.ascentM : undefined,
@@ -182,7 +246,10 @@ export function overlayFrameAt(data: OverlayTrack, progress: number): OverlayFra
   if (path.count === 0) return frame
 
   const { a, b, t } = locate(path.dist, distanceM)
-  frame.ele = samplePath(path, distanceM).ele
+  const sample = samplePath(path, distanceM)
+  frame.ele = sample.ele
+  const { outline } = data
+  if (outline) frame.mapPoint = { x: (sample.lon - outline.west) * outline.kx, y: (outline.north - sample.lat) * outline.ky }
   frame.ascentM = lerpKnown(data.ascent, a, b, t)
   frame.speedKmh = lerpKnown(data.speed, a, b, t)
   frame.heartRate = lerpKnown(data.heartRate, a, b, t)

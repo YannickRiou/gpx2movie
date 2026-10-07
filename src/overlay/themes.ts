@@ -38,6 +38,8 @@ export interface OverlayTheme {
   /** accent bar on the leading edge of panels and cards (u), 0 = none */
   accentBar: number
   profile: { area: string; played: string; line: string; marker: string; markerRing: string }
+  /** mini-map: route still ahead, covered part, start and end dots (ringed with `profile.markerRing`) */
+  minimap: { route: string; covered: string; start: string; end: string }
 }
 
 const FRAUNCES = '"Fraunces", Georgia, serif'
@@ -50,6 +52,7 @@ const INK_SOFT = '#55626B'
 const TRAIL_RED = '#C23B22'
 const TRAIL_RED_LIGHT = '#FF8A5C'
 const GLACIER = '#A9CCD9'
+const MOSS = '#3F6B4A'
 
 export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {
   // light serif titles straight on the image, generous spacing
@@ -77,6 +80,7 @@ export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {
       marker: TRAIL_RED_LIGHT,
       markerRing: '#FFFFFF',
     },
+    minimap: { route: 'rgba(255, 255, 255, 0.5)', covered: TRAIL_RED_LIGHT, start: MOSS, end: '#FFFFFF' },
   },
   // dark glass panels, condensed figures, trail-red bar
   broadcast: {
@@ -102,6 +106,7 @@ export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {
       marker: TRAIL_RED_LIGHT,
       markerRing: '#FFFFFF',
     },
+    minimap: { route: 'rgba(255, 255, 255, 0.4)', covered: TRAIL_RED_LIGHT, start: MOSS, end: '#FFFFFF' },
   },
   // pale rounded cards, like a navigation app
   app: {
@@ -125,6 +130,7 @@ export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {
     groupedCounters: false,
     accentBar: 0,
     profile: { area: GLACIER, played: TRAIL_RED, line: INK, marker: TRAIL_RED, markerRing: PAPER },
+    minimap: { route: 'rgba(28, 42, 51, 0.35)', covered: TRAIL_RED, start: MOSS, end: INK },
   },
 }
 

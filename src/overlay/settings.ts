@@ -110,6 +110,11 @@ export interface TextSettings extends Sized {
   text: string
 }
 
+export interface MiniMapSettings extends Sized {
+  /** small north arrow beside the map (north is always up) */
+  northArrow: boolean
+}
+
 export interface OverlaySettings {
   enabled: boolean
   style: OverlayStyleId
@@ -121,6 +126,8 @@ export interface OverlaySettings {
   text: TextSettings
   /** weather under the marker: condition, temperature, wind (Open-Meteo, when the outing's weather is known) */
   weather: Sized
+  /** plan view of the whole track, covered part and marker */
+  minimap: MiniMapSettings
 }
 
 export const DEFAULT_OVERLAY: OverlaySettings = {
@@ -138,6 +145,21 @@ export const DEFAULT_OVERLAY: OverlaySettings = {
   logo: { enabled: false, anchor: 'bottom-right', size: 1, image: '' },
   text: { enabled: false, anchor: 'bottom-left', size: 1, text: '' },
   weather: { enabled: false, anchor: 'top-left', size: 1 },
+  minimap: { enabled: false, anchor: 'bottom-right', size: 1, northArrow: true },
+}
+
+/** Widgets added after the first saved format: missing from older projects and presets. */
+const OVERLAY_ADDED_KEYS: readonly (keyof OverlaySettings)[] = ['minimap']
+
+/**
+ * Raw overlay settings of an older project or preset with the widgets added since filled in with their
+ * defaults, so they still load. Applied before the shape check: anything else (other keys, a present but
+ * malformed widget) is left as is and still rejected.
+ */
+export function withOverlayDefaults(raw: unknown): unknown {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return raw
+  const missing = OVERLAY_ADDED_KEYS.filter((key) => !(key in raw))
+  return missing.length === 0 ? raw : { ...Object.fromEntries(missing.map((key) => [key, DEFAULT_OVERLAY[key]])), ...raw }
 }
 
 const within = (v: number, min: number, max: number) => v >= min && v <= max
@@ -162,6 +184,7 @@ export function isValidOverlay(o: OverlaySettings): boolean {
     validSized(o.logo) &&
     (o.logo.image === '' || /^data:image\/(png|jpeg|webp);base64,/.test(o.logo.image)) &&
     validSized(o.text) &&
-    validSized(o.weather)
+    validSized(o.weather) &&
+    validSized(o.minimap)
   )
 }

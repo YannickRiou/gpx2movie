@@ -37,6 +37,9 @@ export const CARD_FADE_IN = 0.01
 export const CARD_FADE_OUT = 0.025
 /** Smallest elevation range drawn full height (a flat track stays flat), as in the timeline profile. */
 const PROFILE_MIN_SPAN_M = 100
+/** Longer side of the mini-map at size 1 (u), and its most elongated box (longer side / shorter side). */
+const MINIMAP_SIDE_U = 20
+const MINIMAP_MAX_RATIO = 1.6
 
 /** Short labels drawn in the film. */
 export const COUNTER_LABELS: Record<CounterId, string> = {
@@ -68,6 +71,17 @@ export function titleCardOpacity(progress: number, end: number): number {
 /** Closing card: fades in after `start`, stays until the end. */
 export function endCardOpacity(progress: number, start: number): number {
   return progress <= start ? 0 : smoothstep((progress - start) / CARD_FADE_OUT)
+}
+
+/**
+ * Opacity of the opening or closing card at `progress` (the larger one), 0 while the overlay is off. Pure
+ * function of the progress and the settings: the live widgets and the 3D labels give way to the cards.
+ */
+export function cardOpacityAt(progress: number, settings: OverlaySettings): number {
+  if (!settings.enabled) return 0
+  const title = settings.title.enabled ? titleCardOpacity(progress, settings.title.end) : 0
+  const end = settings.end.enabled ? endCardOpacity(progress, settings.end.start) : 0
+  return Math.max(title, end)
 }
 
 /** Seconds -> "1:05:09" (hours always shown, so the counter keeps its width). */
@@ -541,6 +555,101 @@ function profileWidget(p: Painter, frame: OverlayFrame, settings: OverlaySetting
   }
 }
 
+/** Plan view of the whole track: route ahead, covered part, start and end dots, marker, optional north arrow. */
+function minimapWidget(p: Painter, frame: OverlayFrame, settings: OverlaySettings, opacity: number): Widget | null {
+  const { outline } = frame.track
+  const point = frame.mapPoint
+  if (!outline || !point) return null
+  const { theme, u, ctx } = p
+  const { anchor, size: s, northArrow } = settings.minimap
+  // the box follows the shape of the track, within MINIMAP_MAX_RATIO
+  const ratio = outline.height > 0 ? outline.width / outline.height : outline.width > 0 ? Infinity : 1
+  const r = Math.min(MINIMAP_MAX_RATIO, Math.max(1 / MINIMAP_MAX_RATIO, ratio))
+  const side = MINIMAP_SIDE_U * u * s
+  const mapW = r >= 1 ? side : side * r
+  const mapH = r >= 1 ? side / r : side
+  const pad = (theme.panel ? 1.4 : 0.4) * u * s
+  const bar = theme.panel ? theme.accentBar * u : 0
+  const arrowW = northArrow ? 2.6 * u * s : 0
+  const w = mapW + arrowW + 2 * pad + bar
+  const h = mapH + 2 * pad
+  // room for the marker inside the map box; aspect kept (same scale on both axes)
+  const inset = 1.3 * u * s
+  const scale = Math.min(
+    outline.width > 0 ? (mapW - 2 * inset) / outline.width : Infinity,
+    outline.height > 0 ? (mapH - 2 * inset) / outline.height : Infinity,
+  )
+  const k = Number.isFinite(scale) ? scale : 0
+
+  return {
+    anchor,
+    width: w,
+    height: h,
+    opacity,
+    draw(x, y) {
+      const align = alignOf(anchor)
+      drawPanel(p, x, y, w, h, align)
+      const mx = x + pad + (align === 'right' ? 0 : bar)
+      const my = y + pad
+      const ox = mx + (mapW - outline.width * k) / 2
+      const oy = my + (mapH - outline.height * k) / 2
+      const px = (v: number) => ox + v * k
+      const py = (v: number) => oy + v * k
+      const n = outline.x.length
+
+      ctx.save()
+      ctx.lineJoin = 'round'
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(px(outline.x[0]), py(outline.y[0]))
+      for (let i = 1; i < n; i++) ctx.lineTo(px(outline.x[i]), py(outline.y[i]))
+      ctx.strokeStyle = theme.minimap.route
+      ctx.lineWidth = 0.35 * u * s
+      ctx.stroke()
+      // covered part: the kept points behind the marker, then the marker itself
+      ctx.beginPath()
+      ctx.moveTo(px(outline.x[0]), py(outline.y[0]))
+      for (let i = 1; i < n && outline.dist[i] <= frame.distanceM; i++) ctx.lineTo(px(outline.x[i]), py(outline.y[i]))
+      ctx.lineTo(px(point.x), py(point.y))
+      ctx.strokeStyle = theme.minimap.covered
+      ctx.lineWidth = 0.55 * u * s
+      ctx.stroke()
+      const dot = (cx: number, cy: number, radius: number, fill: string) => {
+        ctx.beginPath()
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+        ctx.fillStyle = fill
+        ctx.fill()
+        ctx.lineWidth = 0.3 * u * s
+        ctx.strokeStyle = theme.profile.markerRing
+        ctx.stroke()
+      }
+      dot(px(outline.x[n - 1]), py(outline.y[n - 1]), 0.6 * u * s, theme.minimap.end)
+      dot(px(outline.x[0]), py(outline.y[0]), 0.6 * u * s, theme.minimap.start)
+      dot(px(point.x), py(point.y), 0.9 * u * s, theme.profile.marker)
+      ctx.restore()
+
+      if (northArrow) {
+        // arrow pointing up over an "N", at the top of the column beside the map
+        const cx = mx + mapW + arrowW / 2
+        const top = my + 0.2 * u * s
+        const arrowH = 1.6 * u * s
+        ctx.save()
+        ctx.beginPath()
+        ctx.moveTo(cx, top)
+        ctx.lineTo(cx + 0.6 * u * s, top + arrowH)
+        ctx.lineTo(cx, top + arrowH * 0.72)
+        ctx.lineTo(cx - 0.6 * u * s, top + arrowH)
+        ctx.closePath()
+        ctx.fillStyle = theme.text
+        ctx.fill()
+        ctx.restore()
+        const letter: TextStyle = { family: theme.bodyFamily, weight: theme.numberWeight, sizePx: 1.5 * u * s, color: theme.text }
+        fillText(p, 'N', cx, top + arrowH + 0.5 * u * s + letter.sizePx * 0.74, letter, 'center')
+      }
+    },
+  }
+}
+
 interface CardContent {
   title: string
   subtitle: string
@@ -764,7 +873,7 @@ export function drawOverlay(
   const titleOpacity = settings.title.enabled ? titleCardOpacity(frame.progress, settings.title.end) : 0
   const endOpacity = settings.end.enabled ? endCardOpacity(frame.progress, settings.end.start) : 0
   // live widgets give way to the cards
-  const live = 1 - Math.max(titleOpacity, endOpacity)
+  const live = 1 - cardOpacityAt(frame.progress, settings)
 
   ctx.save()
   const widgets: Widget[] = []
@@ -777,6 +886,7 @@ export function drawOverlay(
   if (settings.profile.enabled && live > 0) add(profileWidget(p, frame, settings, live))
   const weather = settings.weather.enabled && live > 0 ? weatherWidget(p, frame, settings, live) : null
   add(weather)
+  if (settings.minimap.enabled && live > 0) add(minimapWidget(p, frame, settings, live))
   if (settings.text.enabled) add(textWidget(p, settings))
   if (settings.logo.enabled) add(logoWidget(p, settings, assets))
 

@@ -3,7 +3,8 @@ import sampleGpx from '../../public/samples/tour-du-mont-blanc-j1.gpx?raw'
 import type { TrackPoint } from '../core/types'
 import { parseGpx } from '../import/gpx'
 import { buildTrack } from '../import/stats'
-import { cumulativeAscent, overlayFrameAt, prepareOverlayTrack } from './data'
+import { buildTrackPath } from '../flyover/path'
+import { cumulativeAscent, miniMapOutline, overlayFrameAt, prepareOverlayTrack } from './data'
 
 /** metres per degree of latitude on the haversine sphere */
 const M_PER_DEG = (6371008.8 * Math.PI) / 180
@@ -89,5 +90,54 @@ describe('overlayFrameAt', () => {
   it('reads the steady speed of a regular track', () => {
     const track = buildTrack({ name: 'r', source: 'gpx', segments: [{ points: line(100, (i) => ({ ele: 1000 + i })) }] })
     expect(overlayFrameAt(prepareOverlayTrack(track), 0.4).speedKmh).toBeCloseTo(7.2, 3)
+  })
+})
+
+describe('mini-map outline', () => {
+  const lat0 = 45.9
+  const mPerDegLon = M_PER_DEG * Math.cos((lat0 * Math.PI) / 180)
+  // 2 km due east, then 1 km due north
+  const east: TrackPoint[] = Array.from({ length: 101 }, (_, i) => ({ lon: 6.8 + (i * 20) / mPerDegLon, lat: lat0, ele: 1000 }))
+  const north: TrackPoint[] = Array.from({ length: 100 }, (_, j) => ({ lon: east[100].lon, lat: lat0 + ((j + 1) * 10) / M_PER_DEG, ele: 1000 }))
+  const ell = buildTrack({ name: 'L', source: 'gpx', segments: [{ points: [...east, ...north] }] })
+  const data = prepareOverlayTrack(ell)
+
+  it('keeps the aspect ratio of the ground, longer side 1, north up', () => {
+    const outline = data.outline!
+    expect(outline.width).toBeCloseTo(1, 9)
+    expect(outline.height).toBeCloseTo(0.5, 3)
+    // start in the south-west corner, end in the north-east one
+    expect([outline.x[0], outline.y[0]]).toEqual([0, expect.closeTo(0.5, 3)])
+    expect(outline.x[outline.x.length - 1]).toBeCloseTo(1, 9)
+    expect(outline.y[outline.y.length - 1]).toBeCloseTo(0, 9)
+  })
+
+  it('places the marker at the progress', () => {
+    expect(overlayFrameAt(data, 0).mapPoint).toEqual({ x: 0, y: expect.closeTo(0.5, 3) })
+    const half = overlayFrameAt(data, 0.5).mapPoint!
+    expect(half.x).toBeCloseTo(0.75, 2) // 1.5 km of 3 km: three quarters of the eastward leg
+    expect(half.y).toBeCloseTo(0.5, 3)
+    const end = overlayFrameAt(data, 1).mapPoint!
+    expect(end.x).toBeCloseTo(1, 9)
+    expect(end.y).toBeCloseTo(0, 9)
+  })
+
+  it('keeps at most the requested points, the first and the last', () => {
+    const path = buildTrackPath(sample)
+    const outline = miniMapOutline(path, 100)!
+    expect(path.count).toBeGreaterThan(100)
+    expect(outline.x.length).toBeLessThanOrEqual(100)
+    expect(outline.dist[0]).toBe(0)
+    expect(outline.dist[outline.dist.length - 1]).toBe(path.lengthM)
+    for (let i = 1; i < outline.dist.length; i++) expect(outline.dist[i]).toBeGreaterThanOrEqual(outline.dist[i - 1])
+    expect(Math.max(outline.width, outline.height)).toBeCloseTo(1, 9)
+  })
+
+  it('handles a track that does not move, and no track', () => {
+    const still = buildTrack({ name: 'arrêt', source: 'gpx', segments: [{ points: [{ lon: 6.8, lat: 45.9 }, { lon: 6.8, lat: 45.9 }] }] })
+    const frame = overlayFrameAt(prepareOverlayTrack(still), 0.5)
+    expect(frame.track.outline).toMatchObject({ width: 0, height: 0 })
+    expect(frame.mapPoint).toEqual({ x: 0, y: 0 })
+    expect(miniMapOutline({ ...buildTrackPath(still), count: 0 })).toBeUndefined()
   })
 })

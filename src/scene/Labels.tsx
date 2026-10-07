@@ -6,8 +6,9 @@
  * Each label is a Sprite (sizeAttenuation off, so a constant size on screen) whose canvas texture holds an
  * ink panel with white text, a stem and an anchor dot in the accent of its kind. Sprites skip the depth
  * test; instead, every frame, a label fades out when its line of sight passes under the relief or when it
- * is far away, and colliding labels are dropped by priority. Opacity is a pure function of the view (no
- * temporal smoothing) so any frame renders the same in isolation.
+ * is far away, and colliding labels are dropped by priority; they also fade out while an opening or closing
+ * card of the film overlay is shown. Opacity is a pure function of the view, the progress and the overlay
+ * settings (no temporal smoothing) so any frame renders the same in isolation.
  *
  * Anchors are draped like the track (terrain height, else the recorded elevation, × exaggeration) and
  * re-draped (debounced) whenever the terrain engine reports new tiles. Must be rendered inside TerrainLayer.
@@ -17,6 +18,7 @@ import { useFrame } from '@react-three/fiber'
 import { CanvasTexture, Group, type Camera, LinearFilter, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three'
 import type { LocalFrame, TerrainEngine } from '../core/types'
 import { climbsOf } from '../flyover/climbs'
+import { cardOpacityAt } from '../overlay/draw'
 import { useAppStore } from '../state/store'
 import {
   LABEL_KIND_ACCENTS,
@@ -24,6 +26,7 @@ import {
   LABEL_TEXT_COLOR,
   climbLabels,
   distanceFade,
+  labelOpacity,
   lineOfSightClearance,
   occlusionFade,
   resolveOverlaps,
@@ -159,8 +162,9 @@ const projected = new Vector3()
 const probe = new Vector3()
 
 /**
- * Per-frame visibility: distance and occlusion fades, screen culling, de-cluttering by priority, constant
- * screen size, and colour divided by the renderer exposure (unlit sprites, like the track).
+ * Per-frame visibility: distance and occlusion fades, screen culling, de-cluttering by priority, fade under the
+ * overlay cards (`cardOpacity`), constant screen size, and colour divided by the renderer exposure (unlit
+ * sprites, like the track).
  */
 function updateLabelSet(
   set: LabelSet,
@@ -170,7 +174,12 @@ function updateLabelSet(
   engine: TerrainEngine | null,
   frame: LocalFrame | null,
   exaggeration: number,
+  cardOpacity: number,
 ): void {
+  if (labelOpacity(1, cardOpacity) < MIN_OPACITY) {
+    for (const entry of set.entries) entry.sprite.visible = false
+    return
+  }
   camera.getWorldPosition(cameraPosition)
   const pixel = spriteScaleForPixels(1, size.height, camera.projectionMatrix.elements[5])
   const clearanceAt =
@@ -207,7 +216,7 @@ function updateLabelSet(
     if (!visible[i]) return
     entry.sprite.visible = true
     entry.sprite.scale.set(entry.tex.width * pixel, entry.tex.height * pixel, 1)
-    entry.material.opacity = opacity
+    entry.material.opacity = labelOpacity(opacity, cardOpacity)
     entry.material.color.setScalar(1 / exposure)
   })
 }
@@ -327,7 +336,10 @@ export function Labels() {
   )
 
   useFrame(({ camera, gl, size }) => {
-    if (setRef.current) updateLabelSet(setRef.current, camera, size, gl.toneMappingExposure, engine, frame, exaggeration)
+    if (!setRef.current) return
+    const { playback, settings } = useAppStore.getState()
+    const card = cardOpacityAt(playback.progress, settings.overlay)
+    updateLabelSet(setRef.current, camera, size, gl.toneMappingExposure, engine, frame, exaggeration, card)
   })
 
   return <group ref={groupRef} name="labels" />
