@@ -1,13 +1,15 @@
 /**
  * Film timeline under the 3D view, in film time (opening and closing included).
  *
- * Bar: play / pause, film time, distance, altitude and recorded time at the marker, add a stop (at the playhead
- * or at a highlight), a text or photos, automatic stops, « modifié » marker of the film, speed, fold. Ruler: click
- * or drag to scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile, closing),
+ * Bar (icon buttons with tooltips): play / pause, stop (back to the first frame), film time, distance, altitude and
+ * recorded time at the marker, add a stop (at the playhead or at a highlight), a text or photos, speed, zoom (− / slider
+ * / + / « Ajuster »), « Options » menu (automatic stops, « modifié » marker of the film), fold. Ruler: click or drag to
+ * scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile and its stops, closing),
  * « Arrêts », « Textes », « Médias » (photos also dropped onto the timeline; those taken along the track can then be
  * placed where they were taken): drag a block to move it, an edge to stretch it, snapping to the other edges, the
  * highlights and the playhead (Alt: no snapping); Ctrl+wheel zooms. Keyboard on a block: arrows nudge (Shift:
- * finer), Delete removes, Escape deselects; Space plays / pauses anywhere outside a control.
+ * finer), Delete removes (Escape deselects: `App`); Space plays / pauses anywhere outside a control. The selection
+ * lives in the store (`filmSelection`): the inspector of the selected block is in the right dock (`FilmInspector`).
  *
  * A gesture is previewed on the timeline only and committed on release as one undo step. Edits are the pure
  * functions of `film/timeline.ts`; editing a stop writes the generated stops out first (`materializeStops`).
@@ -27,23 +29,26 @@ import {
   dragFilm,
   fitPxPerS,
   formatFilmTime,
+  hasFilmItem,
   photoFilmTime,
   removeFilmItem,
   rulerTicks,
   snapTargets,
   updateMedia,
-  updateShot,
   zoomAt,
 } from '../film/timeline'
 import type { DragContext, Grip, TimelineItem } from '../film/timeline'
 import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath, type ElevationProfile } from '../flyover/path'
+import { modifiedSettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
-import { useFilmClock, useFilmSource } from '../scene/usePacing'
+import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
-import { FilmInspector } from './FilmInspector'
 import { formatDistance, formatNumber } from './format'
+import { Icon } from './icons'
+import type { IconName } from './icons'
 import { ModifiedMarker } from './ModifiedMarker'
 import { withShortcut } from './shortcuts'
+import { showToast } from './toast'
 
 const SPEEDS = [0.5, 1, 2, 4]
 /** Profile resolution (samples over the track) and drawing height in viewBox units. */
@@ -59,12 +64,14 @@ const DRAG_THRESHOLD_PX = 3
 const NUDGE_S = 1
 const FINE_NUDGE_S = 0.1
 const WHEEL_ZOOM = 1.2
+const BUTTON_ZOOM = 1.5
+/** Zoom slider: position 0..ZOOM_SLIDER_STEPS on a logarithmic scale of ZOOM_RANGE. */
+const ZOOM_SLIDER_STEPS = 100
+const zoomToSlider = (zoom: number) => Math.round((ZOOM_SLIDER_STEPS * Math.log(zoom / ZOOM_RANGE.min)) / Math.log(ZOOM_RANGE.max / ZOOM_RANGE.min))
+const sliderToZoom = (v: number) => ZOOM_RANGE.min * (ZOOM_RANGE.max / ZOOM_RANGE.min) ** (v / ZOOM_SLIDER_STEPS)
 
-/** Message under the bar after adding photos: what was added, and the photos that can be placed on the track. */
-interface PhotoNotice {
-  text: string
-  placements: { id: string; startS: number }[]
-}
+/** Photos that can be placed where they were taken (offered by the message after adding them). */
+type Placements = { id: string; startS: number }[]
 
 const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`
 
@@ -99,6 +106,106 @@ function profileAreaPath(profile: ElevationProfile, xs: readonly number[]): stri
   return d
 }
 
+interface BarButtonProps {
+  icon: IconName
+  /** accessible name, also the tooltip unless `tip` is given (with the shortcut) */
+  name: string
+  tip?: string
+  /** short visible label (hidden on narrow windows) */
+  label?: string
+  onClick(): void
+  disabled?: boolean
+}
+
+/** Icon button of the bar: icon, optional short label, tooltip. */
+function BarButton({ icon, name, tip = name, label, onClick, disabled }: BarButtonProps) {
+  return (
+    <button
+      type="button"
+      className={label ? 'icon-btn icon-btn--label' : 'icon-btn'}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={name}
+      data-tip={tip}
+      data-tip-side="top"
+    >
+      <Icon name={icon} size={18} />
+      {label && <span className="icon-btn__text">{label}</span>}
+    </button>
+  )
+}
+
+/**
+ * « Options » of the film, in a small menu over the bar: automatic stops, « modifié » marker of the film. Closes on
+ * Escape (before the shell deselects anything), on a click outside and when the focus leaves it.
+ */
+function FilmOptions({ autoStops, onAutoStops }: { autoStops: boolean; onAutoStops(on: boolean): void }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const id = useId()
+  const modified = useAppStore((s) => modifiedSettings(s.settings, ['film']).length > 0)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: globalThis.PointerEvent) => {
+      if (!(e.target instanceof Node) || !wrapRef.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [open])
+  return (
+    <div
+      ref={wrapRef}
+      className="film-tl__options"
+      data-local-escape={open ? '' : undefined}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || !open) return
+        e.stopPropagation()
+        setOpen(false)
+        toggleRef.current?.focus()
+      }}
+      onBlur={(e) => {
+        // the focus went elsewhere (Tab); a click outside is caught by the pointer listener
+        if (open && e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) setOpen(false)
+      }}
+    >
+      <button
+        ref={toggleRef}
+        type="button"
+        className="icon-btn icon-btn--label"
+        aria-expanded={open}
+        aria-controls={`${id}-menu`}
+        data-tip="Options du film"
+        data-tip-side="top"
+        data-tip-align="end"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="icon-btn__text">Options</span>
+        <Icon name="chevron-down" size={16} />
+        {modified && (
+          <>
+            <span className="film-tl__dot" />
+            <span className="visually-hidden"> (modifié)</span>
+          </>
+        )}
+      </button>
+      {open && (
+        <div id={`${id}-menu`} className="film-tl__menu" role="group" aria-label="Options du film">
+          <p className="film-tl__menu-title">Options du film</p>
+          <label className="film-tl__check">
+            <input type="checkbox" checked={autoStops} onChange={(e) => onAutoStops(e.currentTarget.checked)} />
+            Arrêts automatiques
+          </label>
+          <p className="film-tl__menu-hint">
+            Un arrêt à chaque temps fort : sommets des montées, cols, sommets. Retoucher un arrêt les fige.
+          </p>
+          <ModifiedMarker keys={['film']} label="Film" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Timeline() {
   const source = useFilmSource()
   const { track, film, durationS, pacing, landmarks } = source
@@ -120,13 +227,13 @@ export function Timeline() {
   )
   const candidates = useMemo(() => (track ? stopCandidates({ track, landmarks, pacing }) : []), [track, landmarks, pacing])
 
-  const [selected, setSelected] = useState<TimelineItem | null>(null)
+  const selected = useAppStore((s) => s.filmSelection)
+  const setSelected = useAppStore((s) => s.setFilmSelection)
   /** film being dragged (shown on the timeline only), committed on release */
   const [draft, setDraft] = useState<Film | null>(null)
   const [zoom, setZoom] = useState<number>(ZOOM_RANGE.min)
   const [collapsed, setCollapsed] = useState(false)
   const [width, setWidth] = useState(0)
-  const [notice, setNotice] = useState<PhotoNotice | null>(null)
   const [reading, setReading] = useState(false)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -152,6 +259,11 @@ export function Timeline() {
   const area = useMemo(() => (profile ? profileAreaPath(profile, flightXs) : ''), [profile, flightXs])
 
   const hasTrack = track !== undefined
+  // the selected block went away (undo, other track, generated stops moved): nothing selected
+  useEffect(() => {
+    if (selected !== null && (!track || !hasFilmItem(film, clock.stops, selected))) setSelected(null)
+  }, [selected, track, film, clock, setSelected])
+
   useEffect(() => {
     const el = scrollerRef.current
     if (!el) return
@@ -217,7 +329,7 @@ export function Timeline() {
   const commit = (next: Film) => {
     if (next !== film) getSettingsHistory().transaction(() => setSetting('film', next))
   }
-  /** edits of the inspector and nudges (quick changes of the film are merged into one undo step) */
+  /** nudges with the arrows (quick changes of the film are merged into one undo step) */
   const change = (fn: (f: Film) => Film, stops: boolean) => {
     const next = fn(stops ? withOwnStops(film) : film)
     if (next !== film) setSetting('film', next)
@@ -230,23 +342,15 @@ export function Timeline() {
     targetsM: candidates.map((c) => c.atM),
     snapS: SNAP_PX / pxPerS,
   })
-  const remove = (item: TimelineItem) => {
-    if (item === 'opening' || item === 'closing') commit(updateShot(film, item, { style: 'aucune' }))
-    else commit(removeFilmItem(isStop(item) ? withOwnStops(film) : film, item))
-    setSelected(null)
-  }
-  const addStopAt = (atM: number, patch?: Parameters<typeof addStop>[2]) => {
-    const added = addStop(withOwnStops(film), atM, patch)
-    commit(added.film)
-    setSelected(added.id)
-  }
+  const remove = (item: TimelineItem) => editFilm((f) => ({ film: removeFilmItem(f, item), id: null }), { stops: isStop(item) })
+  const addStopAt = (atM: number, patch?: Parameters<typeof addStop>[2]) => editFilm((f) => addStop(f, atM, patch), { stops: true })
   /** photos added at the playhead, one after the other (one undo step); offers to place them on the track */
   const addPhotoFiles = async (files: readonly File[]) => {
     const images = files.filter((f) => f.type.startsWith('image/'))
     const others = files.length - images.length
     const unsupported = others > 0 ? ` ${plural(others, 'fichier ignoré', 'fichiers ignorés')} : seules les photos sont prises en charge (vidéos : bientôt).` : ''
     if (images.length === 0) {
-      setNotice({ text: unsupported.trim(), placements: [] })
+      showToast({ kind: 'error', text: unsupported.trim() })
       return
     }
     const startS = playheadS
@@ -263,7 +367,7 @@ export function Timeline() {
     setReading(false)
     const errors = failed.length > 0 ? ` Non ajoutées : ${failed.join(' ; ')}` : ''
     if (read.length === 0) {
-      setNotice({ text: `${errors}${unsupported}`.trim(), placements: [] })
+      showToast({ kind: 'error', text: `${errors}${unsupported}`.trim() })
       return
     }
     const srcs = useMediaStore.getState().add(read.map((r) => r.asset))
@@ -281,12 +385,14 @@ export function Timeline() {
         : n === 1
           ? ` ${read.length === 1 ? 'Elle' : "L'une d'elles"} a été prise le long du parcours : la placer au moment où le marqueur y passe ?`
           : ` ${n} ont été prises le long du parcours : les placer au moment où le marqueur y passe ?`
-    setNotice({ text: `${plural(read.length, 'photo ajoutée', 'photos ajoutées')} à la tête de lecture.${located}${errors}${unsupported}`, placements })
+    showToast({
+      kind: errors || unsupported ? 'info' : 'success',
+      text: `${plural(read.length, 'photo ajoutée', 'photos ajoutées')} à la tête de lecture.${located}${errors}${unsupported}`,
+      action: n > 0 ? { label: 'Placer sur le parcours', run: () => placePhotos(placements) } : undefined,
+    })
   }
-  const placePhotos = (placements: PhotoNotice['placements']) => {
-    commit(placements.reduce((f, p) => updateMedia(f, p.id, { startS: p.startS }), useAppStore.getState().settings.film))
-    setNotice(null)
-  }
+  const placePhotos = (placements: Placements) =>
+    editFilm((f) => ({ film: placements.reduce((g, p) => updateMedia(g, p.id, { startS: p.startS }), f) }))
   const toggleAutoStops = (on: boolean) =>
     commit(on ? { ...film, autoStops: true, autoMode: 'temps-forts', stops: [] } : withOwnStops(film))
 
@@ -355,6 +461,11 @@ export function Timeline() {
     pendingScrollRef.current = next.scrollLeft
     setZoom(next.zoom)
   }
+  /** the whole film in the width of the timeline */
+  const fitZoom = () => {
+    pendingScrollRef.current = 0
+    setZoom(ZOOM_RANGE.min)
+  }
 
   // --- blocks ------------------------------------------------------------------------------------------------
   const block = (
@@ -397,12 +508,6 @@ export function Timeline() {
   const flightStart = shownClock.openingS
   const flightEnd = flightStart + shownClock.flightS
   const ticks = rulerTicks(total, pxPerS)
-  const selectedExists =
-    selected === 'opening' ||
-    selected === 'closing' ||
-    shownClock.stops.some((s) => s.id === selected) ||
-    shownFilm.texts.some((t) => t.id === selected) ||
-    shownFilm.media.some((m) => m.id === selected)
   const mediaLabel = (m: FilmMedia) => m.caption?.trim() || pictures[m.src]?.name || 'Photo'
 
   return (
@@ -410,12 +515,6 @@ export function Timeline() {
       className="film-tl"
       role="group"
       aria-label={`Timeline du film : ${track.name}`}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && selected) {
-          setSelected(null)
-          e.stopPropagation()
-        }
-      }}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes('Files')) return
         e.preventDefault()
@@ -437,8 +536,16 @@ export function Timeline() {
           data-tip-side="top"
           data-tip-align="start"
         >
-          {playing ? '❚❚' : '▶'}
+          <Icon name={playing ? 'pause' : 'play'} size={16} />
         </button>
+        <BarButton
+          icon="square"
+          name="Arrêter et revenir au début"
+          onClick={() => {
+            setPlaying(false)
+            seek(0)
+          }}
+        />
         <span className="film-tl__time">
           <strong>{formatFilmTime(playheadS, true)}</strong> / {formatFilmTime(clock.totalTime())}
         </span>
@@ -460,9 +567,13 @@ export function Timeline() {
           )}
         </span>
         <span className="film-tl__spacer" />
-        <button type="button" className="film-tl__btn" onClick={() => addStopAt(progress * lengthM)} title="Ajouter un arrêt à la position du marqueur">
-          + Arrêt
-        </button>
+        <BarButton
+          icon="map-pin"
+          label="Arrêt"
+          name="Ajouter un arrêt à la position du marqueur"
+          tip={withShortcut('Ajouter un arrêt à la position du marqueur', 'add-stop')}
+          onClick={() => addStopAt(Math.round(progress * lengthM))}
+        />
         {freeCandidates.length > 0 && (
           <select
             className="film-tl__select"
@@ -483,27 +594,21 @@ export function Timeline() {
             ))}
           </select>
         )}
-        <button
-          type="button"
-          className="film-tl__btn"
-          onClick={() => {
-            const added = addText(film, playheadS)
-            commit(added.film)
-            setSelected(added.id)
-          }}
-          title="Ajouter un texte à la tête de lecture"
-        >
-          + Texte
-        </button>
-        <button
-          type="button"
-          className="film-tl__btn"
+        <BarButton
+          icon="type"
+          label="Texte"
+          name="Ajouter un texte à la tête de lecture"
+          tip={withShortcut('Ajouter un texte à la tête de lecture', 'add-text')}
+          onClick={() => editFilm((f) => addText(f, playheadS))}
+        />
+        <BarButton
+          icon="image"
+          label={reading ? 'Lecture…' : 'Photo'}
+          name={reading ? 'Lecture des photos…' : 'Ajouter des photos à la tête de lecture'}
+          tip="Ajouter des photos à la tête de lecture (ou les glisser sur la timeline)"
           onClick={() => photoInputRef.current?.click()}
           disabled={reading}
-          title="Ajouter des photos à la tête de lecture (ou les glisser sur la timeline)"
-        >
-          {reading ? 'Lecture…' : '+ Photo'}
-        </button>
+        />
         <input
           ref={photoInputRef}
           className="visually-hidden"
@@ -518,14 +623,7 @@ export function Timeline() {
             if (files.length > 0) void addPhotoFiles(files)
           }}
         />
-        <label
-          className="film-tl__check"
-          title="Arrêts générés aux temps forts (sommets des montées, cols, sommets) ; toute retouche d'un arrêt les fige"
-        >
-          <input type="checkbox" checked={film.autoStops} onChange={(e) => toggleAutoStops(e.currentTarget.checked)} />
-          Arrêts automatiques
-        </label>
-        <ModifiedMarker keys={['film']} label="Film" />
+        <span className="film-tl__sep" aria-hidden="true" />
         <select className="film-tl__select" aria-label="Vitesse de lecture" value={speed} onChange={(e) => setSpeed(Number(e.currentTarget.value))}>
           {SPEEDS.map((value) => (
             <option key={value} value={value}>
@@ -533,9 +631,38 @@ export function Timeline() {
             </option>
           ))}
         </select>
+        <div className="film-tl__zoom" role="group" aria-label="Zoom de la timeline">
+          <BarButton
+            icon="zoom-out"
+            name="Zoom arrière"
+            tip={withShortcut('Zoom arrière', 'zoom')}
+            onClick={() => zoomBy(1 / BUTTON_ZOOM)}
+            disabled={zoom <= ZOOM_RANGE.min}
+          />
+          <input
+            className="film-tl__zoom-range"
+            type="range"
+            min={0}
+            max={ZOOM_SLIDER_STEPS}
+            step={1}
+            value={zoomToSlider(zoom)}
+            aria-label="Zoom"
+            aria-valuetext={`×${formatNumber(zoom, 1)}`}
+            onChange={(e) => zoomBy(sliderToZoom(Number(e.currentTarget.value)) / zoom)}
+          />
+          <BarButton
+            icon="zoom-in"
+            name="Zoom avant"
+            tip={withShortcut('Zoom avant', 'zoom')}
+            onClick={() => zoomBy(BUTTON_ZOOM)}
+            disabled={zoom >= ZOOM_RANGE.max}
+          />
+          <BarButton icon="move-horizontal" label="Ajuster" name="Ajuster : voir tout le film" tip="Voir tout le film" onClick={fitZoom} disabled={zoom <= ZOOM_RANGE.min} />
+        </div>
+        <FilmOptions autoStops={film.autoStops} onAutoStops={toggleAutoStops} />
         <button
           type="button"
-          className="film-tl__btn film-tl__fold"
+          className="icon-btn"
           onClick={() => setCollapsed(!collapsed)}
           aria-expanded={!collapsed}
           aria-controls={`${id}-lanes`}
@@ -544,46 +671,14 @@ export function Timeline() {
           data-tip-side="top"
           data-tip-align="end"
         >
-          {collapsed ? '▴' : '▾'}
+          <Icon name={collapsed ? 'panel-bottom-open' : 'panel-bottom-close'} size={18} />
         </button>
       </div>
-
-      {notice && (
-        <div className="film-tl__notice" role="status">
-          <span className="film-tl__notice-text">{notice.text}</span>
-          {notice.placements.length > 0 && (
-            <button type="button" className="film-tl__btn" onClick={() => placePhotos(notice.placements)}>
-              Placer sur le parcours
-            </button>
-          )}
-          <button type="button" className="film-tl__btn" onClick={() => setNotice(null)} aria-label="Fermer le message">
-            ×
-          </button>
-        </div>
-      )}
 
       {!collapsed && (
         <div className="film-tl__body" id={`${id}-lanes`}>
           <div className="film-tl__heads">
-            <div className="film-tl__head film-tl__head--ruler">
-              {[
-                { factor: 1 / 1.5, sign: '−', label: 'Zoom arrière', disabled: zoom <= ZOOM_RANGE.min },
-                { factor: 1.5, sign: '+', label: 'Zoom avant', disabled: zoom >= ZOOM_RANGE.max },
-              ].map(({ factor, sign, label, disabled }) => (
-                <button
-                  key={sign}
-                  type="button"
-                  className="film-tl__zoom"
-                  onClick={() => zoomBy(factor)}
-                  disabled={disabled}
-                  aria-label={label}
-                  data-tip={`${label} (Ctrl+molette)`}
-                  data-tip-align="start"
-                >
-                  {sign}
-                </button>
-              ))}
-            </div>
+            <div className="film-tl__head film-tl__head--ruler" />
             {/* the lanes carry the same names */}
             {['Plans', 'Arrêts', 'Textes', 'Médias'].map((name) => (
               <div key={name} className="film-tl__head" aria-hidden="true">
@@ -639,6 +734,14 @@ export function Timeline() {
                       <path className="film-tl__profile-played" d={area} clipPath={`url(#${clipId})`} />
                     </svg>
                   )}
+                  {/* the stops inside the flight: where the flyover holds */}
+                  {shownClock.stops.map((s) => (
+                    <span
+                      key={s.id}
+                      className={`film-tl__flight-stop${s.id === selected ? ' film-tl__flight-stop--selected' : ''}`}
+                      style={{ left: (s.startS - flightStart) * pxPerS, width: (s.endS - s.startS) * pxPerS }}
+                    />
+                  ))}
                   <span className="film-tl__label">Survol · {formatDistance(lengthM)}</span>
                 </div>
                 {block(
@@ -696,18 +799,6 @@ export function Timeline() {
             </div>
           </div>
         </div>
-      )}
-
-      {!collapsed && selected && selectedExists && (
-        <FilmInspector
-          item={selected}
-          film={film}
-          clock={clock}
-          lengthM={lengthM}
-          change={change}
-          remove={() => remove(selected)}
-          close={() => setSelected(null)}
-        />
       )}
     </div>
   )

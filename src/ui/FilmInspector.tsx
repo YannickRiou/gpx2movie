@@ -1,14 +1,16 @@
-import { useId } from 'react'
+import { useId, useRef } from 'react'
 import type { ReactNode } from 'react'
-import type { FilmClock } from '../film/clock'
 import { useMediaStore } from '../film/media'
 import { ITEM_DURATION_RANGE, MEDIA_LAYOUTS, SHOT_DURATION_RANGE, SHOT_STYLES, STOP_CAMERAS, STOP_DURATION_RANGE } from '../film/model'
 import type { Film, MediaLayout, ShotStyle, StopCamera } from '../film/model'
-import { formatFilmTime, updateMedia, updateShot, updateStop, updateText } from '../film/timeline'
-import type { TimelineItem } from '../film/timeline'
+import { formatFilmTime, removeFilmItem, updateMedia, updateShot, updateStop, updateText } from '../film/timeline'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
+import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
+import { useAppStore } from '../state/store'
 import { formatDistance, formatNumber } from './format'
+import { Icon } from './icons'
+import { nextGridIndex } from './shell'
 
 const SHOT_STYLE_LABELS: Record<ShotStyle, string> = { aucune: 'Aucune', descente: 'Descente', saut: 'Saut' }
 const SHOT_HINTS: Record<ShotStyle, string> = {
@@ -22,22 +24,62 @@ const SIZE_RANGE = { min: WIDGET_SIZE_MIN, max: WIDGET_SIZE_MAX, step: 0.1 }
 
 const seconds = (s: number) => `${formatNumber(s, Number.isInteger(s) ? 0 : 1)} s`
 
-interface Props {
-  item: TimelineItem
-  /** committed film and its clock */
-  film: Film
-  clock: FilmClock
-  lengthM: number
-  /** edit the film (`stops`: generated stops written out first) */
-  change(fn: (film: Film) => Film, stops: boolean): void
-  remove(): void
-  close(): void
+/** Position in the frame as a 3 × 3 grid of radio buttons (the arrows move and choose, like native radios). */
+function AnchorPicker({ label, value, onChange }: { label: string; value: OverlayAnchor; onChange(anchor: OverlayAnchor): void }) {
+  const id = useId()
+  const cells = useRef<(HTMLButtonElement | null)[]>([])
+  return (
+    <div className="field">
+      <span id={`${id}-label`} className="field__label">
+        {label}
+      </span>
+      <div className="anchor-picker">
+        <div className="anchor-picker__grid" role="radiogroup" aria-labelledby={`${id}-label`}>
+          {OVERLAY_ANCHORS.map((anchor, i) => (
+            <button
+              key={anchor}
+              ref={(el) => {
+                cells.current[i] = el
+              }}
+              type="button"
+              role="radio"
+              className="anchor-picker__cell"
+              aria-checked={anchor === value}
+              aria-label={OVERLAY_ANCHOR_LABELS[anchor]}
+              tabIndex={anchor === value ? 0 : -1}
+              onClick={() => onChange(anchor)}
+              onKeyDown={(e) => {
+                const next = nextGridIndex(i, e.key, 3, OVERLAY_ANCHORS.length)
+                if (next === null) return
+                e.preventDefault()
+                onChange(OVERLAY_ANCHORS[next])
+                cells.current[next]?.focus()
+              }}
+            />
+          ))}
+        </div>
+        <span className="anchor-picker__value" aria-hidden="true">
+          {OVERLAY_ANCHOR_LABELS[value]}
+        </span>
+      </div>
+    </div>
+  )
 }
 
-/** Settings of the item selected on the timeline: opening / closing shot, stop, text or photo. */
-export function FilmInspector({ item, film, clock, lengthM, change, remove, close }: Props) {
+/**
+ * Settings of the block selected on the timeline (`filmSelection`), in the right dock: opening / closing shot, stop,
+ * text or photo. Typing is merged into one undo step; editing a generated stop writes the stops out first.
+ */
+export function FilmInspector() {
   const id = useId()
   const pictures = useMediaStore((s) => s.table)
+  const item = useAppStore((s) => s.filmSelection)
+  const { track, film } = useFilmSource()
+  const clock = useFilmClock()
+  if (!item || !track) return null
+  const lengthM = track.stats.distanceM
+  const change = (fn: (f: Film) => Film, stops: boolean) => editFilm((f) => ({ film: fn(f) }), { stops, step: false })
+  const close = () => useAppStore.getState().setFilmSelection(null)
   const range = (
     key: string,
     label: string,
@@ -100,18 +142,7 @@ export function FilmInspector({ item, film, clock, lengthM, change, remove, clos
   )
 
   const anchorSelect = (label: string, value: OverlayAnchor, set: (anchor: OverlayAnchor) => void) => (
-    <div className="field">
-      <label className="field__label" htmlFor={`${id}-anchor`}>
-        {label}
-      </label>
-      <select id={`${id}-anchor`} className="select" value={value} onChange={(e) => set(e.currentTarget.value as OverlayAnchor)}>
-        {OVERLAY_ANCHORS.map((anchor) => (
-          <option key={anchor} value={anchor}>
-            {OVERLAY_ANCHOR_LABELS[anchor]}
-          </option>
-        ))}
-      </select>
-    </div>
+    <AnchorPicker label={label} value={value} onChange={set} />
   )
   const timing = (startS: number, durationS: number, set: (patch: { startS?: number; durationS?: number }) => void) => (
     <div className="film-inspector__row">
@@ -124,6 +155,7 @@ export function FilmInspector({ item, film, clock, lengthM, change, remove, clos
   let body: ReactNode
   let removeLabel = 'Supprimer'
   let removable = true
+  let isStop = false
   if (item === 'opening' || item === 'closing') {
     const shot = film[item]
     title = item === 'opening' ? 'Ouverture' : 'Clôture'
@@ -168,6 +200,7 @@ export function FilmInspector({ item, film, clock, lengthM, change, remove, clos
     const filmText = film.texts.find((t) => t.id === item)
     const media = film.media.find((m) => m.id === item)
     if (stop) {
+      isStop = true
       title = 'Arrêt'
       const set = (patch: Parameters<typeof updateStop>[2]) => change((f) => updateStop(f, item, patch), true)
       body = (
@@ -241,16 +274,23 @@ export function FilmInspector({ item, film, clock, lengthM, change, remove, clos
     }
   }
 
+  const remove = () => editFilm((f) => ({ film: removeFilmItem(f, item), id: null }), { stops: isStop })
+
   return (
-    <section className="film-inspector" aria-labelledby={`${id}-title`}>
-      <header className="film-inspector__header">
-        <h2 id={`${id}-title`} className="film-inspector__title">
-          {title}
-        </h2>
-        <button type="button" className="film-inspector__close" onClick={close} aria-label="Fermer l'inspecteur" data-tip="Fermer (Échap)" data-tip-side="left">
-          ×
-        </button>
-      </header>
+    <section
+      className="settings film-inspector"
+      aria-labelledby={`${id}-title`}
+      onKeyDown={(e) => {
+        // Escape in a field (the shell's shortcuts leave text entries alone)
+        if (e.key === 'Escape') close()
+      }}
+    >
+      <h2 id={`${id}-title`} className="section-title settings__title">
+        {title}
+      </h2>
+      <button type="button" className="icon-btn settings__close" onClick={close} aria-label="Fermer l'inspecteur" data-tip="Fermer (Échap)" data-tip-align="end">
+        <Icon name="x" size={18} />
+      </button>
       {body}
       <button type="button" className="btn btn--secondary film-inspector__remove" onClick={remove} disabled={!removable}>
         {removeLabel}

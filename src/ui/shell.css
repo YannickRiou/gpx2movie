@@ -28,7 +28,9 @@
 .topbar :focus-visible,
 .rail :focus-visible,
 .status :focus-visible,
-.view__fit:focus-visible {
+.view__fit:focus-visible,
+.film-tl__bar :focus-visible,
+.track-menu :focus-visible {
   outline: var(--focus-ring-on-dark);
   outline-offset: 2px;
   box-shadow: none;
@@ -887,6 +889,218 @@
   margin-top: var(--space-3);
 }
 
+/* Inspector of the selected timeline block, in the dock (header and close as the export drawer) ------- */
+.dock > .film-inspector {
+  font-size: 13px;
+}
+
+/* position in the frame: 3 × 3 radio buttons drawn as a small frame */
+.anchor-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.anchor-picker__grid {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(3, 28px);
+  grid-auto-rows: 18px;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+}
+
+.anchor-picker__cell {
+  position: relative;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--color-paper);
+  cursor: pointer;
+}
+
+.anchor-picker__cell::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--color-line);
+}
+
+.anchor-picker__cell:hover::before {
+  background: var(--text-2);
+}
+
+.anchor-picker__cell[aria-checked='true'] {
+  background: var(--color-ink);
+}
+
+.anchor-picker__cell[aria-checked='true']::before {
+  background: var(--color-accent-light);
+}
+
+.anchor-picker__cell:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.anchor-picker__value {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+/* Timeline bar (lanes and blocks in app.css): icon buttons on the ink, zoom, « Options » menu ------------ */
+.film-tl__bar .icon-btn {
+  height: 28px;
+  min-width: 28px;
+  color: var(--color-white);
+  font-size: 12px;
+}
+
+.film-tl__bar .icon-btn:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.film-tl__play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.film-tl__sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background: var(--color-ink-soft);
+}
+
+.film-tl__zoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.film-tl__zoom-range {
+  width: 88px;
+  margin: 0 2px;
+  accent-color: var(--color-accent-light);
+}
+
+.film-tl__options {
+  position: relative;
+}
+
+/* the menu opens above its button: no tooltip over it */
+.film-tl__options [aria-expanded='true']::after {
+  display: none;
+}
+
+/* the film differs from its defaults (the « modifié » marker is in the menu) */
+.film-tl__dot {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent-light);
+}
+
+.film-tl__menu {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 6px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 260px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-ink-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-chrome);
+  color: var(--color-white);
+  font-size: 13px;
+  box-shadow: var(--shadow-pop);
+  animation: tip-in 120ms ease both;
+}
+
+.film-tl__menu-title {
+  margin: 0;
+  font: 600 13px/1.3 var(--font-heading);
+}
+
+.film-tl__menu-hint {
+  margin: 0;
+  color: var(--color-glacier);
+  font-size: 12px;
+}
+
+/* stops inside the flight bar of the « Plans » lane: a tinted window with an accent edge on top */
+.film-tl__flight-stop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  min-width: 3px;
+  border-top: 3px solid var(--color-accent-light);
+  pointer-events: none;
+}
+
+.film-tl__flight-stop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--color-accent-light);
+  opacity: 0.2;
+}
+
+.film-tl__flight-stop--selected {
+  border-top-color: var(--color-white);
+}
+
+/* Right-click menu on the track, over the 3D view (TrackPicker.tsx) ------------------------------------ */
+.track-menu {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: var(--space-1);
+  border: 1px solid var(--color-ink-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-chrome);
+  color: var(--color-white);
+  box-shadow: var(--shadow-pop);
+  animation: tip-in 120ms ease both;
+}
+
+.track-menu__item {
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: 600 13px/1 var(--font-body);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.track-menu__item:hover,
+.track-menu__item:focus-visible {
+  background: rgb(255 255 255 / 0.1);
+}
+
 /* Status strip --------------------------------------------------------------- */
 .status {
   display: flex;
@@ -1061,7 +1275,9 @@
   }
 
   .toast,
-  .drop-veil {
+  .drop-veil,
+  .film-tl__menu,
+  .track-menu {
     animation: none;
   }
 

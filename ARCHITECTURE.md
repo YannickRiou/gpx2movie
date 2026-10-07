@@ -38,14 +38,14 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/terrain/imagery.ts` | texture composée | `loadImageryTexture: LoadImageryTexture` |
 | `src/terrain/mesh.ts` | géométrie d'une tuile | `buildTileGeometry(key, grid, frame, opts: BuildTileGeometryOptions): TileGeometryResult` |
 | `src/terrain/quadtree.ts` + `engine.ts` | LOD, chargement, groupe Three | `createTerrainEngine(options: TerrainEngineOptions, deps?: Partial<EngineDeps>, tuning?: Partial<EngineTuning>): TerrainEngine` (deps injectables pour les tests) |
-| `src/scene/*.tsx` | composants R3F | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `CameraRig`, `FlyoverRig`, `useDebouncedCallback` |
-| `src/flyover/path.ts` | chemin de survol | `buildTrackPath(track): TrackPath` (segments concaténés, distances cumulées, `time` en ms ou NaN), `samplePath(path, distanceM): PathSample` (`ele` et `time` interpolés seulement si les deux voisins les ont), `recordedTimeAt(path, distanceM)` (comble les points sans heure), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)` |
+| `src/scene/*.tsx` | composants R3F | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `TrackPicker` (+ `TrackMenu`, DOM), `CameraRig`, `FlyoverRig`, `useDebouncedCallback` |
+| `src/flyover/path.ts` | chemin de survol | `buildTrackPath(track): TrackPath` (segments concaténés, distances cumulées, `time` en ms ou NaN), `samplePath(path, distanceM): PathSample` (`ele` et `time` interpolés seulement si les deux voisins les ont), `recordedTimeAt(path, distanceM)` (comble les points sans heure), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)`, `pickProjectedPath(screen, distM, px, py, maxPx)` (point de la trace projetée le plus proche du pointeur) |
 | `src/flyover/camera.ts` | caméra de survol | `computeCameraView(path, progress, frame, sampler, exaggeration, camera, durationS)`, `smoothedTurn` |
 | `src/flyover/cameraSettings.ts` | styles et préréglages caméra | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
 | `src/flyover/climbs.ts` | montées détectées | `detectClimbs`, `climbsOf(track)` (cache par trace), seuils exportés, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
 | `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses données par le film) ; `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
-| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits, `addPhotos`, `updateMedia`, `photoFilmTime` ; `exif.ts` : `parseExif`, `photoTimeMs` ; `media.ts` (seul module non pur du dossier) : `MediaAsset`, `MediaTable`, `sanitizeMediaTable`, `usedMedia`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` |
+| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits (`removeFilmItem` passe un plan à « aucune »), `hasFilmItem`, `addPhotos`, `updateMedia`, `photoFilmTime` ; `exif.ts` : `parseExif`, `photoTimeMs` ; `media.ts` (seul module non pur du dossier) : `MediaAsset`, `MediaTable`, `sanitizeMediaTable`, `usedMedia`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` |
 | `src/flyover/filmCamera.ts` | caméra du film | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `blendViews`, `shotBlend`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | date du soleil, lever / coucher | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
@@ -58,7 +58,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | météo dans la scène | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction` ; `WeatherEffect` |
 | `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
-| `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `shellShortcut`, `routeOpenedFiles`, `nextTabIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `importTrackFiles`, `loadSample`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
+| `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `shellShortcut`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `importTrackFiles`, `loadSample`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
 
 ### Règles de développement
 
@@ -186,11 +186,16 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   sur l'onglet ouvert, le bouton du bas du rail ou `[` replient le panneau. Onglet et repli mémorisés par le navigateur
   (`localStorage` `openflyover.shell.v1`, `parseShellPrefs`), pas par le projet.
 - **Dock droit** (300 px) : tiroir d'export non modal (`ExportPanel` : formats en tuiles, résolution, estimation, « Exporter
-  la vidéo », « Image fixe », « Plus d'options » : images par seconde, qualité, type d'image). Sous 1360 px de large, un seul
-  côté ouvert à la fois : ouvrir le tiroir replie le panneau et le rouvre à la fermeture (`shellReducer`).
+  la vidéo », « Image fixe », « Plus d'options » : images par seconde, qualité, type d'image) ; sinon l'**inspecteur** du bloc
+  sélectionné sur la timeline (`FilmInspector`, deux `<aside class="dock">` dont un seul visible : le tiroir passe devant,
+  l'inspecteur revient à sa fermeture si le bloc est encore sélectionné). Sous 1360 px de large, un seul côté ouvert à la
+  fois : ce qui remplit le dock (tiroir ou inspecteur) replie le panneau, qui revient quand le dock se vide ; déplier le
+  panneau vide le dock et désélectionne le bloc (`shellReducer` : `inspecting`, événement `inspect`, que `App` envoie quand
+  `filmSelection` change, après le relâcher d'un appui : la timeline ne change pas d'échelle sous un glisser).
 - **Pendant un export** : onglets, repli du panneau, format, « Ouvrir », « Recadrer », annuler / rétablir (boutons) et
   fermeture du tiroir sont désactivés (redimensionner la scène redimensionnerait le canvas).
-- **Vue** : bouton flottant « Recadrer la vue » (F).
+- **Vue** : bouton flottant « Recadrer la vue » (F) ; clic sur la trace et menu du clic droit (`TrackPicker`, voir « Film et
+  timeline »).
 - **Messages** (`toast.ts`, `Toaster.tsx`) : petit store zustand (`showToast`, `dismissToast`, `pushToast` pur : le même
   message remplace l'ancien, 4 au plus, l'erreur la plus ancienne part en dernier), affichés en bas au centre de la vue,
   au-dessus de la timeline, dans une seule région `aria-live` toujours montée. Succès et info disparaissent après
@@ -200,7 +205,7 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   fichier, préréglages, export (« Vidéo prête · Télécharger à nouveau », « Image prête », échec), « Réglages remis par
   défaut · Annuler » (`resetSettings` renvoie une annulation gardée : elle n'agit que si les réglages sont encore ceux du
   retour, donc jamais sur une étape postérieure ni antérieure ; le message disparaît au changement suivant des réglages).
-  Le message des photos de la timeline reste sous sa barre.
+  Aussi les photos ajoutées sur la timeline (« Placer sur le parcours » en action).
 - **Dépôt partout** : `dragover` / `drop` sur `window` (dans `App`) : fichiers `.gpx` / `.fit` importés, `.json` ouvert
   comme projet (`openFiles`, routage `routeOpenedFiles`), voile plein écran « Déposez vos traces GPX ou FIT »
   (`pointer-events: none`) pendant le glissement (`isFileDrag`). Un dépôt déjà traité (`defaultPrevented` : la timeline
@@ -210,12 +215,15 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - **Raccourcis** (`src/ui/shortcuts.ts`) : registre `SHORTCUTS` (id, touches, libellé, groupe Lecture / Montage / Projet /
   Vue) affiché par la boîte « Raccourcis clavier » (`HelpDialog.tsx`, `<dialog>` natif, « ? » ou le bouton de la barre)
   et repris dans les infobulles (`withShortcut`). `matchShortcut(touche, keyFocus(cible))`, pur : Ctrl/Cmd+S enregistrer,
-  Ctrl/Cmd+O ouvrir, Ctrl/Cmd+E tiroir d'export, F recadrer, `[` replier et `?` aide (AltGr / Maj acceptés), Échap, ← / →
+  Ctrl/Cmd+O ouvrir, Ctrl/Cmd+E tiroir d'export, F recadrer, S arrêt au marqueur, T texte à la tête de lecture, `[` replier
+  et `?` aide (AltGr / Maj acceptés), Échap, ← / →
   (Maj : 5 s, `seekTime`), Début / Fin ; rien dans un champ texte ou une liste (`isTextEntry`), ni flèches ni Début / Fin
   sur un contrôle qui s'en sert (curseur, radio, onglet, règle de la timeline). Pas de raccourci à chiffre (AZERTY). `App`
   écoute en phase de capture (aucun raccourci tant qu'une boîte modale est ouverte) ; Échap ferme dans l'ordre la boîte
-  (native), le tiroir d'export, puis la sélection de la timeline. Le déplacement de la tête de lecture vit dans
-  `SeekShortcuts` (composant sans rendu, horloge du film, phase de bulle : un bloc sélectionné garde ses flèches).
+  (native), le tiroir d'export, puis la sélection de la timeline (dans un champ de l'inspecteur aussi) ; un menu ouvert
+  (« Options » de la timeline, clic droit sur la trace : `data-local-escape`) se ferme d'abord lui-même. Le déplacement de
+  la tête de lecture et S / T vivent dans `SeekShortcuts` (composant sans rendu, horloge du film, phase de bulle : un bloc
+  sélectionné garde ses flèches).
   `installHistoryShortcuts` (Ctrl/Cmd+Z, Ctrl/Cmd+Maj+Z, Ctrl+Y) et Espace (timeline) restent à leur place.
 - **Infobulles** : `data-tip` en CSS (`shell.css`), après 450 ms, au survol et au focus clavier, sur chaque bouton à icône
   seule ; `data-tip-side` (`top`, `left`, `right`) et `data-tip-align` (`start`, `end`) près des bords de la fenêtre ou
@@ -382,7 +390,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   `autoStops`) appartiennent à la trace et restent ceux du projet courant à l'application (`presetSettings`, y compris pour
   un préréglage enregistré avec tout le film).
 - **Horloge du film** (`src/film/clock.ts`, `buildFilmClock` / `filmClockFor`, hook `useFilmClock` dans
-  `src/scene/usePacing.ts`, alias `usePacing` pour les panneaux) : temps du film (s à ×1 depuis la première image) →
+  `src/scene/usePacing.ts`, alias `usePacing` pour les panneaux ; au même endroit `getFilmSource` hors React et
+  `editFilm(edit, { stops, step })` : retouche du film des stores en un pas d'annulation, arrêts générés écrits d'abord
+  pour un arrêt, sélection du bloc rendu par la retouche) : temps du film (s à ×1 depuis la première image) →
   `stateAt(t)` = `{ phase: 'opening' | 'flight' | 'stop' | 'closing', progress, flightTimeS, stop, localS, lengthS }`.
   [0, O) ouverture (progression 0), [O, O + F) vol, [O + F, total] clôture (progression 1). Le vol est `flightPacing` :
   ralentis du rythme aux temps forts, arrêts du film insérés avec entrée et sortie en cosinus surélevé (≤ 1,5 s), chacun sa
@@ -407,16 +417,21 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - **Temps du film conservé** : quand l'horloge change (retouche du film, durée, rythme), `FlyoverRig` garde `playback.timeS`
   et en déduit la progression : une retouche en pause ne fait pas sauter la tête de lecture.
 - **Timeline** (`src/ui/Timeline.tsx`, logique pure dans `src/film/timeline.ts`, inspecteur `src/ui/FilmInspector.tsx`) :
-  bandeau sous la vue 3D (`.view__stage` au-dessus, la vue rétrécit d'autant ; ~150 px, pistes repliables). Barre : lecture,
-  temps `m:ss,d / m:ss`, distance / altitude / heure au marqueur, « + Arrêt » (à la position du marqueur, source `manual`,
-  4 s, orbite), « Arrêt à un temps fort… » (temps forts sans arrêt), « + Texte » (à la tête de lecture, 4 s, en bas au
-  centre), « + Photo » (voir « Photos »), case « Arrêts automatiques » (cochée : `autoStops` + `'temps-forts'`, arrêts propres effacés ; décochée : arrêts
-  générés écrits), pastille « modifié » / « Par défaut » du film (`ModifiedMarker keys={['film']}`), vitesse, replier.
+  bandeau sous la vue 3D (`.view__stage` au-dessus, la vue rétrécit d'autant ; ~150 px, pistes repliables). Barre, un seul
+  style de contrôle (boutons à icône Lucide, infobulle `data-tip` avec le raccourci du registre, libellé court masqué à
+  1280 px) : lecture, ■ (pause et retour à la première image), temps `m:ss,d / m:ss`, distance / altitude / heure au
+  marqueur, « Arrêt » (S : à la position du marqueur, au mètre, source `manual`, 4 s, orbite), « Arrêt à un temps fort… »
+  (temps forts sans arrêt), « Texte » (T : à la tête de lecture, 4 s, en bas au centre), « Photo » (voir « Photos »), vitesse,
+  zoom (− / curseur logarithmique / + / « Ajuster » = tout le film), menu « Options » (case « Arrêts automatiques » :
+  cochée, `autoStops` + `'temps-forts'`, arrêts propres effacés ; décochée, arrêts générés écrits ; pastille « modifié » /
+  « Par défaut » du film, `ModifiedMarker keys={['film']}` ; un point sur le bouton quand le film s'écarte du défaut ; se
+  ferme par Échap, un clic dehors ou Tab), replier.
   Règle (`rulerTicks`, pas de 1 s à 1 h selon le zoom, ≥ 56 px) : cliquer-glisser pour se placer **ouverture et clôture
   comprises** (`setProgress(clock.progressAtTime(t), t)`, fin du film = progression 1 sans temps) ; c'est aussi un curseur
   clavier (flèches ±1 s, Maj ±5 s, Page ±10 s, Début / Fin). Pistes « Plans » (ouverture, survol avec profil, clôture ;
-  « aucune » = amorce pointillée sélectionnable), « Arrêts » (fenêtre de chaque arrêt, entrée et sortie comprises ;
-  pointillés tant qu'ils sont générés), « Textes », « Médias » (photos, avec leur vignette).
+  « aucune » = amorce pointillée sélectionnable ; les arrêts y sont aussi marqués sur la barre du survol, fenêtre teintée
+  et bord haut à l'accent, blanc pour l'arrêt sélectionné), « Arrêts » (fenêtre de chaque arrêt, entrée et sortie
+  comprises ; pointillés tant qu'ils sont générés), « Textes », « Médias » (photos, avec leur vignette).
 - **Gestes** (`dragFilm`, pur) : glisser un arrêt le déplace le long de la trace — son début de tenue suit le pointeur,
   position trouvée par dichotomie sur l'horloge (`stopPositionAt`, 32 pas) ; son bord droit l'allonge (en proportion du
   plafond `keepDuration`) ; un texte ou une photo se déplace ou s'étire par ses deux bords ; le bord intérieur de l'ouverture / de la
@@ -427,14 +442,31 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   pas d'annulation** (`history.transaction`) ; l'échelle reste celle du film validé pendant le geste. Clavier sur un bloc :
   flèches ±1 s (Maj ±0,1 s, pas fusionnés comme un curseur), Suppr / Retour arrière supprime (un plan passe à « aucune »),
   Échap désélectionne ; Espace lance / arrête la lecture hors des champs et boutons. Ctrl+molette zoome autour du pointeur
-  (`zoomAt`, ×1 à ×50), boutons − / + autour de la tête de lecture ; défilement horizontal natif.
-- **Inspecteur** (au-dessus de la timeline, à droite de la vue, 300 px) : plan (style, durée), arrêt (libellé, durée,
-  caméra orbite / fixe, position et fenêtre), texte (texte, sous-titre, position, taille, début, durée), photo (vignette,
-  affichage plein écran / carte, Ken Burns, légende, position, taille, début, durée). Les modifications
-  passent par `setSetting` (frappes fusionnées en un pas) ; retoucher un arrêt généré écrit d'abord tous les arrêts.
+  (`zoomAt`, ×1 à ×50), boutons − / + et curseur autour de la tête de lecture, « Ajuster » revient à ×1 ; défilement
+  horizontal natif.
+- **Sélection** : `filmSelection` du store (ajouté en fin d'état, ni enregistré ni annulable), posée par un appui ou le
+  focus sur un bloc et par les ajouts (`editFilm` sélectionne le nouveau bloc), effacée par Échap, la fermeture de
+  l'inspecteur, une suppression, ou quand le bloc n'existe plus (annulation, autre trace, arrêts générés déplacés :
+  `hasFilmItem`, effet de `Timeline`).
+- **Inspecteur** (`FilmInspector`, sans props, dans le dock droit, en-tête collant et ✕ comme le tiroir d'export) : plan
+  (style, durée), arrêt (libellé, durée, caméra orbite / fixe, position et fenêtre), texte (texte, sous-titre, position,
+  taille, début, durée), photo (vignette, affichage plein écran / carte, Ken Burns, légende, position, taille, début, durée).
+  Position : grille 3 × 3 (`radiogroup` de 9 `role="radio"`, focus itinérant, flèches qui déplacent et choisissent,
+  `nextGridIndex`, libellé de la position à côté). Les modifications passent par `editFilm(…, { step: false })` (frappes
+  fusionnées en un pas) ; retoucher un arrêt généré écrit d'abord tous les arrêts.
+- **Sur la trace** (`src/scene/TrackPicker.tsx`, monté dans `FlyoverCanvas`) : un clic sur la première trace place la tête
+  de lecture au point visé (`setProgress(p, clock.timeAtProgress(p))`) ; un clic droit ouvre « Ajouter un arrêt ici » /
+  « Ajouter un texte ici » (`TrackMenu`, DOM au-dessus du canvas, `role="menu"`, flèches, Échap, clic dehors ; chaque ajout
+  par `editFilm` : un pas d'annulation, bloc sélectionné) ; curseur main au survol de la trace. Clic = appui et relâcher du
+  même bouton à moins de 4 px (un glisser d'OrbitControls n'est pas un clic ; le menu s'ouvre au relâcher, pas sur
+  `contextmenu`, qui part à l'appui sous Linux et macOS). Sélection en espace écran (`pickProjectedPath`, pur) : 1 500
+  points répartis le long de la trace, plaqués comme la ligne (relief chargé, sinon altitude enregistrée, × exagération +
+  3 m ; recalculés au plus une fois par seconde), projetés par la caméra, segment le plus proche à 12 px au plus,
+  distance interpolée. Rien pendant un export. Limite : une portion cachée par le relief se sélectionne aussi (la ligne
+  la montre en transparence).
 - **Textes dans le film** (incrément 3) : dessinés par l'habillage (voir « Habillage du film », temps du film et textes de
   la timeline), dans l'aperçu comme à l'export.
-- **Photos** (incrément 4) : « + Photo » (sélecteur, plusieurs fichiers) ou fichiers déposés sur la timeline ; les photos
+- **Photos** (incrément 4) : « Photo » (sélecteur, plusieurs fichiers) ou fichiers déposés sur la timeline ; les photos
   sont lues une à une (`readPhoto`), ajoutées à la table des médias (`useMediaStore.add`, ids `photo-<n>`) puis au film à
   la tête de lecture, 5 s chacune à la suite (`addPhotos`), en un pas d'annulation ; les fichiers qui ne sont pas des
   images (vidéos) sont ignorés avec un message. `readPhoto` lit l'EXIF des 128 premiers Ko (`parseExif`, analyseur pur :
@@ -444,7 +476,7 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   (`photoFilmTime`, pur) : point de la trace le plus proche de la position (à 2 km au plus ; sur un aller-retour, le
   passage enregistré le plus près de l'heure, `nearestOnPath`), sinon point enregistré à l'heure de la photo (trace
   horodatée, 15 min de tolérance aux extrémités, `distanceAtTime`) ; temps du film = `clock.timeAtProgress(distance /
-  longueur)`. Un message sous la barre propose « Placer sur le parcours » (un pas d'annulation de plus).
+  longueur)`. Le message (toast) propose « Placer sur le parcours » (un pas d'annulation de plus).
 - **Table des médias** (`src/film/media.ts`) : les octets ne sont pas dans les réglages (historique et préréglages
   légers) mais dans une table du document `{ id: { data, thumb, width, height, name? } }` (data URL JPEG). Une image
   reste dans la table quand sa photo quitte le film (l'annulation la retrouve) ; l'enregistrement n'écrit que les images

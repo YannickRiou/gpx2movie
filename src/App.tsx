@@ -1,14 +1,16 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { isExportBusy, useExportStore } from './export/store'
+import { addStop, addText } from './film/timeline'
 import { getSettingsHistory, installHistoryShortcuts } from './project/history'
-import { useFilmClock } from './scene/usePacing'
+import { editFilm, useFilmClock } from './scene/usePacing'
 import { useAppStore } from './state/store'
 import type { Settings } from './state/store'
 import { CameraPanel } from './ui/CameraPanel'
 import { ClimbList } from './ui/ClimbList'
 import { EmptyState } from './ui/EmptyState'
 import { ExportPanel } from './ui/ExportPanel'
+import { FilmInspector } from './ui/FilmInspector'
 import { HelpDialog } from './ui/HelpDialog'
 import { Icon } from './ui/icons'
 import type { IconName } from './ui/icons'
@@ -54,10 +56,13 @@ const isExporting = () => isExportBusy(useExportStore.getState().phase)
 /** a modal dialog (help, sources) is open: it takes the keyboard, Escape closes it */
 const isDialogOpen = () => document.querySelector('dialog[open]') !== null
 
+/** Escape is left to an open menu inside this element (it closes itself first). */
+const handlesOwnEscape = (target: EventTarget | null) => target instanceof Element && target.closest('[data-local-escape]') !== null
+
 /**
- * ← / → (Shift: 5 s), Home and End move the playhead in film time. Its own component: the film clock changes with
- * the settings and must not re-render the shell. Listens in the bubble phase, after a timeline block that moves
- * with the arrows (it prevents the default).
+ * ← / → (Shift: 5 s), Home and End move the playhead in film time; S / T add a stop at the marker / a text at the
+ * playhead. Its own component: the film clock changes with the settings and must not re-render the shell. Listens in
+ * the bubble phase, after a timeline block that moves with the arrows (it prevents the default).
  */
 function SeekShortcuts() {
   const clock = useFilmClock()
@@ -75,6 +80,13 @@ function SeekShortcuts() {
       const c = clockRef.current
       const total = c.totalTime()
       const playhead = Math.min(store.playback.timeS ?? c.timeAtProgress(store.playback.progress), total)
+      if (action === 'add-stop' || action === 'add-text') {
+        e.preventDefault()
+        if (e.repeat) return
+        if (action === 'add-stop') editFilm((f) => addStop(f, Math.round(store.playback.progress * store.tracks[0].stats.distanceM)), { stops: true })
+        else editFilm((f) => addText(f, playhead))
+        return
+      }
       const t = seekTime(action, playhead, total)
       if (t === null) return
       e.preventDefault()
@@ -108,7 +120,13 @@ function Fold({ title, keys, hidden, children }: { title: string; keys?: (keyof 
 export default function App() {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
   const exporting = useExportStore((s) => isExportBusy(s.phase))
-  const [shell, dispatch] = useReducer(shellReducer, undefined, () => ({ ...loadPrefs(), dockOpen: false, collapsedByDock: false }))
+  const selected = useAppStore((s) => s.filmSelection !== null && s.tracks.length > 0)
+  const [shell, dispatch] = useReducer(shellReducer, undefined, () => ({
+    ...loadPrefs(),
+    dockOpen: false,
+    collapsedByDock: false,
+    inspecting: false,
+  }))
   const [dragging, setDragging] = useState(false)
   const openInput = useRef<HTMLInputElement>(null)
   const helpDialog = useRef<HTMLDialogElement>(null)
@@ -131,15 +149,66 @@ export default function App() {
 
   useEffect(() => installHistoryShortcuts(getSettingsHistory()), [])
 
+  /** a pointer button is down */
+  const pressed = useRef(false)
   useEffect(() => {
-    // capture phase: Escape closes the export drawer before the timeline deselects its block
+    const down = () => {
+      pressed.current = true
+    }
+    const up = () => {
+      pressed.current = false
+    }
+    // a release outside the window is not seen: the next move tells
+    const move = (e: PointerEvent) => {
+      pressed.current = e.buttons !== 0
+    }
+    window.addEventListener('pointerdown', down, true)
+    window.addEventListener('pointerup', up, true)
+    window.addEventListener('pointercancel', up, true)
+    window.addEventListener('pointermove', move, true)
+    return () => {
+      window.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('pointerup', up, true)
+      window.removeEventListener('pointercancel', up, true)
+      window.removeEventListener('pointermove', move, true)
+    }
+  }, [])
+
+  // a timeline block selected: its inspector in the dock, after the release of a press (the timeline must not change
+  // scale under a drag); the dock given back to the panel (narrow window): deselected
+  useEffect(() => {
+    const show = () => {
+      window.removeEventListener('pointerup', show)
+      window.removeEventListener('pointercancel', show)
+      dispatch({ type: 'inspect', open: selected, narrow: isNarrow() })
+    }
+    if (!selected || !pressed.current) {
+      show()
+      return
+    }
+    window.addEventListener('pointerup', show)
+    window.addEventListener('pointercancel', show)
+    return () => {
+      window.removeEventListener('pointerup', show)
+      window.removeEventListener('pointercancel', show)
+    }
+  }, [selected])
+  useEffect(() => {
+    if (!shell.inspecting) useAppStore.getState().setFilmSelection(null)
+  }, [shell.inspecting])
+
+  useEffect(() => {
+    // capture phase: Escape closes the export drawer, else deselects the timeline block (the dialogs close themselves)
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.isComposing || isDialogOpen()) return
       const action = matchShortcut(e, keyFocus(e.target))
-      if (!action || action.startsWith('seek')) return
+      if (!action || action.startsWith('seek') || action.startsWith('add-')) return
       if (action === 'close') {
-        if (!dockOpen.current || isExporting()) return
-        dispatch({ type: 'close-dock' })
+        if (handlesOwnEscape(e.target)) return
+        const store = useAppStore.getState()
+        if (dockOpen.current && !isExporting()) dispatch({ type: 'close-dock' })
+        else if (store.filmSelection !== null) store.setFilmSelection(null)
+        else return
         e.stopPropagation()
       } else if (action === 'help') {
         helpDialog.current?.showModal()
@@ -316,6 +385,10 @@ export default function App() {
 
         <aside id="export-dock" className="dock" aria-label="Export" hidden={!shell.dockOpen}>
           <ExportPanel onClose={exporting ? undefined : () => dispatch({ type: 'close-dock' })} />
+        </aside>
+        {/* the export drawer goes first */}
+        <aside className="dock" aria-label="Inspecteur" hidden={shell.dockOpen || !shell.inspecting}>
+          {shell.inspecting && !shell.dockOpen && <FilmInspector />}
         </aside>
       </div>
 

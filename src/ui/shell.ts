@@ -62,6 +62,22 @@ export function nextTabIndex(current: number, key: string, count: number): numbe
   return null
 }
 
+/**
+ * Index of the cell that takes the focus after `key` in a grid of `count` cells, `columns` per row (row by row), null
+ * for any other key: the arrows move one cell and stop at the edges, Home / End go to the first / last cell.
+ */
+export function nextGridIndex(current: number, key: string, columns: number, count: number): number | null {
+  if (count <= 0 || columns <= 0) return null
+  const col = current % columns
+  if (key === 'ArrowLeft') return col > 0 ? current - 1 : current
+  if (key === 'ArrowRight') return col < columns - 1 && current + 1 < count ? current + 1 : current
+  if (key === 'ArrowUp') return current - columns >= 0 ? current - columns : current
+  if (key === 'ArrowDown') return current + columns < count ? current + columns : current
+  if (key === 'Home') return 0
+  if (key === 'End') return count - 1
+  return null
+}
+
 /** Name used for the project file: the typed name, else the first track's, else « Sans titre ». */
 export function effectiveProjectName(name: string, firstTrackName: string | undefined): string {
   return name.trim() || firstTrackName || DEFAULT_PROJECT_NAME
@@ -80,7 +96,7 @@ export function isProjectDirty(current: SavedProject, saved: SavedProject): bool
 }
 
 // ---------------------------------------------------------------------------
-// Side columns: tabs of the left panel and the right dock (export drawer)
+// Side columns: tabs of the left panel and the right dock (export drawer, else the inspector of the timeline)
 // ---------------------------------------------------------------------------
 
 export const SHELL_TABS = ['trace', 'carte', 'survol', 'habillage', 'projet'] as const
@@ -97,6 +113,8 @@ export interface ShellState {
   dockOpen: boolean
   /** the panel was folded by the opening of the dock: it comes back when the dock closes */
   collapsedByDock: boolean
+  /** a timeline block is selected: the dock shows its inspector (the export drawer goes first) */
+  inspecting: boolean
 }
 
 export type ShellEvent =
@@ -107,17 +125,31 @@ export type ShellEvent =
   | { type: 'toggle-panel'; narrow: boolean }
   | { type: 'toggle-dock'; narrow: boolean }
   | { type: 'close-dock' }
+  /** a timeline block is selected (`open`) or no longer */
+  | { type: 'inspect'; open: boolean; narrow: boolean }
 
-/** The panel unfolds; on a narrow window it takes the place of the dock. */
+/** The panel unfolds; on a narrow window it takes the place of the dock (drawer and inspector). */
 function unfold(state: ShellState, narrow: boolean): ShellState {
-  return { ...state, collapsed: false, collapsedByDock: false, dockOpen: narrow ? false : state.dockOpen }
+  return narrow
+    ? { ...state, collapsed: false, collapsedByDock: false, dockOpen: false, inspecting: false }
+    : { ...state, collapsed: false, collapsedByDock: false }
+}
+
+/** The dock shows nothing any more: the panel folded by its opening comes back. */
+function emptyDock(state: ShellState): ShellState {
+  return state.collapsedByDock ? { ...state, collapsed: false, collapsedByDock: false } : state
 }
 
 function closeDock(state: ShellState): ShellState {
   if (!state.dockOpen) return state
-  return state.collapsedByDock
-    ? { ...state, dockOpen: false, collapsed: false, collapsedByDock: false }
-    : { ...state, dockOpen: false }
+  const closed = { ...state, dockOpen: false }
+  return state.inspecting ? closed : emptyDock(closed)
+}
+
+/** Something appears in an empty dock: on a narrow window it folds the panel. */
+function fillDock(state: ShellState, narrow: boolean): ShellState {
+  if (narrow && !state.collapsed) return { ...state, collapsed: true, collapsedByDock: true }
+  return state
 }
 
 /** `narrow`: the window is narrower than ONE_SIDE_MAX_WIDTH when the event happens. */
@@ -132,10 +164,13 @@ export function shellReducer(state: ShellState, event: ShellEvent): ShellState {
       return state.collapsed ? unfold(state, event.narrow) : { ...state, collapsed: true, collapsedByDock: false }
     case 'toggle-dock':
       if (state.dockOpen) return closeDock(state)
-      if (event.narrow && !state.collapsed) return { ...state, dockOpen: true, collapsed: true, collapsedByDock: true }
-      return { ...state, dockOpen: true }
+      return fillDock({ ...state, dockOpen: true }, event.narrow)
     case 'close-dock':
       return closeDock(state)
+    case 'inspect':
+      if (event.open === state.inspecting) return state
+      if (!event.open) return state.dockOpen ? { ...state, inspecting: false } : emptyDock({ ...state, inspecting: false })
+      return state.dockOpen ? { ...state, inspecting: true } : fillDock({ ...state, inspecting: true }, event.narrow)
   }
 }
 
