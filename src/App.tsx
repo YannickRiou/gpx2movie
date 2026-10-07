@@ -5,6 +5,7 @@ import { CameraPanel } from './ui/CameraPanel'
 import { ClimbList } from './ui/ClimbList'
 import { ExportPanel } from './ui/ExportPanel'
 import { ImportPanel } from './ui/ImportPanel'
+import { LandmarkPanel } from './ui/LandmarkPanel'
 import { OverlayPanel } from './ui/OverlayPanel'
 import { ProjectPanel } from './ui/ProjectPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
@@ -36,6 +37,7 @@ export default function App() {
           <ImportPanel />
           <TrackList />
           <WeatherPanel />
+          <LandmarkPanel />
           <ClimbList />
           <SettingsPanel />
           <CameraPanel />

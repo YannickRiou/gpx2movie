@@ -73,6 +73,11 @@ describe('engine options from settings', () => {
     weather: { enabled: true },
     overlay: DEFAULT_OVERLAY,
     video: { format: '1920x1080' as const, fps: 30 as const, quality: 'high' as const },
+    landmarks: {
+      enabled: true,
+      kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false },
+      maxDistanceM: 1500,
+    },
   }
 
   it('resolves the sources from the catalogue', () => {

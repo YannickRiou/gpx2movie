@@ -12,6 +12,7 @@ import { FLYOVER_DURATION_RANGE, isValidCamera } from '../flyover/cameraSettings
 import { TRACK_COLORS } from '../import'
 import { buildTrack } from '../import/stats'
 import { isValidVideoSettings } from '../export/schedule'
+import { LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { isValidOverlay } from '../overlay/settings'
 import { TRACK_COLOR_MODES } from '../flyover/trackColor'
 import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS } from '../state/store'
@@ -93,6 +94,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   trackColorBy: (v) => (TRACK_COLOR_MODES as readonly string[]).includes(v),
   overlay: isValidOverlay,
   video: isValidVideoSettings,
+  landmarks: (v) => v.maxDistanceM >= LANDMARK_DISTANCE_RANGE.min && v.maxDistanceM <= LANDMARK_DISTANCE_RANGE.max,
 }
 
 /** True when `value` has the JSON shape of `reference` (finite numbers, same keys for objects). */

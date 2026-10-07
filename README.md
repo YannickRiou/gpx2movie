@@ -116,7 +116,7 @@ Ce qui distingue OpenFlyover : tout reste local, et les données de la sortie (h
 | Trace colorée par une donnée | vitesse, pente, fréquence cardiaque, puissance, en échelle séquentielle perceptuellement uniforme (viridis, magma…) avec légende | fait (vitesse, pente, altitude, FC, cadence, puissance, température) |
 | Course fantôme | plusieurs traces rejouées ensemble sur leur temps réel : comparer des amis, ou ses sorties successives sur un même parcours | à faire |
 | Vidéo embarquée synchronisée | incrustation d'une vidéo GoPro / Insta360 calée sur l'horodatage ; export de l'habillage seul sur fond transparent pour le montage | après la phase 5 |
-| Repères automatiques | sommets, cols, refuges et lacs tirés d'OpenStreetMap avec leur altitude ; montées détectées et catégorisées, qui déclenchent ralentis et titres | montées (cat. 4 à HC) et waypoints GPX étiquetés en 3D : fait ; OpenStreetMap en cours ; ralentis et titres à faire |
+| Repères automatiques | sommets, cols, refuges et lacs tirés d'OpenStreetMap avec leur altitude ; montées détectées et catégorisées, qui déclenchent ralentis et titres | montées (cat. 4 à HC), waypoints GPX et repères OpenStreetMap (sommets, cols, refuges, lacs… à 0,1–3 km, une requête Overpass par trace en cache) étiquetés en 3D : fait ; ralentis et titres à faire |
 | Remonter le temps | orthophotos historiques (IGN 1950–1965) ou d'une autre saison, en comparatif avant / après | photos IGN 1950–1965, 1965–1980 (partiel) et 2000–2005 faites ; comparatif à faire |
 | Rendu en lot | un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface | après la phase 5 |
 | Affiche imprimable | la trace sur le relief en très haute résolution, habillage compris, pour un tirage | après la phase 5 |
@@ -138,6 +138,7 @@ attribution (faite dans la barre d'état). Les gabarits d'URL, zooms, formats, e
 | swisstopo SWISSIMAGE | imagerie Suisse | OGD swisstopo, usage loyal |
 | Esri World Imagery | imagerie mondiale | Esri Master Agreement : attribution obligatoire, à relire avant distribution commerciale ou mise en cache hors ligne |
 | EOX Sentinel-2 cloudless | imagerie mondiale 10 m | **CC BY-NC-SA 4.0** (non commercial) |
+| OpenStreetMap (API Overpass publique) | repères (sommets, cols, refuges, lacs…) | ODbL : attribution obligatoire ; instance publique à usage modéré (une requête par trace, cache) |
 | Open-Meteo (archive ERA5) | météo historique | CC BY 4.0 ; API gratuite réservée à un usage **non commercial** (licence Open-Meteo sinon) |
 
 Points de vigilance avant une distribution payante ou la phase « packs hors ligne » : les conditions

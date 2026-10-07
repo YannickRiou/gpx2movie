@@ -156,6 +156,11 @@ describe('settings and misc', () => {
       weather: { enabled: true },
       overlay: DEFAULT_OVERLAY,
       video: { format: '1920x1080', fps: 30, quality: 'high' },
+      landmarks: {
+        enabled: true,
+        kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false },
+        maxDistanceM: 1500,
+      },
     })
   })
 

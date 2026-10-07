@@ -1,19 +1,21 @@
 /**
  * OpenStreetMap landmarks near a track, through the public Overpass API (no key, ODbL data).
  *
- * One bounded query per track: every kind is searched with `around:<radius>` on the track simplified to a
- * polyline of at most `MAX_QUERY_VERTICES` points (Douglas-Peucker). The radius is the largest distance the
- * UI offers plus the simplification tolerance, so changing the kinds or the distance later only filters the
- * cached result (`landmarks.ts`) and never sends a new query.
+ * One bounded query per track: the kinds are searched inside one bounding box around the track (expanded
+ * by the largest distance the UI offers), or inside a few boxes along it when the track spans more than
+ * `MAX_BOX_SPAN_M`. A plain box is by far the cheapest Overpass form (index lookup, ~2–3 s for the sample
+ * track) where `around:` on a polyline of a few dozen vertices times out on the public server (> 80 s)
+ * (docs/sources.md); the exact distance to the track is computed here (`landmarks.ts`). Changing the kinds
+ * or the distance later only filters the cached result and never sends a new query.
  *
- * Usage policy (docs/sources.md): requests are sent one at a time (module queue), results are cached in
- * memory and in `localStorage` keyed by a hash of the query, a busy server (HTTP 429 / 504) is retried once
- * after a delay and then the next endpoint of `OVERPASS_ENDPOINTS` is tried.
+ * Usage policy: requests are sent one at a time (module queue), results are cached in memory and in
+ * `localStorage` keyed by a hash of the query, a busy server (HTTP 429 / 504) is retried once after a delay
+ * and then the next endpoint of `OVERPASS_ENDPOINTS` is tried.
  *
  * The POST body is form-encoded so the browser sends a "simple" CORS request: overpass-api.de answers the
  * OPTIONS preflight with 406.
  */
-import type { LonLat, Track } from '../core/types'
+import type { LonLat, LonLatBounds, Track } from '../core/types'
 
 /** Main public instance, then VK Maps (no rate limit stated, listed on the OSM wiki); both send CORS headers. */
 export const OVERPASS_ENDPOINTS = [
@@ -25,10 +27,10 @@ export const OSM_ATTRIBUTION = '© contributeurs OpenStreetMap (ODbL)'
 
 /** Largest landmark distance offered by the UI (metres): the query covers it once and for all. */
 export const MAX_LANDMARK_DISTANCE_M = 3000
-/** Upper bound on the polyline sent to Overpass (keeps the request body around 20 kB). */
-export const MAX_QUERY_VERTICES = 200
-/** Smallest simplification tolerance (metres); raised until the polyline fits `MAX_QUERY_VERTICES`. */
-export const MIN_SIMPLIFY_TOLERANCE_M = 100
+/** Largest side of one query box before the margin (metres): a longer track gets several boxes along it. */
+export const MAX_BOX_SPAN_M = 40_000
+/** Simplification tolerance of the track before chunking it into boxes (metres). */
+const SIMPLIFY_TOLERANCE_M = 200
 /** Server-side time limit of the query (seconds). */
 export const QUERY_TIMEOUT_S = 60
 /** Wait before retrying a busy server when it sends no Retry-After (milliseconds). */
@@ -54,7 +56,7 @@ export interface OsmFeature {
   lat: number
   /** raw `ele` tag (parsed by `landmarks.ts`) */
   ele?: string
-  /** finer type: `place` value (town / village / hamlet), `volcano`, `wilderness_hut`… */
+  /** finer type: `place` value (town / village / hamlet), `volcano`, `wilderness_hut`, `water` value… */
   detail?: string
 }
 
@@ -102,16 +104,69 @@ export function simplifyLine(points: readonly LonLat[], toleranceM: number): Lon
   return points.filter((_, i) => keep[i] === 1)
 }
 
-/** The track (segments joined) simplified to at most `maxVertices` points, and the tolerance used. */
-export function corridorLine(track: Track, maxVertices = MAX_QUERY_VERTICES): { line: LonLat[]; toleranceM: number } {
-  const points: LonLat[] = track.segments.flatMap((s) => s.points)
-  let toleranceM = MIN_SIMPLIFY_TOLERANCE_M
-  let line = simplifyLine(points, toleranceM)
-  while (line.length > maxVertices) {
-    toleranceM *= 1.5
-    line = simplifyLine(points, toleranceM)
+function segmentLengthM(a: LonLat, b: LonLat): number {
+  const k = Math.cos((a.lat * Math.PI) / 180)
+  return Math.hypot((b.lon - a.lon) * k, b.lat - a.lat) * M_PER_DEG
+}
+
+/** Insert points so that no segment is longer than `stepM` (a straight track still gets several boxes). */
+function subdivide(points: readonly LonLat[], stepM: number): LonLat[] {
+  const out: LonLat[] = []
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i]
+    if (i > 0) {
+      const a = points[i - 1]
+      const n = Math.ceil(segmentLengthM(a, p) / stepM)
+      for (let k = 1; k < n; k++) out.push({ lon: a.lon + ((p.lon - a.lon) * k) / n, lat: a.lat + ((p.lat - a.lat) * k) / n })
+    }
+    out.push(p)
   }
-  return { line, toleranceM }
+  return out
+}
+
+function spanM(b: LonLatBounds): number {
+  const k = Math.cos((((b.south + b.north) / 2) * Math.PI) / 180)
+  return Math.max((b.east - b.west) * k, b.north - b.south) * M_PER_DEG
+}
+
+function expand(b: LonLatBounds, marginM: number): LonLatBounds {
+  const dLat = marginM / M_PER_DEG
+  const dLon = marginM / (M_PER_DEG * Math.cos((((b.south + b.north) / 2) * Math.PI) / 180))
+  return { west: b.west - dLon, south: b.south - dLat, east: b.east + dLon, north: b.north + dLat }
+}
+
+/**
+ * Boxes covering the track with `marginM` around it: one box, or several along the (simplified) track when
+ * it spans more than `maxSpanM`, consecutive boxes sharing a vertex so the corridor has no gap.
+ */
+export function corridorBoxes(track: Track, marginM = MAX_LANDMARK_DISTANCE_M, maxSpanM = MAX_BOX_SPAN_M): LonLatBounds[] {
+  const points = subdivide(simplifyLine(track.segments.flatMap((s) => s.points), SIMPLIFY_TOLERANCE_M), maxSpanM / 4)
+  if (points.length === 0) return []
+  const boxes: LonLatBounds[] = []
+  let box: LonLatBounds = { west: points[0].lon, south: points[0].lat, east: points[0].lon, north: points[0].lat }
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i]
+    const grown: LonLatBounds = {
+      west: Math.min(box.west, p.lon),
+      south: Math.min(box.south, p.lat),
+      east: Math.max(box.east, p.lon),
+      north: Math.max(box.north, p.lat),
+    }
+    if (spanM(grown) > maxSpanM && (box.west !== box.east || box.south !== box.north)) {
+      boxes.push(box)
+      const prev = points[i - 1]
+      box = {
+        west: Math.min(prev.lon, p.lon),
+        south: Math.min(prev.lat, p.lat),
+        east: Math.max(prev.lon, p.lon),
+        north: Math.max(prev.lat, p.lat),
+      }
+    } else {
+      box = grown
+    }
+  }
+  boxes.push(box)
+  return boxes.map((b) => expand(b, marginM))
 }
 
 /** One Overpass statement per kind; every one requires a name. */
@@ -126,17 +181,18 @@ const STATEMENTS: readonly string[] = [
   'nwr["natural"="glacier"]["name"]',
 ]
 
-/** Overpass QL query for the landmarks within `radiusM` of the polyline `line`. */
-export function buildOverpassQuery(line: readonly LonLat[], radiusM: number): string {
-  const coords = line.map((p) => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`).join(',')
-  const around = `(around:${Math.ceil(radiusM)},${coords})`
-  return `[out:json][timeout:${QUERY_TIMEOUT_S}];\n(\n${STATEMENTS.map((s) => `  ${s}${around};`).join('\n')}\n);\nout center tags qt;\n`
+/** Overpass QL query for the landmarks inside `boxes` (ways and relations reduced to their centre). */
+export function buildOverpassQuery(boxes: readonly LonLatBounds[]): string {
+  const lines = boxes.flatMap((b) => {
+    const bbox = `(${b.south.toFixed(5)},${b.west.toFixed(5)},${b.north.toFixed(5)},${b.east.toFixed(5)})`
+    return STATEMENTS.map((s) => `  ${s}${bbox};`)
+  })
+  return `[out:json][timeout:${QUERY_TIMEOUT_S}];\n(\n${lines.join('\n')}\n);\nout center tags qt;\n`
 }
 
-/** The query of a track: corridor of `MAX_LANDMARK_DISTANCE_M` plus the simplification tolerance. */
+/** The query of a track: its corridor boxes, `MAX_LANDMARK_DISTANCE_M` wide. */
 export function trackQuery(track: Track): string {
-  const { line, toleranceM } = corridorLine(track)
-  return buildOverpassQuery(line, MAX_LANDMARK_DISTANCE_M + toleranceM)
+  return buildOverpassQuery(corridorBoxes(track))
 }
 
 // ---------------------------------------------------------------------------
@@ -282,10 +338,7 @@ export async function runOverpassQuery(
         lastError = e
         break
       }
-      if (response.ok) {
-        const features = parseOverpass(await response.json())
-        return features
-      }
+      if (response.ok) return parseOverpass(await response.json())
       lastError = new OverpassError(`HTTP ${response.status}`, response.status)
       if (response.status !== 429 && response.status !== 504) throw lastError
       if (attempt === 0) await deps.sleep(retryAfterMs(response), signal)
@@ -359,7 +412,7 @@ export function fetchTrackFeatures(track: Track, signal?: AbortSignal, deps: Ove
   return promise
 }
 
-/** Forget the memory cache (tests). */
+/** Forget the memory cache and the queue (tests). */
 export function clearOverpassMemoryCache(): void {
   memoryCache.clear()
   queue = Promise.resolve()

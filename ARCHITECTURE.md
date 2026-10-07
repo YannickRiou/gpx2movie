@@ -48,6 +48,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
 | `src/weather/*` | météo historique de la sortie | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
+| `src/osm/*` | repères OpenStreetMap | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures` ; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `LANDMARK_DISTANCE_RANGE` ; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
 | `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` ; `importFlow.ts` (orchestration d'import sans React, testée) |
@@ -288,3 +289,24 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   entre 35 et 70 km ; en cas de chevauchement, la priorité la plus haute l'emporte. Opacité fonction de la vue seule (pas de
   lissage temporel) : chaque image d'export est rendue isolément. Réglage `settings.labels { climbs, waypoints }`, section
   « Montées » (`ClimbList`, un clic place le survol au pied de la montée).
+
+## Repères OpenStreetMap (phase 7)
+
+- **Source** : OpenStreetMap par l'API Overpass publique (`overpass-api.de`, repli VK Maps), sans clé, données ODbL (attribution
+  « © contributeurs OpenStreetMap (ODbL) » dans le panneau et la barre d'état). Vérifications et conditions d'usage :
+  `docs/sources.md`. La requête doit rester « simple » (POST `application/x-www-form-urlencoded`) : la pré-vérification CORS
+  répond 406.
+- **Une requête par trace** (`src/osm/overpass.ts`) : boîte englobante de la trace élargie de 3 km (plusieurs boîtes consécutives
+  au-delà de 40 km d'emprise), 8 instructions taguées et nommées (sommets / selles, cols, refuges, lacs, cascades, villages et
+  hameaux, points de vue, glaciers), `out center` pour ramener chemins et relations à un point. La forme `around:` sur une
+  polyligne dépasse le délai du serveur public ; la distance à la trace est calculée localement, donc changer les types ou la
+  distance ne refait jamais de requête. File d'attente (une requête à la fois), cache mémoire + `localStorage` 30 jours par
+  empreinte de requête, un réessai sur 429 / 504 (`Retry-After`, sinon 15 s) puis l'autre instance ; une réponse 200 portant un
+  `remark` d'erreur (délai dépassé) est une erreur.
+- **Post-traitement pur** (`src/osm/landmarks.ts`) : projection sur le chemin → distance et abscisse, filtre par type et distance
+  (`settings.landmarks`, défaut sommets + cols + refuges + lacs à 1,5 km), altitude depuis `ele` (formats libres), priorité dans
+  [0, 50) sous les waypoints et les montées (col franchi > sommet haut et proche > col voisin > refuge > lac > cascade / vue /
+  glacier > lieu), dédoublonnage par nom à moins d'1 km, plafond de 40 repères, libellé « Nom · 1 653 m » pour sommets et cols.
+- **État** (`src/osm/store.ts`) : `useLandmarkStore` piloté par `syncLandmarks` depuis `LandmarkPanel` ; les repères de toutes les
+  traces sont publiés aux étiquettes 3D par `setLabelSource('osm', …)` (liste vide à la désactivation). La liste du panneau suit
+  la première trace (clic = `setProgress`).

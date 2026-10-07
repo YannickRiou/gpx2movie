@@ -307,3 +307,34 @@ aucun en-tête de quota renvoyé). Attribution affichée : « Données météo :
 
 Journal (curl, 2026-10-07) : `start_date=end_date=2025-07-12`, 2 lieux (45,89/6,80 et 45,83/6,73) → 200, mailles 45,940/6,704 (1 021 m) et
 45,870/6,693 (1 109 m) ; `2026-10-07` (jour même) → 24 heures complètes ; `2026-10-10` → 400 hors plage ; `1939-12-31` → 400 hors plage.
+
+## Repères OpenStreetMap — Overpass API (2026-10-07)
+
+Sommets, cols, refuges, lacs, cascades, lieux habités, points de vue et glaciers autour de la trace, lus dans OpenStreetMap par
+l'instance publique Overpass `https://overpass-api.de/api/interpreter` (sans clé), avec repli sur `https://maps.mail.ru/osm/tools/overpass/api/interpreter`
+(VK Maps, listée sur le wiki OSM sans limite annoncée). Données **ODbL** : attribution affichée « © contributeurs OpenStreetMap (ODbL) »
+(panneau et barre d'état, lien vers openstreetmap.org/copyright). Code : `src/osm/overpass.ts`.
+
+**Conditions d'usage de l'instance publique** (dev.overpass-api.de, « Commons ») : rester sous ~10 000 requêtes et ~1 Go par jour et par
+adresse ; le wiki recommande cent fois moins pour une application grand public (≤ 100 requêtes, ≤ 10 Mo par jour et par utilisateur).
+Limitation par IP : `/api/status` annonce « Rate limit: 2 » (deux créneaux simultanés), refus **429** quand ils sont pris, **504** quand le
+serveur est surchargé (corps HTML « Dispatcher_Client::request_read_and_idx::timeout / rate_limited »). Motifs jugés abusifs : requêtes
+identiques répétées, balayage de boîtes pour aspirer la planète, application de production qui s'en sert de dorsale. D'où, ici : **une seule
+requête par trace** (tous les types, couloir de 3 km), envoyée seule (file d'attente), mise en cache 30 jours dans `localStorage` par
+empreinte de la requête, un seul réessai après `Retry-After` (sinon 15 s) sur 429 / 504 puis l'autre instance ; changer les types ou la
+distance ne refait pas de requête (filtrage local).
+
+| Point vérifié | Résultat |
+|---|---|
+| CORS (Origin `http://127.0.0.1:5173`) | `Access-Control-Allow-Origin: *`, `Access-Control-Max-Age: 600` sur les réponses POST ; la **pré-vérification OPTIONS répond 406** → requête « simple » obligatoire (corps `application/x-www-form-urlencoded`, champ `data`), ce que fait `URLSearchParams` |
+| User-Agent | 406 « Not Acceptable » pour un `curl` qui imite un navigateur et pour `/api/status` sans agent explicite ; les requêtes d'un vrai Chromium (headless) passent (200) |
+| Forme `around:` sur une polyligne | 4 sommets, 1,5 km, 5 types → 200 en 2,9 s (14 ko) ; **50 sommets, 3,1 km, 8 types → HTTP 200 mais `remark` « Query timed out … after 80 seconds » et zéro élément** (la limite `[timeout:60]` est dépassée côté serveur ; une réponse 200 peut donc être une erreur) |
+| Forme boîte englobante (retenue) | une boîte de 12 × 15 km autour de la trace d'exemple, 8 types, `out center tags qt` → 200 en 2,5 à 5,7 s, 44 ko, 175 éléments (30 sommets, 14 cols, 14 refuges, 8 lacs, 19 glaciers, 2 cascades, 3 points de vue, 84 lieux) |
+| Union de 10 boîtes le long de la trace | 200 en 14 s, 33 ko, 134 éléments : plus lent que la boîte unique (80 instructions) ; utilisée seulement au-delà de 40 km d'emprise (`MAX_BOX_SPAN_M`) |
+| Après ces essais rapprochés | deux requêtes suivantes → **429** (créneaux pris) ; `/api/status` les détaille |
+| `maps.mail.ru` | même réponse (14 ko) en 10 à 14 s depuis `curl`, en-têtes CORS complets (`*`, `GET, POST, OPTIONS, PUT`) ; 504 une fois depuis le navigateur |
+| `overpass.kumi.systems`, `overpass.private.coffee`, `overpass.osm.jp` | injoignables depuis ce réseau (délai 60 s / connexion refusée) : non retenues |
+| Balises utiles | `ele` en texte libre (« 1650 », « 1969.1 » ; ailleurs « 1 653 m », « 1,653 », pieds) → `parseEle` ; `name:fr` rare en France (repli `name`) ; des sommets sans nom (ex. 2 303 m) → filtre `["name"]` dans la requête ; lacs en chemins / relations → `out center` ; le Col de Voza porte `natural=saddle` + `mountain_pass=yes`, `ele=1650` (1 653 m dans le GPX d'exemple) ; 81 hameaux à moins de 3 km de 20 km de trace → lieux désactivés par défaut |
+
+Journal (curl, 2026-10-07) : `[out:json][timeout:60]; ( node["natural"~"^(peak|volcano|saddle)$"]["name"](45.79485,6.68680,45.91881,6.83916); … 8 instructions … ); out center tags qt;`
+→ 200, 5,7 s, 44 447 octets ; même requête depuis Chromium headless (origine `http://127.0.0.1:5184`) → 200 en 3,6 s.
