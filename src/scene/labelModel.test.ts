@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Track } from '../core/types'
 import type { Climb } from '../flyover/climbs'
 import { buildTrack } from '../import/stats'
+import { cardOpacityAt } from '../overlay/draw'
+import { DEFAULT_OVERLAY } from '../overlay/settings'
 import {
   LABEL_FADE_END_M,
   LABEL_FADE_START_M,
@@ -9,6 +11,7 @@ import {
   climbLabelText,
   climbLabels,
   distanceFade,
+  labelOpacity,
   lineOfSightClearance,
   occlusionFade,
   resolveOverlaps,
@@ -128,5 +131,29 @@ describe('screen-space rules', () => {
         { rect: rect(160, 0), priority: 50 },
       ]),
     ).toEqual([false, true, true, true])
+  })
+})
+
+describe('labels under the overlay cards', () => {
+  it('multiplies the view opacity by what the card leaves', () => {
+    expect(labelOpacity(0.8, 0)).toBeCloseTo(0.8, 12)
+    expect(labelOpacity(1, 0.25)).toBeCloseTo(0.75, 12)
+    expect(labelOpacity(0.8, 1)).toBe(0)
+    expect(labelOpacity(0.5, -1)).toBe(0.5)
+    expect(labelOpacity(0.5, 2)).toBe(0)
+  })
+
+  it('fades out with the opening and closing cards, and back in between', () => {
+    const overlay = { ...DEFAULT_OVERLAY, enabled: true }
+    const at = (progress: number, settings = overlay) => labelOpacity(1, cardOpacityAt(progress, settings))
+    expect(at(0.02)).toBe(0) // opening card fully shown
+    expect(at(0.09)).toBeGreaterThan(0) // opening card fading out
+    expect(at(0.09)).toBeLessThan(1)
+    expect(at(0.5)).toBe(1)
+    expect(at(0.91)).toBeLessThan(1) // closing card fading in
+    expect(at(0.99)).toBe(0)
+    // no overlay, or no cards: labels untouched
+    expect(at(0.02, DEFAULT_OVERLAY)).toBe(1)
+    expect(at(0.99, { ...overlay, title: { ...overlay.title, enabled: false }, end: { ...overlay.end, enabled: false } })).toBe(1)
   })
 })

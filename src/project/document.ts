@@ -13,7 +13,7 @@ import { TRACK_COLORS } from '../import'
 import { buildTrack } from '../import/stats'
 import { isValidVideoSettings } from '../export/schedule'
 import { LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
-import { isValidOverlay } from '../overlay/settings'
+import { isValidOverlay, withOverlayDefaults } from '../overlay/settings'
 import { TRACK_COLOR_MODES } from '../flyover/trackColor'
 import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS } from '../state/store'
 import type { AppState, Settings } from '../state/store'
@@ -97,6 +97,14 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   landmarks: (v) => v.maxDistanceM >= LANDMARK_DISTANCE_RANGE.min && v.maxDistanceM <= LANDMARK_DISTANCE_RANGE.max,
 }
 
+/**
+ * Fill-ins for settings whose shape grew after projects were saved, applied to the raw value before it is
+ * validated (e.g. overlay widgets added since: older projects and presets keep loading).
+ */
+export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unknown } = {
+  overlay: withOverlayDefaults,
+}
+
 /** True when `value` has the JSON shape of `reference` (finite numbers, same keys for objects). */
 function sameShape(value: unknown, reference: unknown): boolean {
   if (typeof reference === 'number') return typeof value === 'number' && Number.isFinite(value)
@@ -126,7 +134,8 @@ export function sanitizeSettings(raw: unknown, base: Settings = DEFAULT_SETTINGS
   const invalid: string[] = []
   for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
     if (!(key in record)) continue
-    const value = record[key]
+    const upgrade = SETTING_UPGRADES[key]
+    const value = upgrade ? upgrade(record[key]) : record[key]
     if (isValidSetting(key, value)) (settings as Record<string, unknown>)[key] = value
     else invalid.push(key)
   }

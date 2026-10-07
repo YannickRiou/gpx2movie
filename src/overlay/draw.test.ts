@@ -4,6 +4,7 @@ import { parseGpx } from '../import/gpx'
 import { overlayFrameAt, prepareOverlayTrack } from './data'
 import {
   SAFE_MARGIN,
+  cardOpacityAt,
   counterText,
   drawOverlay,
   endCardOpacity,
@@ -13,7 +14,7 @@ import {
   titleCardOpacity,
 } from './draw'
 import type { OverlayContext2D } from './draw'
-import { DEFAULT_OVERLAY, OVERLAY_STYLES } from './settings'
+import { DEFAULT_OVERLAY, OVERLAY_ANCHORS, OVERLAY_STYLES } from './settings'
 import type { OverlaySettings } from './settings'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import { WEATHER_VARIABLES } from '../weather/series'
@@ -26,10 +27,19 @@ interface TextCall {
   alpha: number
 }
 
-/** 2D context stand-in: records the texts drawn; a glyph is half the font size wide. */
+interface PointCall {
+  op: string
+  x: number
+  y: number
+  /** arc radius */
+  r?: number
+}
+
+/** 2D context stand-in: records the texts and path points drawn; a glyph is half the font size wide. */
 function fakeContext() {
   const texts: TextCall[] = []
   const calls: string[] = []
+  const points: PointCall[] = []
   const state = { font: '10px sans-serif', globalAlpha: 1 }
   const stack: (typeof state)[] = []
   const fontPx = () => Number(/(\d+(?:\.\d+)?)px/.exec(state.font)?.[1] ?? 10)
@@ -45,7 +55,11 @@ function fakeContext() {
     get: (t, key: string) => {
       if (key in state) return state[key as keyof typeof state]
       if (key in t) return t[key]
-      return (...args: unknown[]) => calls.push(`${key}(${args.length})`)
+      return (...args: unknown[]) => {
+        if (key === 'moveTo' || key === 'lineTo') points.push({ op: key, x: args[0] as number, y: args[1] as number })
+        if (key === 'arc') points.push({ op: key, x: args[0] as number, y: args[1] as number, r: args[2] as number })
+        return calls.push(`${key}(${args.length})`)
+      }
     },
     set: (t, key: string, value) => {
       if (key in state) (state as Record<string, unknown>)[key] = value
@@ -54,7 +68,7 @@ function fakeContext() {
     },
     has: () => true,
   })
-  return { ctx: ctx as unknown as OverlayContext2D, texts, calls }
+  return { ctx: ctx as unknown as OverlayContext2D, texts, calls, points }
 }
 
 const sampleTrack = parseGpx(sampleGpx, 'tour-du-mont-blanc-j1.gpx')[0]
@@ -83,6 +97,16 @@ describe('card timing', () => {
     expect(endCardOpacity(0.91, 0.9)).toBeGreaterThan(0)
     expect(endCardOpacity(0.95, 0.9)).toBe(1)
     expect(endCardOpacity(1, 0.9)).toBe(1)
+  })
+
+  it('gives the opacity of whichever card is shown, 0 without overlay or cards', () => {
+    const settings = enabled()
+    expect(cardOpacityAt(0.005, settings)).toBe(titleCardOpacity(0.005, settings.title.end))
+    expect(cardOpacityAt(0.5, settings)).toBe(0)
+    expect(cardOpacityAt(0.92, settings)).toBe(endCardOpacity(0.92, settings.end.start))
+    expect(cardOpacityAt(0.99, settings)).toBe(1)
+    expect(cardOpacityAt(0.99, DEFAULT_OVERLAY)).toBe(0)
+    expect(cardOpacityAt(0.02, enabled({ title: { ...DEFAULT_OVERLAY.title, enabled: false } }))).toBe(0)
   })
 })
 
@@ -228,5 +252,93 @@ describe('drawOverlay', () => {
     const { ctx, calls } = fakeContext()
     drawOverlay(ctx, overlayFrameAt(track, 0.5), settings, SIZE, { logo: { image: {} as CanvasImageSource, width: 400, height: 100 } })
     expect(calls).toContain('drawImage(5)')
+  })
+})
+
+describe('mini-map', () => {
+  const off = <T extends { enabled: boolean }>(w: T): T => ({ ...w, enabled: false })
+  /** only the mini-map, with the cards still timing the live widgets */
+  const minimapOnly = (patch: Partial<OverlaySettings['minimap']> = {}, style: OverlaySettings['style'] = 'broadcast') =>
+    enabled({
+      style,
+      counters: off(DEFAULT_OVERLAY.counters),
+      profile: off(DEFAULT_OVERLAY.profile),
+      minimap: { ...DEFAULT_OVERLAY.minimap, enabled: true, ...patch },
+    })
+  const render = (progress: number, settings: OverlaySettings) => {
+    const { ctx, texts, points } = fakeContext()
+    drawOverlay(ctx, overlayFrameAt(track, progress), settings, SIZE)
+    // the scrim of the editorial style is drawn around the origin of a scaled context
+    return { texts, points: points.filter((pt) => !(pt.x === 0 && pt.y === 0 && pt.r === 1)) }
+  }
+  /** arcs of the mini-map: end dot, start dot, marker */
+  const dots = (progress: number, settings = minimapOnly()) => render(progress, settings).points.filter((pt) => pt.op === 'arc')
+
+  it('is off by default', () => {
+    expect(DEFAULT_OVERLAY.minimap.enabled).toBe(false)
+    expect(draw(0.5, enabled()).texts.map((t) => t.text)).not.toContain('N')
+  })
+
+  it('puts the marker on the start dot, then on the end dot', () => {
+    const noCards = { ...minimapOnly(), title: off(DEFAULT_OVERLAY.title), end: off(DEFAULT_OVERLAY.end) }
+    const [end, start, marker] = dots(0, noCards)
+    expect(marker.r).toBeGreaterThan(start.r!)
+    expect([marker.x, marker.y]).toEqual([start.x, start.y])
+    const last = dots(1, noCards)
+    expect([last[2].x, last[2].y]).toEqual([end.x, end.y])
+    const middle = dots(0.5, noCards)
+    expect([middle[0].x, middle[1].x]).toEqual([end.x, start.x])
+    expect([middle[2].x, middle[2].y]).not.toEqual([start.x, start.y])
+    expect([middle[2].x, middle[2].y]).not.toEqual([end.x, end.y])
+  })
+
+  it('keeps the aspect ratio of the track', () => {
+    const outline = track.outline!
+    // the first point starts the outline of the panel
+    const route = render(0.5, minimapOnly({ northArrow: false })).points.filter((pt) => pt.op !== 'arc').slice(1)
+    const xs = route.map((pt) => pt.x)
+    const ys = route.map((pt) => pt.y)
+    const ratio = (Math.max(...xs) - Math.min(...xs)) / (Math.max(...ys) - Math.min(...ys))
+    expect(ratio).toBeCloseTo(outline.width / outline.height, 6)
+  })
+
+  it.each(OVERLAY_STYLES)('style %s: stays inside the safe area at every anchor', (style) => {
+    for (const anchor of OVERLAY_ANCHORS) {
+      for (const size of [1, 2]) {
+        const { texts, points } = render(0.5, minimapOnly({ anchor, size }, style))
+        expect(texts.map((t) => t.text)).toEqual(['N'])
+        for (const pt of [...points, ...texts]) {
+          const r = 'r' in pt ? (pt.r ?? 0) : 0
+          expect(pt.x - r).toBeGreaterThanOrEqual(SIZE.width * SAFE_MARGIN - 1)
+          expect(pt.x + r).toBeLessThanOrEqual(SIZE.width * (1 - SAFE_MARGIN) + 1)
+          expect(pt.y - r).toBeGreaterThanOrEqual(SIZE.height * SAFE_MARGIN - 1)
+          expect(pt.y + r).toBeLessThanOrEqual(SIZE.height * (1 - SAFE_MARGIN) + 1)
+        }
+      }
+    }
+  })
+
+  it('stacks under another widget of the same anchor', () => {
+    const alone = render(0.5, minimapOnly({ anchor: 'top-right' }))
+    const withProfile = render(0.5, { ...minimapOnly({ anchor: 'top-right' }), profile: { ...DEFAULT_OVERLAY.profile, anchor: 'top-right' } })
+    const shift = DEFAULT_OVERLAY.profile.height * SIZE.height + 2 * (Math.min(SIZE.width, SIZE.height) / 100)
+    const n = (r: ReturnType<typeof render>) => r.texts.find((t) => t.text === 'N')!
+    expect(n(withProfile).y - n(alone).y).toBeCloseTo(shift, 6)
+    expect(n(withProfile).x).toBeCloseTo(n(alone).x, 6)
+  })
+
+  it('crossfades with the cards like the other live widgets', () => {
+    const settings = minimapOnly()
+    const n = (progress: number) => render(progress, settings).texts.find((t) => t.text === 'N')
+    expect(n(0.02)).toBeUndefined()
+    expect(n(0.09)?.alpha).toBeGreaterThan(0)
+    expect(n(0.09)?.alpha).toBeLessThan(1)
+    expect(n(0.5)?.alpha).toBe(1)
+    expect(n(0.99)).toBeUndefined()
+  })
+
+  it('draws the north arrow on request only, and is deterministic', () => {
+    expect(render(0.5, minimapOnly({ northArrow: false })).texts).toEqual([])
+    for (const style of OVERLAY_STYLES) expect(render(0.37, minimapOnly({}, style))).toEqual(render(0.37, minimapOnly({}, style)))
   })
 })

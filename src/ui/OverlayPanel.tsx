@@ -129,7 +129,7 @@ function WidgetGroup({ label, enabled, onToggle, children }: { label: string; en
   )
 }
 
-/** "Habillage" section: film overlay style and widgets (titles, counters, profile, logo, free text). */
+/** "Habillage" section: film overlay style and widgets (titles, counters, profile, mini-map, weather, logo, free text). */
 export function OverlayPanel() {
   const overlay = useAppStore((s) => s.settings.overlay)
   const setSetting = useAppStore((s) => s.setSetting)
@@ -286,6 +286,20 @@ export function OverlayPanel() {
               onChange={(height) => setWidget('profile', { height })}
             />
             <AnchorField value={overlay.profile.anchor} onChange={(anchor) => setWidget('profile', { anchor })} />
+          </WidgetGroup>
+
+          <WidgetGroup label="Mini-carte" enabled={overlay.minimap.enabled} onToggle={(enabled) => setWidget('minimap', { enabled })}>
+            <p className="field__hint">Tracé complet vu de dessus, nord en haut : partie parcourue, départ, arrivée et position.</p>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={overlay.minimap.northArrow}
+                onChange={(e) => setWidget('minimap', { northArrow: e.currentTarget.checked })}
+              />
+              Flèche du nord
+            </label>
+            <AnchorField value={overlay.minimap.anchor} onChange={(anchor) => setWidget('minimap', { anchor })} />
+            <SizeField value={overlay.minimap.size} onChange={(size) => setWidget('minimap', { size })} />
           </WidgetGroup>
 
           <WidgetGroup label="Météo" enabled={overlay.weather.enabled} onToggle={(enabled) => setWidget('weather', { enabled })}>

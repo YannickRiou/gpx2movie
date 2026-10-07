@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isValidSetting, sanitizeSettings } from '../project/document'
-import { DEFAULT_OVERLAY, isValidOverlay } from './settings'
+import { DEFAULT_OVERLAY, isValidOverlay, withOverlayDefaults } from './settings'
 import type { OverlaySettings } from './settings'
 
 const withPatch = (patch: (o: OverlaySettings) => void): OverlaySettings => {
@@ -37,5 +37,29 @@ describe('overlay settings', () => {
     const { settings, invalid } = sanitizeSettings({ overlay: broken })
     expect(settings.overlay).toEqual(DEFAULT_OVERLAY)
     expect(invalid).toEqual(['overlay'])
+  })
+
+  it('loads an overlay saved before the mini-map with the mini-map off', () => {
+    const custom = withPatch((o) => {
+      o.enabled = true
+      o.style = 'app'
+    })
+    const { minimap: _minimap, ...old } = custom
+    const { settings, invalid } = sanitizeSettings({ overlay: old })
+    expect(invalid).toEqual([])
+    expect(settings.overlay).toEqual({ ...custom, minimap: DEFAULT_OVERLAY.minimap })
+    expect(settings.overlay.minimap.enabled).toBe(false)
+    // only the widgets added since are filled in
+    expect(withOverlayDefaults(custom)).toBe(custom)
+    expect(withOverlayDefaults('x')).toBe('x')
+    const { counters: _counters, ...missingCounters } = old
+    expect(sanitizeSettings({ overlay: missingCounters }).invalid).toEqual(['overlay'])
+  })
+
+  it('validates the mini-map', () => {
+    expect(isValidOverlay(withPatch((o) => (o.minimap.anchor = 'nowhere' as OverlaySettings['minimap']['anchor'])))).toBe(false)
+    expect(isValidOverlay(withPatch((o) => (o.minimap.size = 3)))).toBe(false)
+    const broken = { ...DEFAULT_OVERLAY, minimap: { enabled: true, anchor: 'top-left', size: 1 } }
+    expect(sanitizeSettings({ overlay: broken }).invalid).toEqual(['overlay'])
   })
 })
