@@ -139,6 +139,7 @@ attribution (faite dans la barre d'état). Les gabarits d'URL, zooms, formats, e
 | Esri World Imagery | imagerie mondiale | Esri Master Agreement : attribution obligatoire, à relire avant distribution commerciale ou mise en cache hors ligne |
 | EOX Sentinel-2 cloudless | imagerie mondiale 10 m | **CC BY-NC-SA 4.0** (non commercial) |
 | OpenStreetMap (API Overpass publique) | repères (sommets, cols, refuges, lacs…) | ODbL : attribution obligatoire ; instance publique à usage modéré (une requête par trace, cache) |
+| Polices Fraunces, IBM Plex Sans, IBM Plex Sans Condensed (`public/fonts/`) | interface, habillage du film, étiquettes 3D | SIL Open Font License 1.1 (`public/fonts/OFL-*.txt`) |
 | Open-Meteo (archive ERA5) | météo historique | CC BY 4.0 ; API gratuite réservée à un usage **non commercial** (licence Open-Meteo sinon) |
 
 Points de vigilance avant une distribution payante ou la phase « packs hors ligne » : les conditions

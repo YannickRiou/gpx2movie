@@ -146,7 +146,12 @@ Papier de carte topographique, encre, rouge de balisage des sentiers, glacier.
 | Ciel, éléments secondaires | `--color-glacier` | `#A9CCD9` |
 | Départ | `--color-moss` | `#3F6B4A` |
 
-Titres : Fraunces ; corps et boutons : IBM Plex Sans (Google Fonts dans `index.html`). Contraste texte ≥ 4.5:1.
+Titres : Fraunces ; corps et boutons : IBM Plex Sans ; style d'habillage « diffusion » : IBM Plex Sans Condensed. Polices
+**embarquées** (aucun accès réseau) : WOFF2 dans `public/fonts/` (Fraunces variable opsz + wght, IBM Plex Sans variable wght,
+IBM Plex Sans Condensed 500/600/700), sous-ensembles `latin` et `latin-ext` déclarés par `unicode-range` dans
+`src/ui/fonts.css` (importé par `src/main.tsx`) ; le navigateur ne télécharge un sous-ensemble que si un caractère l'exige.
+Sources, versions et licences : `public/fonts/README.md`. `src/ui/fonts.test.ts` vérifie que chaque fichier référencé existe et
+que chaque police dessinée (UI, habillage, étiquettes 3D) a sa face. Contraste texte ≥ 4.5:1.
 Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur orthophoto, pas dans la charte.
 
 ## Survol (phase 2)
@@ -334,7 +339,7 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   et préréglages se chargent toujours. Les temps sont des fractions du survol (fondus de 1 % et 2,5 %) ; les widgets en direct s'effacent pendant les cartes.
   Logo en data URL PNG d'au plus 512 px (projets autonomes). Validation : `isValidOverlay` (`SETTING_CHECKS`).
 - **Polices** : un canvas ne déclenche pas seul le téléchargement des polices web ; `loadOverlayFonts()` les demande avant la
-  première image, l'export doit l'attendre aussi. Polices Google Fonts (Fraunces 300–700, IBM Plex Sans et Sans Condensed) :
-  hors ligne, repli sur Georgia / system-ui.
+  première image, l'export doit l'attendre aussi. Polices embarquées (`src/ui/fonts.css`, `public/fonts/`) :
+  Fraunces 300–700, IBM Plex Sans et Sans Condensed disponibles hors ligne.
 - **Météo** : widget et ligne de la carte de clôture (`weatherWidgetData`, `summarizeOuting`), avec le crédit Open-Meteo dessiné
   en bas de l'image dès qu'ils sont visibles.
