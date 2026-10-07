@@ -44,30 +44,26 @@ Puis supprimer la sauvegarde locale : `git branch -D backup/avant-reecriture`.
 
 Le détail technique de chaque module est dans `ARCHITECTURE.md`, la feuille de route dans `README.md`.
 
-## Travaux en cours, non commités au moment de l'arrêt
+## Travaux en cours
 
-Lancer `git status` et `npm run typecheck` en premier : l'arbre peut contenir ces modifications partielles.
+Lancer `git status` et `npm run typecheck` en premier.
 
 1. **Course fantôme — faite et montée** (`<RaceMarkers />` après `<FlyoverRig />`), documentée. Reste un contrôle visuel :
    taille et couleur des marqueurs (atmosphère active ou non), halo sur neige et forêt, classement en direct, options
    désactivées sans horodatage. Limite : les arrêts de la trace de tête sont franchis instantanément.
-2. **Export : optimisation de la vitesse, puis formats × résolutions** (fichiers `src/export/*`, `src/ui/ExportPanel.tsx`,
-   `src/terrain/engine.ts`, `src/terrain/quadtree.ts`, `src/scene/Labels.tsx`). Au moment de l'arrêt, `ExportPanel.tsx` ne
-   compilait pas encore avec le nouveau `schedule.ts`, et un test de `engine.test.ts` (`pendingVisibleTiles`) échouait :
-   travail à terminer. Plan :
-   - **vitesse** : supprimer l'attente fixe de 250 ms par image (remplacer le debounce du replaquage par un
-     `flushDrapes()` synchrone pendant l'export — registre dans `src/export/store.ts`, à brancher dans `TrackLines.tsx` et
-     `Labels.tsx`) ; n'attendre que les tuiles réellement dessinées (`stats.pendingVisibleTiles`) avec un délai de 5 s ;
-     précharger les tuiles des images suivantes (`engine.prefetch(camera)` avec les caméras calculées par `computeCameraView`) ;
-     2 rendus par image au lieu de 3, second placement de caméra seulement si le sol bouge de plus d'1 m ; mesurer avant / après
-     (temps par image, nombre de dépassements) et afficher « ≈ x s / image » ;
-   - **formats** : matrice format (16:9 paysage, 9:16 vertical, 1:1 carré, 4:5 portrait, 21:9 cinéma) × résolution (petit côté
-     720p, 1080p, 1440p, 4K), réglages `video { aspect, resolution, fps, quality }` avec mise à niveau des anciens
-     `video.format` (`withVideoDefaults` via `SETTING_UPGRADES`), codec choisi par taille (H.264 peut refuser 2160×3840 →
-     HEVC / VP9), taille de fichier estimée ;
-   - **échelle de rendu** `exportRenderScale = petit côté / 1080` pour que trace, étiquettes et marqueur aient en 4K le même
-     aspect qu'en 1080p : `LINE_WIDTH_PX × échelle` dans `TrackLines.tsx`, `MARKER_SCREEN_FACTOR × échelle` dans
-     `FlyoverRig.tsx` et `RaceMarkers.tsx`, police et taille des étiquettes dans `Labels.tsx`.
+2. **Export : vitesse et formats × résolutions — commités (`2b467e7`)** : préchargement des tuiles, attente limitée aux
+   tuiles visibles (délai 5 s), replaquage synchrone, second placement de caméra seulement si le sol bouge de plus d'1 m ;
+   formats 16:9 / 9:16 / 1:1 / 4:5 / 21:9 × 720p / 1080p / 1440p / 4K.
+   - **Mesure à refaire sur une machine avec GPU** (décision de l'utilisateur : plus de benchmark sur la machine WSL, dont le
+     GPU logiciel SwiftShader fausse tout). Mesure partielle WSL, 320×180, 10 i/s, 3 s, cache froid : ≈ 33 s / image après
+     (27 images sur 30) contre 73 s avant, 12 délais dépassés contre 14. Le poste « encodage » (≈ 22 s / image) est en fait
+     la copie de l'image WebGL (`composeFrame` → `drawImage`) qui attend la fin du rendu GPU.
+   - **Comment mesurer** : lancer un export depuis le panneau ; à la fin, la console affiche
+     `[export] N images (M rendues) en … s : rendu … s, attente des tuiles … s, encodage … s, K délai(s) dépassé(s)`.
+     Faire deux exports identiques de suite (cache froid puis chaud). Pour un « avant », comparer avec `c8a00ed`.
+   - **Reste à faire** : échelle de rendu (`exportRenderScale = petit côté / 1080`, déjà appliquée aux étiquettes dans
+     `Labels.tsx`) à brancher sur `LINE_WIDTH_PX` dans `TrackLines.tsx` et `MARKER_SCREEN_FACTOR` dans `FlyoverRig.tsx` et
+     `RaceMarkers.tsx`, sinon trace et marqueurs paraissent plus fins en 4K qu'en 1080p.
 3. **Météo dans la scène — faite** (`src/weather/sceneWeather.ts`, `src/scene/weatherEffect.ts`, réglage
    `settings.weatherScene`), documentée, vérifiée sur données réelles (effet discret le jour de l'exemple) et synthétiques
    (couvert, pluie, brouillard). Suite possible : nuages volumétriques `@takram/three-clouds` (voir ARCHITECTURE.md).
