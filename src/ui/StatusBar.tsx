@@ -1,3 +1,5 @@
+import { OSM_ATTRIBUTION } from '../osm/overpass'
+import { useLandmarkStore } from '../osm/store'
 import { useAppStore } from '../state/store'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
@@ -19,6 +21,7 @@ export function StatusBar() {
   const terrainSourceId = useAppStore((s) => s.settings.terrainSourceId)
   const imagerySourceId = useAppStore((s) => s.settings.imagerySourceId)
   const weatherShown = useWeatherStore((s) => s.status === 'ready')
+  const landmarksShown = useLandmarkStore((s) => Object.values(s.landmarks).some((list) => list.length > 0))
 
   const terrain = getTerrainSource(terrainSourceId)
   const imagery = getImagerySource(imagerySourceId)
@@ -43,6 +46,12 @@ export function StatusBar() {
           <>
             <br />
             {OPEN_METEO_ATTRIBUTION}
+          </>
+        )}
+        {landmarksShown && (
+          <>
+            <br />
+            Repères : {OSM_ATTRIBUTION}
           </>
         )}
       </p>

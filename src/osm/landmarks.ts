@@ -15,6 +15,7 @@
 import type { TrackPath } from '../flyover/path'
 import type { LandmarkKind as LabelKind, LandmarkLabel } from '../scene/labelModel'
 import { formatNumber } from '../ui/format'
+import { MAX_LANDMARK_DISTANCE_M } from './overpass'
 import type { OsmFeature, OsmKind } from './overpass'
 
 export interface LandmarkSettings {
@@ -38,6 +39,9 @@ export const DEFAULT_LANDMARK_SETTINGS: LandmarkSettings = {
   },
   maxDistanceM: 1500,
 }
+
+/** Allowed `maxDistanceM` (metres); the upper bound is what one query covers. */
+export const LANDMARK_DISTANCE_RANGE = { min: 100, max: MAX_LANDMARK_DISTANCE_M, step: 100 } as const
 
 export const KIND_LABELS: Readonly<Record<OsmKind, string>> = {
   peak: 'Sommets',

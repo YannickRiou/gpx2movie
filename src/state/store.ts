@@ -12,6 +12,8 @@ import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S } from '../flyover/cameraSet
 import type { CameraSettings } from '../flyover/cameraSettings'
 import type { TrackColorBy } from '../flyover/trackColor'
 import { centroid } from '../geo/ellipsoid'
+import { DEFAULT_LANDMARK_SETTINGS } from '../osm/landmarks'
+import type { LandmarkSettings } from '../osm/landmarks'
 import { DEFAULT_OVERLAY } from '../overlay/settings'
 import type { OverlaySettings } from '../overlay/settings'
 import { IMAGERY_SOURCES, sourceCovers } from '../terrain/sources'
@@ -46,6 +48,8 @@ export interface Settings {
   overlay: OverlaySettings
   /** exported film: size, frame rate, encoding quality */
   video: VideoSettings
+  /** OpenStreetMap landmarks along the tracks (Overpass API, network): kinds shown and corridor width */
+  landmarks: LandmarkSettings
 }
 
 /** Flyover playback along the first track (progress at constant ground speed). */
@@ -103,6 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   weather: { enabled: true },
   overlay: DEFAULT_OVERLAY,
   video: DEFAULT_VIDEO_SETTINGS,
+  landmarks: DEFAULT_LANDMARK_SETTINGS,
 }
 
 export const DEFAULT_PLAYBACK: Playback = { playing: false, progress: 0, speed: 1 }
