@@ -6,6 +6,8 @@
 .shell {
   display: grid;
   grid-template-rows: var(--topbar-h) minmax(0, 1fr) var(--statusbar-h);
+  /* one column as wide as the window: the dock must shrink the view, never widen the shell */
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
   background: var(--surface-chrome);
