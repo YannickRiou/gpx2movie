@@ -1,16 +1,17 @@
 /**
- * Flyover camera: the view (camera position, look-at target = marker) as a pure function of the progress,
- * the camera settings and the terrain sampler. No smoothing state from frame to frame, so a given progress
- * always gives the same image: the video export can render any frame on its own.
+ * Flyover camera: the view (camera position, look-at target = marker) as a pure function of the progress, the
+ * film time, the camera settings and the terrain sampler. No smoothing state from frame to frame, so a given
+ * progress and film time always give the same image: the video export can render any frame on its own.
  *
  * Every style places the camera on a sphere around the marker (horizontal direction, pitch, distance), then
  * raises it to keep MIN_GROUND_CLEARANCE_M above the ground and the sight line to the marker above the relief.
- * Each term is continuous in the progress, so the camera never jumps.
+ * Each term is continuous in the progress and the film time, so the camera never jumps. The time-based motions
+ * (orbit, cinematic swing) follow the film time, so they keep moving while the pacing holds the progress.
  */
 import { Vector3 } from 'three'
 import type { LocalFrame } from '../core/types'
 import type { HeightSampler } from '../scene/TrackLines'
-import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings } from './cameraSettings'
+import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings, type CameraStyle } from './cameraSettings'
 import { samplePath, type TrackPath } from './path'
 
 // ---------------------------------------------------------------------------
@@ -151,8 +152,15 @@ export interface CameraViewOptions {
   /** height of the marker above the ground (the track line lift) */
   liftM: number
   camera?: CameraSettings
-  /** flyover duration at speed x1 (seconds): the time-based motions (orbit, cinematic swing) use it */
+  /** flyover duration at speed x1 (seconds): film time = progress × durationS when `timeS` is absent */
   durationS?: number
+  /** film time (seconds at x1, pacing included) of the time-based motions (orbit, cinematic swing) */
+  timeS?: number
+}
+
+/** Styles whose view also moves with the film time (they keep moving during a pause of the pacing). */
+export function movesWithTime(style: CameraStyle): boolean {
+  return style === 'orbit' || style === 'cinematic'
 }
 
 /** Horizontal reference direction, viewing angle relative to it (radians, > 0 = right), pitch and distance. */
@@ -166,15 +174,13 @@ interface Placement {
 function placement(
   path: TrackPath,
   d: number,
-  progress: number,
+  timeS: number,
   frame: LocalFrame,
   camera: CameraSettings,
-  durationS: number,
 ): Placement {
   const w = headingWindowM(path) * camera.smoothing
   const distance = autoDistanceM(path) * camera.distance
   const offset = camera.headingOffsetDeg * DEG
-  const timeS = progress * durationS
 
   switch (camera.style) {
     case 'sway': {
@@ -212,9 +218,10 @@ function placement(
 }
 
 /**
- * Camera view at `progress` along `path`. The camera looks along the reference direction rotated by the view
- * angle, from `distance` away at `pitch` above the horizon; it is then raised (pitch steepens) to stay
- * MIN_GROUND_CLEARANCE_M above the terrain and until the sight line to the marker clears the terrain between.
+ * Camera view at `progress` along `path` and film time `options.timeS`. The camera looks along the reference
+ * direction rotated by the view angle, from `distance` away at `pitch` above the horizon; it is then raised
+ * (pitch steepens) to stay MIN_GROUND_CLEARANCE_M above the terrain and until the sight line to the marker clears
+ * the terrain between.
  * Heights: terrain sample, else recorded elevation, else 0; times `exaggeration`.
  */
 export function computeCameraView(
@@ -226,13 +233,14 @@ export function computeCameraView(
 ): CameraView {
   const { exaggeration, liftM, camera = DEFAULT_CAMERA, durationS = DEFAULT_FLYOVER_DURATION_S } = options
   const p = clamp(progress, 0, 1)
+  const timeS = options.timeS ?? p * durationS
   const d = p * path.lengthM
 
   const at = samplePath(path, d)
   const ground = (sample?.(at.lon, at.lat) ?? at.ele ?? 0) * exaggeration
   const target = frame.toLocal(at.lon, at.lat, ground + liftM)
 
-  const { reference, viewAngle, pitchDeg, distance } = placement(path, d, p, frame, camera, durationS)
+  const { reference, viewAngle, pitchDeg, distance } = placement(path, d, timeS, frame, camera)
   const pitch = clamp(pitchDeg, PITCH_MIN_DEG, PITCH_MAX_DEG) * DEG
   // viewing direction = reference turned clockwise (seen from above) by viewAngle; right = (-z, 0, x)
   const cos = Math.cos(viewAngle)

@@ -4,6 +4,7 @@ import {
   VIDEO_ASPECTS,
   VIDEO_RESOLUTIONS,
   buildFrameSchedule,
+  buildFrameTimes,
   isValidVideoSettings,
   videoSize,
   withVideoDefaults,
@@ -94,6 +95,15 @@ describe('buildFrameSchedule', () => {
     expect(frames[2]).toBe(0.5)
     expect(frames[3]).toBe(0.5)
     for (let i = 1; i < frames.length; i++) expect(frames[i]).toBeGreaterThanOrEqual(frames[i - 1])
+  })
+
+  it('film times: held on 0 and the duration, the ramp in between (the pauses keep moving the time)', () => {
+    const options = { durationS: 8, fps: 1, progressAt: (t: number) => (t < 2 ? t / 4 : t < 4 ? 0.5 : 0.5 + (t - 4) / 8) }
+    const times = buildFrameTimes({ ...options, holdStartS: 1, holdEndS: 2 })
+    expect(times).toEqual([0, ...Array.from({ length: 8 }, (_, k) => expect.closeTo((k * 8) / 7, 12)), 8, 8])
+    expect(times[8]).toBe(8)
+    // same frames as the progress schedule
+    expect(buildFrameSchedule({ ...options, holdStartS: 1, holdEndS: 2 })).toHaveLength(times.length)
   })
 
   it('a linear progressAt gives the default ramp', () => {

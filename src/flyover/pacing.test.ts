@@ -235,7 +235,9 @@ describe('pauses', () => {
     expect(pacing.progressAtTime(4.1)).toBeGreaterThan(0)
     expect(pacing.progressAtTime(D + 4 - 0.1)).toBeLessThan(1)
     expect(pacing.progressAtTime(D + 4)).toBe(1)
-    expect(pacing.timeAtProgress(1)).toBeCloseTo(D + 4, 9)
+    // the end of the track is the end of the film, after the final pause
+    expect(pacing.timeAtProgress(1)).toBe(pacing.totalTime())
+    expect(pacing.timeAtProgress(1 - 1e-9)).toBeCloseTo(D + 4, 6)
     expectWellFormed(pacing, 1 / D)
   })
 
@@ -267,13 +269,14 @@ describe('advance', () => {
     const fps = 60
     let position = pacing.positionAt(0)
     let frames = 0
-    while (position.progress < 1 && frames < 100_000) {
+    while (position.timeS < pacing.totalTime() && frames < 100_000) {
       position = pacing.advance(position, 1 / fps, 1)
       frames++
     }
     expect(position.progress).toBe(1)
-    // the last pause (at the end) is not played: progress 1 stops the playback
-    expect(frames / fps).toBeCloseTo(pacing.totalTime() - 2, 1)
+    // the last pause (at the end) is played too: the film ends at the total time, not when the progress reaches 1
+    expect(frames / fps).toBeCloseTo(pacing.totalTime(), 1)
+    expect(pacing.positionAt(1)).toEqual({ timeS: pacing.totalTime(), progress: 1 })
   })
 
   it('scales with the playback speed and resumes from a scrubbed progress', () => {
