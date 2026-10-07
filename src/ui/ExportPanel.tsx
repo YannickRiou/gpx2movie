@@ -16,6 +16,7 @@ import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { ModifiedMarker } from './ModifiedMarker'
 import { formatNumber } from './format'
+import { AspectIcon, Icon } from './icons'
 
 const QUALITIES: { value: VideoQuality; label: string }[] = [
   { value: 'standard', label: 'Standard' },
@@ -66,10 +67,11 @@ interface CodecProbe {
 }
 
 /**
- * "Exporter la vidéo" section: aspect, resolution, frame rate, quality, codec and estimated size, start /
- * cancel, progress and download; also a still image of the current progress at the same size.
+ * "Exporter" drawer: aspect (tiles), resolution, codec and estimated size, start / cancel, progress and download;
+ * also a still image of the current progress at the same size; frame rate, quality and image type under
+ * « Plus d'options ».
  */
-export function ExportPanel() {
+export function ExportPanel({ onClose }: { onClose?: () => void }) {
   const video = useAppStore((s) => s.settings.video)
   // film length and progress at each film time, with the slow-downs and pauses of the preview
   const pacing = usePacing()
@@ -158,31 +160,36 @@ export function ExportPanel() {
   return (
     <section className="settings export" aria-labelledby={`${id}-title`} aria-busy={busy}>
       <h2 id={`${id}-title`} className="section-title settings__title">
-        Exporter la vidéo
+        Exporter
       </h2>
-      <ModifiedMarker keys={['video']} label="Exporter la vidéo" disabled={busy} />
+      <ModifiedMarker keys={['video']} label="Exporter" disabled={busy} />
+      {onClose && (
+        <button type="button" className="icon-btn settings__close" onClick={onClose} aria-label="Fermer le panneau d'export" title="Fermer (Ctrl+E)">
+          <Icon name="x" size={18} />
+        </button>
+      )}
 
-      <div className="field">
-        <label className="field__label" htmlFor={`${id}-aspect`}>
-          Format
-        </label>
-        <select
-          id={`${id}-aspect`}
-          className="select"
-          value={video.aspect}
-          disabled={busy}
-          onChange={(e) => {
-            const aspect = VIDEO_ASPECTS.find((a) => a.id === e.currentTarget.value)
-            if (aspect) update({ aspect: aspect.id })
-          }}
-        >
+      <fieldset className="field fieldset" disabled={busy}>
+        <legend className="field__label">Format</legend>
+        <div className="format-tiles">
           {VIDEO_ASPECTS.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.label}
-            </option>
+            <label key={a.id} className="format-tile" title={a.label}>
+              <input
+                type="radio"
+                name={`${id}-aspect`}
+                value={a.id}
+                checked={video.aspect === a.id}
+                onChange={() => {
+                  update({ aspect: a.id })
+                  useAppStore.getState().setFreeFraming(false)
+                }}
+              />
+              <AspectIcon x={a.x} y={a.y} size={28} />
+              <span className="format-tile__label">{a.id}</span>
+            </label>
           ))}
-        </select>
-      </div>
+        </div>
+      </fieldset>
 
       <div className="field">
         <label className="field__label" htmlFor={`${id}-resolution`}>
@@ -210,42 +217,6 @@ export function ExportPanel() {
         </p>
       </div>
 
-      <fieldset className="field fieldset" disabled={busy}>
-        <legend className="field__label">Images par seconde</legend>
-        <div className="segmented">
-          {VIDEO_FPS.map((fps) => (
-            <label key={fps} className="segmented__option">
-              <input
-                type="radio"
-                name={`${id}-fps`}
-                value={fps}
-                checked={video.fps === fps}
-                onChange={() => update({ fps })}
-              />
-              {fps}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <fieldset className="field fieldset" disabled={busy}>
-        <legend className="field__label">Qualité</legend>
-        <div className="segmented">
-          {QUALITIES.map((q) => (
-            <label key={q.value} className="segmented__option">
-              <input
-                type="radio"
-                name={`${id}-quality`}
-                value={q.value}
-                checked={video.quality === q.value}
-                onChange={() => update({ quality: q.value })}
-              />
-              {q.label}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
       <p className="field__hint">
         {formatClock(totalFrames / video.fps)} · {formatNumber(totalFrames)} images, rendues une à une après le
         chargement complet du relief.
@@ -258,30 +229,20 @@ export function ExportPanel() {
         </p>
       )}
 
-      <fieldset className="field fieldset" disabled={busy}>
-        <legend className="field__label">Image fixe (position actuelle de la lecture)</legend>
-        <div className="segmented">
-          {STILL_TYPES.map((t) => (
-            <label key={t.value} className="segmented__option">
-              <input
-                type="radio"
-                name={`${id}-still`}
-                value={t.value}
-                checked={stillType === t.value}
-                onChange={() => setStillType(t.value)}
-              />
-              {t.label}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
       {!busy && (
         <div className="export__actions">
           <button type="button" className="btn btn--primary" onClick={start} disabled={!trackName || !codec}>
+            <Icon name="download" size={18} />
             Exporter la vidéo
           </button>
-          <button type="button" className="btn btn--secondary" onClick={startStill} disabled={!trackName}>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={startStill}
+            disabled={!trackName}
+            title="Image de la position actuelle de la lecture"
+          >
+            <Icon name="image" size={18} />
             Image fixe
           </button>
         </div>
@@ -339,6 +300,68 @@ export function ExportPanel() {
           </button>
         </div>
       )}
+
+      <details className="export__more">
+        <summary className="export__more-summary">
+          Plus d'options
+          <Icon name="chevron-down" size={16} />
+        </summary>
+        <div className="export__more-body">
+          <fieldset className="field fieldset" disabled={busy}>
+            <legend className="field__label">Images par seconde</legend>
+            <div className="segmented">
+              {VIDEO_FPS.map((fps) => (
+                <label key={fps} className="segmented__option">
+                  <input
+                    type="radio"
+                    name={`${id}-fps`}
+                    value={fps}
+                    checked={video.fps === fps}
+                    onChange={() => update({ fps })}
+                  />
+                  {fps}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset className="field fieldset" disabled={busy}>
+            <legend className="field__label">Qualité</legend>
+            <div className="segmented">
+              {QUALITIES.map((q) => (
+                <label key={q.value} className="segmented__option">
+                  <input
+                    type="radio"
+                    name={`${id}-quality`}
+                    value={q.value}
+                    checked={video.quality === q.value}
+                    onChange={() => update({ quality: q.value })}
+                  />
+                  {q.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset className="field fieldset" disabled={busy}>
+            <legend className="field__label">Type de l'image fixe</legend>
+            <div className="segmented">
+              {STILL_TYPES.map((t) => (
+                <label key={t.value} className="segmented__option">
+                  <input
+                    type="radio"
+                    name={`${id}-still`}
+                    value={t.value}
+                    checked={stillType === t.value}
+                    onChange={() => setStillType(t.value)}
+                  />
+                  {t.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
+      </details>
 
       <p className="visually-hidden" role="status">
         {announcement}

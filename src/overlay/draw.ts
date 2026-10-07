@@ -7,10 +7,12 @@
  * side. Widgets sharing an anchor are stacked. No DOM access: fonts and the logo image are loaded
  * beforehand (see `assets.ts`).
  *
- * What is timed in film seconds (the opening and closing cards, the texts of the timeline) reads the film time
- * of the frame (`OverlayTime`, from the film clock); the live values follow the progress (`OverlayFrame`).
+ * What is timed in film seconds (the opening and closing cards, the texts and photos of the timeline) reads the
+ * film time of the frame (`OverlayTime`, from the film clock); the live values follow the progress (`OverlayFrame`).
+ * The photos of the timeline are drawn even while the rest of the overlay is off: full-screen ones under
+ * everything, framed cards at their anchor.
  */
-import type { FilmText } from '../film/model'
+import type { FilmMedia, FilmText } from '../film/model'
 import { formatDistance, formatDuration, formatNumber } from '../ui/format'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import type { WeatherSummary } from '../weather/series'
@@ -29,9 +31,18 @@ export interface OverlaySize {
   height: number
 }
 
+/** A decoded image and its size. */
+export interface OverlayImage {
+  image: CanvasImageSource
+  width: number
+  height: number
+}
+
 /** Decoded images used by the overlay (loaded asynchronously before drawing). */
 export interface OverlayAssets {
-  logo?: { image: CanvasImageSource; width: number; height: number } | null
+  logo?: OverlayImage | null
+  /** decoded picture of a photo of the timeline (`FilmMedia.src`), undefined while it is not loaded */
+  photo?: (src: string) => OverlayImage | undefined
 }
 
 /** Where a frame is in the film: film time and the lengths of the film clock (seconds at ×1). */
@@ -68,6 +79,8 @@ export interface OverlayExtras {
   time?: OverlayTime
   /** texts of the timeline (`settings.film.texts`), drawn inside their window */
   texts?: readonly FilmText[]
+  /** photos of the timeline (`settings.film.media`), drawn inside their window once their picture is loaded */
+  media?: readonly FilmMedia[]
   /** credits of the sources in the film (`overlayCredits`), drawn while `settings.credits` is on */
   credits?: readonly string[]
 }
@@ -77,8 +90,11 @@ export const SAFE_MARGIN = 0.05
 /** Fade lengths of the cards, as fractions of the flight. */
 export const CARD_FADE_IN = 0.01
 export const CARD_FADE_OUT = 0.025
-/** Fade in and out of a timeline text (seconds, at most a quarter of its duration each). */
+/** Fade in and out of a timeline text or photo (seconds, at most a quarter of its duration each). */
 export const TEXT_FADE_S = 0.4
+/** Ken Burns move of a full-screen photo: zoom at one end (1 at the other), largest pan (fraction of the picture side). */
+export const KEN_BURNS_ZOOM = 1.1
+const KEN_BURNS_PAN = 0.04
 /** Smallest elevation range drawn full height (a flat track stays flat), as in the timeline profile. */
 const PROFILE_MIN_SPAN_M = 100
 /** Longer side of the mini-map at size 1 (u), and its most elongated box (longer side / shorter side). */
@@ -146,14 +162,59 @@ export function filmTextOpacity(text: Pick<FilmText, 'startS' | 'durationS'>, ti
 }
 
 /**
- * Opacities of what the overlay times in film seconds at `time` (opening and closing cards, timeline texts): two
- * frames of one progress with the same values draw the same overlay, so the export may repeat a held frame.
+ * Opacities of what the overlay times in film seconds at `time` (opening and closing cards, timeline texts and
+ * photos, plus the time itself while a full-screen photo moves): two frames of one progress with the same values
+ * draw the same overlay, so the export may repeat a held frame.
  */
-export function overlayTimedState(settings: OverlaySettings, texts: readonly FilmText[], time: OverlayTime): number[] {
-  if (!settings.enabled) return []
+export function overlayTimedState(
+  settings: OverlaySettings,
+  texts: readonly FilmText[],
+  time: OverlayTime,
+  media: readonly FilmMedia[] = [],
+): number[] {
+  const photos = media.flatMap((item) => {
+    const opacity = item.kind === 'image' ? filmTextOpacity(item, time.timeS) : 0
+    return opacity > 0 && item.layout === 'plein-ecran' && item.kenBurns ? [opacity, time.timeS] : [opacity]
+  })
+  if (!settings.enabled) return photos
   const title = settings.title.enabled ? titleCardOpacity(time, settings.title.end) : 0
   const end = settings.end.enabled ? endCardOpacity(time, settings.end.start) : 0
-  return [title, end, ...texts.map((text) => filmTextOpacity(text, time.timeS))]
+  return [title, end, ...texts.map((text) => filmTextOpacity(text, time.timeS)), ...photos]
+}
+
+/** Part of a picture drawn over the frame (source rectangle of `drawImage`). */
+export interface Crop {
+  sx: number
+  sy: number
+  sw: number
+  sh: number
+}
+
+/**
+ * Part of a picture (`iw` × `ih`) shown over a whole frame (`fw` × `fh`) at `t` ∈ [0, 1] of its window: cropped to
+ * cover the frame and, with the Ken Burns `move`, zoomed in or out between 1 and `KEN_BURNS_ZOOM` and panned
+ * diagonally at constant speed, the direction picked from `seed` (each photo moves its own way, the same in every
+ * frame); centred and still without it. Always inside the picture.
+ */
+export function kenBurnsCrop(iw: number, ih: number, fw: number, fh: number, t: number, seed: number, move: boolean): Crop {
+  const cover = Math.max(fw / iw, fh / ih)
+  const variant = ((Math.trunc(seed) % 8) + 8) % 8
+  const e = move ? Math.min(1, Math.max(0, t)) : 0.5
+  const zoom = move ? (variant % 2 === 0 ? 1 + (KEN_BURNS_ZOOM - 1) * e : KEN_BURNS_ZOOM - (KEN_BURNS_ZOOM - 1) * e) : 1
+  const sw = Math.min(iw, fw / (cover * zoom))
+  const sh = Math.min(ih, fh / (cover * zoom))
+  // -1 .. 1 across the window, at most the slack on each side
+  const f = 2 * e - 1
+  const panX = (variant & 2 ? 1 : -1) * f * Math.min((iw - sw) / 2, KEN_BURNS_PAN * iw)
+  const panY = (variant & 4 ? 1 : -1) * f * Math.min((ih - sh) / 2, KEN_BURNS_PAN * ih)
+  return { sx: (iw - sw) / 2 + panX, sy: (ih - sh) / 2 + panY, sw, sh }
+}
+
+/** Small stable number from an id (the Ken Burns direction of a photo). */
+function seedOf(id: string): number {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
+  return Math.abs(h)
 }
 
 /** Seconds -> "1:05:09" (hours always shown, so the counter keeps its width). */
@@ -979,6 +1040,81 @@ function filmTextWidget(p: Painter, item: FilmText, opacity: number, maxWidth: n
   }
 }
 
+/** A full-screen photo of the timeline, under everything else, with its Ken Burns move. */
+function drawFullPhoto(p: Painter, item: FilmMedia, image: OverlayImage, opacity: number, timeS: number): void {
+  const { ctx, size } = p
+  if (image.width <= 0 || image.height <= 0) return
+  const t = (timeS - item.startS) / item.durationS
+  const c = kenBurnsCrop(image.width, image.height, size.width, size.height, t, seedOf(item.id), item.kenBurns)
+  ctx.save()
+  ctx.globalAlpha = opacity
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(image.image, c.sx, c.sy, c.sw, c.sh, 0, 0, size.width, size.height)
+  ctx.restore()
+}
+
+/** A photo card of the timeline: the picture in the frame of the style, its caption below on one line. */
+function photoCardWidget(p: Painter, item: FilmMedia, image: OverlayImage, opacity: number): Widget | null {
+  if (image.width <= 0 || image.height <= 0) return null
+  const { ctx, theme, u, size } = p
+  const frame = theme.photo
+  const s = item.size
+  const pad = frame.pad * u * s
+  const caption: TextStyle = { family: theme.bodyFamily, weight: 500, sizePx: 1.6 * u * s, color: frame.caption }
+  const plain = { ...p, theme: { ...theme, textShadow: undefined } }
+  const text = item.caption?.trim() ?? ''
+  const gap = 0.7 * u * s
+  const captionH = text ? gap + caption.sizePx * 0.95 : 0
+  let h = 26 * u * s
+  let w = (h * image.width) / image.height
+  const maxW = Math.min(40 * u * s, size.width * (1 - 2 * SAFE_MARGIN) - 2 * pad)
+  const maxH = size.height * (1 - 2 * SAFE_MARGIN) - 2 * pad - captionH
+  const fit = Math.min(1, maxW / w, maxH / h)
+  w *= fit
+  h *= fit
+  const line = text ? truncate(plain, text, w, caption) : ''
+  const width = w + 2 * pad
+  const height = h + 2 * pad + captionH
+  const align = alignOf(item.anchor)
+  return {
+    anchor: item.anchor,
+    width,
+    height,
+    opacity,
+    draw(x, y) {
+      ctx.save()
+      roundedRect(ctx, x, y, width, height, frame.radius * u)
+      if (frame.shadow) {
+        ctx.shadowColor = frame.shadow.color
+        ctx.shadowBlur = frame.shadow.blur * u * p.px
+        ctx.shadowOffsetY = frame.shadow.offsetY * u * p.px
+      }
+      ctx.fillStyle = frame.mat
+      ctx.fill()
+      ctx.shadowColor = 'transparent'
+      if (frame.stroke) {
+        ctx.strokeStyle = frame.stroke
+        ctx.lineWidth = Math.max(0.1 * u, 1 / p.px)
+        ctx.stroke()
+      }
+      if (theme.accentBar > 0) {
+        ctx.clip()
+        ctx.fillStyle = theme.accent
+        const bar = theme.accentBar * u
+        ctx.fillRect(align === 'right' ? x + width - bar : x, y, bar, height)
+      }
+      ctx.restore()
+      ctx.save()
+      roundedRect(ctx, x + pad, y + pad, w, h, frame.imageRadius * u)
+      ctx.clip()
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(image.image, x + pad, y + pad, w, h)
+      ctx.restore()
+      if (line) fillText(plain, line, alignX(align, x + pad, w), y + pad + h + gap + caption.sizePx * 0.75, caption, align)
+    },
+  }
+}
+
 function logoWidget(p: Painter, settings: OverlaySettings, assets: OverlayAssets): Widget | null {
   const logo = assets.logo
   if (!logo || !settings.logo.image || logo.width <= 0 || logo.height <= 0) return null
@@ -1010,7 +1146,8 @@ function logoWidget(p: Painter, settings: OverlaySettings, assets: OverlayAssets
 /**
  * Draw the overlay of one frame. The context's current transform maps `size` (user units) onto the canvas;
  * the caller clears the canvas first (the overlay only adds). Synchronous and deterministic: the same
- * arguments always give the same image. The source credits are drawn even while the rest of the overlay is off.
+ * arguments always give the same image. The source credits and the photos of the timeline are drawn even while
+ * the rest of the overlay is off; the credits stay on top.
  */
 export function drawOverlay(
   ctx: OverlayContext2D,
@@ -1022,7 +1159,14 @@ export function drawOverlay(
 ): void {
   if (size.width <= 0 || size.height <= 0) return
   const credits = settings.credits.enabled ? [...(extras.credits ?? [])] : []
-  if (!settings.enabled && credits.length === 0) return
+  const time = extras.time ?? progressTime(frame.progress)
+  // photos inside their window whose picture is loaded (videos are not drawn yet)
+  const photos = (extras.media ?? []).flatMap((item) => {
+    const opacity = item.kind === 'image' ? filmTextOpacity(item, time.timeS) : 0
+    const image = opacity > 0.001 ? assets.photo?.(item.src) : undefined
+    return image ? [{ item, opacity, image }] : []
+  })
+  if (!settings.enabled && credits.length === 0 && photos.length === 0) return
   const transform = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null
   const p: Painter = {
     ctx,
@@ -1033,50 +1177,67 @@ export function drawOverlay(
   }
 
   ctx.save()
-  if (settings.enabled) {
-    const time = extras.time ?? progressTime(frame.progress)
-    const titleOpacity = settings.title.enabled ? titleCardOpacity(time, settings.title.end) : 0
-    const endOpacity = settings.end.enabled ? endCardOpacity(time, settings.end.start) : 0
-    // live widgets give way to the cards
-    const live = 1 - cardOpacityAt(time, settings)
+  // full-screen photos under everything else
+  let cover = 0
+  for (const { item, opacity, image } of photos) {
+    if (item.layout !== 'plein-ecran') continue
+    drawFullPhoto(p, item, image, opacity, time.timeS)
+    cover = Math.max(cover, opacity)
+  }
 
-    const widgets: Widget[] = []
-    const add = (w: Widget | null) => {
-      if (w && w.opacity > 0.001) widgets.push(w)
-    }
+  const widgets: Widget[] = []
+  const add = (w: Widget | null) => {
+    if (w && w.opacity > 0.001) widgets.push(w)
+  }
+  const texts: { item: FilmText; opacity: number }[] = []
+  let weather: Widget | null = null
+  let endOpacity = 0
+  if (settings.enabled) {
+    const titleOpacity = settings.title.enabled ? titleCardOpacity(time, settings.title.end) : 0
+    endOpacity = settings.end.enabled ? endCardOpacity(time, settings.end.start) : 0
+    // live widgets give way to the cards and to the full-screen photos
+    const live = 1 - Math.max(cardOpacityAt(time, settings), cover)
+
     if (titleOpacity > 0) add(titleWidget(p, frame, settings, titleOpacity))
     if (endOpacity > 0) add(endWidget(p, frame, settings, endOpacity))
     if (settings.counters.enabled && live > 0) add(countersWidget(p, frame, settings, live))
     if (settings.profile.enabled && live > 0) add(profileWidget(p, frame, settings, live))
-    const weather = settings.weather.enabled && live > 0 ? weatherWidget(p, frame, settings, live) : null
+    weather = settings.weather.enabled && live > 0 ? weatherWidget(p, frame, settings, live) : null
     add(weather)
     if (settings.minimap.enabled && live > 0) add(minimapWidget(p, frame, settings, live))
     if (settings.text.enabled) add(textWidget(p, settings))
     if (settings.logo.enabled) add(logoWidget(p, settings, assets))
-    // texts of the timeline inside their window, after the widgets of their anchor
-    const shown = (extras.texts ?? []).flatMap((item) => {
+    // texts of the timeline inside their window
+    for (const item of extras.texts ?? []) {
       const opacity = filmTextOpacity(item, time.timeS)
-      return opacity > 0.001 ? [{ item, opacity }] : []
-    })
-    const maxWidths = filmTextMaxWidths(
-      shown.map(({ item }) => item.anchor),
-      size.width * (1 - 2 * SAFE_MARGIN),
-      2 * p.u,
-    )
-    shown.forEach(({ item, opacity }, i) => add(filmTextWidget(p, item, opacity, maxWidths[i])))
-
-    const positions = layoutWidgets(widgets, size, 2 * p.u)
-    widgets.forEach((widget, i) => {
-      ctx.save()
-      ctx.globalAlpha = widget.opacity
-      widget.draw(positions[i].x, positions[i].y)
-      ctx.restore()
-    })
-    if ((weather && weather.opacity > 0.001) || (endOpacity > 0 && settings.end.showWeather && frame.track.stats.weather)) {
-      // required by the Open-Meteo licence: with the other credits when they are drawn, else on its own
-      if (!settings.credits.enabled) drawWeatherCredit(p)
-      else if (!credits.includes(OPEN_METEO_ATTRIBUTION)) credits.push(OPEN_METEO_ATTRIBUTION)
+      if (opacity > 0.001) texts.push({ item, opacity })
     }
+  }
+  // photo cards after the widgets of their anchor; the caption of a full-screen photo is drawn like a text
+  for (const { item, opacity, image } of photos) {
+    const caption = item.caption?.trim()
+    if (item.layout === 'carte') add(photoCardWidget(p, item, image, opacity))
+    else if (caption) texts.push({ item: { ...item, text: caption }, opacity })
+  }
+  // texts after the widgets of their anchor
+  const maxWidths = filmTextMaxWidths(
+    texts.map(({ item }) => item.anchor),
+    size.width * (1 - 2 * SAFE_MARGIN),
+    2 * p.u,
+  )
+  texts.forEach(({ item, opacity }, i) => add(filmTextWidget(p, item, opacity, maxWidths[i])))
+
+  const positions = layoutWidgets(widgets, size, 2 * p.u)
+  widgets.forEach((widget, i) => {
+    ctx.save()
+    ctx.globalAlpha = widget.opacity
+    widget.draw(positions[i].x, positions[i].y)
+    ctx.restore()
+  })
+  if ((weather && weather.opacity > 0.001) || (endOpacity > 0 && settings.end.showWeather && frame.track.stats.weather)) {
+    // required by the Open-Meteo licence: with the other credits when they are drawn, else on its own
+    if (!settings.credits.enabled) drawWeatherCredit(p)
+    else if (!credits.includes(OPEN_METEO_ATTRIBUTION)) credits.push(OPEN_METEO_ATTRIBUTION)
   }
   if (credits.length > 0) drawCredits(p, credits, settings.credits.position)
   ctx.restore()

@@ -3,12 +3,14 @@
  * by its gestures (drag a block, drag an edge, nudge, add, remove), as pure functions of the film. The component
  * only turns pointer and keyboard events into these calls and commits the result as one undo step.
  *
- * Items are selected by id: 'opening', 'closing', or the id of a stop or a text (unique across the film). Times
- * are film times (seconds at ×1 from the first frame, opening included).
+ * Items are selected by id: 'opening', 'closing', or the id of a stop, a text or a medium (unique across the film).
+ * Times are film times (seconds at ×1 from the first frame, opening included).
  */
+import { distanceAtTime, nearestOnPath } from '../flyover/path'
+import type { TrackPath } from '../flyover/path'
 import type { ClockStop, FilmClock } from './clock'
-import { AUTO_STOP_S, ITEM_DURATION_RANGE, SHOT_DURATION_RANGE, STOP_DURATION_RANGE, nextFilmId } from './model'
-import type { Film, FilmShot, FilmStop, FilmText } from './model'
+import { AUTO_STOP_S, ITEM_DURATION_RANGE, MEDIA_DEFAULTS, SHOT_DURATION_RANGE, STOP_DURATION_RANGE, nextFilmId } from './model'
+import type { Film, FilmMedia, FilmShot, FilmStop, FilmText } from './model'
 
 export type TimelineItem = 'opening' | 'closing' | string
 /** part of a block a gesture holds: its body (move) or one of its edges */
@@ -81,8 +83,8 @@ export function snapTime(t: number, targets: readonly number[], thresholdS: numb
 }
 
 /**
- * Times a dragged edge snaps to: start and end of the film, edges of the shots, of the stops and texts (but those
- * of `except`), highlights (progress values), playhead.
+ * Times a dragged edge snaps to: start and end of the film, edges of the shots, of the stops, texts and media (but
+ * those of `except`), highlights (progress values), playhead.
  */
 export function snapTargets(
   clock: FilmClock,
@@ -94,7 +96,7 @@ export function snapTargets(
   const total = clock.totalTime()
   const out = [0, total, clock.openingS, total - clock.closingS, playheadS]
   for (const s of clock.stops) if (s.id !== except) out.push(s.startS, s.endS)
-  for (const t of film.texts) if (t.id !== except) out.push(t.startS, t.startS + t.durationS)
+  for (const t of [...film.texts, ...film.media]) if (t.id !== except) out.push(t.startS, t.startS + t.durationS)
   for (const h of highlights) out.push(clock.timeAtProgress(h))
   return out
 }
@@ -170,7 +172,7 @@ function moveStop(film: Film, stop: ClockStop, deltaS: number, ctx: DragContext)
 /**
  * The film after dragging `grip` of `item` by `deltaS` seconds from the gesture start (`film` is the film at the
  * start, stops written out for a stop): opening end, closing start, stop moved along the track (hold start
- * follows the pointer) or stretched (end edge), text moved or stretched by either edge. Edges snap to
+ * follows the pointer) or stretched (end edge), text or medium moved or stretched by either edge. Edges snap to
  * `ctx.targets`; values are clamped to the model ranges. Unknown items and grips leave the film as is.
  */
 export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: number, ctx: DragContext): Film {
@@ -197,23 +199,29 @@ export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: num
     return { ...film, stops: film.stops.map((s) => (s.id === item ? { ...s, durationS } : s)) }
   }
 
-  const text = film.texts.find((t) => t.id === item)
-  if (!text) return film
-  const start = text.startS
-  const end = text.startS + text.durationS
-  let next: Pick<FilmText, 'startS' | 'durationS'>
+  const lane = film.texts.some((t) => t.id === item) ? 'texts' : 'media'
+  const timed: Timed | undefined = film[lane].find((t) => t.id === item)
+  if (!timed) return film
+  const start = timed.startS
+  const end = timed.startS + timed.durationS
+  let next: Timed
   if (grip === 'move') {
     const snappedStart = snap(start + deltaS)
     const shift = snappedStart !== start + deltaS ? snappedStart - start : snap(end + deltaS) - end
-    next = { startS: roundS(Math.max(0, start + shift)), durationS: text.durationS }
+    next = { startS: roundS(Math.max(0, start + shift)), durationS: timed.durationS }
   } else if (grip === 'start') {
     const s = clamp(snap(start + deltaS), Math.max(0, end - ITEM_DURATION_RANGE.max), end - ITEM_DURATION_RANGE.min)
     next = { startS: roundS(s), durationS: itemDuration(end - s) }
   } else {
     next = { startS: start, durationS: itemDuration(snap(end + deltaS) - start) }
   }
-  return { ...film, texts: film.texts.map((t) => (t.id === item ? { ...t, ...next } : t)) }
+  return lane === 'texts'
+    ? { ...film, texts: film.texts.map((t) => (t.id === item ? { ...t, ...next } : t)) }
+    : { ...film, media: film.media.map((m) => (m.id === item ? { ...m, ...next } : m)) }
 }
+
+/** What a gesture changes on a text or a medium. */
+type Timed = Pick<FilmText, 'startS' | 'durationS'>
 
 // ---------------------------------------------------------------------------
 // Edits
@@ -235,6 +243,48 @@ export function addText(film: Film, startS: number): { film: Film; id: string } 
   const id = nextFilmId(film, 'text')
   const text: FilmText = { id, startS: roundS(Math.max(0, startS)), durationS: NEW_TEXT_S, text: 'Nouveau texte', anchor: 'bottom-center', size: 1 }
   return { film: { ...film, texts: [...film.texts, text] }, id }
+}
+
+/** Length of a photo added on the timeline (seconds). */
+export const NEW_MEDIA_S = 5
+
+/**
+ * Photos added one after the other from film time `startS` (`NEW_MEDIA_S` each, `MEDIA_DEFAULTS` placement), one
+ * per picture id of the media table; with their new ids.
+ */
+export function addPhotos(film: Film, startS: number, srcs: readonly string[]): { film: Film; ids: string[] } {
+  let next = film
+  const ids: string[] = []
+  srcs.forEach((src, k) => {
+    const id = nextFilmId(next, 'media')
+    const startAt = roundS(Math.max(0, startS) + k * NEW_MEDIA_S)
+    const media: FilmMedia = { id, startS: startAt, durationS: NEW_MEDIA_S, kind: 'image', src, ...MEDIA_DEFAULTS }
+    next = { ...next, media: [...next.media, media] }
+    ids.push(id)
+  })
+  return { film: next, ids }
+}
+
+/** Farthest a geotagged photo may be from the track to be placed on it (metres). */
+export const PHOTO_MAX_OFF_M = 2000
+/** Capture instants this long before the start or after the end of the recording place a photo at that end. */
+export const PHOTO_TIME_TOLERANCE_MS = 15 * 60_000
+
+/**
+ * Film time at which the marker reaches the point of the track where a photo was taken (`place`: EXIF position
+ * and / or capture instant): the nearest point of the track, within `PHOTO_MAX_OFF_M` (on an out-and-back, the
+ * pass recorded closest to the instant), else the point recorded at that instant (timed track). Undefined when
+ * neither matches.
+ */
+export function photoFilmTime(path: TrackPath, clock: FilmClock, place: { lon?: number; lat?: number; timeMs?: number }): number | undefined {
+  if (path.lengthM <= 0) return undefined
+  let atM: number | undefined
+  if (place.lon !== undefined && place.lat !== undefined) {
+    const nearest = nearestOnPath(path, { lon: place.lon, lat: place.lat }, place.timeMs)
+    if (nearest && nearest.offM <= PHOTO_MAX_OFF_M) atM = nearest.distanceM
+  }
+  if (atM === undefined && place.timeMs !== undefined) atM = distanceAtTime(path, place.timeMs, PHOTO_TIME_TOLERANCE_MS)
+  return atM === undefined ? undefined : roundS(clock.timeAtProgress(atM / path.lengthM))
 }
 
 /** `film` without the stop, text or media `id` (the shots cannot be removed: style 'aucune'). */
@@ -266,6 +316,18 @@ export function updateText(film: Film, id: string, patch: Partial<Omit<FilmText,
     texts: film.texts.map((t) => {
       if (t.id !== id) return t
       const next = { ...t, ...patch }
+      return { ...next, startS: roundS(Math.max(0, next.startS)), durationS: itemDuration(next.durationS) }
+    }),
+  }
+}
+
+/** Medium `id` with `patch`, start and duration clamped to their ranges. */
+export function updateMedia(film: Film, id: string, patch: Partial<Omit<FilmMedia, 'id'>>): Film {
+  return {
+    ...film,
+    media: film.media.map((m) => {
+      if (m.id !== id) return m
+      const next = { ...m, ...patch }
       return { ...next, startS: roundS(Math.max(0, next.startS)), durationS: itemDuration(next.durationS) }
     }),
   }

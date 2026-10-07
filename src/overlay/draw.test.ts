@@ -12,6 +12,8 @@ import {
   filmTextMaxWidths,
   filmTextOpacity,
   formatElapsed,
+  kenBurnsCrop,
+  KEN_BURNS_ZOOM,
   layoutWidgets,
   overlayTime,
   overlayTimedState,
@@ -19,7 +21,8 @@ import {
   titleCardOpacity,
 } from './draw'
 import type { OverlayContext2D, OverlayExtras } from './draw'
-import type { FilmText } from '../film/model'
+import { MEDIA_DEFAULTS } from '../film/model'
+import type { FilmMedia, FilmText } from '../film/model'
 import { DEFAULT_OVERLAY, OVERLAY_ANCHORS, OVERLAY_STYLES } from './settings'
 import type { OverlaySettings } from './settings'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
@@ -46,6 +49,10 @@ function fakeContext() {
   const texts: TextCall[] = []
   const calls: string[] = []
   const points: PointCall[] = []
+  /** drawImage calls: arguments after the image, opacity */
+  const images: { args: number[]; alpha: number }[] = []
+  /** order of the texts and images drawn */
+  const order: string[] = []
   const state = { font: '10px sans-serif', globalAlpha: 1 }
   const stack: (typeof state)[] = []
   const fontPx = () => Number(/(\d+(?:\.\d+)?)px/.exec(state.font)?.[1] ?? 10)
@@ -53,7 +60,15 @@ function fakeContext() {
     save: () => stack.push({ ...state }),
     restore: () => Object.assign(state, stack.pop()),
     measureText: (text: string) => ({ width: text.length * fontPx() * 0.5 }),
-    fillText: (text: string, x: number, y: number) => texts.push({ text, x, y, alpha: state.globalAlpha }),
+    fillText: (text: string, x: number, y: number) => {
+      order.push('text')
+      texts.push({ text, x, y, alpha: state.globalAlpha })
+    },
+    drawImage: (_image: unknown, ...args: number[]) => {
+      order.push('image')
+      images.push({ args, alpha: state.globalAlpha })
+      calls.push(`drawImage(${args.length + 1})`)
+    },
     createRadialGradient: () => ({ addColorStop: () => {} }),
     getTransform: () => ({ a: 2, b: 0 }),
   }
@@ -74,7 +89,7 @@ function fakeContext() {
     },
     has: () => true,
   })
-  return { ctx: ctx as unknown as OverlayContext2D, texts, calls, points }
+  return { ctx: ctx as unknown as OverlayContext2D, texts, calls, points, images, order }
 }
 
 const sampleTrack = parseGpx(sampleGpx, 'tour-du-mont-blanc-j1.gpx')[0]
@@ -505,5 +520,99 @@ describe('source credits', () => {
     const joined = texts.map((t) => t.text).join(' ')
     expect(joined.split(OPEN_METEO_ATTRIBUTION).length).toBe(2)
     expect(joined).toContain('Mapterhorn')
+  })
+})
+
+describe('timeline photos', () => {
+  const image = { image: {} as CanvasImageSource, width: 3000, height: 2000 }
+  const assets = { photo: (src: string) => (src === 'photo-1' ? image : undefined) }
+  const full: FilmMedia = { id: 'media-1', startS: 40, durationS: 20, kind: 'image', src: 'photo-1', ...MEDIA_DEFAULTS }
+  const card: FilmMedia = { ...full, id: 'media-2', layout: 'carte', anchor: 'top-right', kenBurns: false, caption: 'Lac Blanc' }
+  const noCredits = { ...DEFAULT_OVERLAY, credits: { ...DEFAULT_OVERLAY.credits, enabled: false } }
+  /** a 100 s film without cards */
+  const at = (timeS: number) => ({ timeS, openingS: 0, flightS: 100, totalS: 100 })
+  const render = (settings: OverlaySettings, media: FilmMedia[], timeS: number, extras: OverlayExtras = {}) => {
+    const drawn = fakeContext()
+    drawOverlay(drawn.ctx, overlayFrameAt(track, 0.5), settings, SIZE, assets, { media, time: at(timeS), ...extras })
+    return drawn
+  }
+
+  it('full screen: covers the frame inside its window, under everything, even without the overlay', () => {
+    expect(render(noCredits, [full], 39).images).toEqual([])
+    const { images, order } = render(DEFAULT_OVERLAY, [full], 50, { credits: ['Relief : © Mapterhorn'] })
+    expect(images).toHaveLength(1)
+    expect(images[0].args.slice(4)).toEqual([0, 0, SIZE.width, SIZE.height])
+    expect(images[0].alpha).toBe(1)
+    expect(order).toEqual(['image', 'text'])
+    expect(render(noCredits, [full], 40.2).images[0].alpha).toBeCloseTo(0.5, 6)
+    expect(render(noCredits, [full], 60).images).toEqual([])
+    // not loaded yet, or a video: nothing
+    expect(render(noCredits, [{ ...full, src: 'photo-2' }], 50).calls).toEqual([])
+    expect(render(noCredits, [{ ...full, kind: 'video' }], 50).calls).toEqual([])
+  })
+
+  it('full screen: the Ken Burns move follows the film time, still without it', () => {
+    const crop = (media: FilmMedia, timeS: number) => render(noCredits, [media], timeS).images[0].args.slice(0, 4)
+    expect(crop(full, 42)).not.toEqual(crop(full, 58))
+    expect(crop(full, 50)).toEqual(crop(full, 50))
+    const still = { ...full, kenBurns: false }
+    expect(crop(still, 42)).toEqual(crop(still, 58))
+  })
+
+  it('full screen: the live widgets give way, the caption is drawn like a text', () => {
+    const settings = enabled({ title: { ...DEFAULT_OVERLAY.title, enabled: false }, end: { ...DEFAULT_OVERLAY.end, enabled: false } })
+    const labels = (timeS: number, media: FilmMedia[]) => render(settings, media, timeS).texts.map((t) => t.text.toLocaleLowerCase('fr'))
+    expect(labels(30, [full])).toContain('distance')
+    expect(labels(50, [full])).not.toContain('distance')
+    const captioned = render(noCredits, [{ ...full, caption: 'Lac Blanc', anchor: 'bottom-left' }], 50).texts
+    expect(captioned.map((t) => t.text)).toEqual(['Lac Blanc'])
+    expect(captioned[0].x).toBeCloseTo(SIZE.width * SAFE_MARGIN, 6)
+  })
+
+  it.each(OVERLAY_STYLES)('card, style %s: picture and caption inside the safe area at every anchor and size', (style) => {
+    for (const anchor of OVERLAY_ANCHORS) {
+      for (const size of [0.5, 2]) {
+        const { images, texts } = render({ ...noCredits, style }, [{ ...card, anchor, size, caption: 'Une très longue légende '.repeat(20) }], 50)
+        expect(images).toHaveLength(1)
+        const [x, y, w, h] = images[0].args
+        expect(w / h).toBeCloseTo(1.5, 6)
+        expect(x).toBeGreaterThanOrEqual(SIZE.width * SAFE_MARGIN - 1)
+        expect(x + w).toBeLessThanOrEqual(SIZE.width * (1 - SAFE_MARGIN) + 1)
+        expect(y).toBeGreaterThanOrEqual(SIZE.height * SAFE_MARGIN - 1)
+        expect(y + h).toBeLessThanOrEqual(SIZE.height * (1 - SAFE_MARGIN) + 1)
+        expect(texts).toHaveLength(1)
+        expect(texts[0].text.endsWith('…')).toBe(true)
+        expect(texts[0].y).toBeGreaterThan(y + h)
+        expect(texts[0].y).toBeLessThanOrEqual(SIZE.height * (1 - SAFE_MARGIN) + 1)
+      }
+    }
+  })
+
+  it('times the photos for the export: opacity, and the time while a full-screen photo moves', () => {
+    expect(overlayTimedState(DEFAULT_OVERLAY, [], at(50), [full, card])).toEqual([1, 50, 1])
+    expect(overlayTimedState(DEFAULT_OVERLAY, [], at(30), [full, card])).toEqual([0, 0])
+    expect(overlayTimedState(enabled(), [], at(50), [{ ...full, kenBurns: false }])).toEqual([0, 0, 1])
+  })
+
+  it('Ken Burns crop: inside the picture, frame proportions, zoom from 1 to KEN_BURNS_ZOOM', () => {
+    for (let seed = 0; seed < 8; seed++) {
+      for (const t of [0, 0.3, 1]) {
+        for (const [iw, ih] of [[3000, 2000], [2000, 3000], [1920, 1080]]) {
+          const c = kenBurnsCrop(iw, ih, 1920, 1080, t, seed, true)
+          expect(c.sx).toBeGreaterThanOrEqual(-1e-9)
+          expect(c.sy).toBeGreaterThanOrEqual(-1e-9)
+          expect(c.sx + c.sw).toBeLessThanOrEqual(iw + 1e-9)
+          expect(c.sy + c.sh).toBeLessThanOrEqual(ih + 1e-9)
+          expect(c.sw / c.sh).toBeCloseTo(1920 / 1080, 6)
+        }
+      }
+    }
+    // portrait picture covering a landscape frame: full width at zoom 1
+    expect(kenBurnsCrop(2000, 3000, 1920, 1080, 0, 0, true).sw).toBeCloseTo(2000, 6)
+    expect(kenBurnsCrop(2000, 3000, 1920, 1080, 1, 0, true).sw).toBeCloseTo(2000 / KEN_BURNS_ZOOM, 6)
+    expect(kenBurnsCrop(2000, 3000, 1920, 1080, 0, 1, true).sw).toBeCloseTo(2000 / KEN_BURNS_ZOOM, 6)
+    const still = kenBurnsCrop(2000, 3000, 1920, 1080, 0.9, 3, false)
+    expect(still.sx).toBeCloseTo(0, 6)
+    expect(still.sy).toBeCloseTo((3000 - still.sh) / 2, 6)
   })
 })

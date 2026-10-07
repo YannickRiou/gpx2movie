@@ -1,9 +1,10 @@
 import { useId } from 'react'
 import type { ReactNode } from 'react'
 import type { FilmClock } from '../film/clock'
-import { ITEM_DURATION_RANGE, SHOT_DURATION_RANGE, SHOT_STYLES, STOP_CAMERAS, STOP_DURATION_RANGE } from '../film/model'
-import type { Film, ShotStyle, StopCamera } from '../film/model'
-import { formatFilmTime, updateShot, updateStop, updateText } from '../film/timeline'
+import { useMediaStore } from '../film/media'
+import { ITEM_DURATION_RANGE, MEDIA_LAYOUTS, SHOT_DURATION_RANGE, SHOT_STYLES, STOP_CAMERAS, STOP_DURATION_RANGE } from '../film/model'
+import type { Film, MediaLayout, ShotStyle, StopCamera } from '../film/model'
+import { formatFilmTime, updateMedia, updateShot, updateStop, updateText } from '../film/timeline'
 import type { TimelineItem } from '../film/timeline'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
@@ -16,6 +17,7 @@ const SHOT_HINTS: Record<ShotStyle, string> = {
   saut: "La vue d'ensemble est tenue, puis la caméra rejoint vite le survol.",
 }
 const CAMERA_LABELS: Record<StopCamera, string> = { orbite: 'Orbite', fixe: 'Fixe' }
+const LAYOUT_LABELS: Record<MediaLayout, string> = { 'plein-ecran': 'Plein écran', carte: 'Carte' }
 const SIZE_RANGE = { min: WIDGET_SIZE_MIN, max: WIDGET_SIZE_MAX, step: 0.1 }
 
 const seconds = (s: number) => `${formatNumber(s, Number.isInteger(s) ? 0 : 1)} s`
@@ -32,9 +34,10 @@ interface Props {
   close(): void
 }
 
-/** Settings of the item selected on the timeline: opening / closing shot, stop or text. */
+/** Settings of the item selected on the timeline: opening / closing shot, stop, text or photo. */
 export function FilmInspector({ item, film, clock, lengthM, change, remove, close }: Props) {
   const id = useId()
+  const pictures = useMediaStore((s) => s.table)
   const range = (
     key: string,
     label: string,
@@ -96,6 +99,27 @@ export function FilmInspector({ item, film, clock, lengthM, change, remove, clos
     </div>
   )
 
+  const anchorSelect = (label: string, value: OverlayAnchor, set: (anchor: OverlayAnchor) => void) => (
+    <div className="field">
+      <label className="field__label" htmlFor={`${id}-anchor`}>
+        {label}
+      </label>
+      <select id={`${id}-anchor`} className="select" value={value} onChange={(e) => set(e.currentTarget.value as OverlayAnchor)}>
+        {OVERLAY_ANCHORS.map((anchor) => (
+          <option key={anchor} value={anchor}>
+            {OVERLAY_ANCHOR_LABELS[anchor]}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+  const timing = (startS: number, durationS: number, set: (patch: { startS?: number; durationS?: number }) => void) => (
+    <div className="film-inspector__row">
+      {number('start', 'Début (s)', startS, 0, clock.totalTime(), (v) => set({ startS: v }))}
+      {number('length', 'Durée (s)', durationS, ITEM_DURATION_RANGE.min, ITEM_DURATION_RANGE.max, (v) => set({ durationS: v }))}
+    </div>
+  )
+
   let title: string
   let body: ReactNode
   let removeLabel = 'Supprimer'
@@ -142,6 +166,7 @@ export function FilmInspector({ item, film, clock, lengthM, change, remove, clos
   } else {
     const stop = clock.stops.find((s) => s.id === item)
     const filmText = film.texts.find((t) => t.id === item)
+    const media = film.media.find((m) => m.id === item)
     if (stop) {
       title = 'Arrêt'
       const set = (patch: Parameters<typeof updateStop>[2]) => change((f) => updateStop(f, item, patch), true)
@@ -173,29 +198,42 @@ export function FilmInspector({ item, film, clock, lengthM, change, remove, clos
         <>
           {text('text', 'Texte', filmText.text, (value) => set({ text: value }))}
           {text('subtitle', 'Sous-titre', filmText.subtitle ?? '', (subtitle) => set({ subtitle: subtitle || undefined }))}
-          <div className="field">
-            <label className="field__label" htmlFor={`${id}-anchor`}>
-              Position
-            </label>
-            <select
-              id={`${id}-anchor`}
-              className="select"
-              value={filmText.anchor}
-              onChange={(e) => set({ anchor: e.currentTarget.value as OverlayAnchor })}
-            >
-              {OVERLAY_ANCHORS.map((anchor) => (
-                <option key={anchor} value={anchor}>
-                  {OVERLAY_ANCHOR_LABELS[anchor]}
-                </option>
-              ))}
-            </select>
-          </div>
+          {anchorSelect('Position', filmText.anchor, (anchor) => set({ anchor }))}
           {range('size', 'Taille', filmText.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
-          <div className="film-inspector__row">
-            {number('start', 'Début (s)', filmText.startS, 0, clock.totalTime(), (startS) => set({ startS }))}
-            {number('length', 'Durée (s)', filmText.durationS, ITEM_DURATION_RANGE.min, ITEM_DURATION_RANGE.max, (durationS) => set({ durationS }))}
-          </div>
+          {timing(filmText.startS, filmText.durationS, set)}
           <p className="field__hint">Le texte s'affichera dans l'habillage du film.</p>
+        </>
+      )
+    } else if (media) {
+      title = 'Photo'
+      const set = (patch: Parameters<typeof updateMedia>[2]) => change((f) => updateMedia(f, item, patch), false)
+      const picture = pictures[media.src]
+      const card = media.layout === 'carte'
+      body = (
+        <>
+          {picture && <img className="film-inspector__thumb" src={picture.thumb} alt={picture.name ?? 'Photo'} />}
+          <fieldset className="field fieldset">
+            <legend className="field__label">Affichage</legend>
+            <div className="segmented">
+              {MEDIA_LAYOUTS.map((layout) => (
+                <label key={layout} className="segmented__option">
+                  <input type="radio" name={`${id}-layout`} value={layout} checked={media.layout === layout} onChange={() => set({ layout })} />
+                  {LAYOUT_LABELS[layout]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label className="checkbox">
+            <input type="checkbox" checked={media.kenBurns} disabled={card} onChange={(e) => set({ kenBurns: e.currentTarget.checked })} />
+            Mouvement lent (Ken Burns)
+          </label>
+          {text('caption', 'Légende', media.caption ?? '', (caption) => set({ caption: caption || undefined }))}
+          {anchorSelect(card ? 'Position' : 'Position de la légende', media.anchor, (anchor) => set({ anchor }))}
+          {range('size', 'Taille', media.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
+          {timing(media.startS, media.durationS, set)}
+          <p className="field__hint">
+            {card ? 'La photo s’affiche encadrée, au style de l’habillage.' : 'La photo couvre la vue 3D, en fondu.'}
+          </p>
         </>
       )
     } else {

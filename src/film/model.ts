@@ -7,7 +7,8 @@
  *   OpenStreetMap landmarks loaded later), as `autoMode` says; the first edit on the timeline writes them into
  *   `stops` and clears the flag.
  * - `texts` and `media`: items anchored in film time (seconds at ×1 from the very start, opening included), on
- *   their own lanes; modelled and validated here, drawn by later increments.
+ *   their own lanes, drawn by the overlay. A medium names its picture by id (`src`): the bytes live in the media
+ *   table of the project document (`film/media.ts`), so the settings and the undo history stay light.
  *
  * Part of `Settings` (key `film`): saved in the project document, undone, read the same way by the preview and
  * the export. Ids are stable (`stop-3`, `text-1`, `auto-4520` for a generated stop) so the timeline can select
@@ -65,17 +66,37 @@ export const AUTO_STOP_MODES = ['temps-forts', 'rythme'] as const
  */
 export type AutoStopMode = (typeof AUTO_STOP_MODES)[number]
 
+/** 'video' is reserved (not drawn yet). */
 export const MEDIA_KINDS = ['image', 'video'] as const
 export type MediaKind = (typeof MEDIA_KINDS)[number]
 
-/** Reserved for the media lane (not drawn yet). */
+export const MEDIA_LAYOUTS = ['plein-ecran', 'carte'] as const
+/** 'plein-ecran': the photo covers the 3D view; 'carte': a framed photo card at an anchor of the overlay. */
+export type MediaLayout = (typeof MEDIA_LAYOUTS)[number]
+
 export interface FilmMedia {
   id: string
+  /** film time of its appearance and how long it stays (seconds at ×1) */
   startS: number
   durationS: number
   kind: MediaKind
-  /** data URL (images) or file reference */
+  /** id of the picture in the media table of the project document */
   src: string
+  layout: MediaLayout
+  /** card placement (one of the nine anchors) and size multiplier; the caption of a full-screen photo goes there too */
+  anchor: OverlayAnchor
+  size: number
+  /** slow zoom and pan over a full-screen photo */
+  kenBurns: boolean
+  caption?: string
+}
+
+/** Placement of a photo added on the timeline (and of a medium saved before these fields existed). */
+export const MEDIA_DEFAULTS: Pick<FilmMedia, 'layout' | 'anchor' | 'size' | 'kenBurns'> = {
+  layout: 'plein-ecran',
+  anchor: 'bottom-left',
+  size: 1,
+  kenBurns: true,
 }
 
 export interface Film {
@@ -173,7 +194,17 @@ export function isValidText(text: unknown): text is FilmText {
 }
 
 export function isValidMedia(media: unknown): media is FilmMedia {
-  return isRecord(media) && isValidTimed(media) && oneOf(MEDIA_KINDS, media.kind) && typeof media.src === 'string'
+  return (
+    isRecord(media) &&
+    isValidTimed(media) &&
+    oneOf(MEDIA_KINDS, media.kind) &&
+    isId(media.src) &&
+    oneOf(MEDIA_LAYOUTS, media.layout) &&
+    oneOf(OVERLAY_ANCHORS, media.anchor) &&
+    within(media.size, WIDGET_SIZE_MIN, WIDGET_SIZE_MAX) &&
+    typeof media.kenBurns === 'boolean' &&
+    optionalString(media.caption)
+  )
 }
 
 /**
@@ -190,8 +221,11 @@ export function isValidFilm(film: Film): boolean {
 
 /**
  * Fill-in of a film saved before a field existed (`SETTING_UPGRADES`): missing fields from `DEFAULT_FILM`, except
- * `autoMode`, which keeps the automatic stops of those films following the pacing ('rythme') as they did.
+ * `autoMode`, which keeps the automatic stops of those films following the pacing ('rythme') as they did; media
+ * saved before their placement get `MEDIA_DEFAULTS`.
  */
 export function withFilmDefaults(raw: unknown): unknown {
-  return isRecord(raw) ? { ...DEFAULT_FILM, autoMode: 'rythme', ...raw } : raw
+  if (!isRecord(raw)) return raw
+  const film = { ...DEFAULT_FILM, autoMode: 'rythme', ...raw }
+  return Array.isArray(film.media) ? { ...film, media: film.media.map((m: unknown) => (isRecord(m) ? { ...MEDIA_DEFAULTS, ...m } : m)) } : film
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { isValidSetting, parseProject, sanitizeSettings } from '../project/document'
 import { DEFAULT_SETTINGS } from '../state/store'
-import { DEFAULT_FILM, isValidFilm, nextFilmId, shotDurationS } from './model'
-import type { Film, FilmStop, FilmText } from './model'
+import { DEFAULT_FILM, MEDIA_DEFAULTS, isValidFilm, nextFilmId, shotDurationS } from './model'
+import type { Film, FilmMedia, FilmStop, FilmText } from './model'
 
 const stop = (id: string, patch: Partial<FilmStop> = {}): FilmStop => ({ id, atM: 1000, durationS: 3, camera: 'orbite', ...patch })
 const text = (id: string, patch: Partial<FilmText> = {}): FilmText => ({
@@ -12,6 +12,15 @@ const text = (id: string, patch: Partial<FilmText> = {}): FilmText => ({
   text: 'Col de Voza',
   anchor: 'bottom-left',
   size: 1,
+  ...patch,
+})
+const media = (id: string, patch: Partial<FilmMedia> = {}): FilmMedia => ({
+  id,
+  startS: 10,
+  durationS: 5,
+  kind: 'image',
+  src: 'photo-1',
+  ...MEDIA_DEFAULTS,
   ...patch,
 })
 const film = (patch: Partial<Film>): Film => ({ ...DEFAULT_FILM, ...patch })
@@ -35,7 +44,7 @@ describe('film model', () => {
       autoStops: false,
       stops: [stop('stop-1', { label: 'Sommet', source: { kind: 'landmark', ref: 'node/1' } }), stop('auto-4520', { camera: 'fixe' })],
       texts: [text('text-1', { subtitle: '1 653 m' })],
-      media: [{ id: 'media-1', startS: 10, durationS: 5, kind: 'image', src: 'data:image/png;base64,AA' }],
+      media: [media('media-1'), media('media-2', { layout: 'carte', anchor: 'top-right', size: 1.5, kenBurns: false, caption: 'Lac Blanc' })],
     })
     expect(isValidFilm(full)).toBe(true)
     expect(isValidSetting('film', full)).toBe(true)
@@ -53,7 +62,11 @@ describe('film model', () => {
       film({ texts: [text('text-1', { anchor: 'nowhere' as 'center' })] }),
       film({ texts: [text('text-1', { size: 5 })] }),
       film({ texts: [text('text-1', { durationS: 0 })] }),
-      film({ media: [{ id: 'media-1', startS: 0, durationS: 5, kind: 'sound' as 'image', src: '' }] }),
+      film({ media: [media('media-1', { kind: 'sound' as 'image' })] }),
+      film({ media: [media('media-1', { src: '' })] }),
+      film({ media: [media('media-1', { layout: 'mosaique' as 'carte' })] }),
+      film({ media: [media('media-1', { size: 3 })] }),
+      film({ media: [media('media-1', { anchor: 'nowhere' as 'center' })] }),
       film({ stops: [stop('a')], texts: [text('a')] }),
     ]
     for (const f of bad) expect(isValidFilm(f)).toBe(false)
@@ -70,6 +83,9 @@ describe('film model', () => {
     expect(invalid).toEqual(['film'])
     expect(settings.film).toEqual(DEFAULT_FILM)
     expect(isValidFilm(film({ autoMode: 'partout' as 'rythme' }))).toBe(false)
+    // media saved before their placement get the defaults
+    const bare = { id: 'media-1', startS: 10, durationS: 5, kind: 'image', src: 'photo-1' }
+    expect(sanitizeSettings({ film: { ...DEFAULT_FILM, media: [bare] } }).settings.film.media).toEqual([media('media-1')])
   })
 
   it('round-trips through the project document', () => {

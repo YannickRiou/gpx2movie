@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest'
+import { buildTrackPath } from '../flyover/path'
 import { DEFAULT_PACING } from '../flyover/pacing'
+import { buildTrack } from '../import/stats'
 import { buildFilmClock } from './clock'
 import type { FilmClockInput } from './clock'
-import { AUTO_STOP_S, DEFAULT_FILM, isValidFilm } from './model'
-import type { Film, FilmStop, FilmText } from './model'
+import { AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, isValidFilm } from './model'
+import type { Film, FilmMedia, FilmStop, FilmText } from './model'
 import {
+  NEW_MEDIA_S,
+  addPhotos,
   addStop,
   addText,
   dragFilm,
   fitPxPerS,
   formatFilmTime,
+  photoFilmTime,
   removeFilmItem,
   rulerStep,
   rulerTicks,
@@ -18,6 +23,7 @@ import {
   stopPositionAt,
   updateShot,
   updateStop,
+  updateMedia,
   updateText,
   zoomAt,
 } from './timeline'
@@ -27,11 +33,13 @@ const L = 10_000
 const D = 60
 const stop = (id: string, atM: number, durationS = 4): FilmStop => ({ id, atM, durationS, camera: 'orbite' })
 const text = (id: string, startS: number, durationS = 4): FilmText => ({ id, startS, durationS, text: id, anchor: 'center', size: 1 })
+const photo = (id: string, startS: number, durationS = 5): FilmMedia => ({ id, startS, durationS, kind: 'image', src: 'photo-1', ...MEDIA_DEFAULTS })
 const film: Film = {
   ...DEFAULT_FILM,
   autoStops: false,
   stops: [stop('stop-1', 2000), stop('stop-2', 7000, 2)],
   texts: [text('text-1', 10), text('text-2', 30, 2)],
+  media: [photo('media-1', 40)],
 }
 
 function contextOf(f: Film, patch: Partial<DragContext> = {}, pacing = { ...DEFAULT_PACING, keepDuration: false }): DragContext {
@@ -152,6 +160,14 @@ describe('dragFilm', () => {
     expect(dragFilm(film, 'text-1', 'end', -10, ctx).texts[0].durationS).toBe(0.5)
     expect(dragFilm(film, 'missing', 'move', 1, ctx)).toBe(film)
   })
+
+  it('moves and stretches a photo like a text', () => {
+    const ctx = contextOf(film)
+    expect(dragFilm(film, 'media-1', 'move', 2.5, ctx).media[0]).toMatchObject({ startS: 42.5, durationS: 5 })
+    expect(dragFilm(film, 'media-1', 'start', -3, ctx).media[0]).toMatchObject({ startS: 37, durationS: 8 })
+    expect(dragFilm(film, 'media-1', 'end', 1, { ...ctx, targets: [46.1], snapS: 0.3 }).media[0]).toMatchObject({ startS: 40, durationS: 6.1 })
+    expect(dragFilm(film, 'media-1', 'move', 1, ctx).texts).toBe(film.texts)
+  })
 })
 
 describe('edits', () => {
@@ -174,6 +190,24 @@ describe('edits', () => {
     expect(isValidFilm(t.film)).toBe(true)
   })
 
+  it('adds photos one after the other from the playhead, valid', () => {
+    const { film: next, ids } = addPhotos(film, 12.346, ['photo-4', 'photo-5'])
+    expect(ids).toEqual(['media-2', 'media-3'])
+    expect(next.media.slice(1)).toEqual([
+      { id: 'media-2', startS: 12.35, durationS: NEW_MEDIA_S, kind: 'image', src: 'photo-4', ...MEDIA_DEFAULTS },
+      { id: 'media-3', startS: 17.35, durationS: NEW_MEDIA_S, kind: 'image', src: 'photo-5', ...MEDIA_DEFAULTS },
+    ])
+    expect(isValidFilm(next)).toBe(true)
+    expect(snapTargets(contextOf(next).clock, next, [], 0)).toEqual(expect.arrayContaining([40, 45, 17.35]))
+    expect(removeFilmItem(next, 'media-2').media.map((m) => m.id)).toEqual(['media-1', 'media-3'])
+    expect(updateMedia(next, 'media-1', { startS: -1, durationS: 900, layout: 'carte', caption: 'Lac' }).media[0]).toMatchObject({
+      startS: 0,
+      durationS: 600,
+      layout: 'carte',
+      caption: 'Lac',
+    })
+  })
+
   it('removes a stop or a text; updates clamp to the model ranges', () => {
     expect(removeFilmItem(film, 'stop-1').stops.map((s) => s.id)).toEqual(['stop-2'])
     expect(removeFilmItem(film, 'text-2').texts.map((t) => t.id)).toEqual(['text-1'])
@@ -189,5 +223,44 @@ describe('edits', () => {
       text: 'Titre',
     })
     expect(updateShot(film, 'closing', { style: 'saut', durationS: 0 }).closing).toEqual({ style: 'saut', durationS: 1 })
+  })
+})
+
+describe('placing a photo on the track', () => {
+  const T0 = Date.UTC(2025, 6, 12, 6)
+  const MIN = 60_000
+  // out and back along a parallel: 0.01° of longitude ≈ 775 m at 45.9°, 5 min per point
+  const lons = [6.8, 6.81, 6.82, 6.81, 6.8]
+  const track = buildTrack({
+    name: 'aller-retour',
+    source: 'gpx',
+    segments: [{ points: lons.map((lon, i) => ({ lon, lat: 45.9, time: T0 + 5 * i * MIN })) }],
+  })
+  const path = buildTrackPath(track)
+  const input: FilmClockInput = {
+    opening: { style: 'descente', durationS: 6 },
+    closing: { style: 'aucune', durationS: 5 },
+    stops: [],
+    lengthM: path.lengthM,
+    highlightsM: [],
+    durationS: 40,
+    pacing: { ...DEFAULT_PACING, enabled: false },
+  }
+  const clock = buildFilmClock(input)
+  const at = (distanceM: number) => Math.round(clock.timeAtProgress(distanceM / path.lengthM) * 100) / 100
+
+  it('at the nearest point of the track, on the pass closest to the capture time', () => {
+    expect(photoFilmTime(path, clock, { lon: 6.8201, lat: 45.9001 })).toBe(at(path.dist[2]))
+    expect(photoFilmTime(path, clock, { lon: 6.81, lat: 45.9 })).toBe(at(path.dist[1]))
+    expect(photoFilmTime(path, clock, { lon: 6.81, lat: 45.9, timeMs: T0 + 14 * MIN })).toBe(at(path.dist[3]))
+  })
+
+  it('else at the point recorded at the capture time; nothing far from the track or outside the outing', () => {
+    expect(photoFilmTime(path, clock, { timeMs: T0 + 2.5 * MIN })).toBe(at(path.dist[1] / 2))
+    expect(photoFilmTime(path, clock, { lon: 7.5, lat: 45.9 })).toBeUndefined()
+    expect(photoFilmTime(path, clock, { lon: 7.5, lat: 45.9, timeMs: T0 + 5 * MIN })).toBe(at(path.dist[1]))
+    expect(photoFilmTime(path, clock, { timeMs: T0 - 10 * MIN })).toBe(at(0))
+    expect(photoFilmTime(path, clock, { timeMs: T0 + 3 * 3_600_000 })).toBeUndefined()
+    expect(photoFilmTime(path, clock, {})).toBeUndefined()
   })
 })

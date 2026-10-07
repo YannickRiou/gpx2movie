@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Track } from '../core/types'
 import { buildTrack } from '../import/stats'
 import { DEFAULT_SETTINGS, resetAppStore, useAppStore } from '../state/store'
+import { useMediaStore } from '../film/media'
 import { applyProject, applySettings, modifiedSettings, sameValue } from './apply'
 import type { LoadedProject } from './document'
 
@@ -18,7 +19,7 @@ function chamonix(id: string): Track {
 }
 
 function project(patch: Partial<LoadedProject> = {}): LoadedProject {
-  return { name: 'p', settings: { ...DEFAULT_SETTINGS }, speed: 2, tracks: [chamonix('new')], warnings: [], ...patch }
+  return { name: 'p', settings: { ...DEFAULT_SETTINGS }, speed: 2, tracks: [chamonix('new')], media: {}, warnings: [], ...patch }
 }
 
 beforeEach(() => resetAppStore())
@@ -75,6 +76,14 @@ describe('applyProject', () => {
     expect(state.fitRequest).toBeGreaterThan(fit)
     expect(state.frameOrigin).toEqual({ lon: 6.87, lat: 45.93 })
     expect(state.importError).toBeNull()
+  })
+
+  it('replaces the pictures of the film', () => {
+    const data = 'data:image/jpeg;base64,/9j/AAEC'
+    useMediaStore.getState().add([{ data, thumb: data, width: 1, height: 1, name: 'ancienne.jpg' }])
+    const media = { 'photo-1': { data, thumb: data, width: 4, height: 3, name: 'lac.jpg' } }
+    applyProject(project({ media }))
+    expect(useMediaStore.getState().table).toEqual(media)
   })
 
   it("keeps the project's imagery even where a regional source would be picked automatically", () => {

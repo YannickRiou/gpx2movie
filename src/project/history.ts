@@ -193,7 +193,7 @@ export function resetSettings(keys: readonly (keyof Settings)[], history: Histor
 /** Inputs where Ctrl+Z belongs to the text field, not to the settings history. */
 const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'range', 'button', 'submit', 'reset', 'color', 'file', 'image'])
 
-function isTextEntry(target: EventTarget | null): boolean {
+export function isTextEntry(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   if (target.isContentEditable || target instanceof HTMLTextAreaElement) return true
   return target instanceof HTMLInputElement && !NON_TEXT_INPUTS.has(target.type)
