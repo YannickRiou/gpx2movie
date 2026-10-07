@@ -1,78 +1,360 @@
 # OpenFlyover
 
-Visionneuse 3D de traces GPX / FIT sur relief réel, 100 % locale et sans clé d'API : la trace est
-plaquée sur un terrain streamé (élévation Mapterhorn ou AWS Terrain Tiles) habillé d'orthophotos
-(IGN, swisstopo, Esri, Sentinel-2), avec une caméra orbitale et un survol automatique le long de la
-trace (timeline, profil altimétrique). C'est la fondation d'un générateur de
-films de survol (« flyover »), construit uniquement sur des sources de données ouvertes.
+OpenFlyover fait un film de survol 3D à partir d'une trace GPX ou FIT, sur le vrai relief, avec des données ouvertes.
 
-Phases 1 et 2 (ce dépôt) : la visionneuse et le survol. Les phases suivantes ajoutent l'atmosphère,
-l'export vidéo et l'application de bureau (voir la feuille de route).
+- [Présentation](#présentation)
+- [Captures d'écran](#captures-décran)
+- [Démarrage rapide](#démarrage-rapide)
+- [Utilisation](#utilisation)
+- [Fonctionnement](#fonctionnement)
+- [Déploiement sur un serveur](#déploiement-sur-un-serveur)
+- [Application de bureau](#application-de-bureau)
+- [Tests et qualité](#tests-et-qualité)
+- [Sources de données et attributions](#sources-de-données-et-attributions)
+- [Licences](#licences)
+- [Architecture et contribution](#architecture-et-contribution)
+- [Feuille de route](#feuille-de-route)
 
-## Stack
+## Présentation
 
-- Vite 8, React 19, TypeScript 6 strict (`verbatimModuleSyntax`, `erasableSyntaxOnly`), oxlint.
-- three 0.186, @react-three/fiber 9, @react-three/drei 10 pour le rendu ; zustand 5 pour l'état ;
-  @garmin/fitsdk pour les fichiers FIT.
-- vitest 5 (environnement jsdom) : 330 tests unitaires à côté des modules (`*.test.ts`).
-- CSS vanilla avec la charte dans `src/ui/theme.css` (pas de Tailwind).
+Vous importez la trace d'une sortie : randonnée, trail, vélo, ski de randonnée… OpenFlyover la pose sur un relief 3D
+couvert d'orthophotos (photos aériennes redressées). Une caméra la survole, et vous exportez le résultat en vidéo.
 
-L'architecture détaillée (conventions de coordonnées, contrats `src/core/types.ts`, moteur de terrain,
-scène, état) est décrite dans [`ARCHITECTURE.md`](ARCHITECTURE.md).
+Tout tourne dans le navigateur. Il n'y a ni compte, ni clé d'API, ni service payant, ni code côté serveur. Vos fichiers
+restent sur votre machine : le navigateur télécharge seulement le relief, l'imagerie, la météo et les repères auprès de
+services ouverts.
 
-## Lancer le projet
+Deux façons de l'utiliser :
 
-Prérequis : Node 24 (installé via fnm sur la machine de développement) et `npm install`.
+- comme **site web statique**, en local ou sur votre propre serveur ;
+- plus tard, comme **application de bureau** ([voir plus bas](#application-de-bureau)).
 
-Node n'est pas dans le PATH global de la machine de référence : préfixer chaque commande.
+Ce qui existe aujourd'hui :
 
-```powershell
-# PowerShell
-$env:Path = "C:\Users\MadCreator\AppData\Roaming\fnm\node-versions\v24.21.0\installation;" + $env:Path
-npm run dev
-```
+| Domaine | Fonctionnalités |
+|---|---|
+| Import | GPX et FIT, plusieurs traces à la fois ; fréquence cardiaque, cadence, puissance et température si présentes ; distance, D+ / D−, durée, altitudes |
+| Relief et imagerie | relief Mapterhorn ou AWS Terrain Tiles ; orthophotos IGN en France et swisstopo en Suisse, choisies automatiquement ; Esri et Sentinel-2 ailleurs ; cartes topographiques ; photos IGN anciennes (1950–2005) ; exagération du relief |
+| Survol | cinq styles de caméra (poursuite, balancement, orbite, vue du dessus, plan cinématique), six préréglages, durée de 15 s à 10 min, profil altimétrique cliquable |
+| Rythme | ralentis et pauses aux temps forts : sommets des montées, cols, sommets proches |
+| Lumière | ciel et brume physiques, soleil à l'heure réelle de la sortie, ombres du relief, nuit étoilée, exposition automatique |
+| Météo | météo historique du jour de la sortie (Open-Meteo), visible dans un panneau et dans la scène |
+| Repères | sommets, cols, refuges, lacs… tirés d'OpenStreetMap ; montées détectées et classées (cat. 4 à HC) ; étiquettes 3D |
+| Trace | colorée selon la vitesse, la pente, l'altitude, le cardio, la cadence, la puissance ou la température |
+| Course fantôme | plusieurs traces rejouées ensemble, avec un classement en direct |
+| Habillage | titres, compteurs, profil, mini-carte, météo, logo et texte incrustés dans le film ; trois styles |
+| Export | vidéo MP4 ou WebM en 16:9, 9:16, 1:1, 4:5 ou 21:9, de 720p à 4K, à 24, 30 ou 60 images/s ; image fixe PNG ou JPEG |
+| Projet | fichier de projet à enregistrer et rouvrir, annuler / rétablir, préréglages |
+
+**En cours** sur la branche `timeline` : la timeline de montage, sous la vue 3D. Elle montre le film en pistes (plans,
+arrêts, textes) que vous déplacez et étirez à la souris. Le film est monté automatiquement au chargement : plan
+d'ensemble, survol avec un arrêt à chaque temps fort, plan de clôture. Restent à faire : l'affichage des textes dans le
+film et la piste des médias.
+
+## Captures d'écran
+
+<!-- captures : docs/images/*.png, ajoutées après la timeline -->
+
+Les captures arriveront avec la timeline de montage.
+
+## Démarrage rapide
+
+Il vous faut :
+
+- **Node.js 24** ;
+- **Chrome ou Edge** récent. La vue 3D utilise WebGL 2 et l'export vidéo utilise WebCodecs, l'API d'encodage vidéo du
+  navigateur. L'export n'a pas été testé sous Firefox ni Safari ;
+- une carte graphique correcte : elle fait la vitesse de l'export ;
+- une connexion Internet, pour les tuiles (les petites images carrées de relief et de carte).
 
 ```bash
-# Bash (Git Bash)
-export PATH="/c/Users/MadCreator/AppData/Roaming/fnm/node-versions/v24.21.0/installation:$PATH"
+git clone https://github.com/YannickRiou/gpx2movie.git
+cd gpx2movie
+npm ci
 npm run dev
 ```
+
+Ouvrez <http://127.0.0.1:5173> et cliquez sur « Charger l'exemple ».
+
+Pour tester la version de production : `npm run build`, puis `npm run preview` (<http://localhost:4173>).
+
+### Notes pour la machine de développement
+
+- **WSL** : lancez `source ~/.nvm/nvm.sh && nvm use 24` avant `npm`.
+- **Windows** : Node est installé par fnm, hors du PATH. Ajoutez-le avant `npm` :
+  - PowerShell : `$env:Path = "C:\Users\MadCreator\AppData\Roaming\fnm\node-versions\v24.21.0\installation;" + $env:Path`
+  - Git Bash : `export PATH="/c/Users/MadCreator/AppData/Roaming/fnm/node-versions/v24.21.0/installation:$PATH"`
+
+## Utilisation
+
+À gauche, le panneau des réglages. À droite, la vue 3D, avec le bandeau de lecture en bas.
+
+### Importer une trace
+
+Glissez un ou plusieurs fichiers `.gpx` ou `.fit` dans la zone « Glissez un fichier GPX ou FIT », ou cliquez dessus.
+Vous pouvez aussi cliquer sur **« Charger l'exemple »** : c'est une étape synthétique du Tour du Mont-Blanc.
+
+La vue se cadre sur la trace. Si la trace est entièrement en France ou en Suisse, l'imagerie passe à l'IGN ou à swisstopo, sauf si vous avez déjà choisi une source.
+
+La section « Traces » liste vos traces ; le bouton × en supprime une. Le survol, la météo, les repères et les montées
+suivent la première trace.
+
+### Naviguer et lire
+
+- Clic gauche glissé : tourner. Clic droit glissé : déplacer. Molette : zoomer.
+- « Recadrer la vue » revient à la vue d'ensemble.
+- Dans le bandeau du bas, ▶ lance le survol. Cliquez ou glissez sur le profil pour vous déplacer. La vitesse va de ×0,5 à ×4.
+- En pause, vous tournez librement autour du marqueur.
+
+### Les panneaux
+
+| Panneau | À quoi il sert |
+|---|---|
+| Traces | vos traces ; dès deux traces, la « Course fantôme » (synchronisation par temps écoulé, heure réelle ou même distance) |
+| Météo de la sortie | météo du jour, puis conditions « Au marqueur » ; demande une trace horodatée |
+| Repères (OpenStreetMap) | types de repères et distance maximale à la trace (0,1 à 3 km) ; un clic sur un repère y amène la lecture |
+| Montées | montées détectées ; un clic amène la lecture au pied ; étiquettes des sommets et des points GPX |
+| Réglages | relief, imagerie, détail, exagération, couleur de la trace, atmosphère, ombres, heure du soleil, exposition, « Météo dans la scène » |
+| Caméra | préréglage, style, distance, inclinaison, visée, lissage, durée du survol, rythme |
+| Habillage | style et éléments : titre d'ouverture, carte de clôture, compteurs, profil, mini-carte, météo, logo, texte libre |
+| Projet | enregistrer, ouvrir, annuler, rétablir, préréglages |
+| Exporter la vidéo | format, résolution, images par seconde, qualité, image fixe |
+
+En bas du panneau, la barre d'état compte les tuiles chargées et affiche les attributions des sources.
+
+La météo et les repères sont actifs par défaut. Décochez-les : plus aucune requête ne part.
+
+### « modifié » et « Par défaut »
+
+Quand un réglage s'écarte de sa valeur par défaut, la pastille **« modifié »** apparaît en haut du panneau. Le bouton
+**« Par défaut »** remet tout le panneau à zéro. Ctrl+Z annule ce retour.
+
+La source d'imagerie n'est pas suivie, car l'import la choisit selon la région.
+
+### Exporter une vidéo
+
+1. Dans « Exporter la vidéo », choisissez le format, la résolution, les images par seconde et la qualité.
+2. Lisez le résumé : durée, nombre d'images, codec choisi par le navigateur, taille estimée. La vidéo ajoute 1 s fixe au
+   début et 2 s à la fin.
+3. Cliquez sur **« Exporter la vidéo »**. Chaque image attend que le relief visible soit chargé. Vous voyez la progression
+   et le temps restant. « Annuler l'export » arrête tout.
+4. Le fichier se télécharge à la fin. Le lien « Télécharger… » reste affiché.
+
+Gardez l'onglet ouvert : la vidéo est construite en mémoire.
+
+Pour une **image fixe**, placez la lecture où vous voulez, choisissez PNG ou JPEG, puis cliquez sur « Image fixe ». Elle
+a la taille de la vidéo et inclut l'habillage.
+
+### Enregistrer un projet
+
+- « Enregistrer le projet » télécharge un fichier `<nom>.openflyover.json`. Il contient les traces et tous les réglages.
+- « Ouvrir un projet » le recharge. Un réglage invalide reprend sa valeur par défaut et un message vous le signale.
+- « Annuler » et « Rétablir » portent sur les réglages (Ctrl+Z, Ctrl+Maj+Z ou Ctrl+Y).
+- Les préréglages sont gardés dans le navigateur, sous le nom que vous leur donnez.
+
+## Fonctionnement
+
+```mermaid
+flowchart LR
+  F["Fichier GPX / FIT"] --> I["Import"]
+  DEM["Tuiles de relief"] --> Q["Terrain"]
+  IMG["Tuiles d'imagerie"] --> Q
+  Q --> S["Scène 3D"]
+  I --> S
+  W["Météo"] --> S
+  O["Repères"] --> S
+  H["Horloge du film"] --> S
+  S --> A["Aperçu"]
+  S --> E["Export image par image"]
+  E --> V["Vidéo MP4 / WebM"]
+```
+
+- **Terrain** : les tuiles de relief deviennent des maillages. Un quadtree (découpage en quatre, de plus en plus fin)
+  charge plus de détail près de la caméra. Une tuile reste affichée tant que ses quatre tuiles plus fines ne sont pas
+  prêtes : le relief n'a jamais de trou.
+- **Imagerie** : pour chaque tuile de relief, plusieurs tuiles d'imagerie sont assemblées en une seule texture.
+- **Repère local** : la scène est centrée sur la trace. Les conversions de coordonnées se font en double précision en
+  JavaScript, pour garder une précision au millimètre sur le GPU.
+- **Survol** : la position de la caméra dépend seulement de la position sur la trace, du temps du film et des réglages.
+  L'aperçu et l'export utilisent le même calcul : vous exportez ce que vous voyez.
+- **Atmosphère** : un modèle physique de diffusion de la lumière (bibliothèque Takram) dessine le ciel, la brume et la
+  lumière du soleil.
+- **Export** : chaque image est rendue à la taille de la vidéo, l'habillage est dessiné par-dessus, puis WebCodecs
+  l'encode. La bibliothèque mediabunny range les images dans un fichier MP4 ou WebM.
+
+Le détail est dans [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+## Déploiement sur un serveur
+
+OpenFlyover est un site statique : pas de code serveur, pas de base de données. Un petit serveur personnel ou un
+hébergement mutualisé (OVH par exemple) suffit. Votre serveur envoie seulement les fichiers du site. Le navigateur de
+chaque visiteur va chercher lui-même les tuiles, la météo et les repères.
+
+1. Construisez le site : `npm ci && npm run build`.
+2. Copiez le contenu de `dist/` (environ 13 Mo) à la racine du site.
+3. Servez-le en HTTPS.
+
+### HTTPS obligatoire
+
+Hors de `localhost`, le navigateur réserve certaines fonctions aux pages en HTTPS (un « contexte sécurisé ») :
+l'encodeur vidéo de WebCodecs, mais aussi la création des identifiants de trace à l'import. En HTTP simple, ni l'import
+ni l'export ne marchent. Un certificat Let's Encrypt ou celui de votre hébergeur suffit.
+
+### nginx
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name flyover.example.org;
+    ssl_certificate     /etc/letsencrypt/live/flyover.example.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/flyover.example.org/privkey.pem;
+
+    root /var/www/openflyover;
+
+    location / {
+        try_files $uri =404;
+    }
+
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location /atmosphere/ {
+        types { image/x-exr exr; application/octet-stream bin; }
+    }
+}
+```
+
+Les fichiers de `/assets/` ont une empreinte dans leur nom : on peut les garder en cache un an. Le dossier `/atmosphere/`
+contient les textures du ciel, en `.exr` et `.bin`, deux types que nginx ne connaît pas.
+
+### Apache
+
+Sur un hébergement Apache, ajoutez un fichier `.htaccess` à la racine :
+
+```apache
+AddType image/x-exr .exr
+AddType font/woff2 .woff2
+```
+
+### Limites connues
+
+- Le site doit être servi **à la racine du domaine**. Quelques chemins sont écrits en dur : `/samples/` dans
+  `src/ui/ImportPanel.tsx`, `/favicon.svg` dans `src/App.tsx` et `/fonts/` dans `src/ui/fonts.css`. Pour un sous-dossier,
+  il faut construire avec `vite build --base=/sous-dossier/` et préfixer ces chemins par `import.meta.env.BASE_URL`.
+- Un site public reste soumis aux conditions des sources ([voir plus bas](#sources-de-données-et-attributions)).
+- Une longue vidéo prend beaucoup de mémoire (environ deux fois sa taille). L'écriture directe sur disque est prévue.
+
+## Application de bureau
+
+Elle est prévue pour la phase 6 et n'existe pas encore. Elle emballera le même code avec Tauri. Elle apportera l'écriture
+directe des vidéos sur disque, le stockage local des projets et des tuiles hors ligne.
+
+## Tests et qualité
 
 | Commande | Rôle |
 |---|---|
 | `npm run dev` | serveur de développement sur <http://127.0.0.1:5173> |
-| `npm run build` | `tsc -b` puis bundle de production dans `dist/` |
-| `npm run preview` | sert le bundle de production |
-| `npm test` | `vitest run` (toute la suite) |
-| `npm run typecheck` | `tsc --noEmit -p tsconfig.app.json` |
-| `npm run lint` | oxlint |
+| `npm run build` | vérification des types, puis version de production dans `dist/` |
+| `npm run preview` | sert `dist/` sur <http://localhost:4173> |
+| `npm test` | lance tous les tests (vitest) |
+| `npx vitest run --maxWorkers=1` | les mêmes tests sur un seul cœur, plus stable sur une machine chargée |
+| `npm run typecheck` | vérification des types TypeScript |
+| `npm run lint` | analyse du code (oxlint) |
 
-Dans l'application : glisser un fichier `.gpx` ou `.fit` dans la zone de dépôt, ou cliquer sur
-« Charger l'exemple » (`public/samples/tour-du-mont-blanc-j1.gpx`, trace synthétique de la première
-étape du Tour du Mont-Blanc, régénérable avec `node scripts/gen-sample-gpx.mjs`).
+La suite compte **749 tests** (7 octobre 2026). Chaque fichier de test est rangé à côté de son module
+(`src/**/*.test.ts`). Les appels réseau et l'encodeur vidéo y sont simulés.
 
-## Fonctionnalités de la phase 1
+Ce qui n'est pas testé automatiquement : le rendu 3D, l'encodage réel et les services en ligne. Il n'y a pas de test dans
+un vrai navigateur ; le rendu se vérifie à l'œil.
 
-- **Import GPX et FIT** : plusieurs fichiers à la fois, un `Track` par `<trk>` (repli sur `<rte>`),
-  extensions cardio / cadence / puissance / température, statistiques (distance, D+ / D− lissés,
-  durée, altitudes min / max), couleur attribuée automatiquement, erreurs affichées en français.
-- **Relief 3D streamé** : quadtree Web Mercator avec raffinement par remplacement (jamais de trou),
-  erreur écran cible 3 px, jupes entre niveaux de détail, déchargement des tuiles non visitées, champ
-  de hauteur multi-niveaux pour le plaquage, exagération verticale 1–3, mode filaire.
-- **Élévation** : Mapterhorn (Terrarium WebP 512 px, jusqu'à z17 dans les Alpes) ou AWS Terrain Tiles
-  (Terrarium PNG, z ≤ 15). Une tuile sans donnée (HTTP 4xx) est une feuille : le parent reste affiché.
-- **Imagerie composée** : pour chaque tuile de terrain, `2^k × 2^k` sous-tuiles d'imagerie (détail
-  normal / fin / très fin) assemblées en une texture sRGB mipmappée. IGN BD ORTHO et swisstopo sont
-  choisis automatiquement quand la trace est dans leur emprise ; Esri World Imagery et Sentinel-2
-  cloudless (EOX) couvrent le reste du monde.
-- **Trace plaquée** : lignes épaisses (Line2, 4 px) densifiées tous les 10 m et replaquées sur le relief
-  au fil du chargement des tuiles, passe fantôme pour les portions masquées, sphères de départ et
-  d'arrivée.
-- **Caméra orbitale** avec amortissement, recadrage automatique à l'import et bouton « Recadrer la vue »
-  (animation de 800 ms).
-- **Repère local tangent** centré sur la trace (+X est, +Y haut, +Z sud), conversions WGS84 → ECEF →
-  local en doubles JS pour garder une précision millimétrique dans les buffers float32.
-- **Barre d'état** : tuiles chargées / en attente / en erreur et attributions obligatoires des sources.
+## Sources de données et attributions
+
+Toutes les sources sont ouvertes et sans clé. Le code les déclare dans `src/terrain/sources.ts` ;
+[`docs/sources.md`](docs/sources.md) détaille leurs vérifications (octobre 2026).
+
+| Source | Sert à | Adresse | Attribution affichée |
+|---|---|---|---|
+| Mapterhorn | relief (par défaut) | `tiles.mapterhorn.com` | « © Mapterhorn (données ouvertes, liste des sources : mapterhorn.com/attribution) » |
+| AWS Terrain Tiles | relief | `s3.amazonaws.com/elevation-tiles-prod` | « Terrain Tiles (Mapzen / AWS Open Data) — SRTM, GMTED2010, ETOPO1 courtesy of USGS/NOAA, EU-DEM © Copernicus, ArcticDEM et autres sources ouvertes » |
+| IGN Géoplateforme | orthophotos et Plan IGN en France, photos de 1950 à 2005 | `data.geopf.fr/wmts` | « © IGN — Géoplateforme (BD ORTHO, licence ouverte Etalab 2.0) », et variantes par couche |
+| swisstopo | orthophotos et carte nationale en Suisse | `wmts.geo.admin.ch` | « © swisstopo (SWISSIMAGE, OGD) », « © swisstopo (carte nationale, OGD) » |
+| Esri World Imagery | orthophotos du monde (imagerie par défaut) | `services.arcgisonline.com` | « Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community » |
+| EOX Sentinel-2 cloudless 2025 | images satellite du monde, 10 m | `tiles.maps.eox.at` | « EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0 » |
+| OpenTopoMap | carte topographique du monde | `tile.opentopomap.org` | « Données : © contributeurs OpenStreetMap, SRTM \| Rendu : © OpenTopoMap (CC BY-SA) » |
+| Open-Meteo | météo historique | `archive-api.open-meteo.com` | « Données météo : Open-Meteo.com (CC BY 4.0) » |
+| OpenStreetMap (API Overpass) | repères | `overpass-api.de`, secours `maps.mail.ru` | « © contributeurs OpenStreetMap (ODbL) » |
+
+La barre d'état affiche les attributions du relief et de l'imagerie en cours. Celles d'Open-Meteo et d'OpenStreetMap
+s'ajoutent quand la météo ou les repères sont chargés.
+
+| Source | Licence | À savoir |
+|---|---|---|
+| Mapterhorn, AWS Terrain Tiles | données ouvertes (CC BY 4.0, OGL, domaine public…) | citer les sources |
+| IGN | Licence Ouverte Etalab 2.0 | usage commercial permis |
+| swisstopo | données ouvertes (OGD) | citer la source, usage raisonnable |
+| Esri | conditions d'Esri | **à relire** avant tout usage commercial ou hors ligne |
+| EOX Sentinel-2 cloudless | CC BY-NC-SA 4.0 | **pas d'usage commercial** |
+| OpenTopoMap | CC BY-SA | serveur bénévole : usage modéré ; une vidéo faite avec ce fond doit rester sous la même licence |
+| Open-Meteo | CC BY 4.0 | API gratuite **non commerciale**, 10 000 requêtes par jour au plus |
+| OpenStreetMap | ODbL | serveur public Overpass : usage modéré |
+
+Pour ménager ces services, l'application :
+
+- garde en mémoire les ~600 dernières tuiles et ne demande que celles de la vue ;
+- envoie **une** requête météo par trace et la garde dans le navigateur ;
+- envoie **une** requête de repères par trace, gardée 30 jours, et réessaie une seule fois si le serveur est saturé.
+
+La trace elle-même ne part jamais. Ces services reçoivent seulement une position approchée : la zone des tuiles, quelques
+points arrondis à 1 km avec leurs dates pour la météo, le rectangle autour de la trace pour les repères.
+
+## Licences
+
+Le code d'OpenFlyover est sous **licence MIT** ([`LICENSE`](LICENSE), © 2026 Yannick Riou).
+
+| Dépendance | Version | Licence |
+|---|---|---|
+| three | 0.186.1 | MIT |
+| @react-three/fiber, drei, postprocessing | 9.8.1, 10.7.9, 3.1.3 | MIT |
+| postprocessing | 6.39.5 | Zlib |
+| @takram/three-atmosphere, three-geospatial | 0.19.1, 0.9.1 | MIT |
+| mediabunny | 1.61.3 | MPL-2.0 : utilisable tel quel ; une modification de ses fichiers doit être publiée |
+| zustand | 5.0.15 | MIT |
+| react, react-dom | 19.3.0 | MIT |
+| @garmin/fitsdk | 21.217.0 | licence FIT de Garmin (ci-dessous) |
+
+**Garmin FIT SDK.** Ce n'est pas une licence libre. Garmin autorise gratuitement l'usage du format FIT dans vos logiciels,
+mais interdit de redistribuer le SDK « sauf cas prévus ». Or le site publié contient le code du SDK. Ce point n'est pas
+tranché : à vérifier avant une diffusion large. Le SDK n'est pas couvert par la licence MIT du projet.
+
+Les outils de développement ne sont pas livrés avec le site : Vite, vitest, oxlint et jsdom sont sous MIT, TypeScript
+sous Apache-2.0.
+
+Fichiers embarqués :
+
+- **Polices** Fraunces et IBM Plex, sous SIL Open Font License 1.1 ([`public/fonts/README.md`](public/fonts/README.md)).
+- **Textures du ciel** et catalogue d'étoiles, issus du paquet `@takram/three-atmosphere` (MIT). Le site les sert
+  lui-même. Les étoiles viennent du Yale Bright Star Catalog, dont la licence n'est pas indiquée.
+- **Trace d'exemple**, synthétique, générée par `scripts/gen-sample-gpx.mjs`.
+
+**Vidéos exportées.** Elles contiennent des données cartographiques sous leur propre licence
+([voir les sources](#sources-de-données-et-attributions)). Vous devez donc citer ces sources quand vous diffusez une
+vidéo. L'application ne les incruste pas dans l'image, sauf le crédit Open-Meteo quand la météo est affichée. Recopiez
+les lignes de la barre d'état dans la description de la vidéo, ou dans le widget « Texte libre ».
+
+## Architecture et contribution
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) : coordonnées, contrats partagés, modules. À lire avant de coder.
+- [`docs/reprise.md`](docs/reprise.md) : état du projet et prochaines étapes.
+- [`docs/sources.md`](docs/sources.md) : vérification des sources de données.
+
+Conventions :
+
+- TypeScript strict, avec `import type` et sans `enum`.
+- Interface en français.
+- Charte graphique dans [`src/ui/theme.css`](src/ui/theme.css).
+- Sources ouvertes uniquement, sans clé ; toute nouvelle source va dans `src/terrain/sources.ts` et `docs/sources.md`.
+- Types, lint et tests au vert avant chaque commit, un commit par fonctionnalité.
 
 ## Feuille de route
 
@@ -83,7 +365,7 @@ Dans l'application : glisser un fichier `.gpx` ou `.fit` dans la zone de dépôt
 | 1 — Visionneuse (fait) | import GPX / FIT, relief streamé, imagerie composée, trace plaquée, caméra orbitale |
 | 2 — Survol (fait) | caméra de survol automatique le long de la trace, timeline, lecture / pause, vitesse, marqueur de progression, profil altimétrique |
 | 3 — Atmosphère (en cours) | fait : ciel et diffusion atmosphérique (modèle Takram), brume de distance, soleil et heure solaire, ciel de nuit étoilé, exposition automatique et correction, ombres portées du relief, météo réelle dans la scène (soleil voilé, brume, brouillard, ombres adoucies), fonds de carte topographiques (Plan IGN, carte nationale suisse, OpenTopoMap) ; reste : eau réfléchissante (masque d'eau, reflets du ciel et du soleil, vagues), hauteurs calées sur le niveau de la mer (géoïde) — l'aquarelle (Stadia) exige une clé, exclue |
-| 4 — Personnalisation (en cours) | fait : document de projet (enregistrer / ouvrir un fichier autonome), annuler / rétablir, préréglages, pastille « modifié » et bouton rétablir par panneau, modèle du film et son moteur (timeline, incrément 1 sur 4) ; à venir : timeline de montage sous la vue, tout le film est réglable : caméra, rythme, titres, données affichées, style de trace, points d'intérêt, rendu, format (détail ci-dessous) |
+| 4 — Personnalisation (en cours) | fait : document de projet (enregistrer / ouvrir un fichier autonome), annuler / rétablir, préréglages, pastille « modifié » et bouton rétablir par panneau, modèle du film et son moteur, timeline de montage sous la vue (incréments 1 et 2 sur 4) ; à venir : textes et médias de la timeline dans le film, tout le film est réglable : caméra, rythme, titres, données affichées, style de trace, points d'intérêt, rendu, format (détail ci-dessous) |
 | 5 — Export vidéo (en cours) | fait : rendu hors écran image par image, formats paysage, vertical, carré, portrait, cinéma × résolutions 720p à 4K (24 / 30 / 60 i/s ; trois qualités), attente des seules tuiles visibles et préchargement, habillage incrusté, encodage MP4 H.264 (repli HEVC, WebM VP9 / VP8) via WebCodecs, progression, temps restant, annulation, téléchargement, image fixe PNG / JPEG de la vue courante aux mêmes formats × résolutions, habillage compris ; reste : écriture directe sur disque pour les films longs |
 | 6 — Application de bureau | emballage Tauri (binaire natif, accès disque), stockage local SQLite des projets et préréglages, packs de tuiles hors ligne |
 | 7 — Au-delà du survol | fonctionnalités propres à OpenFlyover : lumière et météo réelles de la sortie, trace colorée par les données, course fantôme, vidéo embarquée synchronisée, repères automatiques, remonter le temps, rendu en lot, affiche, calage musical, reconnaissance (détail ci-dessous) |
@@ -96,7 +378,7 @@ ce qui sera rendu.
 
 | Domaine | Réglages |
 |---|---|
-| Timeline (montage) | comme un logiciel de montage, la base est le survol continu de la trace, avec des pistes séparées au-dessus : arrêts (orbite ou caméra fixe), titres et textes placés et étirés librement dans le temps, points d'intérêt avec arrêt, médias (images, vidéos) ; film assemblé automatiquement au chargement (ouverture en vue d'ensemble → survol avec arrêts aux sommets, cols et montées → clôture en vue d'ensemble), puis retouché. Quatre incréments : 1 — modèle du film et moteur (horloge du film, plans d'ouverture et de clôture « descente » ou « saut », arrêts, aperçu et export identiques) **fait** ; 2 — timeline sous la vue (pistes, glisser pour déplacer et étirer, inspecteur) ; 3 — piste des textes dessinée dans l'habillage ; 4 — piste des médias |
+| Timeline (montage) | comme un logiciel de montage, la base est le survol continu de la trace, avec des pistes séparées au-dessus : arrêts (orbite ou caméra fixe), titres et textes placés et étirés librement dans le temps, points d'intérêt avec arrêt, médias (images, vidéos) ; film assemblé automatiquement au chargement (ouverture en vue d'ensemble → survol avec arrêts aux sommets, cols et montées → clôture en vue d'ensemble), puis retouché. Quatre incréments : 1 — modèle du film et moteur (horloge du film, plans d'ouverture et de clôture « descente » ou « saut », arrêts, aperçu et export identiques) **fait** ; 2 — timeline sous la vue (pistes plans / arrêts / textes, glisser pour déplacer et étirer avec aimantation, zoom, inspecteur, film assemblé avec un arrêt en orbite à chaque temps fort) **fait** ; 3 — piste des textes dessinée dans l'habillage ; 4 — piste des médias |
 | Rythme | **fait** : durée totale réglable (15 s–10 min) ; ralentis et pauses aux temps forts (sommets des montées, cols franchis, sommets proches), durée du film conservée ou allongée ; à faire : vitesse par portion choisie à la main, plan de situation (ouverture sur le pays ou la région qui plonge vers la trace), ouverture et fermeture « balayage » ou « saut », transitions entre sections réglables |
 | Caméra | **fait** : styles poursuite, balancement (hélicoptère), orbite, vue du dessus, plan cinématique ; préréglages nommés ; distance, tangage, cap, lissage ; à faire : caméra propre à chaque étape (photo, lieu, note), images-clés sur la timeline |
 | Titres et textes | titre d'ouverture, sous-titres, générique de fin, étiquettes posées sur le relief (sommets, cols, villages) ; police, couleur, position, apparition et durée |
@@ -125,25 +407,3 @@ Ce qui distingue OpenFlyover : tout reste local, et les données de la sortie (h
 | Affiche imprimable | la trace sur le relief en très haute résolution, habillage compris, pour un tirage | après la phase 5 |
 | Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale | à faire |
 | Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller | à faire |
-
-## Sources de données et licences
-
-Toutes les sources sont ouvertes et accessibles sans clé d'API ; chacune impose l'affichage de son
-attribution (faite dans la barre d'état). Les gabarits d'URL, zooms, formats, emprises et conditions ont
-été vérifiés empiriquement et sont documentés dans [`docs/sources.md`](docs/sources.md) ;
-`src/terrain/sources.ts` est la seule vérité pour le code.
-
-| Source | Usage | Licence / conditions |
-|---|---|---|
-| Mapterhorn | élévation | données ouvertes (151 sources, CC BY 4.0, OGL, domaine public…), code BSD-3 |
-| AWS Terrain Tiles (Mapzen / Tilezen) | élévation | sources publiques (USGS, NOAA, Copernicus, ArcticDEM…) |
-| IGN BD ORTHO (Géoplateforme) | imagerie France | licence ouverte Etalab 2.0 |
-| swisstopo SWISSIMAGE | imagerie Suisse | OGD swisstopo, usage loyal |
-| Esri World Imagery | imagerie mondiale | Esri Master Agreement : attribution obligatoire, à relire avant distribution commerciale ou mise en cache hors ligne |
-| EOX Sentinel-2 cloudless | imagerie mondiale 10 m | **CC BY-NC-SA 4.0** (non commercial) |
-| OpenStreetMap (API Overpass publique) | repères (sommets, cols, refuges, lacs…) | ODbL : attribution obligatoire ; instance publique à usage modéré (une requête par trace, cache) |
-| Polices Fraunces, IBM Plex Sans, IBM Plex Sans Condensed (`public/fonts/`) | interface, habillage du film, étiquettes 3D | SIL Open Font License 1.1 (`public/fonts/OFL-*.txt`) |
-| Open-Meteo (archive ERA5) | météo historique | CC BY 4.0 ; API gratuite réservée à un usage **non commercial** (licence Open-Meteo sinon) |
-
-Points de vigilance avant une distribution payante ou la phase « packs hors ligne » : les conditions
-Esri et la clause non commerciale d'EOX (voir « Points d'attention » dans `docs/sources.md`).
