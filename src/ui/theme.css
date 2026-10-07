@@ -1,15 +1,20 @@
 /* OpenFlyover — charte graphique (variables, typographie, focus). */
 :root {
-  --color-navy: #113b54;
-  --color-chartreuse: #dbe64c;
+  /* « Carte alpine » : papier de carte topographique, encre, rouge de balisage, glacier. */
+  --color-paper: #f5f2ea;
+  --color-card: #eae4d6;
+  --color-ink: #1c2a33;
+  --color-ink-soft: #55626b;
+  --color-line: #d6cdbb;
+  --color-accent: #c23b22;
+  --color-accent-strong: #a3301a;
+  --color-accent-light: #ff8a5c;
+  --color-glacier: #a9ccd9;
+  --color-moss: #3f6b4a;
   --color-white: #ffffff;
-  --color-periwinkle: #bbd1ff;
-  --color-water-green: #e2f4df;
-  --color-pine: #024442;
-  --color-black: #000;
 
-  --font-heading: 'Funnel Display', 'Avenir Next', 'Segoe UI', sans-serif;
-  --font-body: 'Mulish', system-ui, sans-serif;
+  --font-heading: 'Fraunces', Georgia, serif;
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -20,7 +25,7 @@
   --space-5: 24px;
 
   --sidebar-width: 340px;
-  --focus-ring: 2px solid var(--color-chartreuse);
+  --focus-ring: 2px solid var(--color-accent);
 }
 
 h1,
@@ -29,7 +34,7 @@ h3,
 h4 {
   font-family: var(--font-heading);
   font-weight: 600;
-  color: var(--color-black);
+  color: var(--color-ink);
   margin: 0;
   line-height: 1.2;
 }
@@ -42,11 +47,11 @@ select {
   color: inherit;
 }
 
-/* Chartreuse ring with a navy inner line so the indicator keeps ≥ 3:1 on white backgrounds. */
+/* Accent ring with a white inner line so the indicator stays visible on paper and on ink. */
 :focus-visible {
   outline: var(--focus-ring);
   outline-offset: 2px;
-  box-shadow: 0 0 0 1px var(--color-navy);
+  box-shadow: 0 0 0 1px var(--color-white);
 }
 
 /* Buttons --------------------------------------------------------------- */
@@ -59,7 +64,7 @@ select {
   padding: 0 var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  font-family: var(--font-heading);
+  font-family: var(--font-body);
   font-weight: 600;
   font-size: 15px;
   cursor: pointer;
@@ -78,22 +83,22 @@ select {
 }
 
 .btn--primary {
-  background: var(--color-chartreuse);
-  color: var(--color-black);
+  background: var(--color-accent);
+  color: var(--color-white);
 }
 
-/* Hover states stay inside the palette: a navy border instead of a darkened fill. */
 .btn--primary:hover:not(:disabled) {
-  border-color: var(--color-navy);
+  background: var(--color-accent-strong);
 }
 
 .btn--secondary {
-  background: var(--color-periwinkle);
-  color: var(--color-navy);
+  background: var(--color-white);
+  border-color: var(--color-line);
+  color: var(--color-ink);
 }
 
 .btn--secondary:hover:not(:disabled) {
-  border-color: var(--color-navy);
+  border-color: var(--color-ink);
 }
 
 .btn--block {
@@ -110,7 +115,7 @@ select {
 .field__label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-navy);
+  color: var(--color-ink);
 }
 
 .select,
@@ -118,8 +123,8 @@ select {
   width: 100%;
   min-height: 36px;
   padding: 0 var(--space-3);
-  border: 1px solid var(--color-periwinkle);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
   background: var(--color-white);
-  color: var(--color-black);
+  color: var(--color-ink);
 }

@@ -11,12 +11,17 @@
  *
  * Three.js objects are managed imperatively inside one <group>: buffers are updated in place when the
  * point count is unchanged (no GPU buffer churn), and everything is disposed on unmount.
+ *
+ * With `settings.trackColorBy` the lines take per-vertex colours (src/flyover/trackColor.ts): values are
+ * computed on the recorded points, interpolated onto the densified ones, and mapped through one range
+ * shared by every track. Changing the mode only rewrites the colour buffers, never the geometry.
  */
 import { useCallback, useEffect, useRef } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import {
   Color,
   Group,
+  SRGBColorSpace,
   Mesh,
   MeshStandardMaterial,
   SphereGeometry,
@@ -27,6 +32,15 @@ import { Line2 } from 'three/addons/lines/Line2.js'
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 import type { LocalFrame, TerrainEngine, Track, TrackPoint } from '../core/types'
+import { useExportStore } from '../export/store'
+import {
+  TRACK_METRICS,
+  colorizeValues,
+  resampleValues,
+  robustRange,
+  trackMetricValues,
+  type TrackColorBy,
+} from '../flyover/trackColor'
 import { densify } from '../import/stats'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
@@ -54,8 +68,8 @@ export const REDRAPE_DEBOUNCE_MS = 150
 export const REDRAPE_MAX_WAIT_MS = 600
 /** Start / end marker spheres (metres, true scale). */
 export const MARKER_RADIUS_M = 12
-export const START_COLOR = '#024442'
-export const END_COLOR = '#DBE64C'
+export const START_COLOR = '#3F6B4A'
+export const END_COLOR = '#1C2A33'
 
 // ---------------------------------------------------------------------------
 // Pure helpers (unit-tested)
@@ -171,11 +185,34 @@ export function writeLinePositions(geometry: LineGeometry, positions: Float32Arr
   geometry.setPositions(positions)
 }
 
+/**
+ * Write per-point colours (rgb per point, linear) into a LineGeometry, in place when the colour buffer
+ * already has the right size (same pair layout as the positions).
+ */
+export function writeLineColors(geometry: LineGeometry, colors: Float32Array): void {
+  const pointCount = Math.floor(colors.length / 3)
+  if (pointCount < 2) return
+  const start: unknown = geometry.getAttribute('instanceColorStart')
+  if (isInterleavedAttribute(start) && start.data.array.length === (pointCount - 1) * 6) {
+    const array = start.data.array as Float32Array
+    for (let i = 0; i < pointCount - 1; i++) {
+      array.set(colors.subarray(i * 3, i * 3 + 6), i * 6)
+    }
+    start.data.needsUpdate = true
+    return
+  }
+  geometry.setColors(colors)
+}
+
 // ---------------------------------------------------------------------------
 // Three.js object management (no React below this line except the component; exported for unit tests)
 // ---------------------------------------------------------------------------
 
 export interface SegmentLines {
+  /** index in track.segments */
+  index: number
+  /** densified points (the recorded ones are kept as the same objects) */
+  points: TrackPoint[]
   buffer: DrapeBuffer
   /** scratch xyz per point, reused on every drape */
   positions: Float32Array
@@ -251,7 +288,7 @@ export function buildTrackLineSet(
   const { solid: solidMaterial, ghost: ghostMaterial } = createLineMaterials(track.color, width, height)
 
   const segments: SegmentLines[] = []
-  for (const segment of track.segments) {
+  for (const [index, segment] of track.segments.entries()) {
     const points = densify(segment.points, DENSIFY_STEP_M)
     if (points.length < 2) continue
     const buffer = buildDrapeBuffer(points, frame)
@@ -263,7 +300,7 @@ export function buildTrackLineSet(
     ghost.name = 'track-line-ghost'
     ghost.renderOrder = 1
     object.add(solid, ghost)
-    segments.push({ buffer, positions, geometry, solid, ghost })
+    segments.push({ index, points, buffer, positions, geometry, solid, ghost })
   }
 
   let startMarker: Mesh | null = null
@@ -304,10 +341,76 @@ export function drapeTrackLineSet(set: TrackLineSet, engine: TerrainEngine | nul
   }
 }
 
+/**
+ * Line colours divided by the renderer exposure. The lines are unlit: with the atmosphere the frame is
+ * tone-mapped at a high exposure (physical radiances) and they would otherwise burn out to white.
+ */
+export function applyExposure(sets: Iterable<TrackLineSet>, exposure: number): void {
+  for (const set of sets) {
+    // with vertex colours the material colour is a plain multiplier
+    const base = set.solidMaterial.vertexColors ? '#ffffff' : set.track.color
+    set.solidMaterial.color.set(base).multiplyScalar(1 / exposure)
+    set.ghostMaterial.color.copy(set.solidMaterial.color)
+  }
+}
+
+function setVertexColors(set: TrackLineSet, enabled: boolean): void {
+  for (const material of [set.solidMaterial, set.ghostMaterial]) {
+    if (material.vertexColors === enabled) continue
+    material.vertexColors = enabled
+    material.needsUpdate = true
+  }
+}
+
+/**
+ * Colour every set by `colorBy` ('none' restores each track's own colour), with one value range shared
+ * by all the tracks. Call `applyExposure` afterwards: the material colours depend on the mode.
+ */
+export function applyTrackColors(sets: Iterable<TrackLineSet>, colorBy: TrackColorBy): void {
+  const list = [...sets]
+  if (colorBy === 'none') {
+    for (const set of list) {
+      setVertexColors(set, false)
+      for (const segment of set.segments) {
+        segment.geometry.deleteAttribute('instanceColorStart')
+        segment.geometry.deleteAttribute('instanceColorEnd')
+      }
+    }
+    return
+  }
+  const values = list.map((set) => trackMetricValues(set.track, colorBy))
+  const range = robustRange(values.flat()) ?? { min: 0, max: 0 }
+  const { colormap } = TRACK_METRICS[colorBy]
+  const linear = new Color()
+  list.forEach((set, k) => {
+    for (const segment of set.segments) {
+      const source = set.track.segments[segment.index].points
+      const perPoint = resampleValues(source, values[k][segment.index], segment.points)
+      const colors = colorizeValues(perPoint, range, colormap)
+      for (let o = 0; o < colors.length; o += 3) {
+        linear.setRGB(colors[o], colors[o + 1], colors[o + 2], SRGBColorSpace)
+        colors[o] = linear.r
+        colors[o + 1] = linear.g
+        colors[o + 2] = linear.b
+      }
+      writeLineColors(segment.geometry, colors)
+    }
+    setVertexColors(set, true)
+  })
+}
+
 function applyResolution(sets: Iterable<TrackLineSet>, width: number, height: number): void {
   for (const set of sets) {
     set.solidMaterial.resolution.set(width, height)
     set.ghostMaterial.resolution.set(width, height)
+  }
+}
+
+/** Line width in pixels of the canvas: times the export render scale, so a 4K video looks like the 1080p one. */
+function applyLineWidth(sets: Iterable<TrackLineSet>, renderScale: number): void {
+  for (const set of sets) {
+    set.solidMaterial.linewidth = LINE_WIDTH_PX * renderScale
+    set.ghostMaterial.linewidth = LINE_WIDTH_PX * renderScale
   }
 }
 
@@ -352,6 +455,7 @@ export function syncTrackLineSets(
 export function TrackLines() {
   const tracks = useAppStore((s) => s.tracks)
   const exaggeration = useAppStore((s) => s.settings.exaggeration)
+  const colorBy = useAppStore((s) => s.settings.trackColorBy)
   const { engine, frame } = useTerrainContext()
   const size = useThree((s) => s.size)
 
@@ -359,6 +463,10 @@ export function TrackLines() {
   const setsRef = useRef<Map<string, TrackLineSet>>(new Map())
   const sharedRef = useRef<SharedResources | null>(null)
   const sizeRef = useRef(size)
+  /** exposure the line colours were last compensated for (NaN = after a rebuild) */
+  const exposureRef = useRef(Number.NaN)
+  /** render scale the line width was last set for (NaN = after a rebuild) */
+  const lineScaleRef = useRef(Number.NaN)
 
   // Keep the material resolution in sync with the canvas size (Line2 also refreshes it before each
   // render, this covers objects that are not rendered yet).
@@ -378,8 +486,27 @@ export function TrackLines() {
     sharedRef.current ??= createSharedResources()
     const { width, height } = sizeRef.current
     syncTrackLineSets(group, setsRef.current, tracks, frame, sharedRef.current, width, height)
+    exposureRef.current = Number.NaN
+    lineScaleRef.current = Number.NaN
     drapeAll(engine, exaggeration)
   }, [tracks, frame, engine, exaggeration, drapeAll])
+
+  // Colours: after the build above (same commit), only when the mode or the set of lines changes.
+  useEffect(() => {
+    applyTrackColors(setsRef.current.values(), colorBy)
+    exposureRef.current = Number.NaN
+  }, [tracks, frame, colorBy])
+
+  useFrame(({ gl }) => {
+    const { renderScale } = useExportStore.getState()
+    if (renderScale !== lineScaleRef.current) {
+      lineScaleRef.current = renderScale
+      applyLineWidth(setsRef.current.values(), renderScale)
+    }
+    if (gl.toneMappingExposure === exposureRef.current) return
+    exposureRef.current = gl.toneMappingExposure
+    applyExposure(setsRef.current.values(), gl.toneMappingExposure)
+  })
 
   // Re-drape (debounced, with a bounded wait so a long tile stream cannot starve it) whenever the engine
   // reports new or removed tiles.

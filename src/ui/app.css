@@ -14,9 +14,9 @@
   width: var(--sidebar-width);
   height: 100%;
   overflow: hidden;
-  background: var(--color-white);
-  color: var(--color-navy);
-  border-right: 1px solid var(--color-periwinkle);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  border-right: 1px solid var(--color-line);
 }
 
 /* Scrollable part of the sidebar; the status bar below it never scrolls out of view. */
@@ -35,8 +35,8 @@
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  /* neutral sky behind the transparent canvas */
-  background: linear-gradient(180deg, var(--color-periwinkle) 0%, var(--color-white) 100%);
+  /* pale sky behind the transparent canvas */
+  background: linear-gradient(180deg, var(--color-glacier) 0%, var(--color-paper) 100%);
 }
 
 .view > * {
@@ -59,12 +59,12 @@
 
 .header__title {
   font-size: 22px;
-  color: var(--color-black);
+  color: var(--color-ink);
 }
 
 .header__tagline {
   font-size: 12px;
-  color: var(--color-navy);
+  color: var(--color-ink-soft);
 }
 
 .section-title {
@@ -81,7 +81,7 @@
   gap: var(--space-1);
   min-height: 108px;
   padding: var(--space-4);
-  border: 2px dashed var(--color-periwinkle);
+  border: 2px dashed var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-white);
   text-align: center;
@@ -93,8 +93,8 @@
 
 .dropzone:hover,
 .dropzone--active {
-  background: var(--color-water-green);
-  border-color: var(--color-navy);
+  background: var(--color-card);
+  border-color: var(--color-accent);
 }
 
 .dropzone--busy {
@@ -106,12 +106,12 @@
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: 15px;
-  color: var(--color-black);
+  color: var(--color-ink);
 }
 
 .dropzone__hint {
   font-size: 12px;
-  color: var(--color-navy);
+  color: var(--color-ink-soft);
 }
 
 .visually-hidden {
@@ -132,9 +132,9 @@
   align-items: flex-start;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-3);
-  border-left: 4px solid var(--color-chartreuse);
+  border-left: 4px solid var(--color-accent-light);
   border-radius: var(--radius-sm);
-  background: var(--color-navy);
+  background: var(--color-ink);
   color: var(--color-white);
   font-size: 13px;
   word-break: break-word;
@@ -159,7 +159,7 @@
 }
 
 .alert__close:hover {
-  background: var(--color-pine);
+  background: var(--color-ink-soft);
 }
 
 /* Track list -------------------------------------------------------------- */
@@ -177,7 +177,7 @@
   align-items: center;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-water-green);
+  background: var(--color-card);
 }
 
 .track__swatch {
@@ -185,12 +185,13 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(28, 42, 51, 0.35);
 }
 
 .track__name {
+  grid-column: 2;
   font-weight: 700;
-  color: var(--color-black);
+  color: var(--color-ink);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -199,47 +200,203 @@
 .track__meta {
   grid-column: 2;
   font-size: 12px;
-  color: var(--color-navy);
+  color: var(--color-ink-soft);
 }
 
 .track__delete {
+  grid-column: 3;
   grid-row: 1 / span 2;
   width: 28px;
   height: 28px;
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--color-navy);
+  color: var(--color-ink-soft);
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
 }
 
 .track__delete:hover {
-  background: var(--color-periwinkle);
+  background: var(--color-line);
 }
 
 .tracks__empty {
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-water-green);
+  background: var(--color-card);
   font-size: 13px;
-  color: var(--color-navy);
+  color: var(--color-ink-soft);
   text-align: center;
+}
+
+/* Ghost race -------------------------------------------------------------- */
+.race {
+  margin-top: var(--space-3);
+}
+
+.race__board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.race__row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  column-gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+  font-size: 13px;
+}
+
+.race__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(28, 42, 51, 0.35);
+}
+
+.race__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.race__distance {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-soft);
+}
+
+.race__gap {
+  min-width: 8ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+/* Climbs ------------------------------------------------------------------ */
+.climbs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.climb {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-2);
+  align-items: center;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  text-align: left;
+  cursor: pointer;
+}
+
+.climb:hover {
+  border-color: var(--color-ink);
+}
+
+.climb__badge {
+  grid-row: 1 / span 2;
+  min-width: 48px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-ink);
+  color: var(--color-white);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.climb__badge--hc {
+  background: var(--color-accent);
+}
+
+.climb__name {
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.climb__meta {
+  font-size: 12px;
+  color: var(--color-ink-soft);
+}
+
+.climbs__labels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 /* Settings ---------------------------------------------------------------- */
 .settings {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-water-green);
+  background: var(--color-card);
 }
 
 .settings__title {
   margin-bottom: 0;
+}
+
+/* « modifié » marker + « Rétablir » (ModifiedMarker), on the title line; long titles wrap before it */
+.modified {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.settings:has(> .modified) > .settings__title {
+  padding-right: 136px;
+}
+
+.modified__badge {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-accent-strong);
+  border-radius: 999px;
+  color: var(--color-accent-strong);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.modified__reset {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modified__reset:hover:not(:disabled) {
+  border-color: var(--color-ink);
+}
+
+.modified__reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 /* <fieldset> used as a plain field group (segmented control) */
@@ -253,7 +410,7 @@
 .segmented {
   display: flex;
   gap: 0;
-  border: 1px solid var(--color-navy);
+  border: 1px solid var(--color-ink);
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--color-white);
@@ -266,17 +423,17 @@
   padding: 7px var(--space-2);
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-navy);
+  color: var(--color-ink);
   cursor: pointer;
   user-select: none;
 }
 
 .segmented__option + .segmented__option {
-  border-left: 1px solid var(--color-navy);
+  border-left: 1px solid var(--color-ink);
 }
 
 .segmented__option:has(input:checked) {
-  background: var(--color-navy);
+  background: var(--color-ink);
   color: var(--color-white);
 }
 
@@ -301,7 +458,7 @@
 
 .range {
   flex: 1 1 auto;
-  accent-color: var(--color-navy);
+  accent-color: var(--color-ink);
   margin: 0;
 }
 
@@ -311,7 +468,11 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  color: var(--color-black);
+  color: var(--color-ink);
+}
+
+.range-row__value--wide {
+  min-width: 7ch;
 }
 
 .checkbox {
@@ -327,20 +488,51 @@
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: var(--color-navy);
+  accent-color: var(--color-ink);
+}
+
+.checkbox:has(input:disabled) {
+  cursor: default;
+  color: var(--color-ink-soft);
+}
+
+.field__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-soft);
+}
+
+/* Project ----------------------------------------------------------------- */
+.project__row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.project__row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* text field + submit button: the field takes the remaining width */
+.project__row > .input {
+  flex: 1 1 auto;
+}
+
+.project__row > [type='submit'] {
+  flex: none;
 }
 
 /* Status bar -------------------------------------------------------------- */
 .status {
   flex: none;
   padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--color-periwinkle);
-  background: var(--color-white);
+  border-top: 1px solid var(--color-line);
+  background: var(--color-paper);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   font-size: 12px;
-  color: var(--color-navy);
+  color: var(--color-ink-soft);
 }
 
 .status__line {
@@ -349,12 +541,16 @@
   gap: var(--space-2);
 }
 
+.status__line[hidden] {
+  display: none;
+}
+
 .status__spinner {
   width: 12px;
   height: 12px;
   flex: none;
-  border: 2px solid var(--color-periwinkle);
-  border-top-color: var(--color-navy);
+  border: 2px solid var(--color-line);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: status-spin 0.8s linear infinite;
 }
@@ -368,7 +564,171 @@
 .status__attribution {
   font-size: 11px;
   line-height: 1.35;
-  color: var(--color-navy);
+  color: var(--color-ink-soft);
+}
+
+/* Film overlay (« habillage ») ------------------------------------------- */
+/* 2D canvas over the 3D view, under the timeline; never catches the pointer */
+.view > .overlay-canvas {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.overlay-widget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
+.overlay-widget__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-left: var(--space-5);
+}
+
+/* file input hidden inside a button-like label: show the focus on the label */
+.overlay-widget .btn:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Flyover timeline (overlay at the bottom of the 3D view) ----------------- */
+.view > .timeline {
+  inset: auto var(--space-4) var(--space-4) var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-ink);
+  color: var(--color-white);
+  font-size: 13px;
+}
+
+.timeline__play {
+  flex: none;
+  width: 40px;
+  padding: 0;
+}
+
+.timeline__scrub {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* inset by half the slider thumb so that x matches the thumb position */
+.timeline__profile {
+  display: block;
+  width: calc(100% - 16px);
+  height: 44px;
+  margin: 0 8px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.timeline__profile-area {
+  fill: var(--color-glacier);
+  opacity: 0.35;
+}
+
+.timeline__profile-played {
+  fill: var(--color-accent-light);
+}
+
+.timeline__profile-cursor {
+  stroke: var(--color-white);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.timeline__range {
+  accent-color: var(--color-accent-light);
+}
+
+.timeline__distance {
+  flex: none;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.timeline__distance strong {
+  color: var(--color-accent-light);
+}
+
+.timeline__speed {
+  flex: none;
+  width: auto;
+}
+
+/* Track colour legend (overlay above the timeline) ----------------------- */
+.view > .track-legend {
+  /* the timeline is ~88 px high, 16 px above the bottom edge */
+  inset: auto auto calc(var(--space-4) + 96px) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 220px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-ink);
+  color: var(--color-white);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.track-legend__title {
+  font-weight: 600;
+}
+
+.track-legend__bar {
+  height: 10px;
+  border-radius: 2px;
+}
+
+.track-legend__range {
+  display: flex;
+  justify-content: space-between;
+}
+
+.track-legend__missing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.track-legend__swatch {
+  width: 16px;
+  height: 6px;
+  border: 1px solid var(--color-white);
+  border-radius: 2px;
+  background: var(--color-ink-soft);
+}
+
+/* Video export ------------------------------------------------------------ */
+/* video export + still image buttons, side by side */
+.export__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.export__actions > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.export__progress {
+  width: 100%;
+  height: 10px;
+  accent-color: var(--color-accent);
 }
 
 /* Responsive: sidebar becomes a top panel ---------------------------------- */
@@ -383,7 +743,7 @@
     height: auto;
     max-height: 55vh;
     border-right: 0;
-    border-bottom: 1px solid var(--color-periwinkle);
+    border-bottom: 1px solid var(--color-line);
   }
 
   .view {
@@ -395,4 +755,98 @@
   .status__spinner {
     animation: none;
   }
+}
+
+/* Weather of the outing --------------------------------------------------- */
+.weather__list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: 13px;
+}
+
+.weather__list dt {
+  color: var(--color-ink-soft);
+}
+
+.weather__list dd {
+  margin: 0;
+  color: var(--color-ink);
+}
+
+.weather__now {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-line);
+}
+
+.weather__now h3 {
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+/* Landmarks (OpenStreetMap) ---------------------------------------------- */
+.landmarks__kinds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1) var(--space-2);
+}
+
+.landmarks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.landmark {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-2);
+  align-items: center;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  text-align: left;
+  cursor: pointer;
+}
+
+.landmark:hover {
+  border-color: var(--color-ink);
+}
+
+.landmark__kind {
+  grid-row: 1 / span 2;
+  min-width: 56px;
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-ink);
+  color: var(--color-white);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.landmark__kind--pass {
+  background: var(--color-accent);
+}
+
+.landmark__name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landmark__meta {
+  font-size: 12px;
+  color: var(--color-ink-soft);
 }

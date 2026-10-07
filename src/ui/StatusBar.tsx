@@ -1,5 +1,9 @@
+import { OSM_ATTRIBUTION } from '../osm/overpass'
+import { useLandmarkStore } from '../osm/store'
 import { useAppStore } from '../state/store'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
+import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
+import { useWeatherStore } from '../weather/store'
 
 /** French plural: zero and one take the singular. */
 function plural(count: number, singular: string, pluralForm: string): string {
@@ -16,6 +20,8 @@ export function StatusBar() {
   const loading = useAppStore((s) => s.loading)
   const terrainSourceId = useAppStore((s) => s.settings.terrainSourceId)
   const imagerySourceId = useAppStore((s) => s.settings.imagerySourceId)
+  const weatherShown = useWeatherStore((s) => s.status === 'ready')
+  const landmarksShown = useLandmarkStore((s) => Object.values(s.landmarks).some((list) => list.length > 0))
 
   const terrain = getTerrainSource(terrainSourceId)
   const imagery = getImagerySource(imagerySourceId)
@@ -36,6 +42,18 @@ export function StatusBar() {
         Relief : {terrain.attribution}
         <br />
         Imagerie : {imagery.attribution}
+        {weatherShown && (
+          <>
+            <br />
+            {OPEN_METEO_ATTRIBUTION}
+          </>
+        )}
+        {landmarksShown && (
+          <>
+            <br />
+            Repères : {OSM_ATTRIBUTION}
+          </>
+        )}
       </p>
     </footer>
   )

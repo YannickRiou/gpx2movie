@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { LonLatBounds, Track } from '../core/types'
+import { DEFAULT_OVERLAY } from '../overlay/settings'
 import { computeFrameOrigin, pickRegionalImagery, resetAppStore, unionBounds, useAppStore } from './store'
 
 function makeTrack(id: string, bounds: LonLatBounds): Track {
@@ -143,6 +144,26 @@ describe('settings and misc', () => {
       imageryZoomOffset: 1,
       exaggeration: 1.5,
       wireframe: true,
+      atmosphere: true,
+      shadows: true,
+      sunHour: 10,
+      sunFromTrack: true,
+      exposureEv: 0,
+      trackColorBy: 'none',
+      camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
+      flyoverDurationS: 60,
+      pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true },
+      labels: { climbs: true, waypoints: true },
+      weather: { enabled: true },
+      weatherScene: { enabled: true, strength: 1 },
+      overlay: DEFAULT_OVERLAY,
+      video: { aspect: '16:9', resolution: '1080p', fps: 30, quality: 'high' },
+      landmarks: {
+        enabled: true,
+        kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false },
+        maxDistanceM: 1500,
+      },
+      race: { enabled: false, sync: 'elapsed' },
     })
   })
 
@@ -161,5 +182,53 @@ describe('settings and misc', () => {
     expect(st.terrainStats).toEqual(stats)
     expect(st.loading).toBe(true)
     expect(st.importError).toBe('Fichier illisible')
+  })
+})
+
+describe('playback', () => {
+  it('starts paused at 0 and clamps the progress', () => {
+    const s = useAppStore.getState()
+    expect(s.playback).toEqual({ playing: false, progress: 0, timeS: null, speed: 1 })
+    s.setProgress(1.5)
+    expect(useAppStore.getState().playback.progress).toBe(1)
+    s.setProgress(-1)
+    expect(useAppStore.getState().playback.progress).toBe(0)
+  })
+
+  it('stops at the end and rewinds when played again', () => {
+    const s = useAppStore.getState()
+    s.setPlaying(true)
+    s.setProgress(1)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: false, progress: 1 })
+    s.setPlaying(true)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 0 })
+  })
+
+  it('keeps playing at the end while a film time is given (final pause), forgets it when set from outside', () => {
+    const s = useAppStore.getState()
+    s.setPlaying(true)
+    s.setProgress(1, 61)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 1, timeS: 61 })
+    s.setProgress(1, 62)
+    expect(useAppStore.getState().playback.timeS).toBe(62)
+    // paused during the final pause: playing again resumes it instead of rewinding
+    s.setPlaying(false)
+    s.setPlaying(true)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 1, timeS: 62 })
+    // the end of the film: no film time, stops
+    s.setProgress(1)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: false, progress: 1, timeS: null })
+  })
+
+  it('pauses on a fit request and resets when a track is removed', () => {
+    const s = useAppStore.getState()
+    s.addTracks([FR])
+    s.setSpeed(2)
+    s.setProgress(0.4)
+    s.setPlaying(true)
+    s.requestFit()
+    expect(useAppStore.getState().playback).toEqual({ playing: false, progress: 0.4, timeS: null, speed: 2 })
+    s.removeTrack('fr')
+    expect(useAppStore.getState().playback).toEqual({ playing: false, progress: 0, timeS: null, speed: 2 })
   })
 })

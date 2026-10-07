@@ -306,14 +306,16 @@ describe('tilesForBounds', () => {
   })
 
   it('tileCountForBounds matches the length of tilesForBounds', () => {
-    const boxes: LonLatBounds[] = [
-      tileBounds(CHAMONIX_Z12),
-      { west: 6.5, east: 7.3, south: 45.6, north: 46.2 },
-      { west: -200, east: 200, south: -95, north: 95 },
-      { west: 6.87, east: 6.87, south: 45.92, north: 45.92 },
+    const zooms = [0, 1, 5, 10, 12]
+    const cases: [LonLatBounds, number[]][] = [
+      [tileBounds(CHAMONIX_Z12), zooms],
+      [{ west: 6.5, east: 7.3, south: 45.6, north: 46.2 }, zooms],
+      // whole world: stop at z8, z12 would list 16.7 M tiles
+      [{ west: -200, east: 200, south: -95, north: 95 }, [0, 1, 5, 8]],
+      [{ west: 6.87, east: 6.87, south: 45.92, north: 45.92 }, zooms],
     ]
-    for (const box of boxes) {
-      for (const z of [0, 1, 5, 10, 12]) {
+    for (const [box, boxZooms] of cases) {
+      for (const z of boxZooms) {
         expect(tileCountForBounds(box, z)).toBe(tilesForBounds(box, z).length)
       }
     }

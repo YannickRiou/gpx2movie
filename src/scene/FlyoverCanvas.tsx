@@ -1,26 +1,35 @@
 /**
  * FlyoverCanvas — the React Three Fiber root of the viewer.
  *
- * The canvas is transparent (alpha) over a CSS sky gradient (periwinkle at the top, white at the
- * horizon). Lighting is a fixed hemisphere + a sun from the south-east. With no track loaded the scene
- * is left empty (lights only); otherwise the terrain layer provides the engine to the track lines and
- * the camera rig.
+ * With the atmosphere setting on (default), AtmosphereLayer draws the sky, lights the terrain from the
+ * real sun position and tone-maps the frame. Without it, the canvas is transparent (alpha) over a CSS sky
+ * gradient (glacier blue at the top, map paper at the horizon) and lit by a fixed hemisphere + a sun from
+ * the south-east. With no track loaded the scene is left empty; otherwise the terrain layer provides the
+ * engine to the track lines, the camera rigs and the atmosphere.
  *
- * Tone mapping is disabled (`flat`): orthophotos are display-referred images already, a filmic curve
+ * Shadow maps are enabled (PCF) but only the atmosphere's sun casts them (terrainShadow.ts); the fixed lights do not.
+ *
+ * Without the atmosphere, tone mapping is disabled (`flat`): orthophotos are display-referred images already, a filmic curve
  * would only remap their colours. The light intensities are chosen so the lit terrain stays close to the
  * texture brightness: three.js shades a Lambert surface as albedo x irradiance / pi, so a flat tile facing
  * the sky receives (hemisphere + sun x sin(sun elevation)) / pi = (1.2 + 2.0 x 0.79) / pi = 0.88 of its
  * albedo and a slope facing the sun peaks just under 1.0 (nothing clips).
  */
-import type { CSSProperties } from 'react'
+import { useEffect, useMemo, type CSSProperties } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { useAppStore } from '../state/store'
+import { ExportController } from '../export/ExportController'
+import { createOverlayDrawer } from '../overlay/exportOverlay'
+import { AtmosphereLayer } from './AtmosphereLayer'
 import { CameraRig } from './CameraRig'
+import { FlyoverRig } from './FlyoverRig'
+import { Labels } from './Labels'
+import { RaceMarkers } from './RaceMarkers'
 import { TerrainLayer } from './TerrainLayer'
 import { TrackLines } from './TrackLines'
 
-export const SKY_TOP_COLOR = '#BBD1FF'
-export const SKY_HORIZON_COLOR = '#FFFFFF'
+export const SKY_TOP_COLOR = '#A9CCD9'
+export const SKY_HORIZON_COLOR = '#F5F2EA'
 
 const HEMISPHERE_SKY = '#ffffff'
 const HEMISPHERE_GROUND = '#6b7a8f'
@@ -50,16 +59,29 @@ export interface FlyoverCanvasProps {
 
 export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
+  const atmosphere = useAppStore((s) => s.settings.atmosphere)
+  // the video export draws the film overlay through the same code as the preview
+  const overlayDrawer = useMemo(createOverlayDrawer, [])
+  useEffect(() => () => overlayDrawer.dispose(), [overlayDrawer])
 
   return (
     <div className={className} style={style ? { ...wrapperStyle, ...style } : wrapperStyle}>
-      <Canvas gl={GL} camera={CAMERA} dpr={[1, 2]} frameloop="always" flat style={canvasStyle}>
-        <hemisphereLight color={HEMISPHERE_SKY} groundColor={HEMISPHERE_GROUND} intensity={HEMISPHERE_INTENSITY} />
-        <directionalLight position={SUN_POSITION} intensity={SUN_INTENSITY} />
+      <Canvas gl={GL} camera={CAMERA} dpr={[1, 2]} frameloop="always" flat shadows="percentage" style={canvasStyle}>
+        {!atmosphere && (
+          <>
+            <hemisphereLight color={HEMISPHERE_SKY} groundColor={HEMISPHERE_GROUND} intensity={HEMISPHERE_INTENSITY} />
+            <directionalLight position={SUN_POSITION} intensity={SUN_INTENSITY} />
+          </>
+        )}
         {hasTracks && (
           <TerrainLayer>
             <TrackLines />
             <CameraRig />
+            <FlyoverRig />
+            <RaceMarkers />
+            <Labels />
+            {atmosphere && <AtmosphereLayer />}
+            <ExportController drawOverlay={overlayDrawer.draw} />
           </TerrainLayer>
         )}
       </Canvas>

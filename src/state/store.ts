@@ -6,8 +6,23 @@
  */
 import { create } from 'zustand'
 import type { LonLat, LonLatBounds, TerrainStats, Track } from '../core/types'
+import { DEFAULT_VIDEO_SETTINGS } from '../export/schedule'
+import type { VideoSettings } from '../export/schedule'
+import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S } from '../flyover/cameraSettings'
+import type { CameraSettings } from '../flyover/cameraSettings'
+import { DEFAULT_PACING } from '../flyover/pacing'
+import type { PacingSettings } from '../flyover/pacing'
+import { DEFAULT_RACE } from '../flyover/race'
+import type { RaceSettings } from '../flyover/race'
+import type { TrackColorBy } from '../flyover/trackColor'
 import { centroid } from '../geo/ellipsoid'
+import { DEFAULT_LANDMARK_SETTINGS } from '../osm/landmarks'
+import type { LandmarkSettings } from '../osm/landmarks'
+import { DEFAULT_OVERLAY } from '../overlay/settings'
+import type { OverlaySettings } from '../overlay/settings'
 import { IMAGERY_SOURCES, sourceCovers } from '../terrain/sources'
+import { DEFAULT_WEATHER_SCENE } from '../weather/sceneWeather'
+import type { WeatherSceneSettings } from '../weather/sceneWeather'
 
 export interface Settings {
   terrainSourceId: string
@@ -15,6 +30,52 @@ export interface Settings {
   imageryZoomOffset: 0 | 1 | 2
   exaggeration: number
   wireframe: boolean
+  /** physically based sky, sun light and aerial perspective */
+  atmosphere: boolean
+  /** cast shadows of the relief (atmosphere only) */
+  shadows: boolean
+  /** local mean solar time (hours, 12 = solar noon) on the day of the first track */
+  sunHour: number
+  /** the sun follows the recorded time under the flyover marker when the first track has one (else sunHour) */
+  sunFromTrack: boolean
+  /** exposure compensation in stops, on top of the automatic exposure (atmosphere only) */
+  exposureEv: number
+  /** colour the tracks by a recorded quantity ('none' = each track's own colour) */
+  trackColorBy: TrackColorBy
+  /** flyover camera style and parameters (replaced as a whole, e.g. by a camera preset) */
+  camera: CameraSettings
+  /** flyover duration at speed x1 (seconds), whatever the track length */
+  flyoverDurationS: number
+  /** variable pacing of the flyover: slow-downs and pauses at the highlights of the first track */
+  pacing: PacingSettings
+  /** 3D labels on the relief: tops of the detected climbs of the first track, GPX waypoints */
+  labels: { climbs: boolean; waypoints: boolean }
+  /** historical weather of the first timed track (Open-Meteo archive, network) */
+  weather: { enabled: boolean }
+  /** the weather of the outing drives the scene (clouds dim the sun, haze, veiled sky), strength 0..1 (atmosphere only) */
+  weatherScene: WeatherSceneSettings
+  /** film overlay (« habillage »): style and widgets, drawn by src/overlay/draw.ts */
+  overlay: OverlaySettings
+  /** exported film: size, frame rate, encoding quality */
+  video: VideoSettings
+  /** OpenStreetMap landmarks along the tracks (Overpass API, network): kinds shown and corridor width */
+  landmarks: LandmarkSettings
+  /** ghost race: markers on the other tracks, synchronised with the first one (see flyover/race.ts) */
+  race: RaceSettings
+}
+
+/** Flyover playback along the first track (progress at constant ground speed). */
+export interface Playback {
+  playing: boolean
+  /** 0 = start of the track, 1 = end */
+  progress: number
+  /**
+   * film time of the progress (seconds at x1, pacing included) when the playback clock or the export set it;
+   * null when the progress was set from outside (scrub, rewind): the pacing then gives it
+   */
+  timeS: number | null
+  /** playback speed multiplier, on top of settings.flyoverDurationS */
+  speed: number
 }
 
 export interface AppState {
@@ -37,6 +98,15 @@ export interface AppState {
   setImportError(msg: string | null): void
   loading: boolean
   setLoading(v: boolean): void
+  playback: Playback
+  /** starting from the end (progress 1 without film time) rewinds to the start */
+  setPlaying(v: boolean): void
+  /**
+   * clamped to [0, 1]; reaching 1 stops the playback unless a film time is given (the playback clock plays the
+   * final pause of the pacing, then sets 1 without film time)
+   */
+  setProgress(progress: number, timeS?: number | null): void
+  setSpeed(speed: number): void
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -45,7 +115,25 @@ export const DEFAULT_SETTINGS: Settings = {
   imageryZoomOffset: 1,
   exaggeration: 1,
   wireframe: false,
+  atmosphere: true,
+  shadows: true,
+  sunHour: 10,
+  sunFromTrack: true,
+  exposureEv: 0,
+  trackColorBy: 'none',
+  camera: DEFAULT_CAMERA,
+  flyoverDurationS: DEFAULT_FLYOVER_DURATION_S,
+  pacing: DEFAULT_PACING,
+  labels: { climbs: true, waypoints: true },
+  weather: { enabled: true },
+  weatherScene: DEFAULT_WEATHER_SCENE,
+  overlay: DEFAULT_OVERLAY,
+  video: DEFAULT_VIDEO_SETTINGS,
+  landmarks: DEFAULT_LANDMARK_SETTINGS,
+  race: DEFAULT_RACE,
 }
+
+export const DEFAULT_PLAYBACK: Playback = { playing: false, progress: 0, timeS: null, speed: 1 }
 
 const EMPTY_STATS: TerrainStats = { visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0 }
 
@@ -111,6 +199,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   fitRequest: 0,
   importError: null,
   loading: false,
+  playback: { ...DEFAULT_PLAYBACK },
 
   addTracks(incoming) {
     if (incoming.length === 0) return
@@ -134,11 +223,17 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const state = get()
     const tracks = state.tracks.filter((t) => t.id !== id)
     if (tracks.length === state.tracks.length) return
-    set({ tracks, bounds: unionBounds(tracks), frameOrigin: tracks.length === 0 ? null : state.frameOrigin })
+    set({
+      tracks,
+      bounds: unionBounds(tracks),
+      frameOrigin: tracks.length === 0 ? null : state.frameOrigin,
+      playback: { ...state.playback, playing: false, progress: 0, timeS: null },
+    })
   },
 
   clearTracks() {
-    set({ tracks: [], bounds: null, frameOrigin: null })
+    const playback = { ...get().playback, playing: false, progress: 0, timeS: null }
+    set({ tracks: [], bounds: null, frameOrigin: null, playback })
   },
 
   setSetting(key, value) {
@@ -151,7 +246,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   requestFit() {
-    set({ fitRequest: get().fitRequest + 1 })
+    const state = get()
+    set({ fitRequest: state.fitRequest + 1, playback: { ...state.playback, playing: false } })
   },
 
   setImportError(msg) {
@@ -160,6 +256,25 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   setLoading(v) {
     set({ loading: v })
+  },
+
+  setPlaying(v) {
+    const playback = get().playback
+    if (playback.playing === v) return
+    if (v && playback.progress >= 1 && playback.timeS === null) set({ playback: { ...playback, playing: v, progress: 0 } })
+    else set({ playback: { ...playback, playing: v } })
+  },
+
+  setProgress(progress, timeS = null) {
+    const playback = get().playback
+    const clamped = Math.min(1, Math.max(0, progress))
+    const playing = playback.playing && (clamped < 1 || timeS !== null)
+    if (clamped === playback.progress && timeS === playback.timeS && playing === playback.playing) return
+    set({ playback: { ...playback, progress: clamped, timeS, playing } })
+  },
+
+  setSpeed(speed) {
+    set({ playback: { ...get().playback, speed } })
   },
 }))
 
@@ -175,5 +290,6 @@ export function resetAppStore(): void {
     fitRequest: 0,
     importError: null,
     loading: false,
+    playback: { ...DEFAULT_PLAYBACK },
   })
 }
