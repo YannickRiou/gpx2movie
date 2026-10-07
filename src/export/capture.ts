@@ -60,7 +60,8 @@ export async function settle(deps: SettleDeps, options: SettleOptions = DEFAULT_
 /**
  * Show `progress` and wait for its terrain. The chase camera is placed once per progress change with the
  * heights loaded at that moment: when finer tiles arrived after the placement, it is placed once more (at a
- * progress REPLACE_EPSILON away, invisible) so the ground clearance uses the final terrain.
+ * progress REPLACE_EPSILON away, invisible) so the ground clearance uses the final terrain. Not after a
+ * timeout: the terrain would not settle any better the second time.
  */
 export async function renderSettledFrame(
   progress: number,
@@ -70,7 +71,7 @@ export async function renderSettledFrame(
   deps.setProgress(progress)
   const placedAt = deps.now()
   const complete = await settle(deps, options)
-  if (deps.lastChangeAt() < placedAt) return complete
+  if (!complete || deps.lastChangeAt() < placedAt) return complete
   deps.setProgress(progress < 1 ? progress + REPLACE_EPSILON : progress - REPLACE_EPSILON)
   return settle(deps, options)
 }
