@@ -40,6 +40,8 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/terrain/quadtree.ts` + `engine.ts` | LOD, chargement, groupe Three | `createTerrainEngine(options: TerrainEngineOptions, deps?: Partial<EngineDeps>, tuning?: Partial<EngineTuning>): TerrainEngine` (deps injectables pour les tests) |
 | `src/scene/*.tsx` | composants R3F | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `CameraRig`, `FlyoverRig`, `useDebouncedCallback` |
 | `src/flyover/path.ts` | chemin de survol | `buildTrackPath(track): TrackPath` (segments concaténés, distances cumulées, `time` en ms ou NaN), `samplePath(path, distanceM): PathSample` (`ele` et `time` interpolés seulement si les deux voisins les ont), `recordedTimeAt(path, distanceM)` (comble les points sans heure), `elevationProfile(path, samples)` |
+| `src/flyover/camera.ts` | caméra de survol | `computeCameraView(path, progress, frame, sampler, exaggeration, camera, durationS)`, `smoothedTurn` |
+| `src/flyover/cameraSettings.ts` | styles et préréglages caméra | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
 | `src/flyover/sun.ts` | date du soleil | `solarHourToDate(dayMs, lon, solarHour)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
@@ -146,15 +148,23 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 ## Survol (phase 2)
 
 - **Lecture** (`store.playback { playing, progress, speed }`) : `progress` ∈ [0, 1] le long de la **première** trace, à vitesse
-  au sol constante ; durée 60 s à ×1 quelle que soit la longueur. Atteindre 1 met en pause, relancer depuis la fin rembobine ;
+  au sol constante ; durée `settings.flyoverDurationS` à ×1 (60 s par défaut) quelle que soit la longueur. Atteindre 1 met en pause, relancer depuis la fin rembobine ;
   `requestFit` met en pause, retirer une trace remet à 0.
 - **`FlyoverRig`** (dans `TerrainLayer`) : avance `progress` dans `useFrame`, place le marqueur (sphère blanche non éclairée,
   `depthTest: false`, taille écran constante) et pilote la caméra pendant la lecture ou quand `progress` change en pause
   (scrub) ; sinon l'orbite reste libre autour du marqueur.
-- **Caméra de poursuite** (`computeChaseView`) : fonction pure de `progress` (pas d'état de lissage), pour que l'export vidéo
-  puisse rendre n'importe quelle image isolément. Cap = corde [d − w, d + w] (w = 2 % de la trace, 150 m–1,5 km), distance
-  4 % de la trace (600 m–4 km), tangage 30°. La caméra est relevée pour rester à 80 m au-dessus du sol et pour que la ligne de
-  visée vers le marqueur passe au-dessus du relief (13 échantillons, marge décroissante jusqu'au marqueur).
+- **Caméra** (`src/flyover/camera.ts`, `computeCameraView`) : fonction pure de (progression, réglages, échantillonneur de
+  relief), sans état d'une image à l'autre, pour que l'export vidéo rende n'importe quelle image isolément. Cap = corde
+  [d − w, d + w] (w = 2 % de la trace, 150 m–1,5 km, × lissage), distance automatique 4 % de la trace (600 m–4 km, × distance).
+  Styles (`settings.camera.style`) : `chase` (derrière le marqueur), `sway` (balancement vers l'extérieur des virages :
+  50° · tanh(0,8 · T / 50°), T = somme des angles de virage pondérée par une tente sur ±2w, continue et calme), `orbit` (6°/s
+  autour du marqueur depuis le cap de départ), `top` (≥ 70°, distance × 2,5, nord ou cap en haut), `cinematic` (distance × 1,6,
+  tangage / 2, balayage latéral ±35° de période 40 s). Tous gardent 80 m au-dessus du sol et une ligne de visée dégagée
+  (13 échantillons) ; les tests vérifient la continuité en progression.
+- **Réglages caméra** : `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp }` et préréglages
+  nommés (`CAMERA_PRESETS` : Poursuite, Hélicoptère, Drone haut, Vue du dessus, Orbite, Cinéma) dans
+  `src/flyover/cameraSettings.ts` ; `settings.flyoverDurationS` (15–600 s, 60 par défaut) = durée à ×1, la vitesse de la
+  timeline s'y ajoute. Section « Caméra » (`src/ui/CameraPanel.tsx`). En pause, un changement de réglage caméra replace la caméra.
 - **`Timeline`** (`src/ui/Timeline.tsx`) : bandeau en bas de la vue — lecture / pause, profil altimétrique au-dessus du curseur
   (1000 pas), distance parcourue et altitude courante, vitesse ×0,5 à ×4.
 - **Profil altimétrique** : altitudes **enregistrées** de la trace rééchantillonnées à 400 pas de distance constants
