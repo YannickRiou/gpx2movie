@@ -42,6 +42,8 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/path.ts` | chemin de survol | `buildTrackPath(track): TrackPath` (segments concaténés, distances cumulées, `time` en ms ou NaN), `samplePath(path, distanceM): PathSample` (`ele` et `time` interpolés seulement si les deux voisins les ont), `recordedTimeAt(path, distanceM)` (comble les points sans heure), `elevationProfile(path, samples)` |
 | `src/flyover/camera.ts` | caméra de survol | `computeCameraView(path, progress, frame, sampler, exaggeration, camera, durationS)`, `smoothedTurn` |
 | `src/flyover/cameraSettings.ts` | styles et préréglages caméra | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
+| `src/flyover/climbs.ts` | montées détectées | `detectClimbs`, `climbsOf(track)` (cache par trace), seuils exportés, `CATEGORY_THRESHOLDS` |
+| `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
 | `src/flyover/sun.ts` | date du soleil | `solarHourToDate(dayMs, lon, solarHour)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
@@ -269,3 +271,20 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 - **À venir** : widget météo du film (`weatherWidgetData` est prêt) et pilotage de la scène — brume dérivée des nuages bas et des
   précipitations, atténuation du soleil et du ciel selon la nébulosité, nuages volumétriques (`@takram/three-clouds`, non
   installé), particules de pluie et de neige.
+
+## Montées et étiquettes
+
+- **Montées** (`src/flyover/climbs.ts`) sur les altitudes **enregistrées** de la première trace : rééchantillonnage tous les 20 m,
+  moyenne glissante de 100 m, points hauts et bas confirmés par une hystérésis de 10 m, fusion de deux montées séparées par un
+  creux ≤ 40 m (et ≤ 25 % du gain, sur ≤ 1,5 km) quand la seconde finit plus haut, extrémités plates rognées (< 2 % sur 200 m),
+  seuils minimaux 500 m, 50 m de D+, 3 % de moyenne ; pente maximale sur 100 m. Catégorie selon le score longueur (m) × pente
+  moyenne (%) : cat. 4 ≥ 8 000, 3 ≥ 16 000, 2 ≥ 32 000, 1 ≥ 64 000, HC ≥ 80 000 (non classée en dessous).
+- **Waypoints** : `Track.waypoints?` (ajout optionnel au contrat) contient les `<wpt>` du GPX, rattachés à la première trace du
+  fichier ; le document de projet les enregistre.
+- **`Labels`** (dans `TerrainLayer`) : sprites WebGL à texture canvas (taille constante à l'écran, panneau encre, texte blanc,
+  trait d'accent par type) pour le sommet de chaque montée, les waypoints et toute source externe enregistrée par
+  `setLabelSource(id, LandmarkLabel[])` (ex. `'osm'`). Hauteur = terrain (ou altitude enregistrée) × exagération, replaquée sur
+  `engine.onChange` (même debounce que la trace). Fondu quand la ligne de visée passe sous le relief (24 échantillons, ±20 m) et
+  entre 35 et 70 km ; en cas de chevauchement, la priorité la plus haute l'emporte. Opacité fonction de la vue seule (pas de
+  lissage temporel) : chaque image d'export est rendue isolément. Réglage `settings.labels { climbs, waypoints }`, section
+  « Montées » (`ClimbList`, un clic place le survol au pied de la montée).
