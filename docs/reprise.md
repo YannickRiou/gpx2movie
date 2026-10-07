@@ -79,7 +79,8 @@ chantiers : committer par hunks ou tout ensemble une fois l'arbre vert).
   (Trajet, Carte, Habillage, Survol, Prises de vue), pastille « modifié » + rétablir.
 - Phase 3 restante : eau réfléchissante (masque d'eau), hauteurs calées sur le géoïde, nuages volumétriques
   (`@takram/three-clouds` compatible, non installé).
-- Phase 5 restante : images fixes haute résolution, écriture directe sur disque pour les films longs.
+- Phase 5 restante : écriture directe sur disque pour les films longs. Image fixe PNG / JPEG faite (bouton « Image fixe »
+  du panneau d'export) : contrôle visuel à faire (voir ARCHITECTURE.md, export).
 - Phase 7 : vidéo embarquée synchronisée, comparatif avant / après (photos IGN anciennes), rendu en lot, affiche, calage musical,
   reconnaissance d'itinéraire.
 - Limites connues : orbite et cinéma figés pendant les pauses du rythme (la caméra lit la progression, pas le temps du film) ;

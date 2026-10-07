@@ -7,6 +7,7 @@ import {
   isExportBusy,
   registerDrapeFlush,
   resetExportStore,
+  stillBaseName,
   useExportStore,
   videoFileName,
   type ExportRequest,
@@ -52,6 +53,12 @@ describe('helpers', () => {
     expect(videoFileName('ligne\tun\ndeux', '.mp4')).toBe('ligne un deux.mp4')
   })
 
+  it('names a still image after the progress it shows', () => {
+    expect(videoFileName(stillBaseName('Tour', 0.4239), '.png')).toBe('Tour 42 %.png')
+    expect(stillBaseName('Tour', 0)).toBe('Tour 0 %')
+    expect(stillBaseName('Tour', 1)).toBe('Tour 100 %')
+  })
+
   it('knows the busy phases', () => {
     expect(['idle', 'starting', 'rendering', 'finalizing', 'done', 'error', 'canceled'].map((p) => isExportBusy(p as never))).toEqual([
       false,
@@ -85,6 +92,17 @@ describe('useExportStore', () => {
     expect(store().phase).toBe('finalizing')
     store().complete(RESULT)
     expect(store()).toMatchObject({ phase: 'done', request: null, result: RESULT })
+  })
+
+  it('carries a still image request like a film', () => {
+    const store = useExportStore.getState
+    store().start({ ...REQUEST, still: { progress: 0.25, type: 'image/jpeg' } })
+    expect(store().request).toMatchObject({ still: { progress: 0.25, type: 'image/jpeg' } })
+    expect(store().begin(store().request!.id, 1, 0)).toBe(true)
+    store().complete({ ...RESULT, url: 'blob:image', fileName: 'Tour 25 %.jpg', mimeType: 'image/jpeg', codec: 'jpeg' })
+    expect(store()).toMatchObject({ phase: 'done', request: null })
+    store().start(REQUEST)
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:image')
   })
 
   it('ignores a second start while busy and revokes the previous result on a new export', () => {

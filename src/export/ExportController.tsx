@@ -7,7 +7,8 @@
  * pointer events off, render scale of the pixel-sized scene elements set for the video size. Each scheduled
  * progress is rendered until the view has its tiles (see capture.ts), composed with the optional overlay (its
  * web fonts loaded first) into an OffscreenCanvas and encoded; meanwhile the tiles of the upcoming frames are
- * prefetched. Everything is restored afterwards, on success, error or cancel.
+ * prefetched. A still image request renders its single progress the same way and keeps the composed canvas as
+ * PNG / JPEG instead. Everything is restored afterwards, on success, error or cancel.
  */
 import { useEffect, useRef } from 'react'
 import { useThree, type RootState } from '@react-three/fiber'
@@ -19,7 +20,7 @@ import { loadOverlayFonts } from '../overlay/assets'
 import { useTerrainContext } from '../scene/TerrainLayer'
 import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
 import { useAppStore } from '../state/store'
-import { composeFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
+import { REPLACE_EPSILON, composeFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
 import { ExportCanceledError, createVideoEncoder, type VideoEncodeSession } from './encoder'
 import { buildFrameSchedule } from './schedule'
 import {
@@ -40,6 +41,8 @@ export interface ExportControllerProps {
 /** Upcoming frames whose tiles are prefetched (frame offsets), every PREFETCH_EVERY rendered frames. */
 const PREFETCH_AHEAD = [5, 10, 15, 20, 30, 40] as const
 const PREFETCH_EVERY = 5
+/** JPEG quality of still images (PNG is lossless) */
+const STILL_JPEG_QUALITY = 0.92
 
 interface RunDeps {
   get: () => RootState
@@ -72,7 +75,10 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
   const exportStore = useExportStore.getState
   let schedule: number[]
   try {
-    schedule = buildFrameSchedule(request)
+    // the rig only places the camera when the progress changes: a still starts a hair away from the current one
+    const still = request.still?.progress
+    schedule =
+      still === undefined ? buildFrameSchedule(request) : [still < 1 ? still + REPLACE_EPSILON : still - REPLACE_EPSILON]
   } catch (error) {
     if (exportStore().begin(request.id, 0, performance.now())) exportStore().fail(errorMessage(error))
     return
@@ -168,7 +174,6 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     if (!ctx) throw new Error("Impossible de créer l'image de composition.")
     // a canvas never downloads web fonts by itself: the overlay faces must be ready before the first frame
     if (deps.overlay()) await loadOverlayFonts()
-    session = await createVideoEncoder(compositor, request)
 
     const frameDeps = {
       advance,
@@ -184,6 +189,26 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       cameraDrift,
     }
 
+    if (request.still) {
+      const complete = await renderSettledFrame(schedule[0], frameDeps)
+      composeFrame(ctx, canvas, request.still.progress, width, height, deps.overlay())
+      exportStore().reportFrame(1, performance.now())
+      exportStore().finalizing()
+      const blob = await compositor.convertToBlob({ type: request.still.type, quality: STILL_JPEG_QUALITY })
+      // a browser without a JPEG encoder answers PNG
+      const jpeg = blob.type === 'image/jpeg'
+      exportStore().complete({
+        url: URL.createObjectURL(blob),
+        fileName: videoFileName(request.baseName, jpeg ? '.jpg' : '.png'),
+        mimeType: blob.type,
+        sizeBytes: blob.size,
+        codec: jpeg ? 'jpeg' : 'png',
+        incompleteFrames: complete ? 0 : 1,
+      })
+      return
+    }
+
+    session = await createVideoEncoder(compositor, request)
     let previous = Number.NaN
     for (let i = 0; i < schedule.length; i++) {
       if (isCanceled()) throw new ExportCanceledError()
