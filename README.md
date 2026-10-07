@@ -48,14 +48,19 @@ Ce qui existe aujourd'hui :
 
 **En cours** sur la branche `timeline` : la timeline de montage, sous la vue 3D. Elle montre le film en pistes (plans,
 arrêts, textes) que vous déplacez et étirez à la souris. Le film est monté automatiquement au chargement : plan
-d'ensemble, survol avec un arrêt à chaque temps fort, plan de clôture. Restent à faire : l'affichage des textes dans le
-film et la piste des médias.
+d'ensemble, survol avec un arrêt à chaque temps fort, plan de clôture. Les textes s'affichent dans le film. Reste à
+faire : la piste des médias.
 
 ## Captures d'écran
 
-<!-- captures : docs/images/*.png, ajoutées après la timeline -->
+![L'interface : panneaux à gauche, vue 3D du Tour du Mont-Blanc, timeline de montage en bas](docs/images/interface.jpg)
 
-Les captures arriveront avec la timeline de montage.
+*L'interface avec la trace d'exemple : les repères OpenStreetMap sur le relief, la timeline avec ses plans, ses arrêts
+automatiques et sa piste de textes.*
+
+![Le film avec son habillage : titre, date, texte et crédits des sources](docs/images/habillage.jpg)
+
+*Le même film avec l'habillage : carton titre, texte de la timeline en bas, crédits des sources en bas à droite.*
 
 ## Démarrage rapide
 
