@@ -369,19 +369,27 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 - Le calendrier suit le rythme du survol : la rampe dure `pacing.totalTime()` et l'image k montre
   `pacing.progressAtTime(k / (n − 1) × durée)` (ralentis et pauses aux temps forts comme dans l'aperçu ; les images de pause
   réutilisent l'image déjà composée).
-- Pour chaque progression, `advance` jusqu'à ce qu'aucune tuile ne soit en attente, que le terrain n'ait pas changé depuis
-  250 ms (replaquage de la trace) et qu'au moins 3 images aient été rendues (limite 10 s par image, comptée « incomplète ») ;
-  si des tuiles sont arrivées après le placement de la caméra, la progression est décalée de 1e-9 pour la replacer sur le relief
-  final (une seule fois, jamais après un dépassement de délai).
+- Pour chaque progression (`renderSettledFrame`, `src/export/capture.ts`), `advance` jusqu'à ce que la vue n'attende plus
+  aucune tuile réellement dessinée (`stats.pendingVisibleTiles`, limite 5 s par image, comptée « incomplète »), puis les
+  replaquages en attente de la trace et des étiquettes sont exécutés tout de suite (`flushDrapes`, au lieu de leur délai) et
+  l'image est rendue une fois de plus. La caméra n'est replacée (progression décalée de 1e-9) que si le relief final la déplace
+  de plus d'1 m, jamais après un dépassement de délai. Toutes les 5 images rendues, les tuiles des images +5 à +40 sont
+  demandées à l'avance (`engine.prefetch`).
 - L'image WebGL est composée dans la même tâche que le rendu sur un `OffscreenCanvas` (dégradé de ciel, image, puis habillage
   `drawOverlay(ctx, progress, w, h)` après chargement de ses polices), puis encodée par mediabunny (WebCodecs) : MP4 H.264,
   sinon MP4 HEVC, WebM VP9, WebM VP8, le premier accepté par `VideoEncoder.isConfigSupported` ; débit = pixels × fps × 0,06 /
   0,10 / 0,16 bit selon la qualité, corrigé par codec, borné à 1–80 Mbit/s ; image-clé toutes les 2 s ; fichier en mémoire.
 - Tout est restauré en fin d'export, en cas d'erreur ou d'annulation (taille, ratio de pixels, frameloop, pointeur,
-  progression). Réglage `settings.video { format, fps, quality }` dans le document de projet. Formats : 16:9 (720p, 1080p, 4K),
-  9:16, 1:1, 4:5 ; 24 / 30 / 60 i/s.
-- Limites : vitesse (au moins 3 rendus par image plus l'attente des tuiles), fichier gardé en mémoire (~2× sa taille), tailles
-  d'étiquettes en pixels CSS (plus petites en 4K), onglet à garder ouvert.
+  progression). Réglage `settings.video { aspect, resolution, fps, quality }` dans le document de projet (anciens `video.format`
+  convertis par `withVideoDefaults`) : formats 16:9, 9:16, 1:1, 4:5, 21:9 × petit côté 720p, 1080p, 1440p, 4K
+  (`videoSize`) ; 24 / 30 / 60 i/s.
+- Échelle de rendu `exportRenderScale` = petit côté / 1080 (1 hors export) : largeur de la trace et taille des étiquettes, en
+  pixels, sont multipliées pour qu'un film 4K ressemble au 1080p. Les marqueurs n'en ont pas besoin (taille proportionnelle à la
+  distance caméra, donc fraction d'écran constante).
+- La console affiche en fin d'export le temps de rendu, d'attente des tuiles et d'encodage, et le nombre de délais dépassés.
+  « Encodage » inclut la copie de l'image WebGL, qui attend la fin du rendu GPU.
+- Limites : fichier gardé en mémoire (~2× sa taille), onglet à garder ouvert, vitesse liée au GPU (mesure à faire sur une
+  machine avec GPU, voir `docs/reprise.md`).
 
 ## Météo dans la scène (phase 7)
 
