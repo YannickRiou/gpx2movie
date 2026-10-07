@@ -59,5 +59,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // fonts.test.ts reads this stylesheet with ?raw (other CSS stays stubbed out in tests)
+    css: { include: [/src\/ui\/fonts\.css/] },
   },
 })
