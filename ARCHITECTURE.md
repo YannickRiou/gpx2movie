@@ -45,7 +45,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/climbs.ts` | montées détectées | `detectClimbs`, `climbsOf(track)` (cache par trace), seuils exportés, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
 | `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses données par le film) ; `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
-| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `nextFilmId`, `shotDurationS` ; `autoStops`, `assembleFilm`, `filmStops` ; `buildFilmClock`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) |
+| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits |
 | `src/flyover/filmCamera.ts` | caméra du film | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `blendViews`, `shotBlend`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | date du soleil | `solarHourToDate(dayMs, lon, solarHour)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
@@ -198,12 +198,12 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   du film (`flightPacing`, voir « Film et timeline ») ; `pacingFromHighlights` les dérive comme avant. `usePacing`
   (`src/scene/usePacing.ts`) partage le calcul avec le panneau. L'export appelle `pacing.progressAtTime(t)` sur
   `pacing.totalTime()`.
-- **`Timeline`** (`src/ui/Timeline.tsx`) : bandeau en bas de la vue — lecture / pause, profil altimétrique au-dessus du curseur
-  (1000 pas), distance parcourue et altitude courante, vitesse ×0,5 à ×4.
-- **Profil altimétrique** : altitudes **enregistrées** de la trace rééchantillonnées à 400 pas de distance constants
-  (`elevationProfile`), aire SVG, partie parcourue en rouge clair, trait à la position courante ; cliquer-glisser sur le profil
-  déplace la lecture (le curseur reste le contrôle accessible). Amplitude verticale d'au moins 100 m pour ne pas grossir le
-  bruit GPS ; profil masqué si la trace n'a aucune altitude.
+- **`Timeline`** (`src/ui/Timeline.tsx`) : timeline du film sous la vue, en temps du film (voir « Film et timeline ») —
+  lecture / pause, distance parcourue, altitude et heure enregistrée au marqueur, vitesse ×0,5 à ×4.
+- **Profil altimétrique** (bloc du survol de la piste « Plans ») : altitudes **enregistrées** de la trace rééchantillonnées à
+  400 pas de distance constants (`elevationProfile`), placées en temps du film (`timeAtProgress` : plat pendant les arrêts),
+  aire SVG, partie jouée en rouge clair. Amplitude verticale d'au moins 100 m pour ne pas grossir le bruit GPS ; profil masqué
+  si la trace n'a aucune altitude.
 
 ## Atmosphère (phase 3, en cours)
 
@@ -259,28 +259,38 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 - **TrackLines** : couleurs par sommet (`LineGeometry.setColors`, `vertexColors` sur les matériaux plein et fantôme) ; les points
   insérés par `densify` sont interpolés (`resampleValues`). Changer de mode ne réécrit que le tampon de couleurs. Avec les
   couleurs par sommet, la couleur du matériau est le blanc divisé par l'exposition (`applyExposure`).
-- **Légende** `TrackLegend` (au-dessus de la timeline, seulement si `trackColorBy !== 'none'`) : dégradé, bornes avec unités,
+- **Légende** `TrackLegend` (en bas à gauche de la vue 3D, seulement si `trackColorBy !== 'none'`) : dégradé, bornes avec unités,
   pastille « Sans donnée » s'il manque des valeurs.
 
-## Film et timeline (phase 4, incrément 1 sur 4 : modèle et moteur)
+## Film et timeline (phase 4, incréments 1 et 2 sur 4 : modèle, moteur, timeline)
 
 - **Principe** : comme un logiciel de montage, « la base, c'est le GPX » : le survol continu de la première trace porte le
   film ; des éléments posés sur des pistes séparées s'y ajoutent. Incréments : 1 modèle pur et moteur (fait) ; 2 timeline sous
-  la vue (pistes, glisser pour déplacer / étirer, inspecteur) ; 3 piste des textes dessinée dans l'habillage ; 4 piste des
+  la vue (pistes, glisser pour déplacer / étirer, inspecteur ; fait) ; 3 piste des textes dessinée dans l'habillage ; 4 piste des
   médias (images, vidéos).
 - **Modèle** (`src/film/model.ts`, `settings.film` : enregistré dans le document de projet, annulable, validé par
   `isValidFilm` dans `SETTING_CHECKS`, aucune migration : un ancien projet reçoit `DEFAULT_FILM`) :
   `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut', durationS }` (1–30 s ; défaut descente 6 s / 5 s) ;
+  `autoStops` (arrêts générés) et `autoMode` : `'temps-forts'` (défaut des nouveaux projets) ou `'rythme'` (projets
+  antérieurs) ;
   `stops[]` `{ id, atM, durationS (0,5–60 s), camera: 'orbite' | 'fixe', label?, source?: { kind, ref? } }` ;
   `texts[]` `{ id, startS, durationS, text, subtitle?, anchor, size }` (placement du widget texte de l'habillage) et
   `media[]` `{ id, startS, durationS, kind: 'image' | 'video', src }`, ancrés en temps du film ; ids uniques dans le film
   (`stop-3`, `text-1`, `nextFilmId`).
 - **Assemblage automatique** (`src/film/assemble.ts`) : tant que `autoStops` est vrai, les arrêts sont générés à chaque calcul
-  (`autoStops`) aux temps forts du rythme (sommets des montées, cols franchis, sommets proches ; un par groupe, comme les
-  pauses qu'ils remplacent), `pauseS` chacun, caméra `fixe`, id `auto-<mètres>`, libellé (« Montée 1 · cat. 3 · 1 653 m »,
-  nom OSM) et source : ils suivent les repères OSM chargés après coup et les réglages du rythme (rythme désactivé = aucun
-  arrêt, comme avant). `assembleFilm` écrit ces arrêts dans le film (`autoStops: false`) : la timeline l'appellera à la
-  première retouche.
+  (`autoStops`) aux temps forts (`stopCandidates` : sommets des montées, cols franchis, sommets proches, selon les cases
+  `climbs` / `landmarks` du rythme ; un par groupe de `windowM`, comme les pauses qu'ils remplacent), id `auto-<mètres>`,
+  libellé (« Montée 1 · cat. 3 · 1 653 m », nom OSM) et source ; ils suivent les repères OSM chargés après coup.
+  `'temps-forts'` : un arrêt par temps fort **même rythme désactivé**, `AUTO_STOP_S` (4 s), caméra `orbite` (ce sont tous
+  des sommets ou des cols). `'rythme'` : les pauses du rythme d'avant la timeline (rien si le rythme est désactivé,
+  `pauseS`, caméra `fixe`). `materializeStops` écrit les arrêts générés dans le film (`autoStops: false`) à la première
+  retouche d'un arrêt ; `assembleFilm` = film par défaut ainsi écrit.
+- **Anciens projets** : un film enregistré sans `autoMode` est complété par `withFilmDefaults` (`SETTING_UPGRADES`, aussi pour
+  les préréglages) avec `'rythme'` ; un projet v1 sans film reçoit `{ autoMode: 'rythme' }` par la migration v1 → v2
+  (`MIGRATIONS[1]`), complété de même : leurs arrêts restent ceux de leur rythme.
+- **Préréglages** : seuls les plans d'ouverture et de clôture du film sont enregistrés ; `stops`, `texts`, `media` (et
+  `autoStops`) appartiennent à la trace et restent ceux du projet courant à l'application (`presetSettings`, y compris pour
+  un préréglage enregistré avec tout le film).
 - **Horloge du film** (`src/film/clock.ts`, `buildFilmClock` / `filmClockFor`, hook `useFilmClock` dans
   `src/scene/usePacing.ts`, alias `usePacing` pour les panneaux) : temps du film (s à ×1 depuis la première image) →
   `stateAt(t)` = `{ phase: 'opening' | 'flight' | 'stop' | 'closing', progress, flightTimeS, stop, localS, lengthS }`.
@@ -304,10 +314,37 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   et une image d'export est recalculée quand la progression change **ou** quand le temps change alors que la vue en dépend
   (`filmViewMovesWithTime` : plans d'ouverture et de clôture, arrêts en orbite, styles orbite et cinéma, à l'image courante
   ou précédente). Le panneau d'export lit la durée et `progressAtTime` de la même horloge (`usePacing`).
-- Limites (incréments suivants) : la timeline du bas reste en progression (le début du curseur montre le début du vol, pas
-  l'ouverture) ; les cartes d'ouverture et de clôture de l'habillage sont en fractions de progression, donc affichées pendant
-  tout le plan d'ouverture / de clôture ; un changement du film en pause repart du temps déduit de la progression ; les
-  textes et médias ne sont pas encore dessinés ; un préréglage enregistre aussi le film.
+- **Temps du film conservé** : quand l'horloge change (retouche du film, durée, rythme), `FlyoverRig` garde `playback.timeS`
+  et en déduit la progression : une retouche en pause ne fait pas sauter la tête de lecture.
+- **Timeline** (`src/ui/Timeline.tsx`, logique pure dans `src/film/timeline.ts`, inspecteur `src/ui/FilmInspector.tsx`) :
+  bandeau sous la vue 3D (`.view__stage` au-dessus, la vue rétrécit d'autant ; ~150 px, pistes repliables). Barre : lecture,
+  temps `m:ss,d / m:ss`, distance / altitude / heure au marqueur, « + Arrêt » (à la position du marqueur, source `manual`,
+  4 s, orbite), « Arrêt à un temps fort… » (temps forts sans arrêt), « + Texte » (à la tête de lecture, 4 s, en bas au
+  centre), case « Arrêts automatiques » (cochée : `autoStops` + `'temps-forts'`, arrêts propres effacés ; décochée : arrêts
+  générés écrits), pastille « modifié » / « Par défaut » du film (`ModifiedMarker keys={['film']}`), vitesse, replier.
+  Règle (`rulerTicks`, pas de 1 s à 1 h selon le zoom, ≥ 56 px) : cliquer-glisser pour se placer **ouverture et clôture
+  comprises** (`setProgress(clock.progressAtTime(t), t)`, fin du film = progression 1 sans temps) ; c'est aussi un curseur
+  clavier (flèches ±1 s, Maj ±5 s, Page ±10 s, Début / Fin). Pistes « Plans » (ouverture, survol avec profil, clôture ;
+  « aucune » = amorce pointillée sélectionnable), « Arrêts » (fenêtre de chaque arrêt, entrée et sortie comprises ;
+  pointillés tant qu'ils sont générés), « Textes ». Pas de piste « Médias » (incrément 4).
+- **Gestes** (`dragFilm`, pur) : glisser un arrêt le déplace le long de la trace — son début de tenue suit le pointeur,
+  position trouvée par dichotomie sur l'horloge (`stopPositionAt`, 32 pas) ; son bord droit l'allonge (en proportion du
+  plafond `keepDuration`) ; un texte se déplace ou s'étire par ses deux bords ; le bord intérieur de l'ouverture / de la
+  clôture change sa durée. Aimantation à 8 px (`snapTargets` : début et fin du film, bords des plans, des arrêts et des
+  textes, temps forts, tête de lecture ; un arrêt déplacé s'aimante aux temps forts en mètres) ; Alt la désactive. Valeurs
+  bornées aux plages du modèle, arrondies au centième de seconde (arrêt déplacé : au mètre). Un appui sans déplacement de
+  3 px ne fait que sélectionner. Le geste est montré sur la timeline seule (brouillon local) et validé au relâcher en **un
+  pas d'annulation** (`history.transaction`) ; l'échelle reste celle du film validé pendant le geste. Clavier sur un bloc :
+  flèches ±1 s (Maj ±0,1 s, pas fusionnés comme un curseur), Suppr / Retour arrière supprime (un plan passe à « aucune »),
+  Échap désélectionne ; Espace lance / arrête la lecture hors des champs et boutons. Ctrl+molette zoome autour du pointeur
+  (`zoomAt`, ×1 à ×50), boutons − / + autour de la tête de lecture ; défilement horizontal natif.
+- **Inspecteur** (au-dessus de la timeline, à droite de la vue, 300 px) : plan (style, durée), arrêt (libellé, durée,
+  caméra orbite / fixe, position et fenêtre), texte (texte, sous-titre, position, taille, début, durée). Les modifications
+  passent par `setSetting` (frappes fusionnées en un pas) ; retoucher un arrêt généré écrit d'abord tous les arrêts.
+- Limites (incréments suivants) : les cartes d'ouverture et de clôture de l'habillage sont en fractions de progression, donc
+  affichées pendant tout le plan d'ouverture / de clôture ; les textes et médias ne sont pas encore dessinés ; l'aperçu 3D ne
+  suit un geste qu'au relâcher ; pas de défilement automatique quand on glisse au bord ; en mode `'temps-forts'`, le curseur
+  « pause » du rythme ne règle pas la durée des arrêts générés (4 s, à retoucher par arrêt).
 
 ## Projet (phase 4)
 
@@ -318,9 +355,10 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 - Réglages traités **génériquement sur les clés de `DEFAULT_SETTINGS`** : chaque valeur est vérifiée contre le type de sa valeur
   par défaut (objets imbriqués compris), sinon retour au défaut pour cette clé ; clés inconnues ignorées. **Un nouveau réglage
   ne demande aucun code ici** ; ajouter une entrée à `SETTING_CHECKS` seulement si une valeur du bon type peut être invalide
-  (énumération, id de catalogue, plage). Tout changement de format incrémente `PROJECT_VERSION` et ajoute `MIGRATIONS[n]`.
+  (énumération, id de catalogue, plage). Tout changement de format incrémente `PROJECT_VERSION` et ajoute `MIGRATIONS[n]`
+  (version 2 : film des projets v1, voir « Film et timeline »).
 - **Historique** des réglages hors du store : abonné à `useAppStore`, chaque pas ne garde que les clés modifiées ; changements des
-  mêmes clés à moins de 400 ms fusionnés (un glissé = un pas), un préréglage = un pas ; l'imagerie régionale choisie à l'import
+  mêmes clés à moins de 400 ms fusionnés (un glissé = un pas), un préréglage = un pas, un geste de la timeline = un pas ; l'imagerie régionale choisie à l'import
   n'est pas enregistrée ; ouvrir un projet vide l'historique. Raccourcis Ctrl/Cmd+Z, Ctrl/Cmd+Maj+Z, Ctrl+Y (ignorés dans les
   champs texte).
 - **Pastille « modifié » + bouton « Par défaut »** (`ui/ModifiedMarker.tsx`) en haut à droite de chaque panneau de réglages : liste
@@ -399,7 +437,7 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 
 - **Principe** : l'habillage n'est pas du DOM. Une fonction pure et synchrone, `drawOverlay(ctx, frame, settings, size, assets)`
   (`src/overlay/draw.ts`), le dessine sur un contexte 2D, à l'écran ou hors écran. L'aperçu (`OverlayCanvas`, canvas 2D au-dessus
-  du canvas 3D et sous la timeline, sans événements souris) et l'export vidéo (`exportOverlay.ts` → `ExportController`) appellent
+  du canvas 3D, sans événements souris) et l'export vidéo (`exportOverlay.ts` → `ExportController`) appellent
   la même fonction : le film montre exactement l'aperçu.
 - **Unités** : 1 u = 1 % du plus petit côté de l'image ; marges de sécurité de 5 % de chaque côté ; flous d'ombre corrigés de la
   transformation du contexte (devicePixelRatio). Les widgets qui partagent l'une des 9 ancres s'empilent.

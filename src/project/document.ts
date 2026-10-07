@@ -8,7 +8,7 @@
  * to `SETTING_CHECKS` only when a value of the right type can still be invalid (enum, catalogue id, range).
  */
 import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'
-import { isValidFilm } from '../film/model'
+import { isValidFilm, withFilmDefaults } from '../film/model'
 import { FLYOVER_DURATION_RANGE, isValidCamera } from '../flyover/cameraSettings'
 import { isValidPacing } from '../flyover/pacing'
 import { isValidRace } from '../flyover/race'
@@ -23,7 +23,7 @@ import type { AppState, Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
 
 export const PROJECT_FORMAT = 'openflyover-project'
-export const PROJECT_VERSION = 1
+export const PROJECT_VERSION = 2
 /** Suffix of saved project files (`<name>.openflyover.json`). */
 export const PROJECT_FILE_SUFFIX = '.openflyover.json'
 export const DEFAULT_PROJECT_NAME = 'Sans titre'
@@ -111,6 +111,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
 export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unknown } = {
   overlay: withOverlayDefaults,
   video: withVideoDefaults,
+  film: withFilmDefaults,
 }
 
 /** True when `value` has the JSON shape of `reference` (finite numbers, same keys for objects). */
@@ -222,8 +223,12 @@ export function projectFileName(name: string): string {
 
 export type ProjectMigration = (doc: Record<string, unknown>) => Record<string, unknown>
 
-/** `MIGRATIONS[n]` upgrades a document from version n to n + 1 (none yet: v1 is the first format). */
-export const MIGRATIONS: Readonly<Record<number, ProjectMigration>> = {}
+/** `MIGRATIONS[n]` upgrades a document from version n to n + 1. */
+export const MIGRATIONS: Readonly<Record<number, ProjectMigration>> = {
+  // v2: the film's automatic stops no longer need the pacing; a v1 project without a film keeps the stops of its
+  // pacing (`withFilmDefaults` completes the film from the defaults)
+  1: (doc) => (isRecord(doc.settings) && !('film' in doc.settings) ? { ...doc, settings: { ...doc.settings, film: { autoMode: 'rythme' } } } : doc),
+}
 
 /** Run the migrations from `doc.version` up to `target`; the returned document has `version: target`. */
 export function migrateProject(

@@ -60,11 +60,16 @@ describe('film model', () => {
     expect(isValidSetting('film', { ...DEFAULT_FILM, stops: 'none' })).toBe(false)
   })
 
-  it('older projects and presets without a film get the default (generated stops from their pacing)', () => {
+  it('older projects keep the stops of their pacing (rythme); new ones stop at every highlight', () => {
+    expect(DEFAULT_FILM.autoMode).toBe('temps-forts')
     expect(sanitizeSettings({ flyoverDurationS: 90 }).settings.film).toEqual(DEFAULT_FILM)
+    // a film saved before `autoMode` (and its presets): completed, its stops still follow the pacing
+    const { autoMode: _, ...saved } = film({ texts: [text('text-1')] })
+    expect(sanitizeSettings({ film: saved }).settings.film).toEqual(film({ texts: [text('text-1')], autoMode: 'rythme' }))
     const { settings, invalid } = sanitizeSettings({ film: { ...DEFAULT_FILM, stops: [stop('x', { durationS: -1 })] } })
     expect(invalid).toEqual(['film'])
     expect(settings.film).toEqual(DEFAULT_FILM)
+    expect(isValidFilm(film({ autoMode: 'partout' as 'rythme' }))).toBe(false)
   })
 
   it('round-trips through the project document', () => {
@@ -78,6 +83,9 @@ describe('film model', () => {
       tracks: [{ id: 't', name: 't', source: 'gpx', color: '#123456', segments: [{ lon: [6.8, 6.81], lat: [45.8, 45.81] }] }],
     }
     expect(parseProject(JSON.stringify(doc)).settings.film).toEqual(custom)
+    // a v1 project saved before the film existed: default shots, stops of its pacing
+    const { film: _, ...before } = doc.settings
+    expect(parseProject(JSON.stringify({ ...doc, settings: before })).settings.film).toEqual(film({ autoMode: 'rythme' }))
   })
 
   it('next id: one more than the highest number of the kind', () => {
