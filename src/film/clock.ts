@@ -171,9 +171,9 @@ export interface FilmClockFor {
   landmarks?: readonly Landmark[]
 }
 
-/** Clock of the film of `track`: highlights and generated stops from the pacing settings and the landmarks. */
-export function filmClockFor({ track, film, durationS, pacing, landmarks = [] }: FilmClockFor): FilmClock {
-  return buildFilmClock({
+/** Input of the clock of the film of `track`: highlights and generated stops from the pacing settings and the landmarks. */
+export function filmClockInputFor({ track, film, durationS, pacing, landmarks = [] }: FilmClockFor): FilmClockInput {
+  return {
     opening: film.opening,
     closing: film.closing,
     stops: track ? filmStops(film, { track, landmarks, pacing }) : [],
@@ -181,5 +181,10 @@ export function filmClockFor({ track, film, durationS, pacing, landmarks = [] }:
     highlightsM: track && pacing.enabled ? pacingHighlights(track, pacing, landmarks) : [],
     durationS,
     pacing,
-  })
+  }
+}
+
+/** Clock of the film of `track` (`filmClockInputFor`). */
+export function filmClockFor(input: FilmClockFor): FilmClock {
+  return buildFilmClock(filmClockInputFor(input))
 }

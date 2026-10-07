@@ -31,15 +31,23 @@
 }
 
 .view {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+}
+
+/* 3D view and its overlays, above the film timeline */
+.view__stage {
+  position: relative;
+  flex: 1 1 auto;
   min-height: 0;
   /* pale sky behind the transparent canvas */
   background: linear-gradient(180deg, var(--color-glacier) 0%, var(--color-paper) 100%);
 }
 
-.view > * {
+.view__stage > * {
   position: absolute;
   inset: 0;
 }
@@ -568,8 +576,8 @@
 }
 
 /* Film overlay (« habillage ») ------------------------------------------- */
-/* 2D canvas over the 3D view, under the timeline; never catches the pointer */
-.view > .overlay-canvas {
+/* 2D canvas over the 3D view; never catches the pointer */
+.view__stage > .overlay-canvas {
   width: 100%;
   height: 100%;
   pointer-events: none;
@@ -596,82 +604,385 @@
   outline-offset: 2px;
 }
 
-/* Flyover timeline (overlay at the bottom of the 3D view) ----------------- */
-.view > .timeline {
-  inset: auto var(--space-4) var(--space-4) var(--space-4);
+/* Film timeline (under the 3D view) --------------------------------------- */
+.film-tl {
+  position: relative;
+  flex: none;
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
+  flex-direction: column;
   background: var(--color-ink);
   color: var(--color-white);
-  font-size: 13px;
+  font-size: 12px;
 }
 
-.timeline__play {
+.film-tl__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+
+.film-tl__play {
   flex: none;
-  width: 40px;
+  width: 32px;
+  min-height: 28px;
   padding: 0;
 }
 
-.timeline__scrub {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-/* inset by half the slider thumb so that x matches the thumb position */
-.timeline__profile {
-  display: block;
-  width: calc(100% - 16px);
-  height: 44px;
-  margin: 0 8px;
-  cursor: pointer;
-  touch-action: none;
-}
-
-.timeline__profile-area {
-  fill: var(--color-glacier);
-  opacity: 0.35;
-}
-
-.timeline__profile-played {
-  fill: var(--color-accent-light);
-}
-
-.timeline__profile-cursor {
-  stroke: var(--color-white);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
-}
-
-.timeline__range {
-  accent-color: var(--color-accent-light);
-}
-
-.timeline__distance {
-  flex: none;
-  text-align: right;
+.film-tl__time,
+.film-tl__readout {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.timeline__distance strong {
+.film-tl__time {
+  font-size: 13px;
+}
+
+.film-tl__time strong {
   color: var(--color-accent-light);
 }
 
-.timeline__speed {
-  flex: none;
-  width: auto;
+.film-tl__readout {
+  color: var(--color-glacier);
 }
 
-/* Track colour legend (overlay above the timeline) ----------------------- */
-.view > .track-legend {
-  /* the timeline is ~88 px high, 16 px above the bottom edge */
-  inset: auto auto calc(var(--space-4) + 96px) var(--space-4);
+.film-tl__spacer {
+  flex: 1 1 0;
+}
+
+.film-tl__btn,
+.film-tl__select,
+.film-tl__zoom {
+  min-height: 26px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-ink-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-ink);
+  color: var(--color-white);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.film-tl__select {
+  max-width: 190px;
+  padding: 0 var(--space-1);
+}
+
+.film-tl__btn:hover,
+.film-tl__select:hover,
+.film-tl__zoom:hover:not(:disabled) {
+  border-color: var(--color-white);
+}
+
+.film-tl__check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.film-tl__check input {
+  margin: 0;
+  accent-color: var(--color-accent-light);
+}
+
+/* « modifié » marker of the film, inline in the bar, light on ink */
+.film-tl .modified {
+  position: static;
+}
+
+.film-tl .modified__badge {
+  border-color: var(--color-accent-light);
+  color: var(--color-accent-light);
+}
+
+.film-tl__body {
+  display: flex;
+  border-top: 1px solid var(--color-ink-soft);
+}
+
+.film-tl__heads {
+  flex: none;
+  width: 64px;
+  border-right: 1px solid var(--color-ink-soft);
+}
+
+.film-tl__head {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 var(--space-2);
+  color: var(--color-glacier);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.film-tl__head--ruler {
+  height: 20px;
+  gap: 2px;
+  padding: 0 var(--space-1);
+}
+
+.film-tl__zoom {
+  min-height: 0;
+  width: 24px;
+  height: 18px;
+  padding: 0;
+  line-height: 1;
+}
+
+.film-tl__zoom:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.film-tl__scroller {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.film-tl__content {
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.film-tl__ruler {
+  position: relative;
+  height: 20px;
+  border-bottom: 1px solid var(--color-ink-soft);
+  cursor: pointer;
+}
+
+.film-tl__ruler:focus-visible {
+  outline: 2px solid var(--color-white);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.film-tl__tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  padding-left: 3px;
+  border-left: 1px solid var(--color-ink-soft);
+  color: var(--color-glacier);
+  font-size: 10px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.film-tl__lane {
+  position: relative;
+  height: 28px;
+  background: rgb(255 255 255 / 0.04);
+  border-bottom: 1px solid var(--color-ink);
+}
+
+.film-tl__block,
+.film-tl__flight {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.film-tl__block {
+  min-width: 6px;
+  padding: 0 6px;
+  cursor: grab;
+}
+
+.film-tl__block:focus-visible {
+  outline: 2px solid var(--color-white);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.film-tl__block--selected {
+  z-index: 1;
+  box-shadow: 0 0 0 2px var(--color-white);
+}
+
+.film-tl__block--shot {
+  background: var(--color-glacier);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+/* shot « aucune »: a stub that can still be selected */
+.film-tl__block--none {
+  min-width: 10px;
+  border: 1px dashed var(--color-glacier);
+  background: transparent;
+}
+
+.film-tl__block--stop {
+  background: var(--color-accent-light);
+  color: var(--color-ink);
+}
+
+/* generated stops: dashed until they are edited */
+.film-tl__block--auto {
+  border: 1px dashed var(--color-ink);
+}
+
+.film-tl__block--text {
+  background: var(--color-moss);
+  color: var(--color-white);
+}
+
+.film-tl__label {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.film-tl__grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.film-tl__grip:hover {
+  background: var(--color-ink);
+  opacity: 0.3;
+}
+
+.film-tl__grip--start {
+  left: 0;
+}
+
+.film-tl__grip--end {
+  right: 0;
+}
+
+.film-tl__flight {
+  padding: 0 6px;
+  background: rgb(255 255 255 / 0.08);
+  cursor: pointer;
+}
+
+.film-tl__flight svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.film-tl__profile-area {
+  fill: var(--color-glacier);
+  opacity: 0.35;
+}
+
+.film-tl__profile-played {
+  fill: var(--color-accent-light);
+  opacity: 0.8;
+}
+
+.film-tl__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-white);
+  pointer-events: none;
+}
+
+.film-tl__playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  border: 5px solid transparent;
+  border-top: 6px solid var(--color-accent-light);
+}
+
+/* settings of the selected item, above the timeline at the right of the view */
+.film-inspector {
+  position: absolute;
+  right: var(--space-3);
+  bottom: calc(100% + var(--space-2));
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 300px;
+  max-width: calc(100% - 2 * var(--space-3));
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgb(28 42 51 / 0.25);
+}
+
+.film-inspector__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.film-inspector__title {
+  font-size: 16px;
+}
+
+.film-inspector__close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.film-inspector__close:hover {
+  border-color: var(--color-line);
+}
+
+.film-inspector__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.film-inspector__remove {
+  align-self: flex-start;
+  min-height: 32px;
+}
+
+/* Track colour legend (bottom left of the 3D view) ----------------------- */
+.view__stage > .track-legend {
+  inset: auto auto var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);

@@ -2,10 +2,10 @@
  * The film: what the timeline arranges on top of the flight along the first track (« la base, c'est le GPX »).
  *
  * - `opening` / `closing`: overview shot of the whole track before and after the flight ('aucune' = none).
- * - `stops`: the marker stops at a distance along the first track for a while (camera orbiting or held). They
- *   replace the automatic pauses of the pacing: while `autoStops` is set they are generated from the pacing
- *   highlights (`autoStops` in `assemble.ts`, so they follow the OpenStreetMap landmarks loaded later); the
- *   first manual edit writes them into `stops` and clears the flag.
+ * - `stops`: the marker stops at a distance along the first track for a while (camera orbiting or held). While
+ *   `autoStops` is set they are generated from the highlights (`autoStops` in `assemble.ts`, so they follow the
+ *   OpenStreetMap landmarks loaded later), as `autoMode` says; the first edit on the timeline writes them into
+ *   `stops` and clears the flag.
  * - `texts` and `media`: items anchored in film time (seconds at ×1 from the very start, opening included), on
  *   their own lanes; modelled and validated here, drawn by later increments.
  *
@@ -57,6 +57,14 @@ export interface FilmText {
   size: number
 }
 
+export const AUTO_STOP_MODES = ['temps-forts', 'rythme'] as const
+/**
+ * How the automatic stops are made. 'temps-forts' (new projects): one at every highlight whatever the pacing,
+ * `AUTO_STOP_S` each, camera orbiting (highlights are climb tops, passes and summits); 'rythme' (projects saved
+ * before the timeline): the pauses of the pacing, only while it is on, `pauseS` each, camera held.
+ */
+export type AutoStopMode = (typeof AUTO_STOP_MODES)[number]
+
 export const MEDIA_KINDS = ['image', 'video'] as const
 export type MediaKind = (typeof MEDIA_KINDS)[number]
 
@@ -75,6 +83,7 @@ export interface Film {
   closing: FilmShot
   /** stops generated from the pacing highlights (`stops` ignored) until the user edits them */
   autoStops: boolean
+  autoMode: AutoStopMode
   stops: FilmStop[]
   texts: FilmText[]
   media: FilmMedia[]
@@ -84,11 +93,14 @@ export interface Film {
 export const SHOT_DURATION_RANGE = { min: 1, max: 30, step: 0.5 } as const
 export const STOP_DURATION_RANGE = { min: 0.5, max: 60, step: 0.5 } as const
 export const ITEM_DURATION_RANGE = { min: 0.5, max: 600, step: 0.5 } as const
+/** Length of a generated stop ('temps-forts') and of a stop added on the timeline (seconds). */
+export const AUTO_STOP_S = 4
 
 export const DEFAULT_FILM: Film = {
   opening: { style: 'descente', durationS: 6 },
   closing: { style: 'descente', durationS: 5 },
   autoStops: true,
+  autoMode: 'temps-forts',
   stops: [],
   texts: [],
   media: [],
@@ -170,7 +182,16 @@ export function isValidMedia(media: unknown): media is FilmMedia {
  */
 export function isValidFilm(film: Film): boolean {
   if (!isValidShot(film.opening) || !isValidShot(film.closing) || typeof film.autoStops !== 'boolean') return false
+  if (!oneOf(AUTO_STOP_MODES, film.autoMode)) return false
   if (!film.stops.every(isValidStop) || !film.texts.every(isValidText) || !film.media.every(isValidMedia)) return false
   const ids = [...film.stops, ...film.texts, ...film.media].map((item) => item.id)
   return new Set(ids).size === ids.length
+}
+
+/**
+ * Fill-in of a film saved before a field existed (`SETTING_UPGRADES`): missing fields from `DEFAULT_FILM`, except
+ * `autoMode`, which keeps the automatic stops of those films following the pacing ('rythme') as they did.
+ */
+export function withFilmDefaults(raw: unknown): unknown {
+  return isRecord(raw) ? { ...DEFAULT_FILM, autoMode: 'rythme', ...raw } : raw
 }

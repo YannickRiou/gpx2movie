@@ -97,9 +97,11 @@ describe('film clock — equivalence with the pacing', () => {
   const landmarks: Landmark[] = [
     { id: 'node/1', kind: 'pass', name: 'Col', lon: 6.8, lat: 45.8, distanceM: 20, alongM: 1500, priority: 10, text: 'Col' },
   ]
-  const noShots: Film = { ...DEFAULT_FILM, opening: NONE, closing: NONE }
+  // films saved before the timeline: the generated stops are the pauses of the pacing
+  const legacy: Film = { ...DEFAULT_FILM, autoMode: 'rythme' }
+  const noShots: Film = { ...legacy, opening: NONE, closing: NONE }
 
-  it('without shots, the generated stops replay the pacing exactly (pauses and slow-downs)', () => {
+  it('without shots, the generated stops (rythme) replay the pacing exactly (pauses and slow-downs)', () => {
     for (const pacing of [DEFAULT_PACING, { ...DEFAULT_PACING, enabled: true }, { ...DEFAULT_PACING, enabled: true, keepDuration: false, pauseS: 4 }]) {
       const before = buildPacing({ track, durationS: D, settings: pacing, landmarks })
       const clock = filmClockFor({ track, film: noShots, durationS: D, pacing, landmarks })
@@ -114,7 +116,7 @@ describe('film clock — equivalence with the pacing', () => {
   it('with the default shots: the same flight, shifted by the opening', () => {
     const pacing = { ...DEFAULT_PACING, enabled: true }
     const before = buildPacing({ track, durationS: D, settings: pacing, landmarks })
-    const clock = filmClockFor({ track, film: DEFAULT_FILM, durationS: D, pacing, landmarks })
+    const clock = filmClockFor({ track, film: legacy, durationS: D, pacing, landmarks })
     const O = DEFAULT_FILM.opening.durationS
     expect(clock.totalTime()).toBeCloseTo(O + before.totalTime() + DEFAULT_FILM.closing.durationS, 9)
     for (let t = 0; t <= before.totalTime(); t += 0.5) expect(clock.progressAtTime(O + t)).toBeCloseTo(before.progressAtTime(t), 12)

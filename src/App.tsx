@@ -54,11 +54,13 @@ export default function App() {
         <StatusBar />
       </aside>
 
-      <main className="view" aria-label="Vue 3D">
-        <FlyoverCanvas />
-        <OverlayCanvas />
+      <main className="view">
+        <div className="view__stage" role="region" aria-label="Vue 3D">
+          <FlyoverCanvas />
+          <OverlayCanvas />
+          {trackColored && <TrackLegend />}
+        </div>
         <Timeline />
-        {trackColored && <TrackLegend />}
       </main>
     </div>
   )

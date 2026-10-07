@@ -61,10 +61,14 @@ export function FlyoverRig() {
     const store = useAppStore.getState()
     const { playing, speed } = store.playback
     const { settings } = store
-    // a film time belongs to its clock: after a change, start again from the progress
+    // after a change of the film, keep the film time (the timeline edits in film time) and take its progress
     if (clockRef.current !== clock) {
       clockRef.current = clock
-      if (store.playback.timeS !== null) store.setProgress(store.playback.progress)
+      const { timeS } = store.playback
+      if (timeS !== null) {
+        const t = Math.min(timeS, clock.totalTime())
+        store.setProgress(clock.progressAtTime(t), t < clock.totalTime() ? t : null)
+      }
     }
     if (playing) {
       const { progress, timeS } = useAppStore.getState().playback

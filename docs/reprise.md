@@ -67,7 +67,7 @@ Lancer `git status` et `npm run typecheck` en premier.
    `settings.weatherScene`), documentée, vérifiée sur données réelles (effet discret le jour de l'exemple) et synthétiques
    (couvert, pluie, brouillard). Suite possible : nuages volumétriques `@takram/three-clouds` (voir ARCHITECTURE.md).
 
-4. **Film et timeline, incrément 1 sur 4 — fait, non commité** : modèle pur du film (`src/film/model.ts`, réglage
+4. **Film et timeline, incrément 1 sur 4 — fait (`b7ffe55`)** : modèle pur du film (`src/film/model.ts`, réglage
    `settings.film`), assemblage automatique (`src/film/assemble.ts`), horloge du film (`src/film/clock.ts`) qui remplace le
    rythme dans l'aperçu (`FlyoverRig`) et l'export (`ExportController`), caméra des plans d'ouverture / clôture et des arrêts
    (`src/flyover/filmCamera.ts`), pauses du rythme devenues des arrêts (`flightPacing`). Aucune interface ajoutée (les
@@ -76,8 +76,24 @@ Lancer `git status` et `npm run typecheck` en premier.
      traversée du relief), raccord avec chaque style de caméra (orbite et cinéma compris), clôture en fin de lecture, export
      9:16 (toute la trace dans le cadre), arrêts avec rythme actif (pause tenue, caméra fixe), pause dans l'ouverture puis
      réglage caméra, image fixe pendant l'ouverture.
-   - Incréments suivants : 2 timeline sous la vue (pistes, glisser / étirer, inspecteur ; appeler `assembleFilm` à la première
-     retouche des arrêts, timeline en temps du film), 3 piste des textes dans l'habillage, 4 piste des médias.
+   - **Incrément 2 (timeline sous la vue) — fait, non commité** : `src/film/timeline.ts` (pur, testé : échelle, règle,
+     aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits), `src/ui/Timeline.tsx` réécrit (pistes Plans / Arrêts /
+     Textes, règle en temps du film, zoom Ctrl+molette, clavier), `src/ui/FilmInspector.tsx`, vue 3D dans `.view__stage`
+     au-dessus de la timeline. Film : `autoMode` (`'temps-forts'` pour les nouveaux projets : un arrêt en orbite de 4 s à chaque
+     temps fort même rythme désactivé ; `'rythme'` pour les anciens, par `withFilmDefaults` et la migration v1 → v2 du
+     document), `materializeStops` à la première retouche d'un arrêt. Préréglages : seuls ouverture et clôture du film.
+     `FlyoverRig` garde le temps du film quand l'horloge change. Détail : ARCHITECTURE.md, « Film et timeline ».
+   - **Contrôle visuel à faire (incrément 2)** : à 1280 px de large, barre sur une ligne (sinon passage à la ligne propre),
+     hauteur ~150 px, pistes repliées / dépliées ; profil dans le bloc du survol, plat pendant les arrêts ; glisser un arrêt
+     (le bloc suit le pointeur, aimantation sur les temps forts, Alt sans aimant), étirer son bord droit, déplacer / étirer un
+     texte par ses deux bords, bord de l'ouverture / clôture ; un geste = un Ctrl+Z ; arrêts pointillés tant qu'automatiques,
+     pleins après une retouche, case « Arrêts automatiques » ; règle cliquée dans l'ouverture et la clôture (la caméra suit le
+     plan), retouche en pause sans saut de la tête de lecture ; inspecteur au-dessus de la timeline sans masquer la barre,
+     champs (texte, sous-titre, position, taille, début, durée ; libellé, durée, caméra ; style, durée) ; Espace, Suppr,
+     flèches, Échap ; Ctrl+molette (zoom autour du pointeur, pas de zoom de la page) et défilement horizontal ; focus visible
+     sur les blocs ; contrastes de la pastille « modifié » sur fond encre ; légende de couleur de la trace en bas à gauche.
+   - Incréments suivants : 3 piste des textes dans l'habillage, 4 piste des médias (accès aux fichiers derrière une
+     abstraction, pour le web et Tauri).
 
 Pour intégrer proprement : finir chaque chantier, `npx vitest run --maxWorkers=1` + typecheck + lint verts, puis un commit
 par fonctionnalité (les fichiers partagés `store.ts`, `document.ts`, fixtures de test contiennent des morceaux de plusieurs
@@ -87,7 +103,7 @@ chantiers : committer par hunks ou tout ensemble une fois l'arbre vert).
 
 - Contrôle visuel groupé : mini-carte dans les 3 styles, polices hors ligne, ralentis (sensation à 35 % sur ±1 km), course
   fantôme, étiquettes effacées sous les cartes, export complet 1080p d'un film de 60 s.
-- Phase 4 restante : timeline de montage (incréments 2 à 4, ci-dessus), caméra par étape et images-clés, plan de situation
+- Phase 4 restante : timeline de montage (incréments 3 et 4, ci-dessus), caméra par étape et images-clés, plan de situation
   (ouverture depuis le pays), ouverture / fermeture « balayage », vitesse par portion à la main, couleurs et polices par widget, thèmes de film, éditeur en modes
   (Trajet, Carte, Habillage, Survol, Prises de vue). Pastille « modifié » + « Par défaut » : faite par panneau,
   contrôle visuel à faire (position sur la ligne du titre, titres longs, bouton désactivé pendant un export) ; reste le

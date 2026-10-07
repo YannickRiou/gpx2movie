@@ -157,6 +157,7 @@ describe('settings and misc', () => {
         opening: { style: 'descente', durationS: 6 },
         closing: { style: 'descente', durationS: 5 },
         autoStops: true,
+        autoMode: 'temps-forts',
         stops: [],
         texts: [],
         media: [],
