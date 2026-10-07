@@ -12,6 +12,7 @@ import { PACING_RANGES } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
 import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
+import { ModifiedMarker } from './ModifiedMarker'
 import { formatDistance, formatNumber } from './format'
 
 /** Value of the preset select when the camera matches no preset. */
@@ -91,6 +92,7 @@ export function CameraPanel() {
       <h2 id={`${id}-title`} className="section-title settings__title">
         Caméra
       </h2>
+      <ModifiedMarker keys={['camera', 'flyoverDurationS', 'pacing']} label="Caméra" />
 
       <div className="field">
         <label className="field__label" htmlFor={`${id}-preset`}>

@@ -273,6 +273,11 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   mêmes clés à moins de 400 ms fusionnés (un glissé = un pas), un préréglage = un pas ; l'imagerie régionale choisie à l'import
   n'est pas enregistrée ; ouvrir un projet vide l'historique. Raccourcis Ctrl/Cmd+Z, Ctrl/Cmd+Maj+Z, Ctrl+Y (ignorés dans les
   champs texte).
+- **Pastille « modifié » + bouton « Par défaut »** (`ui/ModifiedMarker.tsx`) en haut à droite de chaque panneau de réglages : liste
+  des clés de `Settings` du panneau, comparées en profondeur aux valeurs de `DEFAULT_SETTINGS` (`modifiedSettings` /
+  `sameValue`, `project/apply.ts`) ; « Par défaut » remet ces clés par défaut en un seul pas d'historique (`resetSettings`,
+  `project/history.ts`). La source d'imagerie n'est pas suivie (choisie par région à l'import). Un nouveau réglage d'un
+  panneau : ajouter sa clé à la liste `keys` du marqueur.
 - **Préréglages** dans `localStorage` (`openflyover.presets.v1`, repli en mémoire) ; une clé absente d'un préréglage garde sa
   valeur courante.
 

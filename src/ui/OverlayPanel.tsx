@@ -22,6 +22,7 @@ import {
 import type { CounterId, OverlayAnchor, OverlaySettings } from '../overlay/settings'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
+import { ModifiedMarker } from './ModifiedMarker'
 import { formatNumber } from './format'
 
 const COUNTER_LABELS: Record<CounterId, string> = {
@@ -170,6 +171,7 @@ export function OverlayPanel() {
       <h2 id={`${id}-title`} className="section-title settings__title">
         Habillage
       </h2>
+      <ModifiedMarker keys={['overlay']} label="Habillage" />
       <p className="field__hint">Titres, compteurs et profil incrustés dans le film, tels qu'ils seront exportés.</p>
 
       <label className="checkbox">

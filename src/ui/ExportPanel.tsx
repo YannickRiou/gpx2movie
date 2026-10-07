@@ -14,6 +14,7 @@ import {
 import { isExportBusy, stillBaseName, useExportStore, type StillType } from '../export/store'
 import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
+import { ModifiedMarker } from './ModifiedMarker'
 import { formatNumber } from './format'
 
 const QUALITIES: { value: VideoQuality; label: string }[] = [
@@ -159,6 +160,7 @@ export function ExportPanel() {
       <h2 id={`${id}-title`} className="section-title settings__title">
         Exporter la vidéo
       </h2>
+      <ModifiedMarker keys={['video']} label="Exporter la vidéo" disabled={busy} />
 
       <div className="field">
         <label className="field__label" htmlFor={`${id}-aspect`}>

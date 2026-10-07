@@ -76,7 +76,9 @@ chantiers : committer par hunks ou tout ensemble une fois l'arbre vert).
   fantôme, étiquettes effacées sous les cartes, export complet 1080p d'un film de 60 s.
 - Phase 4 restante : caméra par étape et images-clés, plan de situation (ouverture depuis le pays), ouverture / fermeture
   « balayage » ou « saut », vitesse par portion à la main, couleurs et polices par widget, thèmes de film, éditeur en modes
-  (Trajet, Carte, Habillage, Survol, Prises de vue), pastille « modifié » + rétablir.
+  (Trajet, Carte, Habillage, Survol, Prises de vue). Pastille « modifié » + « Par défaut » : faite par panneau,
+  contrôle visuel à faire (position sur la ligne du titre, titres longs, bouton désactivé pendant un export) ; reste le
+  grain plus fin (par sous-groupe, par réglage) et les sections hors panneaux (étiquettes des montées, course fantôme).
 - Phase 3 restante : eau réfléchissante (masque d'eau), hauteurs calées sur le géoïde, nuages volumétriques
   (`@takram/three-clouds` compatible, non installé).
 - Phase 5 restante : écriture directe sur disque pour les films longs. Image fixe PNG / JPEG faite (bouton « Image fixe »

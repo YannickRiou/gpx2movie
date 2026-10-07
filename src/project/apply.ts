@@ -1,7 +1,7 @@
 /**
  * Bridge between project data and the app store, through the store's public actions only.
  */
-import { useAppStore } from '../state/store'
+import { DEFAULT_SETTINGS, useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import type { LoadedProject } from './document'
 
@@ -15,6 +15,24 @@ export function applySettings(next: Settings): void {
   for (const key of Object.keys(next) as (keyof Settings)[]) {
     if (!Object.is(next[key], settings[key])) setSetting(key, next[key])
   }
+}
+
+/** Deep equality of settings values (JSON-like: primitives, arrays, plain objects). */
+export function sameValue(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  const ka = Object.keys(a)
+  const kb = Object.keys(b)
+  return (
+    ka.length === kb.length &&
+    ka.every((k) => k in b && sameValue((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
+  )
+}
+
+/** The keys among `keys` whose value differs from `DEFAULT_SETTINGS` (« modifié » marker of a settings group). */
+export function modifiedSettings(settings: Settings, keys: readonly (keyof Settings)[]): (keyof Settings)[] {
+  return keys.filter((key) => !sameValue(settings[key], DEFAULT_SETTINGS[key]))
 }
 
 /** Replace the tracks, settings and playback speed by those of `project`, then fit the camera (addTracks requests it). */

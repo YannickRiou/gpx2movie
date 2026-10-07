@@ -6,9 +6,10 @@
  * undo restores those keys and leaves alone what changed outside the history (e.g. the imagery source picked
  * automatically on import). Rapid changes of the same keys (dragging a slider) are coalesced into one step;
  * `transaction` groups several changes (a preset).
- * `getSettingsHistory` binds one instance to `useAppStore`; `installHistoryShortcuts` adds the keyboard.
+ * `getSettingsHistory` binds one instance to `useAppStore`; `installHistoryShortcuts` adds the keyboard;
+ * `resetSettings` puts a group of settings back to their defaults as one step.
  */
-import { useAppStore } from '../state/store'
+import { DEFAULT_SETTINGS, useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { applySettings } from './apply'
 
@@ -181,6 +182,12 @@ export function getSettingsHistory(): History {
       }),
   })
   return appHistory
+}
+
+/** Put `keys` back to their values in `DEFAULT_SETTINGS`, as a single undo step. */
+export function resetSettings(keys: readonly (keyof Settings)[], history: History = getSettingsHistory()): void {
+  const defaults = pick(DEFAULT_SETTINGS, keys)
+  history.transaction(() => applySettings({ ...useAppStore.getState().settings, ...defaults }))
 }
 
 /** Inputs where Ctrl+Z belongs to the text field, not to the settings history. */

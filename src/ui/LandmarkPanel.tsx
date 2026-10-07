@@ -4,6 +4,7 @@ import { OSM_ATTRIBUTION, OSM_KINDS } from '../osm/overpass'
 import type { OsmKind } from '../osm/overpass'
 import { syncLandmarks, useLandmarkStore } from '../osm/store'
 import { useAppStore } from '../state/store'
+import { ModifiedMarker } from './ModifiedMarker'
 import { formatDistance, formatNumber } from './format'
 
 /** Badge of each kind in the list (singular). */
@@ -46,6 +47,7 @@ export function LandmarkPanel() {
       <h2 id={`${id}-title`} className="section-title settings__title">
         Repères (OpenStreetMap)
       </h2>
+      <ModifiedMarker keys={['landmarks']} label="Repères" />
 
       <label className="checkbox" htmlFor={`${id}-enabled`}>
         <input
