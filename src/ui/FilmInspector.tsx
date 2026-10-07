@@ -173,26 +173,24 @@ export function FilmInspector({ item, film, clock, lengthM, change, remove, clos
         <>
           {text('text', 'Texte', filmText.text, (value) => set({ text: value }))}
           {text('subtitle', 'Sous-titre', filmText.subtitle ?? '', (subtitle) => set({ subtitle: subtitle || undefined }))}
-          <div className="film-inspector__row">
-            <div className="field">
-              <label className="field__label" htmlFor={`${id}-anchor`}>
-                Position
-              </label>
-              <select
-                id={`${id}-anchor`}
-                className="select"
-                value={filmText.anchor}
-                onChange={(e) => set({ anchor: e.currentTarget.value as OverlayAnchor })}
-              >
-                {OVERLAY_ANCHORS.map((anchor) => (
-                  <option key={anchor} value={anchor}>
-                    {OVERLAY_ANCHOR_LABELS[anchor]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {range('size', 'Taille', filmText.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
+          <div className="field">
+            <label className="field__label" htmlFor={`${id}-anchor`}>
+              Position
+            </label>
+            <select
+              id={`${id}-anchor`}
+              className="select"
+              value={filmText.anchor}
+              onChange={(e) => set({ anchor: e.currentTarget.value as OverlayAnchor })}
+            >
+              {OVERLAY_ANCHORS.map((anchor) => (
+                <option key={anchor} value={anchor}>
+                  {OVERLAY_ANCHOR_LABELS[anchor]}
+                </option>
+              ))}
+            </select>
           </div>
+          {range('size', 'Taille', filmText.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
           <div className="film-inspector__row">
             {number('start', 'Début (s)', filmText.startS, 0, clock.totalTime(), (startS) => set({ startS }))}
             {number('length', 'Durée (s)', filmText.durationS, ITEM_DURATION_RANGE.min, ITEM_DURATION_RANGE.max, (durationS) => set({ durationS }))}
