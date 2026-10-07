@@ -11,6 +11,7 @@ import {
   type VideoSettings,
 } from '../export/schedule'
 import { isExportBusy, useExportStore } from '../export/store'
+import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatNumber } from './format'
 
@@ -52,7 +53,9 @@ function download(url: string, fileName: string): void {
 /** "Exporter la vidéo" section: film format, frame rate, quality, start / cancel, progress and download. */
 export function ExportPanel() {
   const video = useAppStore((s) => s.settings.video)
-  const durationS = useAppStore((s) => s.settings.flyoverDurationS)
+  // film length and progress at each film time, with the slow-downs and pauses of the preview
+  const pacing = usePacing()
+  const durationS = pacing.totalTime()
   const trackName = useAppStore((s) => s.tracks[0]?.name)
   const setSetting = useAppStore((s) => s.setSetting)
   const { phase, frame, frameCount, etaS, result, error } = useExportStore()
@@ -86,6 +89,7 @@ export function ExportPanel() {
       fps: video.fps,
       quality: video.quality,
       durationS,
+      progressAt: pacing.progressAtTime,
       holdStartS: EXPORT_HOLD_START_S,
       holdEndS: EXPORT_HOLD_END_S,
       baseName: trackName,

@@ -57,6 +57,28 @@ describe('buildFrameSchedule', () => {
     expect(frames).toEqual([0, 0, 0, 1 / 3, 2 / 3, 1, 1, 1, 1, 1])
   })
 
+  it('follows a non-linear pacing, ends exactly on 0 and 1', () => {
+    // half the film paused at the middle of the track, then a linear end
+    const progressAt = (t: number) => (t < 2 ? t / 4 : t < 4 ? 0.5 : 0.5 + (t - 4) / 8)
+    const frames = buildFrameSchedule({ durationS: 8, fps: 1, progressAt, holdEndS: 1 })
+    expect(frames).toHaveLength(8 + 1)
+    expect(frames[0]).toBe(0)
+    expect(frames[7]).toBe(1)
+    expect(frames[8]).toBe(1)
+    // frame k shows film time k × 8 / 7
+    expect(frames[1]).toBeCloseTo(8 / 7 / 4, 12)
+    expect(frames[2]).toBe(0.5)
+    expect(frames[3]).toBe(0.5)
+    for (let i = 1; i < frames.length; i++) expect(frames[i]).toBeGreaterThanOrEqual(frames[i - 1])
+  })
+
+  it('a linear progressAt gives the default ramp', () => {
+    const linear = buildFrameSchedule({ durationS: 3, fps: 10 })
+    expect(buildFrameSchedule({ durationS: 3, fps: 10, progressAt: (t) => t / 3 })).toEqual(
+      linear.map((p) => expect.closeTo(p, 12)),
+    )
+  })
+
   it('60 s at 30 fps with the default holds', () => {
     expect(buildFrameSchedule({ durationS: 60, fps: 30, holdStartS: 1, holdEndS: 2 })).toHaveLength(1890)
   })
