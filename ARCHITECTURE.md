@@ -364,6 +364,9 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   demande déposée dans le store d'export (`src/export/store.ts`, distinct du store de l'application) : lecture en pause,
   `frameloop 'never'`, rendu et caméra à la taille de la vidéo avec un ratio de pixels de 1 (réappliqués avant chaque rendu ;
   canvas affiché en letterbox pendant l'export), pointeur désactivé.
+- Le calendrier suit le rythme du survol : la rampe dure `pacing.totalTime()` et l'image k montre
+  `pacing.progressAtTime(k / (n − 1) × durée)` (ralentis et pauses aux temps forts comme dans l'aperçu ; les images de pause
+  réutilisent l'image déjà composée).
 - Pour chaque progression, `advance` jusqu'à ce qu'aucune tuile ne soit en attente, que le terrain n'ait pas changé depuis
   250 ms (replaquage de la trace) et qu'au moins 3 images aient été rendues (limite 10 s par image, comptée « incomplète ») ;
   si des tuiles sont arrivées après le placement de la caméra, la progression est décalée de 1e-9 pour la replacer sur le relief

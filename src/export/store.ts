@@ -16,8 +16,10 @@ export interface ExportRequest {
   height: number
   fps: number
   quality: VideoQuality
-  /** flyover duration (progress 0 → 1), seconds */
+  /** film duration of the flyover (progress 0 → 1), seconds */
   durationS: number
+  /** progress at film time (variable pacing of the flyover); linear when absent */
+  progressAt?: (tS: number) => number
   holdStartS: number
   holdEndS: number
   /** file name without extension */
