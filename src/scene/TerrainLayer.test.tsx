@@ -60,6 +60,8 @@ describe('engine options from settings', () => {
     imageryZoomOffset: 1 as const,
     exaggeration: 1,
     wireframe: false,
+    atmosphere: true,
+    sunHour: 10,
   }
 
   it('resolves the sources from the catalogue', () => {

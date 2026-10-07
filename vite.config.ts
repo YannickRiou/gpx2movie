@@ -1,6 +1,33 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite'
+import { readFileSync, readdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+
+/**
+ * Takram's precomputed atmosphere textures (EXR, ~9.5 MB) and star catalogue live in the package: serve them at /atmosphere/
+ * in dev and copy them into the build, so nothing is downloaded from a third party nor committed here.
+ */
+const ATMOSPHERE_ASSETS = new URL('./node_modules/@takram/three-atmosphere/assets/', import.meta.url)
+
+function atmosphereAssets(): Plugin {
+  const names = () => readdirSync(ATMOSPHERE_ASSETS).filter((name) => name.endsWith('.exr') || name === 'stars.bin')
+  const read = (name: string) => readFileSync(fileURLToPath(new URL(name, ATMOSPHERE_ASSETS)))
+  return {
+    name: 'openflyover-atmosphere-assets',
+    configureServer(server) {
+      server.middlewares.use('/atmosphere', (req, res, next) => {
+        const name = (req.url ?? '').split('?')[0].replace(/^\//, '')
+        if (!names().includes(name)) return next()
+        res.setHeader('Content-Type', name.endsWith('.exr') ? 'image/x-exr' : 'application/octet-stream')
+        res.end(read(name))
+      })
+    },
+    generateBundle() {
+      for (const name of names()) this.emitFile({ type: 'asset', fileName: `atmosphere/${name}`, source: read(name) })
+    },
+  }
+}
 
 /**
  * Dev proxy for tile sources that do not send CORS headers.
@@ -27,7 +54,7 @@ const proxy = Object.fromEntries(
 )
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), atmosphereAssets()],
   server: { port: 5173, proxy },
   test: {
     environment: 'jsdom',

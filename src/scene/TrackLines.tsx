@@ -13,7 +13,7 @@
  * point count is unchanged (no GPU buffer churn), and everything is disposed on unmount.
  */
 import { useCallback, useEffect, useRef } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import {
   Color,
   Group,
@@ -304,6 +304,17 @@ export function drapeTrackLineSet(set: TrackLineSet, engine: TerrainEngine | nul
   }
 }
 
+/**
+ * Line colours divided by the renderer exposure. The lines are unlit: with the atmosphere the frame is
+ * tone-mapped at a high exposure (physical radiances) and they would otherwise burn out to white.
+ */
+export function applyExposure(sets: Iterable<TrackLineSet>, exposure: number): void {
+  for (const set of sets) {
+    set.solidMaterial.color.set(set.track.color).multiplyScalar(1 / exposure)
+    set.ghostMaterial.color.copy(set.solidMaterial.color)
+  }
+}
+
 function applyResolution(sets: Iterable<TrackLineSet>, width: number, height: number): void {
   for (const set of sets) {
     set.solidMaterial.resolution.set(width, height)
@@ -359,6 +370,8 @@ export function TrackLines() {
   const setsRef = useRef<Map<string, TrackLineSet>>(new Map())
   const sharedRef = useRef<SharedResources | null>(null)
   const sizeRef = useRef(size)
+  /** exposure the line colours were last compensated for (NaN = after a rebuild) */
+  const exposureRef = useRef(Number.NaN)
 
   // Keep the material resolution in sync with the canvas size (Line2 also refreshes it before each
   // render, this covers objects that are not rendered yet).
@@ -378,8 +391,15 @@ export function TrackLines() {
     sharedRef.current ??= createSharedResources()
     const { width, height } = sizeRef.current
     syncTrackLineSets(group, setsRef.current, tracks, frame, sharedRef.current, width, height)
+    exposureRef.current = Number.NaN
     drapeAll(engine, exaggeration)
   }, [tracks, frame, engine, exaggeration, drapeAll])
+
+  useFrame(({ gl }) => {
+    if (gl.toneMappingExposure === exposureRef.current) return
+    exposureRef.current = gl.toneMappingExposure
+    applyExposure(setsRef.current.values(), gl.toneMappingExposure)
+  })
 
   // Re-drape (debounced, with a bounded wait so a long tile stream cannot starve it) whenever the engine
   // reports new or removed tiles.

@@ -316,6 +316,10 @@
   color: var(--color-ink);
 }
 
+.range-row__value--wide {
+  min-width: 7ch;
+}
+
 .checkbox {
   display: flex;
   align-items: center;

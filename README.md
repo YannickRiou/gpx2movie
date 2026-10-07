@@ -58,7 +58,7 @@ Dans l'application : glisser un fichier `.gpx` ou `.fit` dans la zone de dépôt
   durée, altitudes min / max), couleur attribuée automatiquement, erreurs affichées en français.
 - **Relief 3D streamé** : quadtree Web Mercator avec raffinement par remplacement (jamais de trou),
   erreur écran cible 3 px, jupes entre niveaux de détail, déchargement des tuiles non visitées, champ
-  de hauteur multi-niveaux pour le plaquage, exagération verticale 1–2,5, mode filaire.
+  de hauteur multi-niveaux pour le plaquage, exagération verticale 1–3, mode filaire.
 - **Élévation** : Mapterhorn (Terrarium WebP 512 px, jusqu'à z17 dans les Alpes) ou AWS Terrain Tiles
   (Terrarium PNG, z ≤ 15). Une tuile sans donnée (HTTP 4xx) est une feuille : le parent reste affiché.
 - **Imagerie composée** : pour chaque tuile de terrain, `2^k × 2^k` sous-tuiles d'imagerie (détail
@@ -80,9 +80,45 @@ Dans l'application : glisser un fichier `.gpx` ou `.fit` dans la zone de dépôt
 |---|---|
 | 1 — Visionneuse (fait) | import GPX / FIT, relief streamé, imagerie composée, trace plaquée, caméra orbitale |
 | 2 — Survol (fait) | caméra de survol automatique le long de la trace, timeline, lecture / pause, vitesse, marqueur de progression, profil altimétrique |
-| 3 — Atmosphère | ciel et diffusion atmosphérique (modèle Takram), brume de distance, soleil et heure du jour, ombres |
-| 4 — Export vidéo | rendu hors écran à résolution fixe et encodage MP4 / WebM via WebCodecs, presets 16:9 / 9:16 |
-| 5 — Application de bureau | emballage Tauri (binaire natif, accès disque), stockage local SQLite des trips et presets, packs de tuiles hors ligne |
+| 3 — Atmosphère (en cours) | fait : ciel et diffusion atmosphérique (modèle Takram), brume de distance, soleil et heure solaire, ciel de nuit étoilé ; reste : ombres portées, eau réfléchissante (masque d'eau, reflets du ciel et du soleil, vagues), hauteurs calées sur le niveau de la mer (géoïde), fonds de carte supplémentaires (styles satellite, topographique, aquarelle — sources ouvertes à vérifier) |
+| 4 — Personnalisation | tout le film est réglable : caméra, rythme, titres, données affichées, style de trace, points d'intérêt, rendu, format (détail ci-dessous) |
+| 5 — Export vidéo | rendu hors écran à résolution fixe et encodage MP4 / WebM via WebCodecs, titres et widgets inclus, formats de la phase 4, images fixes haute résolution depuis les prises de vue |
+| 6 — Application de bureau | emballage Tauri (binaire natif, accès disque), stockage local SQLite des projets et préréglages, packs de tuiles hors ligne |
+
+### Phase 4 — Personnalisation
+
+Principe : chaque réglage vit dans un **document de projet unique** (JSON versionné) — enregistrable, rechargeable,
+partageable, avec préréglages et annuler / rétablir. L'aperçu et l'export lisent ce même document : ce qu'on voit est
+ce qui sera rendu.
+
+| Domaine | Réglages |
+|---|---|
+| Rythme | durée totale ou vitesse, vitesse variable par portion, ralentis et pauses sur les points d'intérêt ; plan de situation (ouverture sur le pays ou la région qui plonge vers la trace) ; ouverture et fermeture « balayage » ou « saut » enchaînées sur une caméra en mouvement ; transitions entre sections (3 s par défaut, réglables une à une) ; pause propre à chaque étape |
+| Caméra | styles (poursuite, orbite, vue du dessus, plan cinématique, balancement vers l'extérieur des virages) et préréglages nommés (ex. « hélicoptère »), distance, hauteur, tangage, cap, lissage ; caméra propre à chaque étape (photo, lieu, note) ; images-clés sur la timeline |
+| Titres et textes | titre d'ouverture, sous-titres, générique de fin, étiquettes posées sur le relief (sommets, cols, villages) ; police, couleur, position, apparition et durée |
+| Données à l'écran | compteurs (distance, altitude, D+, vitesse, fréquence cardiaque, temps), profil altimétrique (dimensions réglables), mini-carte, logo, texte libre, carte de clôture (altitude max, vitesse max…) ; styles d'habillage prédéfinis (éditorial, diffusion sombre, application claire) ; position, taille et style de chaque widget |
+| Trace | couleur, épaisseur, style (pleine, pointillée, lumineuse sans perte de teinte), trace qui se dessine au fil du survol, enchaînement de plusieurs traces, trace affichée mais exclue du survol ; marqueurs départ / progression / arrivée en figurines 3D animées selon la vitesse et la pente (randonneur, coureur, alpiniste, skieur de randonnée, cycliste route et VTT, bikepacking, moto, parapente, avion léger) ou en autocollant / avatar personnel |
+| Points d'intérêt | ajout manuel ou depuis les waypoints GPX, photos géolocalisées, icônes, types d'épingles ; un seul réglage de timing (apparition / disparition) pour waypoints, photos, bornes kilométriques, départ et arrivée |
+| Rendu | sources de relief et d'imagerie, exagération, atmosphère (date, heure, brume), étalonnage (exposition, contraste, saturation, vignettage) |
+| Format | ratio 16:9 / 9:16 / 1:1 / 4:5, résolution, cadence, zones de sécurité affichées |
+| Thèmes | habillage du film (polices, couleurs des titres et widgets) indépendant de l'interface, thèmes fournis et personnalisés ; styles de carte, d'éléments et d'habillage enregistrables séparément |
+| Éditeur | une page, cinq modes (Trajet, Carte, Habillage, Survol, Prises de vue) sans recharger la scène ; onglets Contenu / Style / Visibilité par élément ; pastille « modifié » et bouton rétablir sur tout réglage qui s'écarte du style ; prises de vue enregistrées (caméra, cadrage, lumière) pour des images fixes |
+
+### Pistes propres à OpenFlyover (proposées, à arbitrer)
+
+| Piste | Intérêt |
+|---|---|
+| Lumière réelle de la sortie | le soleil suit l'horodatage de chaque point : on revit le lever ou le coucher de soleil au bon endroit, ombres portées comprises |
+| Météo historique | nuages, vent et température du jour de la sortie (archives Open-Meteo, sans clé) rendus dans la scène et affichables en widget |
+| Trace colorée par une donnée | vitesse, pente, fréquence cardiaque, puissance, en échelle séquentielle perceptuellement uniforme (viridis, magma…) avec légende |
+| Course fantôme | plusieurs traces rejouées ensemble sur leur temps réel : comparer des amis, ou ses sorties successives sur un même parcours |
+| Vidéo embarquée synchronisée | incrustation d'une vidéo GoPro / Insta360 calée sur l'horodatage ; export de l'habillage seul sur fond transparent pour le montage |
+| Repères automatiques | sommets, cols, refuges et lacs tirés d'OpenStreetMap avec leur altitude ; montées détectées et catégorisées, qui déclenchent ralentis et titres |
+| Remonter le temps | orthophotos historiques (IGN 1950–1965) ou d'une autre saison, en comparatif avant / après |
+| Rendu en lot | un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface |
+| Affiche imprimable | la trace sur le relief en très haute résolution, habillage compris, pour un tirage |
+| Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale |
+| Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller |
 
 ## Sources de données et licences
 
