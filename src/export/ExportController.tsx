@@ -5,11 +5,12 @@
  * For the duration of an export: playback paused, frameloop 'never' (frames are drawn by `advance` only),
  * renderer and camera at the video size with a pixel ratio of 1 (the canvas is shown letterboxed meanwhile),
  * pointer events off. Each scheduled progress is rendered until its terrain is loaded (see capture.ts), composed
- * with the optional overlay into an OffscreenCanvas and encoded. Everything is restored afterwards, on success,
+ * with the optional overlay (its web fonts loaded first) into an OffscreenCanvas and encoded. Everything is restored afterwards, on success,
  * error or cancel.
  */
 import { useEffect, useRef } from 'react'
 import { useThree, type RootState } from '@react-three/fiber'
+import { loadOverlayFonts } from '../overlay/assets'
 import { useTerrainContext } from '../scene/TerrainLayer'
 import { useAppStore } from '../state/store'
 import { composeFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
@@ -90,6 +91,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     const compositor = new OffscreenCanvas(width, height)
     const ctx = compositor.getContext('2d', { alpha: false })
     if (!ctx) throw new Error("Impossible de créer l'image de composition.")
+    // a canvas never downloads web fonts by itself: the overlay faces must be ready before the first frame
+    if (deps.overlay()) await loadOverlayFonts()
     session = await createVideoEncoder(compositor, request)
 
     const frameDeps = {

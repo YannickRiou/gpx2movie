@@ -69,6 +69,14 @@ describe('renderSettledFrame', () => {
     expect(progress).toEqual([0.25, 0.25 + REPLACE_EPSILON])
   })
 
+  it('does not place the camera again after a timeout', async () => {
+    const { deps, progress } = fakeScene()
+    // tiles keep arriving and never finish
+    const busy = { ...deps, pendingTiles: () => 1, lastChangeAt: () => deps.now() }
+    expect(await renderSettledFrame(0.25, busy, { ...DEFAULT_SETTLE, timeoutMs: 500 })).toBe(false)
+    expect(progress).toEqual([0.25])
+  })
+
   it('nudges backwards at the end of the track', async () => {
     const { deps, progress } = fakeScene({ loadedAt: 100 })
     await renderSettledFrame(1, deps)

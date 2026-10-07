@@ -51,6 +51,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/weather/*` | météo historique de la sortie | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
 | `src/osm/*` | repères OpenStreetMap | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures` ; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `LANDMARK_DISTANCE_RANGE` ; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
 | `src/overlay/*` | habillage du film | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (pont vers l'export), `OverlayCanvas` |
+| `src/export/*` | export vidéo | `buildFrameSchedule`, `VIDEO_FORMATS`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `settle`, `renderSettledFrame`, `composeFrame`, `useExportStore`, `videoFileName`, `ExportController` |
 | `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` ; `importFlow.ts` (orchestration d'import sans React, testée) |
@@ -355,3 +356,24 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   Fraunces 300–700, IBM Plex Sans et Sans Condensed disponibles hors ligne.
 - **Météo** : widget et ligne de la carte de clôture (`weatherWidgetData`, `summarizeOuting`), avec le crédit Open-Meteo dessiné
   en bas de l'image dès qu'ils sont visibles.
+
+## Export vidéo (phase 5)
+
+- Le survol étant une fonction pure de `playback.progress`, un film est une liste de progressions (`buildFrameSchedule` : rampe
+  0 → 1 sur `durée × fps` images, plus 1 s tenue au début et 2 s à la fin). `ExportController` (dans `TerrainLayer`) exécute la
+  demande déposée dans le store d'export (`src/export/store.ts`, distinct du store de l'application) : lecture en pause,
+  `frameloop 'never'`, rendu et caméra à la taille de la vidéo avec un ratio de pixels de 1 (réappliqués avant chaque rendu ;
+  canvas affiché en letterbox pendant l'export), pointeur désactivé.
+- Pour chaque progression, `advance` jusqu'à ce qu'aucune tuile ne soit en attente, que le terrain n'ait pas changé depuis
+  250 ms (replaquage de la trace) et qu'au moins 3 images aient été rendues (limite 10 s par image, comptée « incomplète ») ;
+  si des tuiles sont arrivées après le placement de la caméra, la progression est décalée de 1e-9 pour la replacer sur le relief
+  final (une seule fois, jamais après un dépassement de délai).
+- L'image WebGL est composée dans la même tâche que le rendu sur un `OffscreenCanvas` (dégradé de ciel, image, puis habillage
+  `drawOverlay(ctx, progress, w, h)` après chargement de ses polices), puis encodée par mediabunny (WebCodecs) : MP4 H.264,
+  sinon MP4 HEVC, WebM VP9, WebM VP8, le premier accepté par `VideoEncoder.isConfigSupported` ; débit = pixels × fps × 0,06 /
+  0,10 / 0,16 bit selon la qualité, corrigé par codec, borné à 1–80 Mbit/s ; image-clé toutes les 2 s ; fichier en mémoire.
+- Tout est restauré en fin d'export, en cas d'erreur ou d'annulation (taille, ratio de pixels, frameloop, pointeur,
+  progression). Réglage `settings.video { format, fps, quality }` dans le document de projet. Formats : 16:9 (720p, 1080p, 4K),
+  9:16, 1:1, 4:5 ; 24 / 30 / 60 i/s.
+- Limites : vitesse (au moins 3 rendus par image plus l'attente des tuiles), fichier gardé en mémoire (~2× sa taille), tailles
+  d'étiquettes en pixels CSS (plus petites en 4K), onglet à garder ouvert.
