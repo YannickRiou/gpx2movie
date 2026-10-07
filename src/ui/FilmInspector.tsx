@@ -247,7 +247,7 @@ export function FilmInspector({ item, film, clock, lengthM, change, remove, clos
         <h2 id={`${id}-title`} className="film-inspector__title">
           {title}
         </h2>
-        <button type="button" className="film-inspector__close" onClick={close} aria-label="Fermer l'inspecteur" title="Fermer (Échap)">
+        <button type="button" className="film-inspector__close" onClick={close} aria-label="Fermer l'inspecteur" data-tip="Fermer (Échap)" data-tip-side="left">
           ×
         </button>
       </header>

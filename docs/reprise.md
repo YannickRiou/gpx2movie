@@ -139,8 +139,37 @@ Lancer `git status` et `npm run typecheck` en premier.
      de couleur de la trace dans le cadre, tiroir d'export (repli auto du panneau sous 1360 px et retour à la fermeture),
      export observé dans la vue avec « 42 % · Annuler », coque verrouillée pendant l'export, panneau en tiroir sous 1024 px,
      barre d'onglets en bas sous 700 px, boîte « Sources et licences », messages d'import / d'ouverture en haut de la vue.
-   - Incrément suivant de l'interface : feuille des raccourcis (« ? »), menu du projet (Nouveau, Ouvrir, Enregistrer,
-     Préréglages), dépôt de fichiers sur toute la vue.
+   - **Incrément « Carte et Survol plus simples » — fait, non commité** : sections repliables (`src/ui/PanelSection.tsx` :
+     `PanelSection`, `MoreSettings` « Plus de réglages » avec « modifié » des réglages cachés, `InfoTip` ⓘ), onglet Carte
+     en « Fond de carte », « Relief et trace », « Lumière », « Atmosphère et météo » ; onglet Survol en « Caméra » (style
+     en tuiles à icônes) et « Durée et rythme ». « Lumière » : bascule « Suivre la trace » / « Heure fixe », curseur sur une
+     barre nuit / jour avec lever et coucher (`sunTimes`, `solarDay` dans `src/flyover/sun.ts`, testés), raccourcis Lever ·
+     Matin · Midi · Heure dorée · Coucher · Nuit (`sunChipHour`, une étape d'annulation chacun). `modifiedPaths` dans
+     `src/project/apply.ts`. Styles : bloc délimité en fin de `app.css`. Clés de réglages inchangées.
+   - **Contrôle visuel à faire (Carte et Survol)** : en-têtes collants et repli de chaque section, « Plus de réglages »
+     (chevron, pastille « modifié » quand l'exposition ou la distance caméra changent), infobulles ⓘ (retour à la ligne,
+     pas coupées à droite du panneau à 280 et 320 px, au clavier), barre nuit / jour alignée sur le pouce du curseur
+     (repères du lever et du coucher sous le pouce quand on clique « Lever » / « Coucher »), raccourcis sur deux lignes à
+     280 px, « Suivre la trace » grisé sur une trace sans heure, trace en Laponie l'été (jour polaire : Lever / Coucher /
+     Nuit grisés), Ctrl+Z après deux raccourcis rapides (deux étapes), tuiles de style (libellés lisibles, focus visible),
+     « Lumière » avec l'atmosphère décochée.
+6. **Interface, incrément « retours, aide et accueil » — fait, non commité** : messages en bas de la vue (`toast.ts`,
+   `Toaster.tsx`) à la place des bandeaux (import, projet, préréglages, export, « Réglages remis par défaut · Annuler »
+   avec annulation gardée par `resetSettings`) ; dépôt de traces ou d'un projet n'importe où avec voile (`openFiles`,
+   `isFileDrag`), `importFiles` dans `importFlow.ts` ; carte d'accueil sur la vue sans trace (`EmptyState.tsx`, plus de
+   zone de dépôt dans l'onglet Trace : `ImportPanel` et `DropZone` supprimés) ; registre des raccourcis et boîte « ? »
+   (`shortcuts.ts`, `HelpDialog.tsx`), ← / → / Maj / Début / Fin, Échap dans l'ordre boîte → tiroir → sélection ;
+   infobulles `data-tip` sur tous les boutons à icône seule (`data-tip-side="top"`, `data-tip-align`). Détail :
+   ARCHITECTURE.md, « Interface ».
+   - **Contrôle visuel à faire** : carte d'accueil (centrée, lisible sur le ciel, « Import en cours… »), voile pendant un
+     glissement (disparaît au-dessus de la timeline, pas de clignotement, Firefox compris), dépôt d'un `.json`, d'un
+     `.gpx` et d'une photo hors timeline (message d'erreur) ; messages : empilement, survol qui suspend, erreur qui reste,
+     « Annuler » après « Par défaut » (disparaît si on touche un autre réglage), « Télécharger à nouveau » ; boîte « ? »
+     (deux colonnes, une sous 600 px) ; infobulles du bouton ⓘ, de la fermeture du tiroir, de ▶ / repli / zoom de la
+     timeline et de la suppression d'une trace (jamais coupées) ; ← / → pendant la lecture, sur un bloc sélectionné (le
+     bloc bouge, pas la tête), sur un curseur du panneau (le curseur bouge).
+   - Incrément suivant de l'interface : menu du projet (Nouveau, Ouvrir, Enregistrer, Préréglages) ; retirer `importError`
+     du store (plus affiché) ; message des photos de la timeline en toast.
 
 Pour intégrer proprement : finir chaque chantier, `npx vitest run --maxWorkers=1` + typecheck + lint verts, puis un commit
 par fonctionnalité (les fichiers partagés `store.ts`, `document.ts`, fixtures de test contiennent des morceaux de plusieurs

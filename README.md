@@ -101,14 +101,17 @@ L'écran se lit comme un logiciel de montage :
 - **au centre**, la vue 3D, cadrée au format de la vidéo ; **en dessous**, la timeline du film ;
 - **tout en bas**, une fine bande d'état : tuiles chargées et sources des données (le bouton ⓘ affiche le texte complet).
 
-L'appli se souvient de l'onglet ouvert et du panneau replié.
+L'appli se souvient de l'onglet ouvert et du panneau replié. Les messages (trace importée, projet enregistré, vidéo
+prête, erreur…) s'affichent en bas de la vue ; les erreurs restent jusqu'à ce que vous les fermiez. Le bouton **?** de la
+barre du haut (ou la touche `?`) liste tous les raccourcis clavier.
 
 ### Importer une trace
 
-Au premier lancement, l'onglet « Trace » affiche une zone de dépôt : glissez-y un ou plusieurs fichiers `.gpx` ou `.fit`,
-ou cliquez dessus. Vous pouvez aussi cliquer sur **« Charger l'exemple »** : c'est une étape synthétique du Tour du
-Mont-Blanc. Ensuite, le petit bouton **« + Ajouter »** de la liste des traces en ajoute d'autres. « Ouvrir » (Ctrl+O), dans
-la barre du haut, accepte aussi bien une trace qu'un projet.
+Glissez un ou plusieurs fichiers `.gpx` ou `.fit` n'importe où dans la fenêtre ; un fichier de projet `.json` déposé de
+la même façon s'ouvre. Au premier lancement, la vue affiche aussi **« Choisir un fichier »** et **« Essayer avec l'exemple
+(Tour du Mont-Blanc) »** (une étape synthétique). Ensuite, le petit bouton **« + Ajouter »** de la liste des traces en
+ajoute d'autres. « Ouvrir » (Ctrl+O), dans la barre du haut, accepte aussi bien une trace qu'un projet. Les photos se
+déposent, elles, sur la timeline.
 
 La vue se cadre sur la trace. Si la trace est entièrement en France ou en Suisse, l'imagerie passe à l'IGN ou à swisstopo, sauf si vous avez déjà choisi une source.
 
@@ -119,8 +122,8 @@ suivent la première trace.
 
 - Clic gauche glissé : tourner. Clic droit glissé : déplacer. Molette : zoomer.
 - Le bouton en forme de viseur, en haut à droite de la vue (ou la touche F), revient à la vue d'ensemble.
-- Dans la timeline, ▶ (ou Espace) lance le survol. Cliquez ou glissez sur le profil pour vous déplacer. La vitesse va de
-  ×0,5 à ×4.
+- Dans la timeline, ▶ (ou Espace) lance le survol. Cliquez ou glissez sur le profil pour vous déplacer, ou utilisez les
+  flèches ← → (une seconde, cinq avec Maj), Début et Fin. La vitesse va de ×0,5 à ×4.
 - En pause, vous tournez librement autour du marqueur.
 
 ### Le format de sortie
@@ -134,17 +137,20 @@ cadrée exactement comme la vidéo, avec des bandes sombres autour : ce que vous
 | Onglet | À quoi il sert |
 |---|---|
 | Trace | vos traces ; dès deux traces, la « Course fantôme » ; les montées détectées et la météo de la sortie (sections repliables) |
-| Carte | relief, imagerie, détail, exagération, couleur de la trace, atmosphère, ombres, heure du soleil, exposition, « Météo dans la scène » ; repères OpenStreetMap |
-| Survol | préréglage, style, distance, inclinaison, visée, lissage, durée du survol, rythme |
+| Carte | fond de carte, relief et trace, lumière (heure du soleil), atmosphère et météo ; repères OpenStreetMap |
+| Survol | préréglage, style de caméra, durée du survol, rythme |
 | Habillage | style et éléments : titre d'ouverture, carte de clôture, compteurs, profil, mini-carte, météo, logo, texte libre, crédits |
 | Projet | préréglages des réglages |
+
+Les réglages rares sont rangés dans « Plus de réglages », en bas de chaque section. Dans « Lumière », choisissez « Heure
+fixe » pour placer le soleil sur la journée, ou d'un clic : Lever, Matin, Midi, Heure dorée, Coucher, Nuit.
 
 La météo et les repères sont actifs par défaut. Décochez-les : plus aucune requête ne part.
 
 ### « modifié » et « Par défaut »
 
 Quand un réglage s'écarte de sa valeur par défaut, la pastille **« modifié »** apparaît à côté du titre de la section. Le
-bouton **« Par défaut »** remet toute la section à zéro. Ctrl+Z annule ce retour.
+bouton **« Par défaut »** remet toute la section à zéro. « Annuler » dans le message, ou Ctrl+Z, annule ce retour.
 
 La source d'imagerie n'est pas suivie, car l'import la choisit selon la région.
 

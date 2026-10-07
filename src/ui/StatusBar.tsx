@@ -46,7 +46,9 @@ export function StatusBar() {
         type="button"
         className="status__info"
         aria-label="Sources et licences"
-        title="Sources et licences"
+        data-tip="Sources et licences"
+        data-tip-side="top"
+        data-tip-align="end"
         onClick={() => dialog.current?.showModal()}
       >
         <Icon name="info" size={14} />
@@ -57,7 +59,7 @@ export function StatusBar() {
           <h2 id="sources-title" className="sources__title">
             Sources et licences
           </h2>
-          <button type="button" className="icon-btn" aria-label="Fermer" onClick={() => dialog.current?.close()}>
+          <button type="button" className="icon-btn" aria-label="Fermer" data-tip="Fermer (Échap)" data-tip-side="left" onClick={() => dialog.current?.close()}>
             <Icon name="x" size={18} />
           </button>
         </div>

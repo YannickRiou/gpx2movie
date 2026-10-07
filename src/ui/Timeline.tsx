@@ -43,6 +43,7 @@ import { useAppStore } from '../state/store'
 import { FilmInspector } from './FilmInspector'
 import { formatDistance, formatNumber } from './format'
 import { ModifiedMarker } from './ModifiedMarker'
+import { withShortcut } from './shortcuts'
 
 const SPEEDS = [0.5, 1, 2, 4]
 /** Profile resolution (samples over the track) and drawing height in viewBox units. */
@@ -432,6 +433,9 @@ export function Timeline() {
           className="btn btn--primary film-tl__play"
           onClick={() => setPlaying(!playing)}
           aria-label={playing ? 'Mettre en pause' : 'Lancer le film'}
+          data-tip={withShortcut(playing ? 'Pause' : 'Lecture', 'play')}
+          data-tip-side="top"
+          data-tip-align="start"
         >
           {playing ? '❚❚' : '▶'}
         </button>
@@ -536,7 +540,9 @@ export function Timeline() {
           aria-expanded={!collapsed}
           aria-controls={`${id}-lanes`}
           aria-label={collapsed ? 'Déplier les pistes' : 'Replier les pistes'}
-          title={collapsed ? 'Déplier les pistes' : 'Replier les pistes'}
+          data-tip={collapsed ? 'Déplier les pistes' : 'Replier les pistes'}
+          data-tip-side="top"
+          data-tip-align="end"
         >
           {collapsed ? '▴' : '▾'}
         </button>
@@ -571,7 +577,8 @@ export function Timeline() {
                   onClick={() => zoomBy(factor)}
                   disabled={disabled}
                   aria-label={label}
-                  title={`${label} (Ctrl+molette)`}
+                  data-tip={`${label} (Ctrl+molette)`}
+                  data-tip-align="start"
                 >
                   {sign}
                 </button>

@@ -36,6 +36,23 @@ export function modifiedSettings(settings: Settings, keys: readonly (keyof Setti
   return keys.filter((key) => !sameValue(settings[key], DEFAULT_SETTINGS[key]))
 }
 
+/** Settings whose value is an object (their fields can be addressed one by one). */
+type ObjectSettingKey = { [K in keyof Settings]: Settings[K] extends object ? K : never }[keyof Settings]
+
+/** A setting, or one field of an object setting: `'exposureEv'`, `'camera.distance'`. */
+export type SettingPath = keyof Settings | { [K in ObjectSettingKey]: `${K}.${keyof Settings[K] & string}` }[ObjectSettingKey]
+
+function valueAt(settings: Settings, path: SettingPath): unknown {
+  const [key, field] = path.split('.') as [keyof Settings, string | undefined]
+  const value = settings[key]
+  return field === undefined ? value : (value as unknown as Record<string, unknown>)[field]
+}
+
+/** The paths among `paths` whose value differs from `DEFAULT_SETTINGS` (« modifié » of a « Plus de réglages » group). */
+export function modifiedPaths(settings: Settings, paths: readonly SettingPath[]): SettingPath[] {
+  return paths.filter((path) => !sameValue(valueAt(settings, path), valueAt(DEFAULT_SETTINGS, path)))
+}
+
 /**
  * Replace the tracks, settings, pictures of the film and playback speed by those of `project`, then fit the camera
  * (addTracks requests it).

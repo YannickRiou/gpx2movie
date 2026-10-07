@@ -1,6 +1,6 @@
 /**
  * Pure logic of the application shell (no React, no DOM): framing of the 3D preview to the output format,
- * keyboard shortcuts, routing of the opened files, roving focus of the tabs, project name and save state.
+ * routing of the opened or dropped files, roving focus of the tabs, project name and save state (shortcuts: `shortcuts.ts`).
  */
 import type { Track } from '../core/types'
 import { DEFAULT_PROJECT_NAME } from '../project/document'
@@ -26,39 +26,7 @@ export function frameRect(width: number, height: number, aspect: number | null):
   return { left: Math.floor((width - w) / 2), top: Math.floor((height - h) / 2), width: w, height: h }
 }
 
-export type ShellAction = 'save' | 'open' | 'export' | 'fit' | 'toggle-panel'
-
-export interface KeyLike {
-  key: string
-  ctrlKey: boolean
-  metaKey: boolean
-  shiftKey: boolean
-  altKey: boolean
-}
-
-/**
- * Shortcut of the shell for a key press, null when none: Ctrl/Cmd+S save, Ctrl/Cmd+O open, Ctrl/Cmd+E export
- * drawer, F fit the view, [ collapse / expand the panel (whatever the modifiers that type it). Undo / redo belong to `installHistoryShortcuts`.
- * `typing` (focus in a text field or a list) disables every shortcut.
- */
-export function shellShortcut(e: KeyLike, typing: boolean): ShellAction | null {
-  if (typing) return null
-  // « [ » needs AltGr (Ctrl+Alt) on French keyboards: the character decides, not the modifiers
-  if (e.key === '[') return e.metaKey ? null : 'toggle-panel'
-  if (e.altKey) return null
-  const key = e.key.toLowerCase()
-  if (e.ctrlKey || e.metaKey) {
-    if (e.shiftKey) return null
-    if (key === 's') return 'save'
-    if (key === 'o') return 'open'
-    if (key === 'e') return 'export'
-    return null
-  }
-  if (key === 'f' && !e.shiftKey) return 'fit'
-  return null
-}
-
-/** Files picked with « Ouvrir »: a project (.json) is opened, everything else goes to the track importer. */
+/** Files picked with « Ouvrir » or dropped on the window: a project (.json) is opened, everything else goes to the track importer. */
 export interface OpenedFiles<F> {
   project: F | null
   tracks: F[]
@@ -74,6 +42,11 @@ export function routeOpenedFiles<F extends { name: string }>(files: readonly F[]
     else out.project = file
   }
   return out
+}
+
+/** A drag carries files (not text or a link): the window offers to import them. */
+export function isFileDrag(types: readonly string[] | null | undefined): boolean {
+  return types?.includes('Files') ?? false
 }
 
 /**

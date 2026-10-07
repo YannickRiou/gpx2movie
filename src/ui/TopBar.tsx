@@ -6,6 +6,7 @@ import { useAppStore } from '../state/store'
 import { AspectIcon, Icon } from './icons'
 import { saveProject } from './projectActions'
 import { effectiveProjectName, isProjectDirty } from './shell'
+import { withShortcut } from './shortcuts'
 
 /** Output format of the preview and of the export: « Libre » (preview only) or one of the video aspects. */
 function FormatSwitcher({ disabled }: { disabled: boolean }) {
@@ -41,13 +42,15 @@ interface TopBarProps {
   onOpen(): void
   exportOpen: boolean
   onToggleExport(): void
+  /** open the keyboard shortcuts */
+  onHelp(): void
 }
 
 /**
  * Top bar: logo, project name (edited in place) and save state, undo / redo, open / save, output format,
- * « Exporter » (the export drawer; « 42 % · Annuler » while exporting).
+ * shortcuts (« ? »), « Exporter » (the export drawer; « 42 % · Annuler » while exporting).
  */
-export function TopBar({ onOpen, exportOpen, onToggleExport }: TopBarProps) {
+export function TopBar({ onOpen, exportOpen, onToggleExport, onHelp }: TopBarProps) {
   const history = getSettingsHistory()
   const { canUndo, canRedo } = useSyncExternalStore(history.subscribe, history.getState)
   const name = useAppStore((s) => s.projectName)
@@ -78,17 +81,17 @@ export function TopBar({ onOpen, exportOpen, onToggleExport }: TopBarProps) {
           </span>
         )}
         <span className="topbar__sep" aria-hidden="true" />
-        <button type="button" className="icon-btn" onClick={history.undo} disabled={!canUndo || busy} aria-label="Annuler" data-tip="Annuler (Ctrl+Z)">
+        <button type="button" className="icon-btn" onClick={history.undo} disabled={!canUndo || busy} aria-label="Annuler" data-tip={withShortcut('Annuler', 'undo')}>
           <Icon name="undo" />
         </button>
-        <button type="button" className="icon-btn" onClick={history.redo} disabled={!canRedo || busy} aria-label="Rétablir" data-tip="Rétablir (Ctrl+Maj+Z)">
+        <button type="button" className="icon-btn" onClick={history.redo} disabled={!canRedo || busy} aria-label="Rétablir" data-tip={withShortcut('Rétablir', 'redo')}>
           <Icon name="redo" />
         </button>
-        <button type="button" className="icon-btn icon-btn--label" onClick={onOpen} disabled={busy} data-tip="Trace GPX, FIT ou projet (Ctrl+O)">
+        <button type="button" className="icon-btn icon-btn--label" onClick={onOpen} disabled={busy} data-tip={withShortcut('Trace GPX, FIT ou projet', 'open')}>
           <Icon name="folder-open" />
           <span className="icon-btn__text">Ouvrir</span>
         </button>
-        <button type="button" className="icon-btn icon-btn--label" onClick={saveProject} data-tip="Fichier .openflyover.json (Ctrl+S)">
+        <button type="button" className="icon-btn icon-btn--label" onClick={saveProject} data-tip={withShortcut('Fichier .openflyover.json', 'save')}>
           <Icon name="save" />
           <span className="icon-btn__text">Enregistrer</span>
         </button>
@@ -97,6 +100,9 @@ export function TopBar({ onOpen, exportOpen, onToggleExport }: TopBarProps) {
       <FormatSwitcher disabled={busy} />
 
       <div className="topbar__end">
+        <button type="button" className="icon-btn" onClick={onHelp} aria-label="Raccourcis clavier" data-tip={withShortcut('Raccourcis clavier', 'help')}>
+          <Icon name="circle-help" />
+        </button>
         {busy ? (
           <button
             type="button"
@@ -114,7 +120,7 @@ export function TopBar({ onOpen, exportOpen, onToggleExport }: TopBarProps) {
             onClick={onToggleExport}
             aria-expanded={exportOpen}
             aria-controls="export-dock"
-            data-tip="Exporter la vidéo ou une image (Ctrl+E)"
+            data-tip={withShortcut('Exporter la vidéo ou une image', 'export')}
           >
             <Icon name="download" size={18} />
             <span className="icon-btn__text">Exporter</span>

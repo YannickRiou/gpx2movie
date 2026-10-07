@@ -4,23 +4,14 @@ import { DEFAULT_SETTINGS } from '../state/store'
 import {
   effectiveProjectName,
   frameRect,
+  isFileDrag,
   isProjectDirty,
   nextTabIndex,
   parseShellPrefs,
   routeOpenedFiles,
   shellReducer,
-  shellShortcut,
 } from './shell'
-import type { KeyLike, ShellState } from './shell'
-
-const key = (k: string, mods: Partial<KeyLike> = {}): KeyLike => ({
-  key: k,
-  ctrlKey: false,
-  metaKey: false,
-  shiftKey: false,
-  altKey: false,
-  ...mods,
-})
+import type { ShellState } from './shell'
 
 describe('frameRect', () => {
   it('letterboxes a wide format in a taller stage, centred', () => {
@@ -56,33 +47,6 @@ describe('frameRect', () => {
   })
 })
 
-describe('shellShortcut', () => {
-  it('maps Ctrl or Cmd + S / O / E', () => {
-    expect(shellShortcut(key('s', { ctrlKey: true }), false)).toBe('save')
-    expect(shellShortcut(key('O', { metaKey: true }), false)).toBe('open')
-    expect(shellShortcut(key('e', { ctrlKey: true }), false)).toBe('export')
-  })
-
-  it('maps F and [ without modifier', () => {
-    expect(shellShortcut(key('f'), false)).toBe('fit')
-    expect(shellShortcut(key('F'), false)).toBe('fit')
-    expect(shellShortcut(key('['), false)).toBe('toggle-panel')
-    // AltGr+5 on an AZERTY keyboard
-    expect(shellShortcut(key('[', { ctrlKey: true, altKey: true }), false)).toBe('toggle-panel')
-    expect(shellShortcut(key('['), true)).toBeNull()
-  })
-
-  it('ignores everything while typing, and other combinations', () => {
-    expect(shellShortcut(key('s', { ctrlKey: true }), true)).toBeNull()
-    expect(shellShortcut(key('f'), true)).toBeNull()
-    expect(shellShortcut(key('s', { ctrlKey: true, shiftKey: true }), false)).toBeNull()
-    expect(shellShortcut(key('f', { altKey: true }), false)).toBeNull()
-    expect(shellShortcut(key('f', { ctrlKey: true }), false)).toBeNull()
-    expect(shellShortcut(key('z', { ctrlKey: true }), false)).toBeNull()
-    expect(shellShortcut(key('a'), false)).toBeNull()
-  })
-})
-
 describe('routeOpenedFiles', () => {
   it('opens the first project and imports the rest as tracks', () => {
     const files = [{ name: 'a.gpx' }, { name: 'Tour.openflyover.JSON' }, { name: 'b.fit' }, { name: 'c.json' }, { name: 'notes.txt' }]
@@ -94,6 +58,14 @@ describe('routeOpenedFiles', () => {
 
   it('has no project for tracks only', () => {
     expect(routeOpenedFiles([{ name: 'x.gpx' }]).project).toBeNull()
+  })
+})
+
+describe('isFileDrag', () => {
+  it('is true only when the drag carries files', () => {
+    expect(isFileDrag(['Files', 'application/x-moz-file'])).toBe(true)
+    expect(isFileDrag(['text/plain', 'text/uri-list'])).toBe(false)
+    expect(isFileDrag(undefined)).toBe(false)
   })
 })
 

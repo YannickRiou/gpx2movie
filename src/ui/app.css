@@ -11,48 +11,6 @@
   margin-bottom: var(--space-2);
 }
 
-/* Drop zone --------------------------------------------------------------- */
-.dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
-  min-height: 108px;
-  padding: var(--space-4);
-  border: 2px dashed var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-white);
-  text-align: center;
-  cursor: pointer;
-  transition:
-    background-color 120ms ease,
-    border-color 120ms ease;
-}
-
-.dropzone:hover,
-.dropzone--active {
-  background: var(--color-card);
-  border-color: var(--color-accent);
-}
-
-.dropzone--busy {
-  cursor: progress;
-  opacity: 0.7;
-}
-
-.dropzone__title {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--color-ink);
-}
-
-.dropzone__hint {
-  font-size: 12px;
-  color: var(--color-ink-soft);
-}
-
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -63,42 +21,6 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
-}
-
-/* Error banner ------------------------------------------------------------ */
-.alert {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-3);
-  border-left: 4px solid var(--color-accent-light);
-  border-radius: var(--radius-sm);
-  background: var(--color-ink);
-  color: var(--color-white);
-  font-size: 13px;
-  word-break: break-word;
-}
-
-.alert__text {
-  flex: 1 1 auto;
-  white-space: pre-line;
-}
-
-.alert__close {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-white);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.alert__close:hover {
-  background: var(--color-ink-soft);
 }
 
 /* Track list -------------------------------------------------------------- */
@@ -1065,3 +987,184 @@
   font-size: 12px;
   color: var(--color-ink-soft);
 }
+
+/* ==========================================================================
+ * Carte et Survol : sections repliables, « Plus de réglages », ⓘ, journée du soleil, moments, tuiles de style
+ * ========================================================================== */
+.panel-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.more-settings {
+  border-top: 1px solid var(--line);
+}
+
+.more-settings__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  padding-top: var(--space-2);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+.more-settings__summary::-webkit-details-marker {
+  display: none;
+}
+
+.more-settings__summary:hover,
+.more-settings[open] > .more-settings__summary {
+  color: var(--text-1);
+}
+
+.more-settings__summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.more-settings__label {
+  flex: 1 1 auto;
+}
+
+.more-settings:not([open]) > .more-settings__summary > .icon:last-child {
+  transform: rotate(-90deg);
+}
+
+.more-settings__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* label + ⓘ on one line */
+.field__label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.info-tip {
+  display: inline-flex;
+  flex: none;
+  border-radius: 50%;
+  color: var(--text-2);
+  cursor: help;
+}
+
+.info-tip:hover,
+.info-tip:focus-visible {
+  color: var(--text-1);
+}
+
+.info-tip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* one sentence: wraps inside the panel */
+.info-tip[data-tip]:hover::after,
+.info-tip[data-tip]:focus-visible::after {
+  width: max-content;
+  max-width: 200px;
+  white-space: normal;
+}
+
+.segmented__option:has(input:disabled) {
+  background: var(--surface-card);
+  color: var(--text-2);
+  cursor: not-allowed;
+}
+
+/* solar hour slider over the night / day bar (marks: sunrise and sunset) */
+.sun-day {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.sun-day > .range {
+  width: 100%;
+}
+
+/* inset by half a slider thumb: the bar lines up with the thumb's centre */
+.sun-day__bar {
+  position: relative;
+  height: 8px;
+  margin: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.sun-day__mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--color-accent-strong);
+}
+
+.sun-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--space-2);
+}
+
+.sun-chip {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--color-white);
+  color: var(--text-1);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sun-chip:hover:not(:disabled) {
+  border-color: var(--color-ink);
+}
+
+.sun-chip[aria-pressed='true'] {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-white);
+}
+
+.sun-chip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.sun-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* camera style tiles (look of the export format tiles) */
+.style-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.style-tile .format-tile__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* ======================== fin Carte et Survol ============================ */
