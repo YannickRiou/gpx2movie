@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { CanvasTexture, Group, type Camera, LinearFilter, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three'
 import type { LocalFrame, TerrainEngine } from '../core/types'
+import { registerDrapeFlush, useExportStore } from '../export/store'
 import { climbsOf } from '../flyover/climbs'
 import { cardOpacityAt } from '../overlay/draw'
 import { useAppStore } from '../state/store'
@@ -163,8 +164,8 @@ const probe = new Vector3()
 
 /**
  * Per-frame visibility: distance and occlusion fades, screen culling, de-cluttering by priority, fade under the
- * overlay cards (`cardOpacity`), constant screen size, and colour divided by the renderer exposure (unlit
- * sprites, like the track).
+ * overlay cards (`cardOpacity`), constant screen size (times `renderScale`, > 1 for a video larger than the
+ * preview), and colour divided by the renderer exposure (unlit sprites, like the track).
  */
 function updateLabelSet(
   set: LabelSet,
@@ -175,13 +176,14 @@ function updateLabelSet(
   frame: LocalFrame | null,
   exaggeration: number,
   cardOpacity: number,
+  renderScale = 1,
 ): void {
   if (labelOpacity(1, cardOpacity) < MIN_OPACITY) {
     for (const entry of set.entries) entry.sprite.visible = false
     return
   }
   camera.getWorldPosition(cameraPosition)
-  const pixel = spriteScaleForPixels(1, size.height, camera.projectionMatrix.elements[5])
+  const pixel = spriteScaleForPixels(1, size.height, camera.projectionMatrix.elements[5]) * renderScale
   const clearanceAt =
     engine && frame
       ? (x: number, y: number, z: number) => {
@@ -204,9 +206,11 @@ function updateLabelSet(
     if (opacity < MIN_OPACITY) continue
     const x = ((projected.x + 1) / 2) * size.width
     const y = ((1 - projected.y) / 2) * size.height
-    const below = tex.height * tex.anchorY
+    const w = tex.width * renderScale
+    const h = tex.height * renderScale
+    const below = h * tex.anchorY
     candidates.push({
-      rect: { left: x - tex.width / 2, right: x + tex.width / 2, top: y - tex.height + below, bottom: y + below },
+      rect: { left: x - w / 2, right: x + w / 2, top: y - h + below, bottom: y + below },
       priority: entry.label.priority,
     })
     shown.push({ entry, opacity })
@@ -316,6 +320,16 @@ export function Labels() {
   }, [labels, frame, engine, exaggeration, fontVersion, drape])
 
   const redrape = useDebouncedCallback(drape, REDRAPE_DEBOUNCE_MS, REDRAPE_MAX_WAIT_MS)
+  // the video export runs the pending re-drape right away instead of waiting for the debounce
+  useEffect(
+    () =>
+      registerDrapeFlush(() => {
+        const pending = redrape.isPending()
+        redrape.flush()
+        return pending
+      }),
+    [redrape],
+  )
   useEffect(() => {
     if (!engine) return
     const unsubscribe = engine.onChange(() => redrape(engine, exaggeration))
@@ -339,7 +353,8 @@ export function Labels() {
     if (!setRef.current) return
     const { playback, settings } = useAppStore.getState()
     const card = cardOpacityAt(playback.progress, settings.overlay)
-    updateLabelSet(setRef.current, camera, size, gl.toneMappingExposure, engine, frame, exaggeration, card)
+    const { renderScale } = useExportStore.getState()
+    updateLabelSet(setRef.current, camera, size, gl.toneMappingExposure, engine, frame, exaggeration, card, renderScale)
   })
 
   return <group ref={groupRef} name="labels" />

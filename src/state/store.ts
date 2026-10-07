@@ -12,6 +12,8 @@ import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S } from '../flyover/cameraSet
 import type { CameraSettings } from '../flyover/cameraSettings'
 import { DEFAULT_PACING } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
+import { DEFAULT_RACE } from '../flyover/race'
+import type { RaceSettings } from '../flyover/race'
 import type { TrackColorBy } from '../flyover/trackColor'
 import { centroid } from '../geo/ellipsoid'
 import { DEFAULT_LANDMARK_SETTINGS } from '../osm/landmarks'
@@ -19,6 +21,8 @@ import type { LandmarkSettings } from '../osm/landmarks'
 import { DEFAULT_OVERLAY } from '../overlay/settings'
 import type { OverlaySettings } from '../overlay/settings'
 import { IMAGERY_SOURCES, sourceCovers } from '../terrain/sources'
+import { DEFAULT_WEATHER_SCENE } from '../weather/sceneWeather'
+import type { WeatherSceneSettings } from '../weather/sceneWeather'
 
 export interface Settings {
   terrainSourceId: string
@@ -48,12 +52,16 @@ export interface Settings {
   labels: { climbs: boolean; waypoints: boolean }
   /** historical weather of the first timed track (Open-Meteo archive, network) */
   weather: { enabled: boolean }
+  /** the weather of the outing drives the scene (clouds dim the sun, haze, veiled sky), strength 0..1 (atmosphere only) */
+  weatherScene: WeatherSceneSettings
   /** film overlay (« habillage »): style and widgets, drawn by src/overlay/draw.ts */
   overlay: OverlaySettings
   /** exported film: size, frame rate, encoding quality */
   video: VideoSettings
   /** OpenStreetMap landmarks along the tracks (Overpass API, network): kinds shown and corridor width */
   landmarks: LandmarkSettings
+  /** ghost race: markers on the other tracks, synchronised with the first one (see flyover/race.ts) */
+  race: RaceSettings
 }
 
 /** Flyover playback along the first track (progress at constant ground speed). */
@@ -110,9 +118,11 @@ export const DEFAULT_SETTINGS: Settings = {
   pacing: DEFAULT_PACING,
   labels: { climbs: true, waypoints: true },
   weather: { enabled: true },
+  weatherScene: DEFAULT_WEATHER_SCENE,
   overlay: DEFAULT_OVERLAY,
   video: DEFAULT_VIDEO_SETTINGS,
   landmarks: DEFAULT_LANDMARK_SETTINGS,
+  race: DEFAULT_RACE,
 }
 
 export const DEFAULT_PLAYBACK: Playback = { playing: false, progress: 0, speed: 1 }

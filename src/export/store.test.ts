@@ -1,5 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { estimateRemainingS, isExportBusy, resetExportStore, useExportStore, videoFileName, type ExportRequest } from './store'
+import {
+  EMPTY_TIMINGS,
+  estimateRemainingS,
+  exportRenderScale,
+  flushDrapes,
+  isExportBusy,
+  registerDrapeFlush,
+  resetExportStore,
+  useExportStore,
+  videoFileName,
+  type ExportRequest,
+} from './store'
 
 const REQUEST: Omit<ExportRequest, 'id'> = {
   width: 320,
@@ -112,5 +123,51 @@ describe('useExportStore', () => {
     expect(store()).toMatchObject({ phase: 'error', error: 'boom', request: null })
     store().reset()
     expect(store()).toMatchObject({ phase: 'idle', error: null })
+  })
+})
+
+describe('render scale and timings', () => {
+  it('scales pixel-sized elements by the short side of the video, 1 outside an export', () => {
+    expect(useExportStore.getState().renderScale).toBe(1)
+    expect(exportRenderScale(1920, 1080)).toBe(1)
+    expect(exportRenderScale(2160, 3840)).toBe(2)
+    expect(exportRenderScale(1280, 720)).toBeCloseTo(2 / 3)
+    useExportStore.getState().setRenderScale(2)
+    expect(useExportStore.getState().renderScale).toBe(2)
+  })
+
+  it('reports a copy of the timings with the frames and clears them on begin', () => {
+    const store = useExportStore.getState
+    store().start(REQUEST)
+    store().begin(store().request!.id, 10, 0)
+    const timings = { ...EMPTY_TIMINGS, rendered: 2, renderMs: 30 }
+    store().reportFrame(2, 100, timings)
+    timings.rendered = 3
+    expect(store().timings).toMatchObject({ rendered: 2, renderMs: 30 })
+    store().canceled()
+    store().start(REQUEST)
+    store().begin(store().request!.id, 10, 0)
+    expect(store().timings).toEqual(EMPTY_TIMINGS)
+  })
+})
+
+describe('drape flushes', () => {
+  it('runs every registered flush and tells whether one had work', () => {
+    let pending = true
+    const a = vi.fn(() => {
+      const ran = pending
+      pending = false
+      return ran
+    })
+    const b = vi.fn(() => false)
+    const offA = registerDrapeFlush(a)
+    const offB = registerDrapeFlush(b)
+    expect(flushDrapes()).toBe(true)
+    expect(flushDrapes()).toBe(false)
+    expect(b).toHaveBeenCalledTimes(2)
+    offA()
+    offB()
+    expect(flushDrapes()).toBe(false)
+    expect(a).toHaveBeenCalledTimes(2)
   })
 })

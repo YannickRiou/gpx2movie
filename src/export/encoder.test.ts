@@ -133,6 +133,15 @@ describe('pickCodec', () => {
     expect(await pickCodec(OPTIONS, supporting())).toBeNull()
   })
 
+  it('checks the actual frame size: a vertical 4K film falls back when H.264 is limited to 4096 × 2304', async () => {
+    const limitedAvc = vi.fn(async (codec: string, query: { width: number; height: number }) =>
+      codec === 'avc' ? query.width <= 4096 && query.height <= 2304 : codec === 'vp9',
+    ) as unknown as CanEncode
+    expect(await pickCodec({ ...OPTIONS, width: 3840, height: 2160 }, limitedAvc)).toEqual({ container: 'mp4', codec: 'avc' })
+    expect(await pickCodec({ ...OPTIONS, width: 2160, height: 3840 }, limitedAvc)).toEqual({ container: 'webm', codec: 'vp9' })
+    expect(await pickCodec({ ...OPTIONS, width: 5040, height: 2160 }, limitedAvc)).toEqual({ container: 'webm', codec: 'vp9' })
+  })
+
   it('tries the candidates in order', () => {
     expect(CODEC_CANDIDATES.map((c) => `${c.container}/${c.codec}`)).toEqual(['mp4/avc', 'mp4/hevc', 'webm/vp9', 'webm/vp8'])
   })

@@ -6,34 +6,29 @@
  * flyover), optionally preceded and followed by frames held on the first / last image.
  */
 
-export type VideoAspect = '16:9' | '9:16' | '1:1' | '4:5'
+/**
+ * Film aspect ratios (`x:y` = width:height). The size is the aspect × a resolution class defined by the short
+ * side, so a vertical 4K film is 2160 × 3840 and a square 1440p film 1440 × 1440.
+ */
+export const VIDEO_ASPECTS = [
+  { id: '16:9', label: 'Paysage 16:9', x: 16, y: 9 },
+  { id: '9:16', label: 'Vertical 9:16', x: 9, y: 16 },
+  { id: '1:1', label: 'Carré 1:1', x: 1, y: 1 },
+  { id: '4:5', label: 'Portrait 4:5', x: 4, y: 5 },
+  { id: '21:9', label: 'Cinéma 21:9', x: 21, y: 9 },
+] as const satisfies readonly { id: string; label: string; x: number; y: number }[]
 
-export interface VideoFormat {
-  id: string
-  aspect: VideoAspect
-  width: number
-  height: number
-  label: string
-}
+export type VideoAspect = (typeof VIDEO_ASPECTS)[number]['id']
 
-/** Output sizes, grouped by aspect ratio (the first one of each ratio is its default). */
-export const VIDEO_FORMATS = [
-  { id: '1920x1080', aspect: '16:9', width: 1920, height: 1080, label: 'Full HD — 1920 × 1080' },
-  { id: '3840x2160', aspect: '16:9', width: 3840, height: 2160, label: '4K — 3840 × 2160' },
-  { id: '1280x720', aspect: '16:9', width: 1280, height: 720, label: 'HD — 1280 × 720' },
-  { id: '1080x1920', aspect: '9:16', width: 1080, height: 1920, label: '1080 × 1920' },
-  { id: '1080x1080', aspect: '1:1', width: 1080, height: 1080, label: '1080 × 1080' },
-  { id: '1080x1350', aspect: '4:5', width: 1080, height: 1350, label: '1080 × 1350' },
-] as const satisfies readonly VideoFormat[]
+/** Resolution classes, named after the short side of the frame. */
+export const VIDEO_RESOLUTIONS = [
+  { id: '720p', label: '720p', shortSide: 720 },
+  { id: '1080p', label: '1080p', shortSide: 1080 },
+  { id: '1440p', label: '1440p', shortSide: 1440 },
+  { id: '4k', label: '4K', shortSide: 2160 },
+] as const satisfies readonly { id: string; label: string; shortSide: number }[]
 
-export type VideoFormatId = (typeof VIDEO_FORMATS)[number]['id']
-
-export const VIDEO_ASPECTS: readonly { aspect: VideoAspect; label: string }[] = [
-  { aspect: '16:9', label: 'Paysage 16:9' },
-  { aspect: '9:16', label: 'Vertical 9:16' },
-  { aspect: '1:1', label: 'Carré 1:1' },
-  { aspect: '4:5', label: 'Portrait 4:5' },
-]
+export type VideoResolution = (typeof VIDEO_RESOLUTIONS)[number]['id']
 
 export const VIDEO_FPS = [24, 30, 60] as const
 export type VideoFps = (typeof VIDEO_FPS)[number]
@@ -44,27 +39,59 @@ export type VideoQuality = (typeof VIDEO_QUALITIES)[number]
 
 /** Film format of the project (stored in the settings). */
 export interface VideoSettings {
-  format: VideoFormatId
+  aspect: VideoAspect
+  resolution: VideoResolution
   fps: VideoFps
   quality: VideoQuality
 }
 
-export const DEFAULT_VIDEO_SETTINGS: VideoSettings = { format: '1920x1080', fps: 30, quality: 'high' }
+export const DEFAULT_VIDEO_SETTINGS: VideoSettings = { aspect: '16:9', resolution: '1080p', fps: 30, quality: 'high' }
 
 /** Frames held on the first image (lets the viewer settle) and on the last one (the arrival). */
 export const EXPORT_HOLD_START_S = 1
 export const EXPORT_HOLD_END_S = 2
 
-export function getVideoFormat(id: string): VideoFormat | undefined {
-  return VIDEO_FORMATS.find((f) => f.id === id)
+/**
+ * Frame size in pixels: the short side of the resolution class, the long side from the aspect ratio rounded
+ * to an even number (H.264 / HEVC need even sizes). Every combination is exact today: 1920 × 1080,
+ * 2160 × 3840, 1080 × 1350, 2520 × 1080…
+ */
+export function videoSize(aspect: VideoAspect, resolution: VideoResolution): { width: number; height: number } {
+  const a = VIDEO_ASPECTS.find((v) => v.id === aspect) ?? VIDEO_ASPECTS[0]
+  const short = (VIDEO_RESOLUTIONS.find((r) => r.id === resolution) ?? VIDEO_RESOLUTIONS[1]).shortSide
+  const long = 2 * Math.round((short * Math.max(a.x, a.y)) / Math.min(a.x, a.y) / 2)
+  return a.x >= a.y ? { width: long, height: short } : { width: short, height: long }
 }
 
 export function isValidVideoSettings(video: VideoSettings): boolean {
   return (
-    getVideoFormat(video.format) !== undefined &&
+    VIDEO_ASPECTS.some((a) => a.id === video.aspect) &&
+    VIDEO_RESOLUTIONS.some((r) => r.id === video.resolution) &&
     (VIDEO_FPS as readonly number[]).includes(video.fps) &&
     (VIDEO_QUALITIES as readonly string[]).includes(video.quality)
   )
+}
+
+/** Fixed sizes of the first version of the settings (`video.format`), as aspect × resolution. */
+const LEGACY_FORMATS: Record<string, Pick<VideoSettings, 'aspect' | 'resolution'>> = {
+  '1920x1080': { aspect: '16:9', resolution: '1080p' },
+  '3840x2160': { aspect: '16:9', resolution: '4k' },
+  '1280x720': { aspect: '16:9', resolution: '720p' },
+  '1080x1920': { aspect: '9:16', resolution: '1080p' },
+  '1080x1080': { aspect: '1:1', resolution: '1080p' },
+  '1080x1350': { aspect: '4:5', resolution: '1080p' },
+}
+
+/**
+ * Upgrade of a saved `video` setting (project or preset) before validation: `{ format, fps, quality }`
+ * becomes `{ aspect, resolution, fps, quality }` (an unknown format falls back to 16:9 1080p).
+ */
+export function withVideoDefaults(raw: unknown): unknown {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw) || !('format' in raw)) return raw
+  const { format, ...rest } = raw as Record<string, unknown>
+  if ('aspect' in rest && 'resolution' in rest) return rest
+  const legacy = (typeof format === 'string' && LEGACY_FORMATS[format]) || DEFAULT_VIDEO_SETTINGS
+  return { ...rest, aspect: legacy.aspect, resolution: legacy.resolution }
 }
 
 export interface ScheduleOptions {

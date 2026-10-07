@@ -24,6 +24,7 @@ import { AtmosphereLayer } from './AtmosphereLayer'
 import { CameraRig } from './CameraRig'
 import { FlyoverRig } from './FlyoverRig'
 import { Labels } from './Labels'
+import { RaceMarkers } from './RaceMarkers'
 import { TerrainLayer } from './TerrainLayer'
 import { TrackLines } from './TrackLines'
 
@@ -77,6 +78,7 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
             <TrackLines />
             <CameraRig />
             <FlyoverRig />
+            <RaceMarkers />
             <Labels />
             {atmosphere && <AtmosphereLayer />}
             <ExportController drawOverlay={overlayDrawer.draw} />

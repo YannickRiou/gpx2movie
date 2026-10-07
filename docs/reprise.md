@@ -48,14 +48,9 @@ Le détail technique de chaque module est dans `ARCHITECTURE.md`, la feuille de 
 
 Lancer `git status` et `npm run typecheck` en premier : l'arbre peut contenir ces modifications partielles.
 
-1. **Course fantôme — terminée, à intégrer.** Fichiers : `src/flyover/race.ts` (+ test, 28 tests), `src/scene/RaceMarkers.tsx`,
-   `src/scene/useRace.ts`, bloc « Course fantôme » dans `src/ui/TrackList.tsx`, `formatTimeGap` / `formatDistanceGap` dans
-   `src/ui/format.ts`, réglage `settings.race`, `isValidRace` dans `SETTING_CHECKS`, styles `.race*`. Reste :
-   - monter `<RaceMarkers />` juste après `<FlyoverRig />` dans `src/scene/FlyoverCanvas.tsx` ;
-   - documenter (section « Course fantôme (phase 7) » d'ARCHITECTURE.md, ligne phase 7 du README) ;
-   - contrôle visuel : taille et couleur des marqueurs, halo sur neige et forêt, classement en direct ;
-   - limite connue : les arrêts de la trace de tête sont franchis instantanément (la lecture avance en distance), les autres
-     marqueurs sautent alors d'autant en mode temporel.
+1. **Course fantôme — faite et montée** (`<RaceMarkers />` après `<FlyoverRig />`), documentée. Reste un contrôle visuel :
+   taille et couleur des marqueurs (atmosphère active ou non), halo sur neige et forêt, classement en direct, options
+   désactivées sans horodatage. Limite : les arrêts de la trace de tête sont franchis instantanément.
 2. **Export : optimisation de la vitesse, puis formats × résolutions** (fichiers `src/export/*`, `src/ui/ExportPanel.tsx`,
    `src/terrain/engine.ts`, `src/terrain/quadtree.ts`, `src/scene/Labels.tsx`). Au moment de l'arrêt, `ExportPanel.tsx` ne
    compilait pas encore avec le nouveau `schedule.ts`, et un test de `engine.test.ts` (`pendingVisibleTiles`) échouait :
@@ -73,10 +68,9 @@ Lancer `git status` et `npm run typecheck` en premier : l'arbre peut contenir ce
    - **échelle de rendu** `exportRenderScale = petit côté / 1080` pour que trace, étiquettes et marqueur aient en 4K le même
      aspect qu'en 1080p : `LINE_WIDTH_PX × échelle` dans `TrackLines.tsx`, `MARKER_SCREEN_FACTOR × échelle` dans
      `FlyoverRig.tsx` et `RaceMarkers.tsx`, police et taille des étiquettes dans `Labels.tsx`.
-3. **Météo dans la scène** (fichiers `src/weather/sceneWeather.ts` + test, `src/scene/AtmosphereLayer.tsx`, réglage
-   `settings.weatherScene { enabled, strength }`, case « Météo dans la scène ») : soleil et ciel atténués selon la nébulosité,
-   compensation partielle d'exposition, ombres adoucies, brume accrue (nuages bas, précipitations, brouillard), fonction pure
-   de la météo à la date du soleil de l'image. À terminer, vérifier à l'écran (avant / après), documenter.
+3. **Météo dans la scène — faite** (`src/weather/sceneWeather.ts`, `src/scene/weatherEffect.ts`, réglage
+   `settings.weatherScene`), documentée, vérifiée sur données réelles (effet discret le jour de l'exemple) et synthétiques
+   (couvert, pluie, brouillard). Suite possible : nuages volumétriques `@takram/three-clouds` (voir ARCHITECTURE.md).
 
 Pour intégrer proprement : finir chaque chantier, `npx vitest run --maxWorkers=1` + typecheck + lint verts, puis un commit
 par fonctionnalité (les fichiers partagés `store.ts`, `document.ts`, fixtures de test contiennent des morceaux de plusieurs

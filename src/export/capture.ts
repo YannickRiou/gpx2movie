@@ -8,27 +8,31 @@ import { ExportCanceledError } from './encoder'
 export type DrawOverlay = (ctx: OffscreenCanvasRenderingContext2D, progress: number, width: number, height: number) => void
 
 export interface SettleOptions {
-  /** renders per frame at least, so the LOD selection, the shadows and the post-process settle */
+  /**
+   * Renders per frame at least. One is enough: in a single `advance` the flyover rig places the camera before
+   * TerrainLayer selects the tiles for it (useFrame order), and the shadows and post-process follow the camera.
+   */
   minAdvances: number
-  /** time without terrain change before the frame is final: lets the track re-drape (150 ms debounce) */
-  quietMs: number
   /** give up waiting for the terrain after this long and capture what is there */
   timeoutMs: number
   /** wait between renders while tiles are loading */
   pollMs: number
 }
 
-export const DEFAULT_SETTLE: SettleOptions = { minAdvances: 3, quietMs: 250, timeoutMs: 10_000, pollMs: 16 }
+export const DEFAULT_SETTLE: SettleOptions = { minAdvances: 1, timeoutMs: 5_000, pollMs: 16 }
 
 /** Offset used to make the flyover rig place the camera again at (almost) the same progress. */
 export const REPLACE_EPSILON = 1e-9
+/** The camera is placed again only when the final terrain moves its placement by more than this (metres). */
+export const REPLACE_TOLERANCE_M = 1
 
 export interface SettleDeps {
   /** render one frame (R3F `advance`) */
   advance(): void
+  /** tiles the current view still waits for (`stats.pendingVisibleTiles`) */
   pendingTiles(): number
-  /** time of the last terrain change (tile ready or removed), same clock as `now` */
-  lastChangeAt(): number
+  /** run the debounced re-drapes of the track and labels now; true when one ran */
+  flushDrapes(): boolean
   now(): number
   wait(ms: number): Promise<void>
   isCanceled(): boolean
@@ -36,32 +40,38 @@ export interface SettleDeps {
 
 export interface RenderFrameDeps extends SettleDeps {
   setProgress(progress: number): void
+  /**
+   * How far (metres) the camera placement for the current progress, computed with the terrain loaded now,
+   * is from the placement in use (position, and target off the line of sight).
+   */
+  cameraDrift(): number
 }
 
 /**
- * Render until no tile is pending, the terrain has been quiet for `quietMs` and at least `minAdvances` frames
- * were drawn. Resolves true when settled, false on timeout; throws ExportCanceledError when canceled.
- * The last frame is still in the WebGL drawing buffer when the promise settles: capture it right away,
- * without awaiting anything else first.
+ * Render until the view waits for no tile (at least `minAdvances` renders), then run the pending re-drapes
+ * and render once more if one ran. Resolves true when settled, false on timeout; throws ExportCanceledError
+ * when canceled. The last frame is still in the WebGL drawing buffer when the promise settles: capture it
+ * right away, without awaiting anything else first.
  */
 export async function settle(deps: SettleDeps, options: SettleOptions = DEFAULT_SETTLE): Promise<boolean> {
   const start = deps.now()
   for (let n = 1; ; n++) {
     deps.advance()
-    const now = deps.now()
-    const loaded = deps.pendingTiles() === 0 && now - deps.lastChangeAt() >= options.quietMs
-    if (loaded && n >= options.minAdvances) return true
-    if (now - start >= options.timeoutMs) return false
+    const done = n >= options.minAdvances && deps.pendingTiles() === 0
+    if (done || deps.now() - start >= options.timeoutMs) {
+      if (deps.flushDrapes()) deps.advance()
+      return done
+    }
     if (deps.isCanceled()) throw new ExportCanceledError()
-    await deps.wait(loaded ? 0 : options.pollMs)
+    await deps.wait(deps.pendingTiles() > 0 ? options.pollMs : 0)
   }
 }
 
 /**
- * Show `progress` and wait for its terrain. The chase camera is placed once per progress change with the
- * heights loaded at that moment: when finer tiles arrived after the placement, it is placed once more (at a
- * progress REPLACE_EPSILON away, invisible) so the ground clearance uses the final terrain. Not after a
- * timeout: the terrain would not settle any better the second time.
+ * Show `progress` and wait for its terrain. The camera is placed once per progress change with the heights
+ * loaded at that moment: when the final terrain moves that placement by more than REPLACE_TOLERANCE_M, it is
+ * placed once more (at a progress REPLACE_EPSILON away, invisible) so the ground clearance uses the final
+ * terrain. Not after a timeout: the terrain would not settle any better the second time.
  */
 export async function renderSettledFrame(
   progress: number,
@@ -69,9 +79,8 @@ export async function renderSettledFrame(
   options: SettleOptions = DEFAULT_SETTLE,
 ): Promise<boolean> {
   deps.setProgress(progress)
-  const placedAt = deps.now()
   const complete = await settle(deps, options)
-  if (!complete || deps.lastChangeAt() < placedAt) return complete
+  if (!complete || deps.cameraDrift() <= REPLACE_TOLERANCE_M) return complete
   deps.setProgress(progress < 1 ? progress + REPLACE_EPSILON : progress - REPLACE_EPSILON)
   return settle(deps, options)
 }

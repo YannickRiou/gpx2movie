@@ -1,53 +1,79 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTLE, REPLACE_EPSILON, composeFrame, renderSettledFrame, settle, wait, type RenderFrameDeps } from './capture'
+import {
+  DEFAULT_SETTLE,
+  REPLACE_EPSILON,
+  REPLACE_TOLERANCE_M,
+  composeFrame,
+  renderSettledFrame,
+  settle,
+  wait,
+  type RenderFrameDeps,
+} from './capture'
 import { ExportCanceledError } from './encoder'
 
 /**
- * Fake scene on a virtual clock: each render takes 10 ms, `wait` advances the clock, tiles finish loading at
- * `loadedAt` (one terrain change at that time).
+ * Fake scene on a virtual clock: each render takes 10 ms, `wait` advances the clock, the view's tiles are
+ * ready from `1000 + loadedAt` (which leaves a re-drape pending), the camera placement drifts by `drift` m.
  */
-function fakeScene({ loadedAt = 0, canceled = (): boolean => false } = {}) {
+function fakeScene({ loadedAt = 0, canceled = (): boolean => false, drift = 0 } = {}) {
   let clock = 1000
-  let lastChange = 0
+  let drapePending = false
   const renders: number[] = []
   const progress: number[] = []
+  const flushes: boolean[] = []
   const deps: RenderFrameDeps = {
     advance: () => {
       clock += 10
-      if (loadedAt > 0 && lastChange < loadedAt + 1000 && clock >= loadedAt + 1000) lastChange = clock
+      if (loadedAt > 0 && renders.length > 0 && clock >= loadedAt + 1000 && renders.at(-1)! < loadedAt + 1000) drapePending = true
       renders.push(clock)
     },
     pendingTiles: () => (clock < loadedAt + 1000 ? 2 : 0),
-    lastChangeAt: () => lastChange,
+    flushDrapes: () => {
+      const ran = drapePending
+      drapePending = false
+      flushes.push(ran)
+      return ran
+    },
     now: () => clock,
     wait: async (ms) => {
       clock += ms
     },
     isCanceled: canceled,
     setProgress: (p) => progress.push(p),
+    cameraDrift: () => drift,
   }
-  return { deps, renders, progress }
+  return { deps, renders, progress, flushes }
 }
 
 describe('settle', () => {
-  it('renders the minimum number of frames when the terrain is already complete', async () => {
+  it('renders once when the terrain is already complete', async () => {
+    const { deps, renders, flushes } = fakeScene()
+    expect(await settle(deps)).toBe(true)
+    expect(renders).toHaveLength(1)
+    expect(flushes).toEqual([false])
+  })
+
+  it('polls until the view has its tiles, then re-drapes and renders once more', async () => {
+    const { deps, renders, flushes } = fakeScene({ loadedAt: 200 })
+    expect(await settle(deps)).toBe(true)
+    expect(deps.now()).toBeGreaterThanOrEqual(1200)
+    expect(deps.now()).toBeLessThan(1200 + 60)
+    expect(flushes).toEqual([true])
+    // the last render follows the flush
+    expect(renders.length).toBeGreaterThan(2)
+  })
+
+  it('honours a minimum number of renders', async () => {
     const { deps, renders } = fakeScene()
-    expect(await settle(deps)).toBe(true)
-    expect(renders).toHaveLength(DEFAULT_SETTLE.minAdvances)
+    await settle(deps, { ...DEFAULT_SETTLE, minAdvances: 3 })
+    expect(renders).toHaveLength(3)
   })
 
-  it('waits for pending tiles, then for the quiet period', async () => {
-    const { deps } = fakeScene({ loadedAt: 200 })
-    expect(await settle(deps)).toBe(true)
-    // tiles ready at 1200, plus 250 ms of quiet
-    expect(deps.now()).toBeGreaterThanOrEqual(1200 + DEFAULT_SETTLE.quietMs)
-    expect(deps.now()).toBeLessThan(1200 + DEFAULT_SETTLE.quietMs + 50)
-  })
-
-  it('gives up after the timeout', async () => {
-    const { deps } = fakeScene({ loadedAt: 60_000 })
+  it('gives up after the timeout, still flushing the re-drapes', async () => {
+    const { deps, flushes } = fakeScene({ loadedAt: 60_000 })
     expect(await settle(deps, { ...DEFAULT_SETTLE, timeoutMs: 500 })).toBe(false)
     expect(deps.now()).toBeLessThan(1000 + 600)
+    expect(flushes).toHaveLength(1)
   })
 
   it('throws when canceled', async () => {
@@ -57,28 +83,26 @@ describe('settle', () => {
 })
 
 describe('renderSettledFrame', () => {
-  it('sets the progress once when no tile arrives', async () => {
-    const { deps, progress } = fakeScene()
+  it('sets the progress once when the placement does not move', async () => {
+    const { deps, progress } = fakeScene({ loadedAt: 100, drift: REPLACE_TOLERANCE_M / 2 })
     expect(await renderSettledFrame(0.25, deps)).toBe(true)
     expect(progress).toEqual([0.25])
   })
 
-  it('places the camera again after tiles arrived', async () => {
-    const { deps, progress } = fakeScene({ loadedAt: 100 })
+  it('places the camera again when the final terrain moves it', async () => {
+    const { deps, progress } = fakeScene({ loadedAt: 100, drift: 5 })
     expect(await renderSettledFrame(0.25, deps)).toBe(true)
     expect(progress).toEqual([0.25, 0.25 + REPLACE_EPSILON])
   })
 
   it('does not place the camera again after a timeout', async () => {
-    const { deps, progress } = fakeScene()
-    // tiles keep arriving and never finish
-    const busy = { ...deps, pendingTiles: () => 1, lastChangeAt: () => deps.now() }
-    expect(await renderSettledFrame(0.25, busy, { ...DEFAULT_SETTLE, timeoutMs: 500 })).toBe(false)
+    const { deps, progress } = fakeScene({ loadedAt: 60_000, drift: 5 })
+    expect(await renderSettledFrame(0.25, deps, { ...DEFAULT_SETTLE, timeoutMs: 500 })).toBe(false)
     expect(progress).toEqual([0.25])
   })
 
   it('nudges backwards at the end of the track', async () => {
-    const { deps, progress } = fakeScene({ loadedAt: 100 })
+    const { deps, progress } = fakeScene({ drift: 5 })
     await renderSettledFrame(1, deps)
     expect(progress).toEqual([1, 1 - REPLACE_EPSILON])
   })

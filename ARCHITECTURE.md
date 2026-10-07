@@ -52,6 +52,8 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/osm/*` | repères OpenStreetMap | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures` ; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `LANDMARK_DISTANCE_RANGE` ; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
 | `src/overlay/*` | habillage du film | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (pont vers l'export), `OverlayCanvas` |
 | `src/export/*` | export vidéo | `buildFrameSchedule`, `VIDEO_FORMATS`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `settle`, `renderSettledFrame`, `composeFrame`, `useExportStore`, `videoFileName`, `ExportController` |
+| `src/flyover/race.ts` | course fantôme | `RACE_SYNC_MODES`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers` ; `useRace`, `RaceMarkers` |
+| `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | météo dans la scène | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction` ; `WeatherEffect` |
 | `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` ; `importFlow.ts` (orchestration d'import sans React, testée) |
@@ -380,3 +382,33 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   9:16, 1:1, 4:5 ; 24 / 30 / 60 i/s.
 - Limites : vitesse (au moins 3 rendus par image plus l'attente des tuiles), fichier gardé en mémoire (~2× sa taille), tailles
   d'étiquettes en pixels CSS (plus petites en 4K), onglet à garder ouvert.
+
+## Météo dans la scène (phase 7)
+
+- `src/weather/sceneWeather.ts` (pur ; `settings.weatherScene { enabled, strength }`, case « Météo dans la scène » visible avec
+  l'atmosphère et une météo chargée) : à chaque image, la météo sous le marqueur à la date du soleil (`sceneConditionsAt` :
+  nébulosités interpolées, cumuls horaires et brouillard WMO 45/48 recentrés au milieu de leur heure puis interpolés) donne
+  `sunScale`, `skyScale`, `hazeScale`, `hazeHeightM`, `shadowStrength`, `exposureCompensationEv`, `desaturation`, `skyVeil`
+  (formules en tête de `sceneWeatherFrom`, bornées, identité par ciel clair, sans données ou réglage coupé ; `strength` mélange
+  vers l'identité). Fonction pure de la progression : l'export reste déterministe.
+- Application (`AtmosphereLayer`) : intensités du `SunLight` et du `SkyLight`, `shadow.intensity`, compensation ajoutée à
+  l'exposition ; sous le voile, les coefficients SH de la lumière du ciel tendent vers leur luminance.
+- `WeatherEffect` (`src/scene/weatherEffect.ts`, après la perspective aérienne, même `EffectPass`) : l'effet Takram n'a pas de
+  réglage de densité, d'où une brume en hauteur exponentielle (β0 = 3,912·(hazeScale − 1)/60 km au sol sous le marqueur,
+  intégrale analytique le long du rayon), ciel voilé, lointain ramené au gris sous le voile, désaturation ; profondeur
+  logarithmique lue comme dans l'effet Takram ; uniformes préfixés `weather*`.
+- Limites : météo d'un seul point appliquée à toute la scène ; pas de nuages visibles (voile seulement) — nuages volumétriques
+  possibles avec `@takram/three-clouds` (coût élevé, reprojection temporelle à neutraliser à l'export).
+
+## Course fantôme (phase 7)
+
+- La progression reste la fraction de distance de la première trace (suivie par la caméra) ; chaque autre trace reçoit un
+  marqueur placé par `raceAt(race, progression)`, fonction pure. Réglage `settings.race { enabled, sync }`, bloc « Course
+  fantôme » de la liste des traces (à partir de deux traces).
+- Synchronisation : `elapsed` (même temps écoulé depuis chaque départ), `clock` (même heure enregistrée ; attente au départ,
+  arrêt à l'arrivée), `distance` (même fraction de chaque trace). Les deux premiers exigent des horodatages sur toutes les
+  traces, sinon repli sur `distance`.
+- Tables temps ↔ distance par trace (points sans heure comblés, horloge rendue monotone), requêtes par dichotomie. Écarts du
+  classement comparés à fraction égale (exacts sur un même parcours) ; affichage « +1 min 20 », « −350 m ».
+- `RaceMarkers` (après `FlyoverRig` dans `TerrainLayer`) : sphère à la couleur de la trace avec halo encre, même taille écran que
+  le marqueur principal. Limite : les arrêts de la trace de tête sont franchis instantanément (la lecture avance en distance).

@@ -127,6 +127,25 @@ describe('serializeProject / parseProject', () => {
     expect(sanitizeSettings(null, base)).toEqual({ settings: base, invalid: [] })
   })
 
+  it('validates the ghost race and loads projects saved before it', () => {
+    const d = doc()
+    const settings = d.settings as Record<string, unknown>
+    delete settings.race
+    expect(parseProject(JSON.stringify(d)).settings.race).toEqual({ enabled: false, sync: 'elapsed' })
+    settings.race = { enabled: true, sync: 'clock' }
+    expect(parseProject(JSON.stringify(d)).settings.race).toEqual({ enabled: true, sync: 'clock' })
+    const { settings: sanitized, invalid } = sanitizeSettings({ race: { enabled: true, sync: 'warp' } })
+    expect(sanitized.race).toEqual(DEFAULT_SETTINGS.race)
+    expect(invalid).toEqual(['race'])
+  })
+
+  it('loads the fixed video formats of older projects as aspect × resolution', () => {
+    const { settings, invalid } = sanitizeSettings({ video: { format: '1080x1920', fps: 60, quality: 'max' } })
+    expect(invalid).toEqual([])
+    expect(settings.video).toEqual({ aspect: '9:16', resolution: '1080p', fps: 60, quality: 'max' })
+    expect(sanitizeSettings({ video: { aspect: '1:1', resolution: '8k', fps: 30, quality: 'high' } }).invalid).toEqual(['video'])
+  })
+
   it('rejects an unknown track colour mode and an out-of-range exposure', () => {
     const { settings, invalid } = sanitizeSettings({ trackColorBy: 'rainbow', exposureEv: 12 })
     expect(settings.trackColorBy).toBe(DEFAULT_SETTINGS.trackColorBy)

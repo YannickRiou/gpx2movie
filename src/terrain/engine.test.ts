@@ -203,7 +203,58 @@ describe('createTerrainEngine', () => {
     const engine = engineWith(createFakeDeps())
     expect(engine.group.name).toBe('terrain')
     expect(engine.group.children).toHaveLength(0)
-    expect(engine.stats).toEqual({ visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0 })
+    expect(engine.stats).toEqual({ visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0, pendingVisibleTiles: 0 })
+  })
+
+  it('counts apart the tiles the view waits for (pendingVisibleTiles excludes culled tiles)', async () => {
+    const deps = createFakeDeps({ deferDem: true })
+    const engine = engineWith(deps, { maxZoom: ROOT_ZOOM + 1 })
+    const camera = cameraAbove(600_000, 2) // narrow view: most roots are culled but still queued
+
+    engine.update(camera, 1000)
+    expect(engine.stats.pendingVisibleTiles).toBeGreaterThan(0)
+    expect(engine.stats.pendingVisibleTiles).toBeLessThan(engine.stats.pendingTiles)
+
+    for (let i = 0; i < 6 && engine.stats.pendingVisibleTiles! > 0; i++) {
+      deps.release()
+      await settle()
+      engine.update(camera, 1000)
+    }
+    expect(engine.stats.pendingVisibleTiles).toBe(0)
+  })
+
+  it('prefetches the tiles of another camera after the view, within its share of the load budget', async () => {
+    const deps = createFakeDeps({ deferDem: true })
+    const engine = engineWith(deps, { maxZoom: ROOT_ZOOM + 4 }, { maxConcurrentLoads: 24, prefetchLoadShare: 0.5 })
+    const high = cameraAbove(600_000)
+    engine.update(high, 1000)
+    for (let i = 0; i < 8 && engine.stats.pendingTiles > 0; i++) {
+      deps.release()
+      await settle()
+      engine.update(high, 1000)
+    }
+    expect(engine.stats.pendingVisibleTiles).toBe(0)
+    const before = { ...engine.stats }
+    const visibleBefore = meshesOf(engine).filter((m) => m.visible).length
+    const fetchedBefore = deps.fetched.length
+
+    const started = engine.prefetch?.(cameraAbove(4000), 1000) ?? 0
+    expect(started).toBeGreaterThan(0)
+    expect(started).toBeLessThanOrEqual(12)
+    const prefetched = deps.fetched.slice(fetchedBefore)
+    expect(prefetched).toHaveLength(started)
+    const zoomOf = (url: string) => Number(url.split('/')[3])
+    const deepestBefore = Math.max(...deps.fetched.slice(0, fetchedBefore).map(zoomOf))
+    for (const url of prefetched) expect(zoomOf(url)).toBeGreaterThan(deepestBefore)
+    // ranked after any request of the current view
+    const ranks = (deps.fetcher.fetchBitmap as ReturnType<typeof vi.fn>).mock.calls.slice(fetchedBefore).map((c) => c[1]?.priority)
+    for (const rank of ranks) expect(rank).toBeGreaterThanOrEqual(1_000_000)
+    // nothing drawn or reported changes
+    expect(engine.stats).toEqual(before)
+    expect(meshesOf(engine).filter((m) => m.visible)).toHaveLength(visibleBefore)
+
+    // a second call does not exceed the share while those loads are in flight
+    expect(engine.prefetch?.(cameraAbove(4000), 1000)).toBe(0)
   })
 
   it('loads the root tiles after a few updates and renders them', async () => {
@@ -472,7 +523,7 @@ describe('createTerrainEngine', () => {
     expect(deps.heightField.clear).toHaveBeenCalled()
     for (const spy of textureDispose) expect(spy).toHaveBeenCalled()
     // stats reflect the empty tree right away, not only after the next update()
-    expect(engine.stats).toEqual({ visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0 })
+    expect(engine.stats).toEqual({ visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0, pendingVisibleTiles: 0 })
 
     engine.update(camera, 1000)
     expect(engine.stats.loadedTiles).toBe(0)
@@ -545,7 +596,7 @@ describe('createTerrainEngine', () => {
     await settle()
 
     expect(engine.group.children).toHaveLength(0)
-    expect(engine.stats).toEqual({ visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0 })
+    expect(engine.stats).toEqual({ visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0, pendingVisibleTiles: 0 })
     expect(deps.heightField.clear).toHaveBeenCalled()
     // the injected fetcher is not owned by the engine
     expect(deps.fetcher.clear).not.toHaveBeenCalled()

@@ -155,13 +155,15 @@ describe('settings and misc', () => {
       pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true },
       labels: { climbs: true, waypoints: true },
       weather: { enabled: true },
+      weatherScene: { enabled: true, strength: 1 },
       overlay: DEFAULT_OVERLAY,
-      video: { format: '1920x1080', fps: 30, quality: 'high' },
+      video: { aspect: '16:9', resolution: '1080p', fps: 30, quality: 'high' },
       landmarks: {
         enabled: true,
         kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false },
         maxDistanceM: 1500,
       },
+      race: { enabled: false, sync: 'elapsed' },
     })
   })
 
