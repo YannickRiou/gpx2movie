@@ -1,6 +1,7 @@
 /**
  * Bridge between project data and the app store, through the store's public actions only.
  */
+import { useMediaStore } from '../film/media'
 import { DEFAULT_SETTINGS, useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import type { LoadedProject } from './document'
@@ -35,9 +36,14 @@ export function modifiedSettings(settings: Settings, keys: readonly (keyof Setti
   return keys.filter((key) => !sameValue(settings[key], DEFAULT_SETTINGS[key]))
 }
 
-/** Replace the tracks, settings and playback speed by those of `project`, then fit the camera (addTracks requests it). */
+/**
+ * Replace the tracks, settings, pictures of the film and playback speed by those of `project`, then fit the camera
+ * (addTracks requests it).
+ */
 export function applyProject(project: LoadedProject): void {
   const store = useAppStore.getState()
+  // pictures first: the film that names them comes with the settings
+  useMediaStore.getState().replace(project.media)
   store.clearTracks()
   store.addTracks(project.tracks)
   // after addTracks, so that the project's imagery source wins over the automatic regional choice

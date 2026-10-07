@@ -42,6 +42,18 @@ export interface OverlayTheme {
   minimap: { route: string; covered: string; start: string; end: string }
   /** source credits: subtle backing and text, legible on snow as on forest */
   credits: { fill: string; text: string }
+  /** photo card of the timeline: mat around the picture (pad and radii in u), caption colour on the mat */
+  photo: OverlayPhotoStyle
+}
+
+export interface OverlayPhotoStyle {
+  mat: string
+  stroke?: string
+  pad: number
+  radius: number
+  imageRadius: number
+  caption: string
+  shadow?: { color: string; blur: number; offsetY: number }
 }
 
 const FRAUNCES = '"Fraunces", Georgia, serif'
@@ -84,6 +96,8 @@ export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {
     },
     minimap: { route: 'rgba(255, 255, 255, 0.5)', covered: TRAIL_RED_LIGHT, start: MOSS, end: '#FFFFFF' },
     credits: { fill: 'rgba(16, 25, 31, 0.6)', text: '#FFFFFF' },
+    // white print mat, like a photo laid on the map
+    photo: { mat: '#FFFFFF', pad: 0.8, radius: 0.3, imageRadius: 0, caption: INK, shadow: { color: 'rgba(0, 0, 0, 0.35)', blur: 2, offsetY: 0.4 } },
   },
   // dark glass panels, condensed figures, trail-red bar
   broadcast: {
@@ -111,6 +125,7 @@ export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {
     },
     minimap: { route: 'rgba(255, 255, 255, 0.4)', covered: TRAIL_RED_LIGHT, start: MOSS, end: '#FFFFFF' },
     credits: { fill: 'rgba(16, 25, 31, 0.7)', text: '#FFFFFF' },
+    photo: { mat: 'rgba(16, 25, 31, 0.78)', stroke: 'rgba(255, 255, 255, 0.14)', pad: 0.6, radius: 0.5, imageRadius: 0.2, caption: '#FFFFFF' },
   },
   // pale rounded cards, like a navigation app
   app: {
@@ -136,6 +151,14 @@ export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {
     profile: { area: GLACIER, played: TRAIL_RED, line: INK, marker: TRAIL_RED, markerRing: PAPER },
     minimap: { route: 'rgba(28, 42, 51, 0.35)', covered: TRAIL_RED, start: MOSS, end: INK },
     credits: { fill: 'rgba(245, 242, 234, 0.82)', text: INK },
+    photo: {
+      mat: 'rgba(245, 242, 234, 0.94)',
+      pad: 0.8,
+      radius: 1.6,
+      imageRadius: 1,
+      caption: INK,
+      shadow: { color: 'rgba(0, 0, 0, 0.28)', blur: 1.6, offsetY: 0.3 },
+    },
   },
 }
 

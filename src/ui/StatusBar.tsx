@@ -1,9 +1,9 @@
-import { OSM_ATTRIBUTION } from '../osm/overpass'
+import { useRef } from 'react'
 import { useLandmarkStore } from '../osm/store'
+import { overlayCredits } from '../overlay/data'
 import { useAppStore } from '../state/store'
-import { getImagerySource, getTerrainSource } from '../terrain/sources'
-import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import { useWeatherStore } from '../weather/store'
+import { Icon } from './icons'
 
 /** French plural: zero and one take the singular. */
 function plural(count: number, singular: string, pluralForm: string): string {
@@ -11,7 +11,8 @@ function plural(count: number, singular: string, pluralForm: string): string {
 }
 
 /**
- * Tile counters, import spinner and the mandatory source attributions.
+ * Status strip under the timeline: tile counters, import spinner and the mandatory source attributions on one line;
+ * the ⓘ button opens the full « Sources et licences » text.
  * Only the import status is a live region: the tile counters change several times a second
  * and must not be announced by screen readers.
  */
@@ -20,15 +21,15 @@ export function StatusBar() {
   const loading = useAppStore((s) => s.loading)
   const terrainSourceId = useAppStore((s) => s.settings.terrainSourceId)
   const imagerySourceId = useAppStore((s) => s.settings.imagerySourceId)
-  const weatherShown = useWeatherStore((s) => s.status === 'ready')
-  const landmarksShown = useLandmarkStore((s) => Object.values(s.landmarks).some((list) => list.length > 0))
+  const weather = useWeatherStore((s) => s.status === 'ready')
+  const landmarks = useLandmarkStore((s) => Object.values(s.landmarks).some((list) => list.length > 0))
+  const dialog = useRef<HTMLDialogElement>(null)
 
-  const terrain = getTerrainSource(terrainSourceId)
-  const imagery = getImagerySource(imagerySourceId)
+  const credits = overlayCredits({ terrainSourceId, imagerySourceId, weather, landmarks })
 
   return (
     <footer className="status">
-      <p className="status__line">
+      <p className="status__tiles">
         Tuiles : {stats.loadedTiles} {plural(stats.loadedTiles, 'chargée', 'chargées')} · {stats.pendingTiles} en
         attente
         {stats.failedTiles > 0 && ` · ${stats.failedTiles} en erreur`}
@@ -38,23 +39,38 @@ export function StatusBar() {
         <span className="status__spinner" aria-hidden="true" />
         Import en cours…
       </p>
-      <p className="status__attribution">
-        Relief : {terrain.attribution}
-        <br />
-        Imagerie : {imagery.attribution}
-        {weatherShown && (
-          <>
-            <br />
-            {OPEN_METEO_ATTRIBUTION}
-          </>
-        )}
-        {landmarksShown && (
-          <>
-            <br />
-            Repères : {OSM_ATTRIBUTION}
-          </>
-        )}
+      <p className="status__attribution" title={credits.join('\n')}>
+        {credits.join(' · ')}
       </p>
+      <button
+        type="button"
+        className="status__info"
+        aria-label="Sources et licences"
+        title="Sources et licences"
+        onClick={() => dialog.current?.showModal()}
+      >
+        <Icon name="info" size={14} />
+      </button>
+
+      <dialog ref={dialog} className="sources" aria-labelledby="sources-title">
+        <div className="sources__head">
+          <h2 id="sources-title" className="sources__title">
+            Sources et licences
+          </h2>
+          <button type="button" className="icon-btn" aria-label="Fermer" onClick={() => dialog.current?.close()}>
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        <ul className="sources__list">
+          {credits.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+        <p className="field__hint">
+          Ces mentions sont incrustées dans les films exportés (Habillage, « Crédits des sources »). Polices : Fraunces et
+          IBM Plex (SIL Open Font License 1.1). Icônes : Lucide (licence ISC). OpenFlyover est publié sous licence MIT.
+        </p>
+      </dialog>
     </footer>
   )
 }

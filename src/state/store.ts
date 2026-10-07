@@ -112,6 +112,15 @@ export interface AppState {
    */
   setProgress(progress: number, timeS?: number | null): void
   setSpeed(speed: number): void
+  /** name typed by the user ('' = the first track's name, see effectiveProjectName) */
+  projectName: string
+  setProjectName(name: string): void
+  /** preview only (neither saved nor undoable): the 3D view fills the stage instead of the export format */
+  freeFraming: boolean
+  setFreeFraming(v: boolean): void
+  /** settings, tracks and name at the last save or open (compared by reference: « Modifié » / « Enregistré ») */
+  savedProject: { settings: Settings; tracks: Track[]; name: string }
+  markProjectSaved(): void
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -283,6 +292,20 @@ export const useAppStore = create<AppState>()((set, get) => ({
   setSpeed(speed) {
     set({ playback: { ...get().playback, speed } })
   },
+
+  projectName: '',
+  setProjectName(name) {
+    set({ projectName: name })
+  },
+  freeFraming: false,
+  setFreeFraming(v) {
+    set({ freeFraming: v })
+  },
+  savedProject: { settings: DEFAULT_SETTINGS, tracks: [], name: '' },
+  markProjectSaved() {
+    const { settings, tracks, projectName } = get()
+    set({ savedProject: { settings, tracks, name: projectName } })
+  },
 }))
 
 /** Restore the initial state (tests). */
@@ -298,5 +321,8 @@ export function resetAppStore(): void {
     importError: null,
     loading: false,
     playback: { ...DEFAULT_PLAYBACK },
+    projectName: '',
+    freeFraming: false,
+    savedProject: { settings: DEFAULT_SETTINGS, tracks: [], name: '' },
   })
 }

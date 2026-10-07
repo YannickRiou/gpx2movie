@@ -108,7 +108,39 @@ Lancer `git status` et `npm run typecheck` en premier.
      neige et sur forêt, en 9:16 (repliée sur deux lignes ?), en 720p (lisibilité), avec météo et repères chargés, sans
      habillage, et absente une fois décochée ; recouvrement possible avec la légende de couleur de la trace (bas à gauche de
      l'aperçu, hors export).
-   - Incrément suivant : 4 piste des médias (accès aux fichiers derrière une abstraction, pour le web et Tauri).
+   - **Incrément 4 (piste « Médias », photos) — fait, non commité** : `src/film/exif.ts` (EXIF pur : GPS, heure),
+     `src/film/media.ts` (table des médias du document, `readPhoto` : réduction 2 560 px JPEG 0,85 + vignette, images
+     décodées à la demande et libérées), « + Photo » et dépôt sur la timeline, proposition « Placer sur le parcours »
+     (`photoFilmTime` : point le plus proche, sinon heure), piste « Médias » avec vignettes, inspecteur (plein écran /
+     carte, Ken Burns, légende, position, taille, début, durée), dessin dans `drawOverlay` (plein écran sous tout avec
+     Ken Burns, carte encadrée aux 3 styles), export (images décodées avant chaque image, `overlayTimedState`), champ
+     `media` du document (sans changement de version). Vidéos : réservées (ignorées à l'ajout). Lien photo → arrêt : non
+     fait. Détail : ARCHITECTURE.md, « Film et timeline » (Photos, Table des médias) et « Habillage du film ».
+   - **Contrôle visuel à faire (incrément 4)** : « + Photo » sur la barre à 1280 px (passage à la ligne propre), dépôt de
+     plusieurs JPEG sur la timeline, message et « Placer sur le parcours » avec des photos de téléphone (GPS) et d'appareil
+     (heure seule), photo HEIC (message d'erreur), vignettes lisibles dans les blocs, glisser / étirer / Suppr / flèches ;
+     plein écran : fondus, mouvement lent régulier (sans saccade à l'aperçu et à l'export), photo en hauteur recadrée,
+     widgets en direct effacés dessous, légende ; carte dans les 3 styles, aux 9 positions, tailles 0,5 et 2, légende
+     longue ; habillage désactivé (photos toujours dessinées) ; crédits au-dessus ; export 9:16 et 4K ; enregistrer,
+     rouvrir (photos et vignettes revenues), Ctrl+Z après suppression (photo revenue).
+
+5. **Interface, incrément « coque + barre du haut » — fait, non commité** : coque sombre / panneaux clairs
+   (`src/ui/shell.css`, jetons de gabarit et surfaces sémantiques dans `theme.css`), rail d'onglets Trace · Carte · Survol ·
+   Habillage · Projet et un panneau à la fois (tous montés), barre du haut (`TopBar.tsx` : nom du projet dans le store,
+   état « Modifié / Enregistré », annuler / rétablir, Ouvrir unique GPX / FIT / projet, Enregistrer, format de sortie
+   centré, « Exporter »), vue cadrée au format (`Stage.tsx`, « Libre » = aperçu seulement), tiroir d'export à droite
+   (tuiles de format, « Plus d'options »), « Recadrer » flottant (F), bande d'état 24 px avec ⓘ « Sources et licences »,
+   icônes Lucide en ligne (`icons.tsx`), raccourcis Ctrl+S / O / E, F, `[`. Logique pure testée dans `src/ui/shell.ts`.
+   Détail : ARCHITECTURE.md, « Interface ».
+   - **Contrôle visuel à faire** (1440×900, 1280×800, 1000×700, puis < 700 px) : barre du haut sur une ligne sans
+     chevauchement (format bien centré, nom tronqué proprement), infobulles (délai, position, pas de débordement à droite),
+     rail (onglet actif, repli, focus visible orange sur l'encre), en-têtes de section collants avec « modifié / Par défaut »,
+     sections Montées / Météo repliables, cadrage 16:9 / 9:16 / 21:9 avec bandes encre et habillage dans le cadre, légende
+     de couleur de la trace dans le cadre, tiroir d'export (repli auto du panneau sous 1360 px et retour à la fermeture),
+     export observé dans la vue avec « 42 % · Annuler », coque verrouillée pendant l'export, panneau en tiroir sous 1024 px,
+     barre d'onglets en bas sous 700 px, boîte « Sources et licences », messages d'import / d'ouverture en haut de la vue.
+   - Incrément suivant de l'interface : feuille des raccourcis (« ? »), menu du projet (Nouveau, Ouvrir, Enregistrer,
+     Préréglages), dépôt de fichiers sur toute la vue.
 
 Pour intégrer proprement : finir chaque chantier, `npx vitest run --maxWorkers=1` + typecheck + lint verts, puis un commit
 par fonctionnalité (les fichiers partagés `store.ts`, `document.ts`, fixtures de test contiennent des morceaux de plusieurs
@@ -118,7 +150,7 @@ chantiers : committer par hunks ou tout ensemble une fois l'arbre vert).
 
 - Contrôle visuel groupé : mini-carte dans les 3 styles, polices hors ligne, ralentis (sensation à 35 % sur ±1 km), course
   fantôme, étiquettes effacées sous les cartes, export complet 1080p d'un film de 60 s.
-- Phase 4 restante : timeline de montage (incrément 4, ci-dessus), caméra par étape et images-clés, plan de situation
+- Phase 4 restante : vidéos de la piste des médias, lien d'une photo à un arrêt, caméra par étape et images-clés, plan de situation
   (ouverture depuis le pays), ouverture / fermeture « balayage », vitesse par portion à la main, couleurs et polices par widget, thèmes de film, éditeur en modes
   (Trajet, Carte, Habillage, Survol, Prises de vue). Pastille « modifié » + « Par défaut » : faite par panneau,
   contrôle visuel à faire (position sur la ligne du titre, titres longs, bouton désactivé pendant un export) ; reste le

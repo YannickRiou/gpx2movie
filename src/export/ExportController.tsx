@@ -19,6 +19,7 @@ import { computeFilmView, filmViewMovesWithTime, type FilmView } from '../flyove
 import { buildTrackPath, type TrackPath } from '../flyover/path'
 import { loadOverlayFonts } from '../overlay/assets'
 import { overlayTime, overlayTimedState } from '../overlay/draw'
+import { loadFramePhotos } from '../overlay/exportOverlay'
 import { useTerrainContext } from '../scene/TerrainLayer'
 import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
 import { useFilmClock } from '../scene/usePacing'
@@ -211,9 +212,12 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     }
 
     if (request.still) {
-      const complete = await renderSettledFrame(schedule[0], frameDeps)
       const { progress } = request.still
-      composeFrame(ctx, canvas, { progress, time: overlayTime(filmClock, progress, saved.timeS) }, width, height, deps.overlay())
+      const time = overlayTime(filmClock, progress, saved.timeS)
+      // pictures decoded before the render: composing must follow it in the same task
+      await loadFramePhotos(time.timeS)
+      const complete = await renderSettledFrame(schedule[0], frameDeps)
+      composeFrame(ctx, canvas, { progress, time }, width, height, deps.overlay())
       exportStore().reportFrame(1, performance.now())
       exportStore().finalizing()
       const blob = await compositor.convertToBlob({ type: request.still.type, quality: STILL_JPEG_QUALITY })
@@ -232,9 +236,11 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
 
     session = await createVideoEncoder(compositor, request)
     const settings = useAppStore.getState().settings
-    /** opacities of the timed overlay (cards, timeline texts) at a frame, '' without overlay */
+    /** opacities of the timed overlay (cards, timeline texts and photos) at a frame, '' without overlay */
     const overlayKey = (progress: number, timeS: number) =>
-      deps.overlay() ? overlayTimedState(settings.overlay, settings.film.texts, overlayTime(filmClock, progress, timeS)).join() : ''
+      deps.overlay()
+        ? overlayTimedState(settings.overlay, settings.film.texts, overlayTime(filmClock, progress, timeS), settings.film.media).join()
+        : ''
     let previous = Number.NaN
     /** the view of the last rendered frame moved with time */
     let previousTimed = false
@@ -249,6 +255,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
         frameTimeS = times[i]
         previousTimed = timed
         previousOverlay = overlayNow
+        // pictures decoded before the render: composing must follow it in the same task
+        await loadFramePhotos(frameTimeS)
         const complete = await renderSettledFrame(progress, frameDeps)
         // same task as the last render: the drawing buffer still holds the frame
         const t0 = performance.now()

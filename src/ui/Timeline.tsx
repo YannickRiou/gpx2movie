@@ -2,9 +2,10 @@
  * Film timeline under the 3D view, in film time (opening and closing included).
  *
  * Bar: play / pause, film time, distance, altitude and recorded time at the marker, add a stop (at the playhead
- * or at a highlight) or a text, automatic stops, « modifié » marker of the film, speed, fold. Ruler: click or drag
- * to scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile, closing),
- * « Arrêts », « Textes »: drag a block to move it, an edge to stretch it, snapping to the other edges, the
+ * or at a highlight), a text or photos, automatic stops, « modifié » marker of the film, speed, fold. Ruler: click
+ * or drag to scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile, closing),
+ * « Arrêts », « Textes », « Médias » (photos also dropped onto the timeline; those taken along the track can then be
+ * placed where they were taken): drag a block to move it, an edge to stretch it, snapping to the other edges, the
  * highlights and the playhead (Alt: no snapping); Ctrl+wheel zooms. Keyboard on a block: arrows nudge (Shift:
  * finer), Delete removes, Escape deselects; Space plays / pauses anywhere outside a control.
  *
@@ -15,17 +16,22 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import type { KeyboardEvent, PointerEvent } from 'react'
 import { materializeStops, stopCandidates } from '../film/assemble'
 import { buildFilmClock, filmClockInputFor } from '../film/clock'
-import type { Film, FilmStop } from '../film/model'
+import { photoTimeMs } from '../film/exif'
+import { readPhoto, useMediaStore } from '../film/media'
+import type { Film, FilmMedia, FilmStop } from '../film/model'
 import {
   ZOOM_RANGE,
+  addPhotos,
   addStop,
   addText,
   dragFilm,
   fitPxPerS,
   formatFilmTime,
+  photoFilmTime,
   removeFilmItem,
   rulerTicks,
   snapTargets,
+  updateMedia,
   updateShot,
   zoomAt,
 } from '../film/timeline'
@@ -52,6 +58,14 @@ const DRAG_THRESHOLD_PX = 3
 const NUDGE_S = 1
 const FINE_NUDGE_S = 0.1
 const WHEEL_ZOOM = 1.2
+
+/** Message under the bar after adding photos: what was added, and the photos that can be placed on the track. */
+interface PhotoNotice {
+  text: string
+  placements: { id: string; startS: number }[]
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`
 
 type Gesture =
   | { kind: 'scrub' }
@@ -93,6 +107,7 @@ export function Timeline() {
   const setProgress = useAppStore((s) => s.setProgress)
   const setSpeed = useAppStore((s) => s.setSpeed)
   const setSetting = useAppStore((s) => s.setSetting)
+  const pictures = useMediaStore((s) => s.table)
   const id = useId()
   const clipId = `profile-played-${id.replace(/[^\w-]/g, '')}`
 
@@ -110,6 +125,9 @@ export function Timeline() {
   const [zoom, setZoom] = useState<number>(ZOOM_RANGE.min)
   const [collapsed, setCollapsed] = useState(false)
   const [width, setWidth] = useState(0)
+  const [notice, setNotice] = useState<PhotoNotice | null>(null)
+  const [reading, setReading] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const gestureRef = useRef<Gesture | null>(null)
@@ -221,6 +239,53 @@ export function Timeline() {
     commit(added.film)
     setSelected(added.id)
   }
+  /** photos added at the playhead, one after the other (one undo step); offers to place them on the track */
+  const addPhotoFiles = async (files: readonly File[]) => {
+    const images = files.filter((f) => f.type.startsWith('image/'))
+    const others = files.length - images.length
+    const unsupported = others > 0 ? ` ${plural(others, 'fichier ignoré', 'fichiers ignorés')} : seules les photos sont prises en charge (vidéos : bientôt).` : ''
+    if (images.length === 0) {
+      setNotice({ text: unsupported.trim(), placements: [] })
+      return
+    }
+    const startS = playheadS
+    setReading(true)
+    const read: Awaited<ReturnType<typeof readPhoto>>[] = []
+    const failed: string[] = []
+    for (const file of images) {
+      try {
+        read.push(await readPhoto(file, file.name))
+      } catch (err) {
+        failed.push(`« ${file.name} » : ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    setReading(false)
+    const errors = failed.length > 0 ? ` Non ajoutées : ${failed.join(' ; ')}` : ''
+    if (read.length === 0) {
+      setNotice({ text: `${errors}${unsupported}`.trim(), placements: [] })
+      return
+    }
+    const srcs = useMediaStore.getState().add(read.map((r) => r.asset))
+    const added = addPhotos(useAppStore.getState().settings.film, startS, srcs)
+    commit(added.film)
+    setSelected(added.ids[0])
+    const placements = added.ids.flatMap((photoId, k) => {
+      const t = photoFilmTime(path, clock, { lon: read[k].exif.lon, lat: read[k].exif.lat, timeMs: photoTimeMs(read[k].exif) })
+      return t === undefined ? [] : [{ id: photoId, startS: t }]
+    })
+    const n = placements.length
+    const located =
+      n === 0
+        ? ''
+        : n === 1
+          ? ` ${read.length === 1 ? 'Elle' : "L'une d'elles"} a été prise le long du parcours : la placer au moment où le marqueur y passe ?`
+          : ` ${n} ont été prises le long du parcours : les placer au moment où le marqueur y passe ?`
+    setNotice({ text: `${plural(read.length, 'photo ajoutée', 'photos ajoutées')} à la tête de lecture.${located}${errors}${unsupported}`, placements })
+  }
+  const placePhotos = (placements: PhotoNotice['placements']) => {
+    commit(placements.reduce((f, p) => updateMedia(f, p.id, { startS: p.startS }), useAppStore.getState().settings.film))
+    setNotice(null)
+  }
   const toggleAutoStops = (on: boolean) =>
     commit(on ? { ...film, autoStops: true, autoMode: 'temps-forts', stops: [] } : withOwnStops(film))
 
@@ -291,7 +356,16 @@ export function Timeline() {
   }
 
   // --- blocks ------------------------------------------------------------------------------------------------
-  const block = (item: TimelineItem, startS: number, endS: number, label: string, description: string, className: string, grips: Grip[]) => (
+  const block = (
+    item: TimelineItem,
+    startS: number,
+    endS: number,
+    label: string,
+    description: string,
+    className: string,
+    grips: Grip[],
+    thumb?: string,
+  ) => (
     <div
       key={item}
       role="button"
@@ -312,6 +386,7 @@ export function Timeline() {
       onKeyDown={(e) => onBlockKeyDown(e, item)}
     >
       {grips.includes('start') && <span className="film-tl__grip film-tl__grip--start" onPointerDown={(e) => startEdit(e, item, 'start')} />}
+      {thumb && <img className="film-tl__thumb" src={thumb} alt="" draggable={false} />}
       <span className="film-tl__label">{label}</span>
       {grips.includes('end') && <span className="film-tl__grip film-tl__grip--end" onPointerDown={(e) => startEdit(e, item, 'end')} />}
     </div>
@@ -325,7 +400,9 @@ export function Timeline() {
     selected === 'opening' ||
     selected === 'closing' ||
     shownClock.stops.some((s) => s.id === selected) ||
-    shownFilm.texts.some((t) => t.id === selected)
+    shownFilm.texts.some((t) => t.id === selected) ||
+    shownFilm.media.some((m) => m.id === selected)
+  const mediaLabel = (m: FilmMedia) => m.caption?.trim() || pictures[m.src]?.name || 'Photo'
 
   return (
     <div
@@ -337,6 +414,16 @@ export function Timeline() {
           setSelected(null)
           e.stopPropagation()
         }
+      }}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer.files.length === 0) return
+        e.preventDefault()
+        void addPhotoFiles(Array.from(e.dataTransfer.files))
       }}
     >
       <div className="film-tl__bar">
@@ -404,6 +491,29 @@ export function Timeline() {
         >
           + Texte
         </button>
+        <button
+          type="button"
+          className="film-tl__btn"
+          onClick={() => photoInputRef.current?.click()}
+          disabled={reading}
+          title="Ajouter des photos à la tête de lecture (ou les glisser sur la timeline)"
+        >
+          {reading ? 'Lecture…' : '+ Photo'}
+        </button>
+        <input
+          ref={photoInputRef}
+          className="visually-hidden"
+          type="file"
+          accept="image/*"
+          multiple
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(e) => {
+            const files = Array.from(e.currentTarget.files ?? [])
+            e.currentTarget.value = ''
+            if (files.length > 0) void addPhotoFiles(files)
+          }}
+        />
         <label
           className="film-tl__check"
           title="Arrêts générés aux temps forts (sommets des montées, cols, sommets) ; toute retouche d'un arrêt les fige"
@@ -432,6 +542,20 @@ export function Timeline() {
         </button>
       </div>
 
+      {notice && (
+        <div className="film-tl__notice" role="status">
+          <span className="film-tl__notice-text">{notice.text}</span>
+          {notice.placements.length > 0 && (
+            <button type="button" className="film-tl__btn" onClick={() => placePhotos(notice.placements)}>
+              Placer sur le parcours
+            </button>
+          )}
+          <button type="button" className="film-tl__btn" onClick={() => setNotice(null)} aria-label="Fermer le message">
+            ×
+          </button>
+        </div>
+      )}
+
       {!collapsed && (
         <div className="film-tl__body" id={`${id}-lanes`}>
           <div className="film-tl__heads">
@@ -454,7 +578,7 @@ export function Timeline() {
               ))}
             </div>
             {/* the lanes carry the same names */}
-            {['Plans', 'Arrêts', 'Textes'].map((name) => (
+            {['Plans', 'Arrêts', 'Textes', 'Médias'].map((name) => (
               <div key={name} className="film-tl__head" aria-hidden="true">
                 {name}
               </div>
@@ -543,6 +667,21 @@ export function Timeline() {
                     'move',
                     'end',
                   ]),
+                )}
+              </div>
+
+              <div className="film-tl__lane" role="group" aria-label="Médias">
+                {shownFilm.media.map((m) =>
+                  block(
+                    m.id,
+                    m.startS,
+                    m.startS + m.durationS,
+                    mediaLabel(m),
+                    `Photo ${m.layout === 'carte' ? 'en carte' : 'plein écran'} : ${mediaLabel(m)}`,
+                    'film-tl__block--media',
+                    ['start', 'move', 'end'],
+                    pictures[m.src]?.thumb,
+                  ),
                 )}
               </div>
 

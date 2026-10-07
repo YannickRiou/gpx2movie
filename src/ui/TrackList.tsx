@@ -1,10 +1,12 @@
-import { useId } from 'react'
+import { useId, useRef } from 'react'
 import type { Track } from '../core/types'
 import { RACE_SYNC_LABELS, RACE_SYNC_MODES, raceAt, rankRacers, syncNeedsTime } from '../flyover/race'
 import type { Race, RaceSync, Racer } from '../flyover/race'
 import { useRace } from '../scene/useRace'
 import { useAppStore } from '../state/store'
 import { formatDistance, formatDistanceGap, formatTimeGap, formatTrackSummary } from './format'
+import { Icon } from './icons'
+import { importTrackFiles } from './projectActions'
 
 /** Progress steps the leaderboard follows: a few renders per second of its own rows, not one per frame. */
 const PROGRESS_STEPS = 1000
@@ -109,6 +111,39 @@ function RacePanel({ tracks }: { tracks: readonly Track[] }) {
   )
 }
 
+/** « + Ajouter »: pick more GPX / FIT files. */
+function AddTracksButton() {
+  const input = useRef<HTMLInputElement>(null)
+  const loading = useAppStore((s) => s.loading)
+  return (
+    <>
+      <button
+        type="button"
+        className="btn btn--secondary btn--small"
+        onClick={() => input.current?.click()}
+        disabled={loading}
+        title="Ajouter des traces GPX ou FIT"
+      >
+        <Icon name="plus" size={16} />
+        Ajouter
+      </button>
+      <input
+        ref={input}
+        className="visually-hidden"
+        type="file"
+        multiple
+        accept=".gpx,.fit"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={(e) => {
+          importTrackFiles(Array.from(e.currentTarget.files ?? []))
+          e.currentTarget.value = ''
+        }}
+      />
+    </>
+  )
+}
+
 /** One card per imported track, with a delete button; the ghost race block from two tracks. */
 export function TrackList() {
   const tracks = useAppStore((s) => s.tracks)
@@ -116,9 +151,12 @@ export function TrackList() {
 
   return (
     <section aria-labelledby="tracks-title">
-      <h2 id="tracks-title" className="section-title">
-        Traces
-      </h2>
+      <div className="section-head">
+        <h2 id="tracks-title" className="section-title">
+          Traces
+        </h2>
+        {tracks.length > 0 && <AddTracksButton />}
+      </div>
       {tracks.length === 0 ? (
         <p className="tracks__empty">Aucune trace pour l'instant. Importez un fichier GPX ou FIT pour commencer.</p>
       ) : (
