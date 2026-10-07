@@ -12,6 +12,8 @@ import type { VideoQuality } from './schedule'
 
 export type ExportPhase = 'idle' | 'starting' | 'rendering' | 'finalizing' | 'done' | 'error' | 'canceled'
 
+export type StillType = 'image/png' | 'image/jpeg'
+
 export interface ExportRequest {
   /** increasing id: the controller runs each request once */
   id: number
@@ -27,15 +29,17 @@ export interface ExportRequest {
   holdEndS: number
   /** file name without extension */
   baseName: string
+  /** a still image of this progress instead of the film (the timing fields are then unused) */
+  still?: { progress: number; type: StillType }
 }
 
 export interface ExportResult {
-  /** object URL of the video blob (revoked by `reset` or the next export) */
+  /** object URL of the video or image blob (revoked by `reset` or the next export) */
   url: string
   fileName: string
   mimeType: string
   sizeBytes: number
-  /** e.g. 'mp4/avc' */
+  /** e.g. 'mp4/avc', 'png' */
   codec: string
   /** frames captured before their terrain had finished loading (per-frame timeout) */
   incompleteFrames: number
@@ -118,6 +122,11 @@ export function videoFileName(name: string, extension: string): string {
     .replace(/[\\/:*?"<>|]+/g, '-')
     .replace(/^[\s.-]+|[\s.]+$/g, '')
   return `${safe || 'openflyover'}${extension}`
+}
+
+/** Base name of a still image: `<name> <progress in %>`, e.g. 'Tour 42 %'. */
+export function stillBaseName(name: string, progress: number): string {
+  return `${name} ${Math.round(progress * 100)} %`
 }
 
 let nextId = 1

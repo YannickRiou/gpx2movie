@@ -11,7 +11,7 @@ import {
   type VideoQuality,
   type VideoSettings,
 } from '../export/schedule'
-import { isExportBusy, useExportStore } from '../export/store'
+import { isExportBusy, stillBaseName, useExportStore, type StillType } from '../export/store'
 import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatNumber } from './format'
@@ -27,7 +27,14 @@ const CODEC_LABELS: Record<string, string> = {
   'mp4/hevc': 'MP4 (HEVC)',
   'webm/vp9': 'WebM (VP9)',
   'webm/vp8': 'WebM (VP8)',
+  png: 'PNG',
+  jpeg: 'JPEG',
 }
+
+const STILL_TYPES: { value: StillType; label: string }[] = [
+  { value: 'image/png', label: 'PNG' },
+  { value: 'image/jpeg', label: 'JPEG' },
+]
 
 /** 75 -> "1 min 15 s", 42 -> "42 s" */
 function formatClock(seconds: number): string {
@@ -59,7 +66,7 @@ interface CodecProbe {
 
 /**
  * "Exporter la vidéo" section: aspect, resolution, frame rate, quality, codec and estimated size, start /
- * cancel, progress and download.
+ * cancel, progress and download; also a still image of the current progress at the same size.
  */
 export function ExportPanel() {
   const video = useAppStore((s) => s.settings.video)
@@ -70,6 +77,7 @@ export function ExportPanel() {
   const setSetting = useAppStore((s) => s.setSetting)
   const { phase, frame, frameCount, etaS, result, error, timings } = useExportStore()
   const id = useId()
+  const [stillType, setStillType] = useState<StillType>('image/png')
   const downloadedRef = useRef<string | null>(null)
 
   const busy = isExportBusy(phase)
@@ -107,18 +115,29 @@ export function ExportPanel() {
 
   const update = (patch: Partial<VideoSettings>) => setSetting('video', { ...video, ...patch })
 
+  const request = {
+    width,
+    height,
+    fps: video.fps,
+    quality: video.quality,
+    durationS,
+    progressAt: pacing.progressAtTime,
+    holdStartS: EXPORT_HOLD_START_S,
+    holdEndS: EXPORT_HOLD_END_S,
+  }
+
   const start = () => {
     if (!trackName || !codec) return
+    useExportStore.getState().start({ ...request, baseName: trackName })
+  }
+
+  const startStill = () => {
+    if (!trackName) return
+    const progress = useAppStore.getState().playback.progress
     useExportStore.getState().start({
-      width,
-      height,
-      fps: video.fps,
-      quality: video.quality,
-      durationS,
-      progressAt: pacing.progressAtTime,
-      holdStartS: EXPORT_HOLD_START_S,
-      holdEndS: EXPORT_HOLD_END_S,
-      baseName: trackName,
+      ...request,
+      baseName: stillBaseName(trackName, progress),
+      still: { progress, type: stillType },
     })
   }
 
@@ -128,7 +147,9 @@ export function ExportPanel() {
       : phase === 'finalizing'
         ? 'Finalisation du fichier…'
         : phase === 'done'
-          ? 'Vidéo prête.'
+          ? result?.mimeType.startsWith('image/')
+            ? 'Image prête.'
+            : 'Vidéo prête.'
           : phase === 'canceled'
             ? 'Export annulé.'
             : ''
@@ -235,10 +256,33 @@ export function ExportPanel() {
         </p>
       )}
 
+      <fieldset className="field fieldset" disabled={busy}>
+        <legend className="field__label">Image fixe (position actuelle de la lecture)</legend>
+        <div className="segmented">
+          {STILL_TYPES.map((t) => (
+            <label key={t.value} className="segmented__option">
+              <input
+                type="radio"
+                name={`${id}-still`}
+                value={t.value}
+                checked={stillType === t.value}
+                onChange={() => setStillType(t.value)}
+              />
+              {t.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
       {!busy && (
-        <button type="button" className="btn btn--primary btn--block" onClick={start} disabled={!trackName || !codec}>
-          Exporter la vidéo
-        </button>
+        <div className="export__actions">
+          <button type="button" className="btn btn--primary" onClick={start} disabled={!trackName || !codec}>
+            Exporter la vidéo
+          </button>
+          <button type="button" className="btn btn--secondary" onClick={startStill} disabled={!trackName}>
+            Image fixe
+          </button>
+        </div>
       )}
 
       {busy && (

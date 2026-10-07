@@ -386,6 +386,12 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 - Échelle de rendu `exportRenderScale` = petit côté / 1080 (1 hors export) : largeur de la trace et taille des étiquettes, en
   pixels, sont multipliées pour qu'un film 4K ressemble au 1080p. Les marqueurs n'en ont pas besoin (taille proportionnelle à la
   distance caméra, donc fraction d'écran constante).
+- Image fixe (bouton « Image fixe » du panneau, PNG ou JPEG) : même demande avec `still { progress, type }`, la progression
+  de lecture courante, à la taille format × résolution de la vidéo. Même chemin que le film (taille, ratio de pixels 1,
+  échelle de rendu, `renderSettledFrame`, `composeFrame` avec l'habillage s'il est affiché), une seule image rendue à la
+  progression décalée de 1e-9 pour que la caméra soit placée par le style courant (et non la vue orbitée à la main), puis
+  `OffscreenCanvas.convertToBlob` (JPEG qualité 0,92 ; extension d'après le type obtenu). Nom : `<trace> <progression> %`.
+  Restauration identique au film.
 - La console affiche en fin d'export le temps de rendu, d'attente des tuiles et d'encodage, et le nombre de délais dépassés.
   « Encodage » inclut la copie de l'image WebGL, qui attend la fin du rendu GPU.
 - Limites : fichier gardé en mémoire (~2× sa taille), onglet à garder ouvert, vitesse liée au GPU (mesure à faire sur une
