@@ -12,18 +12,11 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
   PR #2 → `phase3-atmosphere`, en brouillon : https://github.com/YannickRiou/gpx2movie/pull/2. À fusionner après la #1.
 - Règle demandée : une branche et une PR par fonctionnalité, description à jour + procédure de test manuel ; l'utilisateur
   fusionne.
-- **Pousser** : `~/.gitconfig` réécrit les URL GitHub vers le SSH du compte `yriouvortex` (sans droits) et git 2.25 ignore
-  `GIT_CONFIG_GLOBAL`. Passer par le compte `YannickRiou` de `gh` avec un HOME temporaire :
-
-```bash
-G=$HOME/.config/gh; T=$(mktemp -d); HOME=$T GH_CONFIG_DIR=$G git -c credential.helper='!gh auth git-credential' push https://github.com/YannickRiou/gpx2movie.git timeline; rm -rf $T
-```
-
-  (`~/.gitconfig` contient aussi un jeton d'accès personnel en clair du compte `yriouvortex` : à révoquer et supprimer ; signalé à
-  l'utilisateur, pas touché.)
-
-- **Le dernier commit de `timeline` n'a pas pu être poussé** (GitHub répondait « Internal Server Error » le 2026-10-07 vers
-  17 h) : pousser en premier à la reprise avec la commande ci-dessus, puis vérifier `git status -sb`.
+- **Pousser** : `git push` tout simplement. Le remote `origin` est `git@github-yannickriou:YannickRiou/gpx2movie.git`,
+  alias SSH défini dans `~/.ssh/config` (clé dédiée `~/.ssh/id_ed25519_yannickriou`, enregistrée sur le compte perso
+  `YannickRiou`). Ne pas repasser par `git@github.com` : cette adresse authentifie le compte `yriouvortex`, sans droits
+  ici, et le push HTTPS avec le jeton `gh` renvoyait « Internal Server Error ». `~/.gitconfig` contient encore un jeton
+  d'accès personnel en clair du compte `yriouvortex` (règle `url.*.insteadOf`) : à révoquer et supprimer par l'utilisateur.
 
 ## Environnement et méthode (WSL)
 
@@ -57,6 +50,7 @@ G=$HOME/.config/gh; T=$(mktemp -d); HOME=$T GH_CONFIG_DIR=$G git -c credential.h
 
 | Commit | Contenu |
 |---|---|
+| *(aucun)* | **fait, non commité** (arbre vert : typecheck, lint, 63 fichiers / 853 tests, build) — interface : inspecteur de la timeline dans le panneau de droite (sélection `filmSelection` dans le store, le tiroir d'export passe devant, repli du panneau sous 1360 px, position en grille 3 × 3) ; Échap : boîte → tiroir → sélection, un menu ouvert se ferme d'abord ; timeline : barre à boutons-icônes avec infobulles, ■ retour au début, zoom − / curseur / + / « Ajuster », menu « Options » (arrêts automatiques, « Par défaut »), arrêts marqués sur la barre du survol, message des photos en toast, raccourcis S / T ; vue 3D : clic sur la trace = tête de lecture, clic droit = « Ajouter un arrêt / un texte ici » (`src/scene/TrackPicker.tsx`, `pickProjectedPath`) |
 | `6ce6085` | Survol : nombre d'arrêts dans la durée du film |
 | `a215704` | messages éphémères (toasts), dépôt n'importe où, écran d'accueil, aide des raccourcis « ? », infobulles ; onglets Carte et Survol en sections, « Plus de réglages », heure du soleil (lever / coucher, boutons rapides) |
 | `46b6b39` | le tiroir d'export réduit la vue (bug : la fenêtre s'élargissait) |
@@ -73,21 +67,12 @@ Feuille de route et fonctionnalités : `README.md`.
 
 ## Travail en cours, probablement NON commité à la reprise
 
-Dernier chantier d'interface, lancé juste avant l'arrêt (vérifier avec `git status` ; si l'arbre est vert, finir et
-commiter ; sinon terminer d'abord). Fichiers : `src/App.tsx`, `src/ui/Timeline.tsx`, `src/ui/FilmInspector.tsx`,
-`src/ui/shell.ts`, `src/ui/shortcuts.ts`, `src/ui/icons.tsx`, `src/state/store.ts`, `src/film/timeline.ts`,
-`src/flyover/path.ts`, `src/scene/usePacing.ts`, `src/scene/FlyoverCanvas.tsx`, nouveau `src/scene/TrackPicker.tsx`
-(+ tests). Contenu prévu :
-
-1. inspecteur de la timeline rendu dans le panneau de droite (`.dock`) au lieu de flotter sur la vue ; sélection dans le
-   store ; grille 3×3 pour la position d'un texte ; Échap : dialogue → tiroir → sélection ;
-2. timeline : arrêts dessinés sur la barre du survol, curseur de zoom + « Ajuster », bouton stop, barre aux contrôles
-   harmonisés (icônes + infobulles), « modifié / Par défaut » et « Arrêts automatiques » dans un menu ▾, message photos en
-   toast, raccourcis S / T (arrêt / texte au curseur) ;
-3. vue 3D : clic sur la trace = déplacer le curseur ; clic droit = « Ajouter un arrêt / un texte ici » (`TrackPicker`).
-
-Puis : typecheck, lint, tests, build ; captures 1440 / 1280 / 1000 ; mettre à jour ARCHITECTURE.md, README
-(« Utilisation »), ce fichier ; commit, push, description de la PR #2 (étape « interface » cochée).
+Le dernier chantier d'interface est fait (première ligne du tableau) mais pas commité : vérifier avec `git status`, puis
+commiter (fichiers : `src/App.tsx`, `src/ui/Timeline.tsx`, `src/ui/FilmInspector.tsx`, `src/ui/shell.ts`, `shell.css`,
+`app.css`, `src/ui/shortcuts.ts`, `src/ui/icons.tsx`, `src/state/store.ts`, `src/film/timeline.ts`, `src/flyover/path.ts`,
+`src/scene/usePacing.ts`, `src/scene/FlyoverCanvas.tsx`, nouveau `src/scene/TrackPicker.tsx`, tests de `shell`,
+`shortcuts`, `film/timeline`, `flyover/path`, `ARCHITECTURE.md`, `README.md`, ce fichier), pousser, mettre à jour la
+description de la PR #2 (étape « interface » cochée, procédure de test manuel), refaire les captures 1440 / 1280 / 1000.
 
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
 
@@ -99,6 +84,19 @@ Puis : typecheck, lint, tests, build ; captures 1440 / 1280 / 1000 ; mettre à j
 - Interface : 1280 et 1000 px de large (panneau en tiroir), tiroir d'export pendant un vrai export (« 42 % · Annuler »,
   interface verrouillée), toasts (empilement, « Annuler » après « Par défaut »), dépôt d'un fichier (voile), onglet Projet,
   heure du soleil : curseur aligné sur les repères lever / coucher, boutons sur deux lignes à 280 px.
+- Dernier chantier (inspecteur à droite, barre de la timeline, clic sur la trace) :
+  - inspecteur : à 1440 px panneau + vue + inspecteur côte à côte ; à 1280 px le panneau se replie à la sélection et revient
+    à la désélection ; tiroir d'export par-dessus puis inspecteur revenu à sa fermeture ; en-tête collant ; grille 3 × 3
+    (case choisie, focus visible, flèches, libellé à côté) ; Échap dans un champ ; glisser un bloc : la timeline ne saute pas
+    à l'appui, l'inspecteur s'ouvre au relâcher ;
+  - barre de la timeline à 1440 / 1280 / 1000 px (une ou deux lignes propres, libellés masqués à 1280 px), infobulles en
+    haut jamais coupées (bords gauche et droit), curseur de zoom et « Ajuster », ■, menu « Options » au-dessus de la barre
+    (point « modifié », Échap, clic dehors, Tab), arrêts teintés sur la barre du survol lisibles sur le profil (arrêt
+    sélectionné en blanc), toast des photos avec « Placer sur le parcours », S / T ;
+  - vue 3D : curseur main sur la trace seulement, clic = tête de lecture (pas après un glisser de caméra), clic droit sans
+    glisser = menu au pointeur (retourné près des bords droit et bas), clic droit glissé = déplacement de la caméra sans
+    menu, menu au clavier (flèches, Échap), ajout = bloc sélectionné + inspecteur, un Ctrl+Z par ajout ; rien pendant un
+    export ; Firefox (menu du navigateur bien remplacé).
 - Plus ancien : marqueurs de course fantôme, mini-carte dans les 3 styles, étiquettes effacées sous les cartes, ralentis.
 - Export réel sur machine avec GPU : vitesse (avant `c8a00ed` / après), film 60 s en 1080p puis 4K (mémoire), 9:16,
   trace et étiquettes à l'échelle en 4K, crédits incrustés, image fixe.
