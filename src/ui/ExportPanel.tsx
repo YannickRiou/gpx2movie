@@ -1,12 +1,13 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { pickCodec, videoBitrate, type CodecCandidate } from '../export/encoder'
 import {
   EXPORT_HOLD_END_S,
   EXPORT_HOLD_START_S,
   VIDEO_ASPECTS,
-  VIDEO_FORMATS,
   VIDEO_FPS,
+  VIDEO_RESOLUTIONS,
   buildFrameSchedule,
-  getVideoFormat,
+  videoSize,
   type VideoQuality,
   type VideoSettings,
 } from '../export/schedule'
@@ -50,7 +51,16 @@ function download(url: string, fileName: string): void {
   link.remove()
 }
 
-/** "Exporter la vidéo" section: film format, frame rate, quality, start / cancel, progress and download. */
+/** Codec the browser would use for a size / rate / quality (`key`), null when it can encode none. */
+interface CodecProbe {
+  key: string
+  codec: CodecCandidate | null
+}
+
+/**
+ * "Exporter la vidéo" section: aspect, resolution, frame rate, quality, codec and estimated size, start /
+ * cancel, progress and download.
+ */
 export function ExportPanel() {
   const video = useAppStore((s) => s.settings.video)
   // film length and progress at each film time, with the slow-downs and pauses of the preview
@@ -58,19 +68,35 @@ export function ExportPanel() {
   const durationS = pacing.totalTime()
   const trackName = useAppStore((s) => s.tracks[0]?.name)
   const setSetting = useAppStore((s) => s.setSetting)
-  const { phase, frame, frameCount, etaS, result, error } = useExportStore()
+  const { phase, frame, frameCount, etaS, result, error, timings } = useExportStore()
   const id = useId()
   const downloadedRef = useRef<string | null>(null)
 
   const busy = isExportBusy(phase)
-  const format = getVideoFormat(video.format) ?? VIDEO_FORMATS[0]
-  const sizes = VIDEO_FORMATS.filter((f) => f.aspect === format.aspect)
+  const { width, height } = videoSize(video.aspect, video.resolution)
   const totalFrames = buildFrameSchedule({
     durationS,
     fps: video.fps,
     holdStartS: EXPORT_HOLD_START_S,
     holdEndS: EXPORT_HOLD_END_S,
   }).length
+
+  // Ask the browser which codec it can use at this size (H.264 may refuse large or tall frames).
+  const probeKey = `${width}x${height}@${video.fps}/${video.quality}`
+  const [probe, setProbe] = useState<CodecProbe | null>(null)
+  useEffect(() => {
+    let alive = true
+    void pickCodec({ width, height, fps: video.fps, quality: video.quality }).then((codec) => {
+      if (alive) setProbe({ key: probeKey, codec })
+    })
+    return () => {
+      alive = false
+    }
+  }, [probeKey, width, height, video.fps, video.quality])
+  const codec = probe?.key === probeKey ? probe.codec : undefined
+  const estimatedBytes = codec ? (videoBitrate(width, height, video.fps, video.quality, codec.codec) * totalFrames) / video.fps / 8 : 0
+  const secondsPerImage =
+    timings.rendered > 0 ? (timings.renderMs + timings.waitMs + timings.encodeMs) / timings.rendered / 1000 : null
 
   // Download the film automatically once it is ready (the link stays available).
   useEffect(() => {
@@ -82,10 +108,10 @@ export function ExportPanel() {
   const update = (patch: Partial<VideoSettings>) => setSetting('video', { ...video, ...patch })
 
   const start = () => {
-    if (!trackName) return
+    if (!trackName || !codec) return
     useExportStore.getState().start({
-      width: format.width,
-      height: format.height,
+      width,
+      height,
       fps: video.fps,
       quality: video.quality,
       durationS,
@@ -120,15 +146,15 @@ export function ExportPanel() {
         <select
           id={`${id}-aspect`}
           className="select"
-          value={format.aspect}
+          value={video.aspect}
           disabled={busy}
           onChange={(e) => {
-            const first = VIDEO_FORMATS.find((f) => f.aspect === e.currentTarget.value)
-            if (first) update({ format: first.id })
+            const aspect = VIDEO_ASPECTS.find((a) => a.id === e.currentTarget.value)
+            if (aspect) update({ aspect: aspect.id })
           }}
         >
           {VIDEO_ASPECTS.map((a) => (
-            <option key={a.aspect} value={a.aspect}>
+            <option key={a.id} value={a.id}>
               {a.label}
             </option>
           ))}
@@ -136,25 +162,29 @@ export function ExportPanel() {
       </div>
 
       <div className="field">
-        <label className="field__label" htmlFor={`${id}-size`}>
+        <label className="field__label" htmlFor={`${id}-resolution`}>
           Résolution
         </label>
         <select
-          id={`${id}-size`}
+          id={`${id}-resolution`}
           className="select"
-          value={format.id}
-          disabled={busy || sizes.length < 2}
+          value={video.resolution}
+          disabled={busy}
+          aria-describedby={`${id}-size`}
           onChange={(e) => {
-            const next = sizes.find((f) => f.id === e.currentTarget.value)
-            if (next) update({ format: next.id })
+            const resolution = VIDEO_RESOLUTIONS.find((r) => r.id === e.currentTarget.value)
+            if (resolution) update({ resolution: resolution.id })
           }}
         >
-          {sizes.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.label}
+          {VIDEO_RESOLUTIONS.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.label}
             </option>
           ))}
         </select>
+        <p id={`${id}-size`} className="field__hint">
+          {formatNumber(width)} × {formatNumber(height)} pixels
+        </p>
       </div>
 
       <fieldset className="field fieldset" disabled={busy}>
@@ -196,10 +226,17 @@ export function ExportPanel() {
       <p className="field__hint">
         {formatClock(totalFrames / video.fps)} · {formatNumber(totalFrames)} images, rendues une à une après le
         chargement complet du relief.
+        {codec && ` ${CODEC_LABELS[`${codec.container}/${codec.codec}`]}, environ ${formatMegabytes(estimatedBytes)}.`}
       </p>
+      {codec === null && (
+        <p className="field__hint" role="alert">
+          Ce navigateur ne sait pas encoder une vidéo de {formatNumber(width)} × {formatNumber(height)} pixels :
+          choisissez une résolution plus petite.
+        </p>
+      )}
 
       {!busy && (
-        <button type="button" className="btn btn--primary btn--block" onClick={start} disabled={!trackName}>
+        <button type="button" className="btn btn--primary btn--block" onClick={start} disabled={!trackName || !codec}>
           Exporter la vidéo
         </button>
       )}
@@ -218,8 +255,8 @@ export function ExportPanel() {
               : phase === 'starting'
                 ? 'Préparation…'
                 : `Image ${formatNumber(frame)} / ${formatNumber(frameCount)}${
-                    etaS === null ? '' : ` · reste environ ${formatClock(etaS)}`
-                  }`}
+                    secondsPerImage === null ? '' : ` · ≈ ${formatNumber(secondsPerImage, 1)} s / image`
+                  }${etaS === null ? '' : ` · reste environ ${formatClock(etaS)}`}`}
           </p>
           <button
             type="button"

@@ -3,6 +3,7 @@ import { TRACK_COLOR_MODES, TRACK_METRICS, hasMetric } from '../flyover/trackCol
 import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
+import { useWeatherStore } from '../weather/store'
 import { formatNumber } from './format'
 
 const ZOOM_OFFSETS: { value: Settings['imageryZoomOffset']; label: string }[] = [
@@ -22,6 +23,11 @@ const SUN_HOUR_STEP = 0.25
 const EXPOSURE_EV_MIN = -2
 const EXPOSURE_EV_MAX = 2
 const EXPOSURE_EV_STEP = 0.5
+
+const WEATHER_STRENGTH_STEP = 0.05
+
+/** 0.75 -> "75 %" */
+const formatPercent = (v: number) => `${formatNumber(v * 100)} %`
 
 /** 0.5 -> "+0,5 IL" */
 function formatEv(ev: number): string {
@@ -51,6 +57,10 @@ export function SettingsPanel() {
   const trackHasTime = useAppStore((s) => s.tracks[0]?.stats.startTime !== undefined)
   const sunFollowsTrack = settings.sunFromTrack && trackHasTime
   const exposureId = `${id}-exposure`
+  const weatherSceneId = `${id}-weather-scene`
+  const weatherStrengthId = `${id}-weather-strength`
+  const firstTrackId = useAppStore((s) => s.tracks[0]?.id)
+  const weatherReady = useWeatherStore((s) => s.status === 'ready' && s.trackId !== null && s.trackId === firstTrackId)
   const trackColorId = `${id}-track-color`
   const firstTrack = useAppStore((s) => s.tracks[0])
   const colorModes = useMemo(
@@ -261,6 +271,45 @@ export function SettingsPanel() {
               {formatEv(settings.exposureEv)}
             </output>
           </div>
+        </div>
+      )}
+
+      {settings.atmosphere && weatherReady && (
+        <div className="field">
+          <label className="checkbox" htmlFor={weatherSceneId}>
+            <input
+              id={weatherSceneId}
+              type="checkbox"
+              checked={settings.weatherScene.enabled}
+              onChange={(e) => setSetting('weatherScene', { ...settings.weatherScene, enabled: e.currentTarget.checked })}
+            />
+            Météo dans la scène
+          </label>
+          {settings.weatherScene.enabled && (
+            <>
+              <label className="field__label" htmlFor={weatherStrengthId}>
+                Intensité de la météo
+              </label>
+              <div className="range-row">
+                <input
+                  id={weatherStrengthId}
+                  className="range"
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={WEATHER_STRENGTH_STEP}
+                  value={settings.weatherScene.strength}
+                  onChange={(e) =>
+                    setSetting('weatherScene', { ...settings.weatherScene, strength: Number(e.currentTarget.value) })
+                  }
+                  aria-valuetext={formatPercent(settings.weatherScene.strength)}
+                />
+                <output className="range-row__value range-row__value--wide" htmlFor={weatherStrengthId}>
+                  {formatPercent(settings.weatherScene.strength)}
+                </output>
+              </div>
+            </>
+          )}
         </div>
       )}
     </section>

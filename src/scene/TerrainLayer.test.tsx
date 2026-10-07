@@ -72,13 +72,15 @@ describe('engine options from settings', () => {
     pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true },
     labels: { climbs: true, waypoints: true },
     weather: { enabled: true },
+    weatherScene: { enabled: true, strength: 1 },
     overlay: DEFAULT_OVERLAY,
-    video: { format: '1920x1080' as const, fps: 30 as const, quality: 'high' as const },
+    video: { aspect: '16:9' as const, resolution: '1080p' as const, fps: 30 as const, quality: 'high' as const },
     landmarks: {
       enabled: true,
       kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false },
       maxDistanceM: 1500,
     },
+    race: { enabled: false, sync: 'elapsed' as const },
   }
 
   it('resolves the sources from the catalogue', () => {

@@ -9,24 +9,31 @@
  * Every frame: the sun date follows the playback (recorded time under the marker, else the solar hour, see
  * flyover/sun.ts), then the exposure opens up as the sun goes down and a faint night fill keeps the relief
  * readable (scene/exposure.ts).
+ * The weather of the outing under the marker at that date (weather/sceneWeather.ts, `settings.weatherScene`)
+ * then dims the sun and sky lights, fades the shadows, adds exposure, and drives the weather post-effect
+ * (extra haze near the ground, veiled sky, desaturation: scene/weatherEffect.ts).
  * The precomputed scattering textures ship with the package and are served locally at /atmosphere/ (see
  * vite.config.ts): generating them at start-up runs in idle callbacks, which never fire while a heavy scene
  * keeps the main thread busy, and the lights would stay black.
  */
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Vector3, type HemisphereLight } from 'three'
+import { Color, Vector3, type HemisphereLight } from 'three'
 import { EffectComposer, SMAA, ToneMapping } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
-import type { AerialPerspectiveEffect, SunDirectionalLight } from '@takram/three-atmosphere'
+import type { AerialPerspectiveEffect, SkyLightProbe, SunDirectionalLight } from '@takram/three-atmosphere'
 import { AerialPerspective, Atmosphere, Sky, SkyLight, Stars, SunLight, type AtmosphereApi } from '@takram/three-atmosphere/r3f'
-import { buildTrackPath } from '../flyover/path'
+import { buildTrackPath, samplePath } from '../flyover/path'
 import { sunDateAt } from '../flyover/sun'
 import { useAppStore } from '../state/store'
+import { CLEAR_SCENE_WEATHER, hazeExtinction, sceneWeatherAt } from '../weather/sceneWeather'
+import type { SceneWeather } from '../weather/sceneWeather'
+import { useWeatherStore } from '../weather/store'
 import { DEFAULT_GROUND_HEIGHT_M } from './CameraRig'
 import { nightFillIntensity, sceneExposure, sunElevation } from './exposure'
 import { useTerrainContext } from './TerrainLayer'
 import { SHADOW_MAP_SIZE, TerrainShadow } from './terrainShadow'
+import { WeatherEffect } from './weatherEffect'
 
 /** Directory of the precomputed atmosphere textures (EXR) and of the star catalogue. */
 export const ATMOSPHERE_TEXTURES_URL = `${import.meta.env.BASE_URL}atmosphere/`
@@ -34,24 +41,32 @@ const STARS_DATA_URL = `${ATMOSPHERE_TEXTURES_URL}stars.bin`
 /** Night fill colours (sky / ground), multiplied by nightFillIntensity. */
 const NIGHT_SKY_COLOR = '#A9CCD9'
 const NIGHT_GROUND_COLOR = '#1C2A33'
+/** Reflectance of the haze droplets lit by the sun and the sky (a white diffuser would be 1). */
+const HAZE_ALBEDO = 0.8
+const WORLD_UP = new Vector3(0, 1, 0)
+const _marker = new Vector3()
+const _irradiance = new Vector3()
+const _grey = new Color()
 
 export function AtmosphereLayer() {
   const { engine, frame } = useTerrainContext()
   const shadows = useAppStore((s) => s.settings.shadows)
   const track = useAppStore((s) => s.tracks[0])
-  const sunFromTrack = useAppStore((s) => s.settings.sunFromTrack)
   const gl = useThree((s) => s.gl)
+  const camera = useThree((s) => s.camera)
   const atmosphereRef = useRef<AtmosphereApi>(null)
   const aerialRef = useRef<AerialPerspectiveEffect>(null)
   const nightFillRef = useRef<HemisphereLight>(null)
+  const skyLightRef = useRef<SkyLightProbe>(null)
   const [sun, setSun] = useState<SunDirectionalLight | null>(null)
   /** day used when the track has no timestamps */
   const [today] = useState(() => Date.now())
-  /** only timed tracks need the path (startTime is set as soon as one point has a time) */
-  const path = useMemo(
-    () => (track && sunFromTrack && track.stats.startTime !== undefined ? buildTrackPath(track) : null),
-    [track, sunFromTrack],
-  )
+  /** only timed tracks need the path, for the sun date and the weather (startTime is set as soon as one point has a time) */
+  const path = useMemo(() => (track && track.stats.startTime !== undefined ? buildTrackPath(track) : null), [track])
+  const weatherEffect = useMemo(() => new WeatherEffect({ logarithmicDepth: gl.capabilities.logarithmicDepthBuffer }), [gl])
+  useEffect(() => () => weatherEffect.dispose(), [weatherEffect])
+  /** weather applied to the current frame, kept for the haze colour (after the lights are updated) */
+  const weatherRef = useRef<SceneWeather>(CLEAR_SCENE_WEATHER)
   /** local vertical in ECEF, for the sun elevation */
   const up = useMemo(() => (frame ? new Vector3().setFromMatrixColumn(frame.localToEcef, 1).normalize() : null), [frame])
 
@@ -63,8 +78,9 @@ export function AtmosphereLayer() {
     }
   }, [gl])
 
-  // Before the default render (negative priority): sun date, exposure and night fill for this frame. Reading
-  // the progress here rather than through a selector avoids a React render per frame during playback.
+  // Before the default render (negative priority): sun date, weather, exposure and night fill for this frame.
+  // Reading the progress here rather than through a selector avoids a React render per frame during playback.
+  // Everything is a function of the progress (no state carried between frames): the export stays deterministic.
   useFrame(() => {
     const atmosphere = atmosphereRef.current
     if (!frame || !up || !atmosphere) return
@@ -77,9 +93,67 @@ export function AtmosphereLayer() {
     })
     atmosphere.updateByDate(date)
     const elevation = sunElevation(atmosphere.sunDirection, up)
-    gl.toneMappingExposure = sceneExposure(elevation, settings.exposureEv)
+
+    // weather under the marker at the sun date; the haze starts from the ground there
+    let weather: SceneWeather = CLEAR_SCENE_WEATHER
+    let hazeBaseY = 0
+    const { series, trackId } = useWeatherStore.getState()
+    if (path && path.count > 0 && series && trackId === track?.id && settings.weatherScene.enabled) {
+      const marker = samplePath(path, Math.min(1, Math.max(0, playback.progress)) * path.lengthM)
+      weather = sceneWeatherAt(series, date.getTime(), marker.lon, marker.lat, settings.weatherScene)
+      const ground = engine?.sampleHeight(marker.lon, marker.lat) ?? marker.ele ?? 0
+      hazeBaseY = frame.toLocal(marker.lon, marker.lat, ground * settings.exaggeration, _marker).y
+    }
+    weatherRef.current = weather
+
+    gl.toneMappingExposure = sceneExposure(elevation, settings.exposureEv + weather.exposureCompensationEv)
     if (nightFillRef.current) nightFillRef.current.intensity = nightFillIntensity(elevation)
+    if (sun) {
+      sun.intensity = weather.sunScale
+      sun.shadow.intensity = weather.shadowStrength
+    }
+    if (skyLightRef.current) skyLightRef.current.intensity = weather.skyScale
+    weatherEffect.setParams({
+      hazeExtinction: hazeExtinction(weather.hazeScale),
+      hazeBaseY,
+      hazeHeight: weather.hazeHeightM * settings.exaggeration,
+      skyVeil: weather.skyVeil,
+      desaturation: weather.desaturation,
+    })
   }, -1)
+
+  // Once the Takram lights are updated for this frame (priority 0) and before the composer renders (priority 1):
+  // the sky light under a cloud deck turns white (its blue fades with the veil, luminance kept), then the haze
+  // colour is the radiance of the haze lit by the dimmed sun (on a horizontal surface) and sky.
+  useFrame(() => {
+    const atmosphere = atmosphereRef.current
+    const sky = skyLightRef.current
+    if (!up || !atmosphere || !sun || !sky) return
+    const weather = weatherRef.current
+    if (weather.skyVeil > 0) {
+      for (const c of sky.sh.coefficients) {
+        const grey = 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z
+        c.set(c.x + (grey - c.x) * weather.skyVeil, c.y + (grey - c.y) * weather.skyVeil, c.z + (grey - c.z) * weather.skyVeil)
+      }
+    }
+    const color = weatherEffect.hazeColor
+    if (weather.hazeScale <= 1 && weather.skyVeil <= 0) {
+      color.setRGB(0, 0, 0)
+      return
+    }
+    const sinElevation = Math.max(0, Math.sin(sunElevation(atmosphere.sunDirection, up)))
+    const skyIrradiance = sky.sh.getIrradianceAt(WORLD_UP, _irradiance).multiplyScalar(sky.intensity)
+    const sunIrradiance = sun.intensity * sinElevation
+    color.setRGB(
+      skyIrradiance.x + sun.color.r * sunIrradiance,
+      skyIrradiance.y + sun.color.g * sunIrradiance,
+      skyIrradiance.z + sun.color.b * sunIrradiance,
+    )
+    color.multiplyScalar(HAZE_ALBEDO / Math.PI)
+    // haze under a cloud deck is lit by white diffuse light: the tint of the low sun fades with the veil
+    const grey = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
+    color.lerp(_grey.setRGB(grey, grey, grey), weather.skyVeil)
+  }, 0.5)
 
   useLayoutEffect(() => {
     if (frame) atmosphereRef.current?.worldToECEFMatrix.copy(frame.localToEcef)
@@ -115,11 +189,12 @@ export function AtmosphereLayer() {
       <Stars data={STARS_DATA_URL} />
       <hemisphereLight ref={nightFillRef} color={NIGHT_SKY_COLOR} groundColor={NIGHT_GROUND_COLOR} intensity={0} />
       <group position={[0, DEFAULT_GROUND_HEIGHT_M, 0]}>
-        <SkyLight />
+        <SkyLight ref={skyLightRef} />
         <SunLight ref={setSun} />
       </group>
       <EffectComposer multisampling={0}>
         <AerialPerspective ref={aerialRef} />
+        <primitive object={weatherEffect} mainCamera={camera} />
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />
         <SMAA />
       </EffectComposer>

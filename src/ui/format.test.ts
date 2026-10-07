@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { formatAscent, formatDistance, formatDuration, formatNumber, formatTrackSummary } from './format'
+import {
+  formatAscent,
+  formatDistance,
+  formatDistanceGap,
+  formatDuration,
+  formatNumber,
+  formatTimeGap,
+  formatTrackSummary,
+} from './format'
 
 const NNBSP = ' '
 
@@ -56,5 +64,26 @@ describe('formatTrackSummary', () => {
 
   it('omits the duration when unknown', () => {
     expect(formatTrackSummary({ distanceM: 500, ascentM: 10, descentM: 0, pointCount: 2 })).toBe('500 m · D+ 10 m')
+  })
+})
+
+describe('formatTimeGap', () => {
+  it('signs the gap (+ behind, − ahead) in seconds, minutes and seconds, or hours and minutes', () => {
+    expect(formatTimeGap(80_000)).toBe('+1 min 20')
+    expect(formatTimeGap(-45_000)).toBe('−45 s')
+    expect(formatTimeGap(125_400)).toBe('+2 min 05')
+    expect(formatTimeGap(-3_900_000)).toBe('−1 h 05')
+    expect(formatTimeGap(3_599_600)).toBe('+1 h 00')
+    expect(formatTimeGap(400)).toBe('0 s')
+    expect(formatTimeGap(Number.NaN)).toBe('–')
+  })
+})
+
+describe('formatDistanceGap', () => {
+  it('signs the gap (− behind, + ahead) in metres or kilometres', () => {
+    expect(formatDistanceGap(-350)).toBe('−350 m')
+    expect(formatDistanceGap(1234)).toBe('+1,2 km')
+    expect(formatDistanceGap(0.3)).toBe('0 m')
+    expect(formatDistanceGap(Number.POSITIVE_INFINITY)).toBe('–')
   })
 })

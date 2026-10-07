@@ -2,44 +2,68 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_VIDEO_SETTINGS,
   VIDEO_ASPECTS,
-  VIDEO_FORMATS,
+  VIDEO_RESOLUTIONS,
   buildFrameSchedule,
-  getVideoFormat,
   isValidVideoSettings,
+  videoSize,
+  withVideoDefaults,
 } from './schedule'
 
 describe('video formats', () => {
-  it('lists the expected sizes, all with even dimensions (H.264 requirement)', () => {
-    expect(VIDEO_FORMATS.map((f) => `${f.aspect} ${f.width}x${f.height}`)).toEqual([
-      '16:9 1920x1080',
-      '16:9 3840x2160',
-      '16:9 1280x720',
-      '9:16 1080x1920',
-      '1:1 1080x1080',
-      '4:5 1080x1350',
+  it('sizes every aspect × resolution from the short side', () => {
+    const sizes = VIDEO_ASPECTS.map((a) =>
+      VIDEO_RESOLUTIONS.map((r) => {
+        const { width, height } = videoSize(a.id, r.id)
+        return `${width}x${height}`
+      }).join(' '),
+    )
+    expect(sizes).toEqual([
+      '1280x720 1920x1080 2560x1440 3840x2160',
+      '720x1280 1080x1920 1440x2560 2160x3840',
+      '720x720 1080x1080 1440x1440 2160x2160',
+      '720x900 1080x1350 1440x1800 2160x2700',
+      '1680x720 2520x1080 3360x1440 5040x2160',
     ])
-    for (const f of VIDEO_FORMATS) {
-      expect(f.width % 2).toBe(0)
-      expect(f.height % 2).toBe(0)
-      const [w, h] = f.aspect.split(':').map(Number)
-      expect(f.width / f.height).toBeCloseTo(w / h, 6)
+  })
+
+  it('keeps even sizes with the exact aspect and short side', () => {
+    for (const a of VIDEO_ASPECTS) {
+      for (const r of VIDEO_RESOLUTIONS) {
+        const { width, height } = videoSize(a.id, r.id)
+        expect(width % 2).toBe(0)
+        expect(height % 2).toBe(0)
+        expect(Math.min(width, height)).toBe(r.shortSide)
+        expect(width / height).toBeCloseTo(a.x / a.y, 2)
+      }
     }
-  })
-
-  it('every aspect has at least one format', () => {
-    for (const { aspect } of VIDEO_ASPECTS) expect(VIDEO_FORMATS.some((f) => f.aspect === aspect)).toBe(true)
-  })
-
-  it('looks formats up by id', () => {
-    expect(getVideoFormat('1080x1350')).toMatchObject({ aspect: '4:5', width: 1080, height: 1350 })
-    expect(getVideoFormat('640x480')).toBeUndefined()
   })
 
   it('validates video settings', () => {
     expect(isValidVideoSettings(DEFAULT_VIDEO_SETTINGS)).toBe(true)
-    expect(isValidVideoSettings({ ...DEFAULT_VIDEO_SETTINGS, format: '640x480' as never })).toBe(false)
+    expect(isValidVideoSettings({ ...DEFAULT_VIDEO_SETTINGS, aspect: '3:2' as never })).toBe(false)
+    expect(isValidVideoSettings({ ...DEFAULT_VIDEO_SETTINGS, resolution: '8k' as never })).toBe(false)
     expect(isValidVideoSettings({ ...DEFAULT_VIDEO_SETTINGS, fps: 25 as never })).toBe(false)
     expect(isValidVideoSettings({ ...DEFAULT_VIDEO_SETTINGS, quality: 'ultra' as never })).toBe(false)
+  })
+
+  it('upgrades the former fixed formats', () => {
+    expect(withVideoDefaults({ format: '1080x1920', fps: 60, quality: 'max' })).toEqual({
+      aspect: '9:16',
+      resolution: '1080p',
+      fps: 60,
+      quality: 'max',
+    })
+    expect(withVideoDefaults({ format: '3840x2160', fps: 30, quality: 'high' })).toMatchObject({ aspect: '16:9', resolution: '4k' })
+    expect(withVideoDefaults({ format: '1080x1350', fps: 30, quality: 'high' })).toMatchObject({ aspect: '4:5', resolution: '1080p' })
+    expect(withVideoDefaults({ format: '640x480', fps: 24, quality: 'standard' })).toEqual({
+      aspect: '16:9',
+      resolution: '1080p',
+      fps: 24,
+      quality: 'standard',
+    })
+    // current shape and unrelated values are left alone
+    expect(withVideoDefaults(DEFAULT_VIDEO_SETTINGS)).toBe(DEFAULT_VIDEO_SETTINGS)
+    expect(withVideoDefaults(null)).toBeNull()
   })
 })
 

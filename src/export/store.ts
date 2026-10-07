@@ -3,6 +3,9 @@
  * in the 3D scene runs it and reports its progress here.
  *
  * phase: idle → starting (requested, waiting for the controller) → rendering → finalizing → done | error | canceled
+ *
+ * Also shared with the scene during an export: the render scale (pixel-sized elements grow with the video) and
+ * the drape-flush registry (the track and the labels re-drape synchronously instead of after their debounce).
  */
 import { create } from 'zustand'
 import type { VideoQuality } from './schedule'
@@ -38,6 +41,32 @@ export interface ExportResult {
   incompleteFrames: number
 }
 
+/** Where the export time goes, accumulated over the frames rendered so far (milliseconds). */
+export interface ExportTimings {
+  /** distinct images rendered (held frames reuse the previous one) */
+  rendered: number
+  /** `advance` calls: scene update + WebGL render */
+  renderMs: number
+  /** waiting for tiles between renders */
+  waitMs: number
+  /** composing and encoding */
+  encodeMs: number
+  /** images captured at the per-frame timeout */
+  timeouts: number
+}
+
+export const EMPTY_TIMINGS: ExportTimings = { rendered: 0, renderMs: 0, waitMs: 0, encodeMs: 0, timeouts: 0 }
+
+/**
+ * Short side of the frame at which pixel-sized scene elements (labels, track width) keep their preview size;
+ * a 4K film (short side 2160) draws them twice as large, so they cover the same share of the image.
+ */
+export const RENDER_SCALE_REFERENCE_PX = 1080
+
+export function exportRenderScale(width: number, height: number): number {
+  return Math.min(width, height) / RENDER_SCALE_REFERENCE_PX
+}
+
 export interface ExportState {
   phase: ExportPhase
   request: ExportRequest | null
@@ -51,6 +80,9 @@ export interface ExportState {
   etaS: number | null
   result: ExportResult | null
   error: string | null
+  timings: ExportTimings
+  /** multiplier of pixel-sized scene elements: `exportRenderScale` during an export, 1 otherwise */
+  renderScale: number
 
   start(request: Omit<ExportRequest, 'id'>): void
   cancel(): void
@@ -59,7 +91,8 @@ export interface ExportState {
 
   // reported by the controller
   begin(id: number, frameCount: number, now: number): boolean
-  reportFrame(frame: number, now: number): void
+  reportFrame(frame: number, now: number, timings?: ExportTimings): void
+  setRenderScale(scale: number): void
   finalizing(): void
   complete(result: ExportResult): void
   fail(message: string): void
@@ -99,6 +132,8 @@ const IDLE = {
   etaS: null,
   result: null,
   error: null,
+  timings: EMPTY_TIMINGS,
+  renderScale: 1,
 }
 
 function revoke(result: ExportResult | null): void {
@@ -130,13 +165,17 @@ export const useExportStore = create<ExportState>()((set, get) => ({
   begin(id, frameCount, now) {
     const { phase, request } = get()
     if (phase !== 'starting' || request?.id !== id) return false
-    set({ phase: 'rendering', frame: 0, frameCount, startedAt: now, etaS: null })
+    set({ phase: 'rendering', frame: 0, frameCount, startedAt: now, etaS: null, timings: EMPTY_TIMINGS })
     return true
   },
 
-  reportFrame(frame, now) {
+  reportFrame(frame, now, timings) {
     const { startedAt, frameCount } = get()
-    set({ frame, etaS: estimateRemainingS(now - startedAt, frame, frameCount) })
+    set({ frame, etaS: estimateRemainingS(now - startedAt, frame, frameCount), ...(timings && { timings: { ...timings } }) })
+  },
+
+  setRenderScale(renderScale) {
+    if (renderScale !== get().renderScale) set({ renderScale })
   },
 
   finalizing() {
@@ -160,4 +199,28 @@ export const useExportStore = create<ExportState>()((set, get) => ({
 export function resetExportStore(): void {
   revoke(useExportStore.getState().result)
   useExportStore.setState({ ...IDLE })
+}
+
+// ---------------------------------------------------------------------------
+// Drape flushes
+// ---------------------------------------------------------------------------
+
+/** Runs a pending debounced re-drape now; returns true when there was one. */
+export type DrapeFlush = () => boolean
+
+const drapeFlushes = new Set<DrapeFlush>()
+
+/** Scene components with a debounced re-drape register it here (returns the unregister function). */
+export function registerDrapeFlush(flush: DrapeFlush): () => void {
+  drapeFlushes.add(flush)
+  return () => {
+    drapeFlushes.delete(flush)
+  }
+}
+
+/** Run every pending re-drape now; true when at least one ran (the scene must be rendered again). */
+export function flushDrapes(): boolean {
+  let flushed = false
+  for (const flush of drapeFlushes) flushed = flush() || flushed
+  return flushed
 }
