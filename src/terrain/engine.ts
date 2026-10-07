@@ -89,6 +89,8 @@ export interface EngineTuning {
   maxLoadAttempts: number
   /** frames to wait before retrying a failed node */
   retryDelayFrames: number
+  /** share of `maxConcurrentLoads` that prefetches may use (the rest stays free for the current view) */
+  prefetchLoadShare: number
   /** skirt depth as a fraction of the tile ground size */
   skirtRatio: number
   /** minimum skirt depth, metres */
@@ -104,6 +106,7 @@ export const DEFAULT_TUNING: Readonly<EngineTuning> = {
   rootTileBudget: 16,
   maxLoadAttempts: 3,
   retryDelayFrames: 300,
+  prefetchLoadShare: 0.5,
   skirtRatio: 0.015,
   minSkirtDepthM: 20,
 }
@@ -178,16 +181,20 @@ export function createTerrainEngine(
   group.name = 'terrain'
   group.matrixAutoUpdate = false
 
-  const stats: TerrainStats = { visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0 }
+  const stats: TerrainStats = { visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0, pendingVisibleTiles: 0 }
   const listeners = new Set<() => void>()
 
   // Hot-path scratch state, allocated once.
   const cameraState = createCameraState()
   const selection = createSelectionResult()
+  const prefetchCameraState = createCameraState()
+  const prefetchSelection = createSelectionResult()
   const selectionParams: SelectionParams = { errorTargetPx: 0, maxZoom: 0, frame: 0, maxLoadAttempts: cfg.maxLoadAttempts }
   const geometryOptions: BuildTileGeometryOptions = { segments: 0, exaggeration: 1, skirtDepthM: 0 }
-  /** nodes whose mesh is currently visible */
+  /** nodes whose mesh is currently drawn */
   const rendered: TileNode[] = []
+  /** ready nodes outside the view frustum, kept visible for the shadow pass only */
+  const casters: TileNode[] = []
   /**
    * Keys pushed into the height field, insertion order: the engine-side LRU for a field that
    * cannot prune itself. Not maintained otherwise (it would grow with every tile ever loaded).
@@ -338,7 +345,10 @@ export function createTerrainEngine(
     const result = buildGeometryFor(node, grid)
     const mesh = new Mesh(result.geometry, createMaterial(texture))
     mesh.name = node.id
-    mesh.frustumCulled = false // the quadtree already culls
+    // three culls too: the shadow casters outside the view (see update) must not cost a draw in the main pass
+    mesh.frustumCulled = true
+    mesh.castShadow = true
+    mesh.receiveShadow = true
     mesh.matrixAutoUpdate = false
     mesh.visible = false
     node.geometry = result.geometry
@@ -424,8 +434,10 @@ export function createTerrainEngine(
     for (let i = 0; i < roots.length; i++) disposeSubtree(roots[i])
     roots = []
     rendered.length = 0
+    casters.length = 0
     selection.toRender.length = 0
     selection.toLoad.length = 0
+    selection.pendingVisible = 0
     loadingCount = 0
     readyCount = 0
     failedCount = 0
@@ -521,11 +533,12 @@ export function createTerrainEngine(
   // --- change notifications ---------------------------------------------------------
 
   /** `pendingTiles` = nodes loading + nodes the last selection wanted but could not start. */
-  function refreshStats(pendingTiles: number): void {
+  function refreshStats(pendingTiles: number, pendingVisibleTiles = 0): void {
     stats.visibleTiles = rendered.length
     stats.loadedTiles = readyCount
     stats.pendingTiles = pendingTiles
     stats.failedTiles = failedCount
+    stats.pendingVisibleTiles = pendingVisibleTiles
   }
 
   function flushChange(): void {
@@ -540,6 +553,34 @@ export function createTerrainEngine(
     }
   }
 
+  // --- visibility -------------------------------------------------------------------
+
+  function hideAll(nodes: TileNode[]): void {
+    for (let i = 0; i < nodes.length; i++) {
+      const mesh = nodes[i].mesh
+      if (mesh) mesh.visible = false
+    }
+    nodes.length = 0
+  }
+
+  /**
+   * Shadow casters: the ready nodes the selection visited but culled (outside the view frustum) and that no
+   * drawn tile covers. A ridge between the view and a low sun is often behind or beside the camera; its
+   * mesh stays visible so it reaches the shadow map, and three's frustum culling keeps it out of the main pass.
+   */
+  function collectCasters(node: TileNode): void {
+    if (node.lastVisitedFrame !== frame || node.mesh?.visible) return
+    if (!cameraState.frustum.intersectsSphere(node.boundingSphere)) {
+      if (node.state === 'ready' && node.mesh) {
+        node.mesh.visible = true
+        casters.push(node)
+      }
+      return
+    }
+    const children = node.children
+    if (children) for (let i = 0; i < 4; i++) collectCasters(children[i])
+  }
+
   // --- public API -------------------------------------------------------------------
 
   function update(camera: PerspectiveCamera, viewportHeightPx: number): void {
@@ -552,11 +593,8 @@ export function createTerrainEngine(
     selectTiles(roots, cameraState, selectionParams, selection)
 
     // Visibility: only the selected nodes draw.
-    for (let i = 0; i < rendered.length; i++) {
-      const mesh = rendered[i].mesh
-      if (mesh) mesh.visible = false
-    }
-    rendered.length = 0
+    hideAll(rendered)
+    hideAll(casters)
     const toRender = selection.toRender
     for (let i = 0; i < toRender.length; i++) {
       const node = toRender[i]
@@ -565,6 +603,7 @@ export function createTerrainEngine(
         rendered.push(node)
       }
     }
+    for (let i = 0; i < roots.length; i++) collectCasters(roots[i])
 
     // Loads, highest priority first, within the concurrency budget.
     const toLoad = selection.toLoad
@@ -577,8 +616,29 @@ export function createTerrainEngine(
     if (dirtyCount > 0) rebuildDirty()
     if (frame % cfg.sweepEveryFrames === 0) sweep()
 
-    refreshStats(loadingCount + (toLoad.length - started))
+    refreshStats(loadingCount + (toLoad.length - started), selection.pendingVisible)
     flushChange()
+  }
+
+  /** Fetch ranks of prefetches start here: after any request of the current view (lower rank = sooner). */
+  const PREFETCH_RANK = 1_000_000
+
+  function prefetch(camera: PerspectiveCamera, viewportHeightPx: number): number {
+    if (disposed) return 0
+    updateCameraState(prefetchCameraState, camera, viewportHeightPx)
+    selectionParams.errorTargetPx = opts.errorTargetPx
+    selectionParams.maxZoom = opts.maxZoom
+    selectionParams.frame = frame
+    selectTiles(roots, prefetchCameraState, selectionParams, prefetchSelection)
+    const limit = Math.max(1, Math.floor(cfg.maxConcurrentLoads * cfg.prefetchLoadShare))
+    const toLoad = prefetchSelection.toLoad
+    let started = 0
+    // only what that camera would draw (priority >= 0, sorted first), never its off-screen children
+    for (let i = 0; i < toLoad.length && loadingCount < limit && toLoad[i].priority >= 0; i++) {
+      startLoad(toLoad[i], PREFETCH_RANK + i)
+      started++
+    }
+    return started
   }
 
   function sampleHeight(lon: number, lat: number): number | undefined {
@@ -634,5 +694,5 @@ export function createTerrainEngine(
 
   buildTree()
 
-  return { group, update, sampleHeight, setOptions, onChange, stats, dispose }
+  return { group, update, sampleHeight, setOptions, onChange, stats, prefetch, dispose }
 }

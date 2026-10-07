@@ -46,3 +46,24 @@ export function formatTrackSummary(stats: TrackStats): string {
   if (stats.durationS !== undefined && stats.durationS > 0) parts.push(formatDuration(stats.durationS))
   return parts.join(' · ')
 }
+
+const MINUS = '−'
+
+/** Time gap (ms, positive = behind) -> "+45 s", "+1 min 20", "−1 h 05", "0 s". */
+export function formatTimeGap(ms: number): string {
+  if (!Number.isFinite(ms)) return PLACEHOLDER
+  const total = Math.round(Math.abs(ms) / 1000)
+  if (total === 0) return '0 s'
+  const sign = ms > 0 ? '+' : MINUS
+  if (total < 60) return `${sign}${total} s`
+  if (total < 3600) return `${sign}${Math.floor(total / 60)} min ${String(total % 60).padStart(2, '0')}`
+  const minutes = Math.round(total / 60)
+  return `${sign}${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`
+}
+
+/** Distance gap (m, negative = behind) -> "−350 m", "+1,2 km", "0 m". */
+export function formatDistanceGap(metres: number): string {
+  if (!Number.isFinite(metres)) return PLACEHOLDER
+  if (Math.round(metres) === 0) return '0 m'
+  return `${metres > 0 ? '+' : MINUS}${formatDistance(Math.abs(metres))}`
+}

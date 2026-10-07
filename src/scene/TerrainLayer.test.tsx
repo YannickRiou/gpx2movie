@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { LonLatBounds } from '../core/types'
+import { DEFAULT_OVERLAY } from '../overlay/settings'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
 
 vi.mock('@react-three/fiber', () => ({ useFrame: vi.fn(), useThree: vi.fn() }))
@@ -60,6 +61,26 @@ describe('engine options from settings', () => {
     imageryZoomOffset: 1 as const,
     exaggeration: 1,
     wireframe: false,
+    atmosphere: true,
+    shadows: true,
+    sunHour: 10,
+    sunFromTrack: true,
+    exposureEv: 0,
+    trackColorBy: 'none' as const,
+    camera: { style: 'chase' as const, distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
+    flyoverDurationS: 60,
+    pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true },
+    labels: { climbs: true, waypoints: true },
+    weather: { enabled: true },
+    weatherScene: { enabled: true, strength: 1 },
+    overlay: DEFAULT_OVERLAY,
+    video: { aspect: '16:9' as const, resolution: '1080p' as const, fps: 30 as const, quality: 'high' as const },
+    landmarks: {
+      enabled: true,
+      kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false },
+      maxDistanceM: 1500,
+    },
+    race: { enabled: false, sync: 'elapsed' as const },
   }
 
   it('resolves the sources from the catalogue', () => {

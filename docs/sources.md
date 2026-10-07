@@ -1,6 +1,7 @@
 # Sources de tuiles — vérification empirique
 
-Date de vérification : **2026-10-05** (relecture indépendante le même jour : sondes supplémentaires aux frontières, § « Sondes frontalières »). Outils : `curl.exe` avec l'en-tête `Origin: http://127.0.0.1:5173`
+Date de vérification : **2026-10-05** (relecture indépendante le même jour : sondes supplémentaires aux frontières, § « Sondes frontalières ») ;
+cartes topographiques et orthophotos datées ajoutées le **2026-10-07** (§ « Cartes et photos anciennes »). Outils : `curl.exe` avec l'en-tête `Origin: http://127.0.0.1:5173`
 (statut, `content-type`, `access-control-allow-origin`), lecture des en-têtes d'image (IHDR / SOF / VP8L)
 et décodage PNG minimal en Node (zlib) pour le contrôle Terrarium, documents GetCapabilities des fournisseurs.
 `src/terrain/sources.ts` est la seule vérité pour le code ; ce document en est la justification.
@@ -19,6 +20,12 @@ Zermatt (7.75, 46.02) → z12 = 2136/1456, z20 = 546861/372959 ; New York (−74
 | `swisstopo` | `https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg` | 0–20 (`3857_20`) | 256 px | JPEG | `*` | boîte 5.140242/45.398181 → 11.47757/48.230651 (WGS84BoundingBox du GetCapabilities) ; vraies tuiles jusqu'à z20 sur toute la boîte, mais **nettement moins résolues hors Suisse/Liechtenstein** | OGD swisstopo, gratuit, « fair use » (~20 000 utilisateurs/jour) | `© swisstopo` |
 | `arcgis-world-imagery` | `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` | 0–19 (le service annonce 24 LOD, z0–23 ; au-delà de 19 un placeholder 200 est renvoyé là où il n'y a pas d'image) | 256 px | JPEG | `*` | mondiale | Esri Master Agreement ; voir § Esri | `Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community` (champ `copyrightText` du service) |
 | `eox-s2cloudless` | `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/{z}/{y}/{x}.jpg` | 0–16 dans le catalogue (serveur : 200 jusqu'à z18 à Chamonix, 404 à z19 ; natif ≈ z14 / 10 m) | 256 px | JPEG | origine reflétée (`access-control-allow-origin: http://127.0.0.1:5173`) | mondiale | **CC BY-NC-SA 4.0** (usage commercial : licence EOX séparée) | `EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025)` |
+| `ign-plan` | `https://data.geopf.fr/wmts?…LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&…&FORMAT=image/png` | 0–19 (`PM_0_19`) | 256 px | PNG RGB | `*` | France (même boîte que `ign-ortho`) ; 404 hors de France dès z13 | Licence ouverte Etalab 2.0 | `© IGN — Géoplateforme (Plan IGN)` |
+| `swisstopo-carte` | `https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/{z}/{x}/{y}.jpeg` | 0–19 (`3857_19`) | 256 px | JPEG | `*` | boîte swisstopo ; hors Suisse + bande frontalière, **tuile blanche** (668 o) à partir de z16 | OGD swisstopo, « fair use » | `© swisstopo` |
+| `opentopomap` | `https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png` (`{s}` = a, b, c) | 0–17 (z18 : image « max zoom layer = 17 » sans CORS) | 256 px | PNG palette | `*` | mondiale | données ODbL (OSM) + SRTM, rendu **CC BY-SA** ; serveur bénévole, pas de téléchargement massif | `Kartendaten: © OpenStreetMap-Mitwirkende, SRTM \| Kartendarstellung: © OpenTopoMap (CC-BY-SA)` (traduit dans l'UI) |
+| `ign-ortho-2000-2005` | `…LAYER=ORTHOIMAGERY.ORTHOPHOTOS2000-2005&STYLE=normal&…&FORMAT=image/jpeg` | **6**–18 (`PM_6_18`) | 256 px | JPEG | `*` | France (boîte IGN) ; tuile blanche 1 651 o / 404 hors de France | Licence ouverte Etalab 2.0 | `© IGN — Géoplateforme (BD ORTHO 2000–2005)` |
+| `ign-ortho-1965-1980` | `…LAYER=ORTHOIMAGERY.ORTHOPHOTOS.1965-1980&STYLE=BDORTHOHISTORIQUE&…&FORMAT=image/png` | **3**–18 (`PM_3_18`) | 256 px | PNG palette, niveaux de gris, noir → transparent | `*` | **partielle** (Alpes, sud, ouest oui ; Bassin parisien, nord-est en grande partie non → 404) | Licence ouverte Etalab 2.0 | `© IGN — Géoplateforme (BD ORTHO historique 1965–1980)` |
+| `ign-ortho-1950-1965` | `…LAYER=ORTHOIMAGERY.ORTHOPHOTOS.1950-1965&STYLE=normal&…&FORMAT=image/png` | 0–18 (`PM_0_18`) | 256 px | PNG niveaux de gris | `*` | France métropolitaine **complète** (seul millésime historique complet) ; déborde sur Genève et Courmayeur ; 404 à Zermatt | Licence ouverte Etalab 2.0 | `© IGN — Géoplateforme (BD ORTHO historique 1950–1965)` |
 
 Toutes les sources répondent avec un en-tête CORS pour l'origine `http://127.0.0.1:5173` : **aucun proxy Vite n'est nécessaire**,
 `TILE_PROXIES` reste vide dans `vite.config.ts`.
@@ -163,6 +170,98 @@ Toutes les sources répondent avec un en-tête CORS pour l'origine `http://127.0
 | Bregenz AT / Vaduz LI / Côme IT | — | 200 (24–31 Ko) |
 | Menton, Bastia, Bonifacio, Ouessant, Dunkerque (FR) | 200, 12–23 Ko (réelles) | — |
 
+## Cartes et photos anciennes (2026-10-07)
+
+Même protocole (`curl` avec `Origin: http://127.0.0.1:5173`, lecture des en-têtes PNG/JPEG, Pillow pour les pixels transparents ou blancs),
+GetCapabilities Géoplateforme (`https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetCapabilities&VERSION=1.0.0`) et swisstopo (EPSG:3857).
+Deuxième région de contrôle : Paris (IGN), Zermatt et Berne (swisstopo), New York (OpenTopoMap, Plan IGN). Échantillonnage de couverture :
+grille de 56 points (7 longitudes −1,5 → 7,0 × 8 latitudes 43,3 → 50,3) à z14.
+
+### IGN — orthophotos datées (« remonter le temps »)
+
+- Couches publiques sans clé dans le GetCapabilities : `ORTHOIMAGERY.ORTHOPHOTOS.1950-1965`, `.1965-1980`, `.1980-1995`,
+  `ORTHOIMAGERY.ORTHOPHOTOS2000-2005`, `2006-2010`, `2011-2015`, `2016-2020`, `2021-2023`, ainsi que des millésimes annuels (`ORTHOPHOTOS2000` … `2024`),
+  les couvertures IRC, Pléiades / SPOT annuels et des emprises locales `EDUGEO` (villes, années 1950–1990). Métadonnées `IGNF_BD-ORTHO-HISTO` :
+  « Licence Ouverte / Open License », et « Seul un millésime (1950-1965) en niveaux de gris est aujourd'hui complet sur le territoire. D'autres sont en cours de constitution. »
+- **1950–1965** : `Format image/png`, `PM_0_18`, styles `BDORTHOHISTORIQUE` (défaut, « noir rendu transparent ») et `normal` ; le catalogue utilise `normal`
+  (PNG niveaux de gris opaque, `colorType 0`). Chamonix z10–z18 200 (40–58 Ko), z19 404 ; Paris z12/z16/z18 200. Grille z14 : 48/56 en 200
+  (les 404 et tuiles de 141 o sont en mer ou en Allemagne / Suisse). Vraies photos à Genève et Courmayeur (z15), 404 à Zermatt. Aucune transparence ni pixel noir
+  sur les tuiles alpines testées. z0 et z3 servis (mosaïque basse résolution).
+- **1965–1980** : seul le style `BDORTHOHISTORIQUE` existe (`STYLE=normal` → **400** « Style normal unknown »). PNG palette en niveaux de gris, `PM_3_18`
+  (z2 → 404). Chamonix z12–z18 200, z19 404 ; Paris z12/z16/z18 200. Grille z14 : **39/56** (trous dans le Bassin parisien, la Champagne, la Lorraine).
+  Sur l'emprise de la trace d'exemple (49 tuiles z14) : couverture complète sauf le massif du Mont-Blanc (1 tuile 404, 2 partielles) ; le noir rendu
+  transparent laisse voir le gris neutre d'`imagery.ts`. D'où l'étiquette « (France, partiel) ».
+- **1980–1995** : même format que 1965–1980 mais 404 à Chamonix et à Paris, 6/56 sur la grille (Bretagne / Normandie seulement) : **non retenue**.
+- **2000–2005** (et 2006–2010, même structure) : `Format image/jpeg`, style `normal`, `PM_6_18` : z5 → 404, z6 200, Chamonix z12–z18 200 (13–20 Ko), z19 404 ;
+  Paris z12/z16/z18 200. Grille z14 : 48/56, mêmes trous que BD ORTHO (mer) et **même tuile blanche de 1 651 o** hors de France (Courmayeur, Genève).
+  Seule 2000–2005 est ajoutée (point intermédiaire entre les années 1950 et aujourd'hui) ; 2006–2010, 2011–2015, 2016–2020, 2021–2023 et les millésimes
+  annuels fonctionnent de la même manière et peuvent être ajoutés à l'identique.
+- CORS `*`, `Fees: none`, CGU `cartes.gouv.fr/cgu` comme `ign-ortho`.
+
+### Plan IGN v2
+
+- Couche `GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2`, « Plan IGN », style `normal`, `Format image/png`, `PM_0_19` (limites z19 : lignes 858–523429).
+  Métadonnées `IGNF_PLAN-IGN` : « Licence Ouverte / Open License ».
+- Chamonix z0/z5/z12/z15/z17/z18/z19 200 (PNG RGB 22–100 Ko), z20 404 ; Paris z12/z19 200. Zermatt z12 200 puis 404 de z13 à z17 ;
+  Courmayeur z13/z15 200 (marge frontalière), z17 404 ; New York 404 dès z10. Grille z14 : 48/56. → boîte `coverage` France.
+- La carte **SCAN 25 / TOPO 1:25 000** n'est pas publique : `GEOGRAPHICALGRIDSYSTEMS.MAPS` → 400 « Layer unknown » sur `/wmts`,
+  401 sur `/private/wmts` (clé requise) — **exclue**.
+
+### swisstopo — carte nationale
+
+- Couche `ch.swisstopo.pixelkarte-farbe` « Landeskarten (farbig) », `image/jpeg`, `3857_19`, `Time = current`, même `WGS84BoundingBox` que SWISSIMAGE.
+- Zermatt z6/z12/z15/z17/z18/z19 200 (13–40 Ko), z20 → 400 JSON ; Berne z12/z19 200 ; Paris z12 → 400 « Tile out of bounds ».
+- Chamonix : z12 et z15 = vraie carte (la carte suisse déborde sur la vallée de Chamonix), **z17 et z19 = JPEG blanc de 668 o** (z16 aussi).
+  Bonne source pour la Suisse, pas pour la France au-delà de z15.
+- Conditions identiques à SWISSIMAGE (OGD, gratuit, fair use, mention « © swisstopo »).
+
+### OpenTopoMap
+
+- `https://{a|b|c}.tile.opentopomap.org/{z}/{x}/{y}.png` (chemin donné sur `opentopomap.org/about`). Les trois sous-domaines renvoient la même tuile (md5 identique).
+- Chamonix z0/z3/z12/z15/z17 200 (PNG palette 21–51 Ko) ; **z18 → 200 avec une image « max zoom layer = 17 » (4 343 o) sans en-tête CORS** :
+  le catalogue s'arrête à 17. New York z12/z17 200. CORS `*`, `cache-control: max-age=604800`.
+- Conditions (`opentopomap.org/about`, rubriques « Verwendung » et FAQ) : carte sous **CC-BY-SA**, « kostenlos und frei verwendet » avec attribution
+  « Kartendaten: © OpenStreetMap-Mitwirkende, SRTM | Kartendarstellung: © OpenTopoMap (CC-BY-SA) » ; intégration dans un site ou une application
+  « jederzeit gerne möglich, sofern unser Server z.B. durch Massendownloads nicht zu stark beansprucht wird », sans garantie de disponibilité ;
+  le rendu tourne depuis le 05/01/2026 sur un vServer plus petit. → **retenue pour l'usage interactif**, mais à **exclure des futurs packs hors ligne**
+  et des rendus vidéo massifs (pré-téléchargement de toute une trace à z17).
+
+### Sources examinées et non retenues
+
+| Source | Constat (2026-10-07) | Motif |
+|---|---|---|
+| Stadia Maps (Stamen Watercolor, Stamen Terrain) | `tiles.stadiamaps.com/tiles/stamen_watercolor/…` : 200 avec `Origin: http://127.0.0.1:5173` (tolérance « localhost » de Stadia), **401** sans en-tête Origin | compte / clé API requis hors développement local : **exclu** (règle « pas de clé ni d'inscription ») |
+| Thunderforest (Landscape, Outdoors) | 200 mais tuile barrée « API Key Required » | clé requise : **exclu** |
+| IGN SCAN 25 / TOPO 1:25 000 (`GEOGRAPHICALGRIDSYSTEMS.MAPS`) | 400 « Layer unknown » (public), 401 (`/private/wmts`) | clé requise : **exclu** |
+| IGN photos 1980–1995 | 404 à Chamonix et Paris, 6/56 sur la grille z14 | couverture trop lacunaire pour l'instant |
+| EOX Sentinel-2 cloudless 2017 (`s2cloudless-2017_3857`) | 200, CORS reflété, **CC BY 4.0** (seule année non NC) ; mais Europe seulement à fort zoom : PNG transparent de 116 o à Denver, Nairobi, Katmandou, quasi vide à New York | couverture difficile à borner, peu de différence visible avec 2025 à 10 m : non ajoutée (candidate si une alternative non commerciale à `eox-s2cloudless` devient nécessaire) |
+| swisstopo SWISSIMAGE HIST 1946 (`ch.swisstopo.swissimage-product_1946`) | JPEG `3857_17`, Zermatt / Berne z8–z17 200, z18 400 ; Chamonix : JPEG blanc 668 o | fonctionne sans clé ; non ajoutée pour limiter le diff (équivalent suisse de « photos 1950–1965 », à ajouter si besoin) |
+
+### Journal des requêtes (2026-10-07, Origin http://127.0.0.1:5173)
+
+| Source | Tuile | Statut | content-type | Taille | ACAO |
+|---|---|---|---|---|---|
+| ign-ortho-1950-1965 | Chamonix z10 / 12 / 15 / 17 / 18 | 200 | image/png (256×256, gris) | 55 671 / 57 450 / 58 233 / 52 459 / 40 709 | `*` |
+| ign-ortho-1950-1965 | Chamonix z19 | 404 | text/xml | 137 | `*` |
+| ign-ortho-1950-1965 | Paris z12 / 16 / 18 | 200 | image/png | 54 670 / 60 574 / 52 624 | `*` |
+| ign-ortho-1950-1965 | Genève z15 / Courmayeur z15 / Zermatt z14 | 200 / 200 / 404 | image/png | 61 311 / 58 252 / — | `*` |
+| ign-ortho-1965-1980 | Chamonix z12 (STYLE=normal) | 400 | text/xml | 156 | `*` |
+| ign-ortho-1965-1980 | Chamonix z12 / 15 / 17 / 18 (BDORTHOHISTORIQUE) | 200 | image/png (palette) | 61 217 / 61 163 / 64 196 / 63 485 | `*` |
+| ign-ortho-1965-1980 | Paris z12 / 16 / 18 | 200 | image/png | 55 359 / 60 732 / 60 527 | `*` |
+| ign-ortho-1965-1980 | Chamonix z2 / z19 | 404 / 404 | text/xml | 137 | `*` |
+| ign-ortho-2000-2005 | Chamonix z5 / z6 / z12 / z15 / z17 / z18 / z19 | 404 / 200 / 200 / 200 / 200 / 200 / 404 | image/jpeg | — / 5 494 / 16 571 / 20 091 / 18 895 / 13 459 / — | `*` |
+| ign-ortho-2000-2005 | Paris z12 / 16 / 18 | 200 | image/jpeg | 22 374 / 22 925 / 13 477 | `*` |
+| ign-plan | Chamonix z0 / 12 / 15 / 18 / 19 / 20 | 200 ×5 / 404 | image/png (RGB) | 37 484 / 100 548 / 60 738 / 22 500 / 27 705 / — | `*` |
+| ign-plan | Paris z12 / z19 ; Zermatt z12 / z13 ; NYC z10 | 200 / 200 ; 200 / 404 ; 404 | | 48 210 / 26 923 ; 48 371 | `*` |
+| swisstopo-carte | Zermatt z12 / 15 / 17 / 19 / 20 | 200 ×4 / 400 | image/jpeg | 26 508 / 39 613 / 32 720 / 12 969 / 93 (JSON) | `*` |
+| swisstopo-carte | Berne z19 ; Chamonix z15 / z17 / z19 ; Paris z12 | 200 ; 200 / 200 blanc / 200 blanc ; 400 | image/jpeg | 5 275 ; 35 915 / 668 / 668 ; 83 | `*` |
+| opentopomap | Chamonix z12 (a, b, c) / z15 / z17 | 200 | image/png (palette) | 51 067 / 34 605 / 21 265 | `*` |
+| opentopomap | Chamonix z18 | 200 | image/png (RGBA) | 4 343 « max zoom layer = 17 » | **absent** |
+| opentopomap | NYC z12 / z17 | 200 | image/png | 49 182 / 5 617 | `*` |
+
+Contrôle visuel (Chromium headless, trace d'exemple Les Houches → Les Contamines) : `ign-ortho-1950-1965`, `ign-ortho-1965-1980`, `ign-ortho-2000-2005`,
+`ign-plan`, `swisstopo-carte` et `opentopomap` s'affichent drapés sur le relief, attribution correcte dans la barre d'état.
+
 ## Points d'attention pour l'intégration
 
 1. **Mapterhorn 404 = feuille** : le zoom max réel varie de 12 à 17 selon la région. Le moteur doit traiter un 404 sur une tuile DEM
@@ -181,3 +280,61 @@ Toutes les sources répondent avec un en-tête CORS pour l'origine `http://127.0
    ou laisser l'utilisateur basculer manuellement. `store.ts` possède sa propre copie de `boundsInside` ; `sourceCovers` peut la remplacer.
 8. `sourceCovers(source, bounds | point)` (export de `sources.ts`) permet à l'UI de proposer par défaut la source d'imagerie la plus fine
    couvrant entièrement la trace ; `true` signifie « vaut la peine d'essayer », `false` « inutile ».
+9. **Sources datées / cartes jamais choisies automatiquement** : `AUTO_IMAGERY_IDS` de `store.ts` ne liste que `ign-ortho` et `swisstopo` ;
+   les nouvelles entrées partagent pourtant leurs boîtes de couverture, il ne faut donc pas remplacer cette liste par « toute source avec `coverage` ».
+10. **`minZoom` > 0** (`ign-ortho-2000-2005` : 6, `ign-ortho-1965-1980` : 3) : les tuiles de relief plus grossières restent grises (comportement documenté d'`imagery.ts`), invisible en pratique dans un survol.
+11. **OpenTopoMap** : serveur bénévole ; ne pas l'utiliser pour des téléchargements massifs (packs hors ligne, rendu vidéo pré-chargé) sans accord.
+12. **CC BY-SA (OpenTopoMap)** : une vidéo exportée avec ce fond doit porter l'attribution et peut être considérée comme une adaptation (partage dans les mêmes conditions) : à signaler à l'export.
+
+## Météo historique — Open-Meteo (2026-10-07)
+
+Archive ERA5 / modèles régionaux réanalysés, sans clé : `https://archive-api.open-meteo.com/v1/archive`. Licence des
+données **CC BY 4.0**, API gratuite pour un usage **non commercial** (≤ 10 000 requêtes/jour, 5 000/h, 600/min annoncés ;
+aucun en-tête de quota renvoyé). Attribution affichée : « Données météo : Open-Meteo.com (CC BY 4.0) ». Code : `src/weather/openMeteo.ts`.
+
+| Point vérifié | Résultat |
+|---|---|
+| CORS (Origin `http://127.0.0.1:5173`) | `access-control-allow-origin: *`, GET/POST/OPTIONS, `max-age` 600 |
+| Variables horaires | `temperature_2m`, `apparent_temperature`, `precipitation`, `rain`, `snowfall` (cm), `cloud_cover` (+ `_low`/`_mid`/`_high`), `wind_speed_10m`, `wind_direction_10m`, `wind_gusts_10m`, `weather_code`, `is_day` : toutes renseignées |
+| `visibility` | acceptée mais **toujours `null`** dans l'archive (unité « undefined ») ; disponible seulement sur l'API prévision (`api.open-meteo.com/v1/forecast`, `past_days` ≤ 92, sans clé, CORS `*`), non utilisée |
+| Fuseau | `timezone=GMT` → heures UTC ; `timeformat=unixtime` donne des secondes Unix (début de chaque heure) |
+| Étendue | `start_date` de **1940-01-01** à **aujourd'hui** inclus (erreur 400 `{"error":true,"reason":"Parameter 'start_date' is out of allowed range from 1940-01-01 to <aujourd'hui>"}` au-delà) ; les derniers jours sont complets (prévisions rejouées, révisées quelques jours plus tard : on ne les met en cache persistant qu'au-delà de 7 jours). 1940 : `precipitation`, `wind_gusts_10m`, `weather_code` nuls les 7 premières heures |
+| Plusieurs lieux | `latitude=a,b&longitude=c,d` → tableau JSON (objet nu pour un seul lieu) ; `elevation=e1,e2` accepté par lieu |
+| Grille | ~0,07° en latitude (45,73 / 45,80 / 45,87 / 45,94 / 46,01) et ~0,1–0,14° en longitude dans les Alpes (≈ 9 km) : deux points à moins de ~5 km tombent souvent dans la même maille |
+| Altitude | le paramètre `elevation` ramène la température à l'altitude demandée : à 45,85° N 6,78° E, 12,5 °C sans paramètre (maille à 2 316 m) contre 22,8 °C à 1 000 m et 10,6 °C à 2 500 m → on passe l'altitude enregistrée de la trace |
+| Dates inversées | 400 `{"reason":"Bad Request"}` |
+| Taille | ~2,5 ko gzip par lieu et par jour pour les 14 variables |
+
+Journal (curl, 2026-10-07) : `start_date=end_date=2025-07-12`, 2 lieux (45,89/6,80 et 45,83/6,73) → 200, mailles 45,940/6,704 (1 021 m) et
+45,870/6,693 (1 109 m) ; `2026-10-07` (jour même) → 24 heures complètes ; `2026-10-10` → 400 hors plage ; `1939-12-31` → 400 hors plage.
+
+## Repères OpenStreetMap — Overpass API (2026-10-07)
+
+Sommets, cols, refuges, lacs, cascades, lieux habités, points de vue et glaciers autour de la trace, lus dans OpenStreetMap par
+l'instance publique Overpass `https://overpass-api.de/api/interpreter` (sans clé), avec repli sur `https://maps.mail.ru/osm/tools/overpass/api/interpreter`
+(VK Maps, listée sur le wiki OSM sans limite annoncée). Données **ODbL** : attribution affichée « © contributeurs OpenStreetMap (ODbL) »
+(panneau et barre d'état, lien vers openstreetmap.org/copyright). Code : `src/osm/overpass.ts`.
+
+**Conditions d'usage de l'instance publique** (dev.overpass-api.de, « Commons ») : rester sous ~10 000 requêtes et ~1 Go par jour et par
+adresse ; le wiki recommande cent fois moins pour une application grand public (≤ 100 requêtes, ≤ 10 Mo par jour et par utilisateur).
+Limitation par IP : `/api/status` annonce « Rate limit: 2 » (deux créneaux simultanés), refus **429** quand ils sont pris, **504** quand le
+serveur est surchargé (corps HTML « Dispatcher_Client::request_read_and_idx::timeout / rate_limited »). Motifs jugés abusifs : requêtes
+identiques répétées, balayage de boîtes pour aspirer la planète, application de production qui s'en sert de dorsale. D'où, ici : **une seule
+requête par trace** (tous les types, couloir de 3 km), envoyée seule (file d'attente), mise en cache 30 jours dans `localStorage` par
+empreinte de la requête, un seul réessai après `Retry-After` (sinon 15 s) sur 429 / 504 puis l'autre instance ; changer les types ou la
+distance ne refait pas de requête (filtrage local).
+
+| Point vérifié | Résultat |
+|---|---|
+| CORS (Origin `http://127.0.0.1:5173`) | `Access-Control-Allow-Origin: *`, `Access-Control-Max-Age: 600` sur les réponses POST ; la **pré-vérification OPTIONS répond 406** → requête « simple » obligatoire (corps `application/x-www-form-urlencoded`, champ `data`), ce que fait `URLSearchParams` |
+| User-Agent | 406 « Not Acceptable » pour un `curl` qui imite un navigateur et pour `/api/status` sans agent explicite ; les requêtes d'un vrai Chromium (headless) passent (200) |
+| Forme `around:` sur une polyligne | 4 sommets, 1,5 km, 5 types → 200 en 2,9 s (14 ko) ; **50 sommets, 3,1 km, 8 types → HTTP 200 mais `remark` « Query timed out … after 80 seconds » et zéro élément** (la limite `[timeout:60]` est dépassée côté serveur ; une réponse 200 peut donc être une erreur) |
+| Forme boîte englobante (retenue) | une boîte de 12 × 15 km autour de la trace d'exemple, 8 types, `out center tags qt` → 200 en 2,5 à 5,7 s, 44 ko, 175 éléments (30 sommets, 14 cols, 14 refuges, 8 lacs, 19 glaciers, 2 cascades, 3 points de vue, 84 lieux) |
+| Union de 10 boîtes le long de la trace | 200 en 14 s, 33 ko, 134 éléments : plus lent que la boîte unique (80 instructions) ; utilisée seulement au-delà de 40 km d'emprise (`MAX_BOX_SPAN_M`) |
+| Après ces essais rapprochés | deux requêtes suivantes → **429** (créneaux pris) ; `/api/status` les détaille |
+| `maps.mail.ru` | même réponse (14 ko) en 10 à 14 s depuis `curl`, en-têtes CORS complets (`*`, `GET, POST, OPTIONS, PUT`) ; 504 une fois depuis le navigateur |
+| `overpass.kumi.systems`, `overpass.private.coffee`, `overpass.osm.jp` | injoignables depuis ce réseau (délai 60 s / connexion refusée) : non retenues |
+| Balises utiles | `ele` en texte libre (« 1650 », « 1969.1 » ; ailleurs « 1 653 m », « 1,653 », pieds) → `parseEle` ; `name:fr` rare en France (repli `name`) ; des sommets sans nom (ex. 2 303 m) → filtre `["name"]` dans la requête ; lacs en chemins / relations → `out center` ; le Col de Voza porte `natural=saddle` + `mountain_pass=yes`, `ele=1650` (1 653 m dans le GPX d'exemple) ; 81 hameaux à moins de 3 km de 20 km de trace → lieux désactivés par défaut |
+
+Journal (curl, 2026-10-07) : `[out:json][timeout:60]; ( node["natural"~"^(peak|volcano|saddle)$"]["name"](45.79485,6.68680,45.91881,6.83916); … 8 instructions … ); out center tags qt;`
+→ 200, 5,7 s, 44 447 octets ; même requête depuis Chromium headless (origine `http://127.0.0.1:5184`) → 200 en 3,6 s.

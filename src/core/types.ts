@@ -92,6 +92,17 @@ export interface Track {
   bounds: LonLatBounds
   /** CSS colour used for the 3D line and the UI swatch */
   color: string
+  /** named points of the file (GPX <wpt>), attached to the first track of the file; absent when none */
+  waypoints?: Waypoint[]
+}
+
+/** A named point stored with a track (GPX <wpt>), not part of the path. */
+export interface Waypoint {
+  lon: number
+  lat: number
+  /** metres, as recorded (may be undefined) */
+  ele?: number
+  name: string
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +186,11 @@ export interface TerrainStats {
   loadedTiles: number
   pendingTiles: number
   failedTiles: number
+  /**
+   * Tiles the current view still waits for before what it draws is final (in the frustum, loading or
+   * queued); excludes shadow casters, off-screen children and prefetches. Used by the video export.
+   */
+  pendingVisibleTiles?: number
 }
 
 export interface TerrainEngine {
@@ -191,6 +207,12 @@ export interface TerrainEngine {
   /** subscribe to "something became ready/removed" (coalesced to at most once per frame). Returns unsubscribe. */
   onChange(cb: () => void): () => void
   readonly stats: TerrainStats
+  /**
+   * Request, after the current view's tiles, the missing tiles another camera would draw (e.g. an upcoming
+   * frame of the video export). Changes neither what is drawn nor the stats; bounded to part of the load
+   * budget. Returns the number of loads started.
+   */
+  prefetch?(camera: PerspectiveCamera, viewportHeightPx: number): number
   dispose(): void
 }
 

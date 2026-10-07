@@ -118,4 +118,22 @@ describe('parseGpx', () => {
     expect(() => parseGpx('<gpx><trk><trkseg/></trk></gpx>', 'empty.gpx')).toThrow(/aucun point/)
     expect(() => parseGpx('<kml><Placemark/></kml>', 'x.gpx')).toThrow(/Fichier GPX invalide/)
   })
+
+  it('attaches the <wpt> of the file to its first track', () => {
+    const gpx = `<gpx xmlns="http://www.topografix.com/GPX/1/1">
+      <wpt lat="45.8631" lon="6.782"><ele>1653</ele><name> Col de Voza </name></wpt>
+      <wpt lat="45.85" lon="6.77"></wpt>
+      <wpt lat="95" lon="6.77"><name>Hors limites</name></wpt>
+      <trk><name>A</name><trkseg><trkpt lat="45.86" lon="6.78"/><trkpt lat="45.87" lon="6.79"/></trkseg></trk>
+      <trk><name>B</name><trkseg><trkpt lat="45.86" lon="6.78"/></trkseg></trk>
+    </gpx>`
+    const [first, second] = parseGpx(gpx, 'wpt.gpx')
+    expect(first.waypoints).toEqual([
+      { lon: 6.782, lat: 45.8631, ele: 1653, name: 'Col de Voza' },
+      { lon: 6.77, lat: 45.85, name: 'Point 2' },
+    ])
+    expect(second.waypoints).toBeUndefined()
+    expect(parseGpx(routeOnlyGpx, 'route.gpx')[0].waypoints).toEqual([{ lon: 6.7986, lat: 45.8911, name: 'Les Houches' }])
+    expect(parseGpx(twoSegmentsGpx, 'two.gpx')[0].waypoints).toBeUndefined()
+  })
 })

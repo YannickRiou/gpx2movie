@@ -234,10 +234,15 @@ export interface SelectionResult {
   toRender: TileNode[]
   /** nodes that should be loaded, highest priority first */
   toLoad: TileNode[]
+  /**
+   * In-frustum nodes the view is waiting for (loading or loadable): 0 once the drawn selection is final.
+   * Culled nodes (shadow casters, low-priority children) are not counted.
+   */
+  pendingVisible: number
 }
 
 export function createSelectionResult(): SelectionResult {
-  return { toRender: [], toLoad: [] }
+  return { toRender: [], toLoad: [], pendingVisible: 0 }
 }
 
 const DEFAULT_MAX_LOAD_ATTEMPTS = 3
@@ -276,6 +281,7 @@ export function selectTiles(
 ): SelectionResult {
   out.toRender.length = 0
   out.toLoad.length = 0
+  out.pendingVisible = 0
   const ctx = selectionContext
   ctx.camera = camera
   ctx.params = params
@@ -299,7 +305,10 @@ export function isLoadable(node: TileNode, frame: number, maxLoadAttempts = DEFA
 
 function queueLoad(node: TileNode, priority: number, ctx: SelectionContext): void {
   node.priority = priority
-  if (isLoadable(node, ctx.params.frame, ctx.maxLoadAttempts)) ctx.out.toLoad.push(node)
+  const loadable = isLoadable(node, ctx.params.frame, ctx.maxLoadAttempts)
+  if (loadable) ctx.out.toLoad.push(node)
+  // visible nodes have a priority >= 0 (their sse), culled ones a negative one
+  if (priority >= 0 && (loadable || node.state === 'loading')) ctx.out.pendingVisible++
 }
 
 /** Priority of a culled node: always below any visible node, shallow levels first. */
