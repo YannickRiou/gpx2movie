@@ -7,6 +7,8 @@
  * the south-east. With no track loaded the scene is left empty; otherwise the terrain layer provides the
  * engine to the track lines, the camera rigs and the atmosphere.
  *
+ * Shadow maps are enabled (PCF) but only the atmosphere's sun casts them (terrainShadow.ts); the fixed lights do not.
+ *
  * Without the atmosphere, tone mapping is disabled (`flat`): orthophotos are display-referred images already, a filmic curve
  * would only remap their colours. The light intensities are chosen so the lit terrain stays close to the
  * texture brightness: three.js shades a Lambert surface as albedo x irradiance / pi, so a flat tile facing
@@ -57,7 +59,7 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
 
   return (
     <div className={className} style={style ? { ...wrapperStyle, ...style } : wrapperStyle}>
-      <Canvas gl={GL} camera={CAMERA} dpr={[1, 2]} frameloop="always" flat style={canvasStyle}>
+      <Canvas gl={GL} camera={CAMERA} dpr={[1, 2]} frameloop="always" flat shadows="percentage" style={canvasStyle}>
         {!atmosphere && (
           <>
             <hemisphereLight color={HEMISPHERE_SKY} groundColor={HEMISPHERE_GROUND} intensity={HEMISPHERE_INTENSITY} />

@@ -1,0 +1,180 @@
+import { useId } from 'react'
+import {
+  CAMERA_PRESETS,
+  CAMERA_RANGES,
+  CAMERA_STYLE_LABELS,
+  CAMERA_STYLES,
+  findCameraPreset,
+  FLYOVER_DURATION_RANGE,
+} from '../flyover/cameraSettings'
+import type { CameraSettings, CameraStyle } from '../flyover/cameraSettings'
+import { useAppStore } from '../state/store'
+import { formatNumber } from './format'
+
+/** Value of the preset select when the camera matches no preset. */
+const CUSTOM = ''
+
+/** 90 -> "1 min 30 s", 45 -> "45 s" */
+function formatSeconds(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.round(seconds - m * 60)
+  if (m === 0) return `${s} s`
+  return s === 0 ? `${m} min` : `${m} min ${String(s).padStart(2, '0')} s`
+}
+
+/** -30 -> "−30°" */
+function formatDegrees(deg: number): string {
+  return `${deg < 0 ? '−' : ''}${formatNumber(Math.abs(deg))}°`
+}
+
+type NumericKey = keyof typeof CAMERA_RANGES
+
+interface Slider {
+  key: NumericKey
+  label: string
+  format(value: number): string
+}
+
+const SLIDERS: Slider[] = [
+  { key: 'distance', label: 'Distance (× automatique)', format: (v) => `×${formatNumber(v, 1)}` },
+  { key: 'pitchDeg', label: 'Inclinaison au-dessus de l’horizon', format: formatDegrees },
+  { key: 'headingOffsetDeg', label: 'Direction de visée (par rapport au trajet)', format: formatDegrees },
+  { key: 'smoothing', label: 'Lissage du cap', format: (v) => `×${formatNumber(v, 2)}` },
+]
+
+/** One-line description of each style (hint under the style select). */
+const STYLE_HINTS: Record<CameraStyle, string> = {
+  chase: 'Derrière le marqueur, dans la direction du trajet.',
+  sway: 'Se balance vers l’extérieur des virages, comme un hélicoptère.',
+  orbit: 'Tourne lentement autour du marqueur (6° par seconde).',
+  top: 'Haute et presque verticale (inclinaison d’au moins 70°).',
+  cinematic: 'Plus loin et plus bas, avec un lent mouvement latéral.',
+}
+
+/** "Caméra" section: camera preset, style and parameters of the flyover, flyover duration. */
+export function CameraPanel() {
+  const camera = useAppStore((s) => s.settings.camera)
+  const durationS = useAppStore((s) => s.settings.flyoverDurationS)
+  const setSetting = useAppStore((s) => s.setSetting)
+  const id = useId()
+  const preset = findCameraPreset(camera)
+  const update = (patch: Partial<CameraSettings>) => setSetting('camera', { ...camera, ...patch })
+
+  return (
+    <section className="settings" aria-labelledby={`${id}-title`}>
+      <h2 id={`${id}-title`} className="section-title settings__title">
+        Caméra
+      </h2>
+
+      <div className="field">
+        <label className="field__label" htmlFor={`${id}-preset`}>
+          Préréglage
+        </label>
+        <select
+          id={`${id}-preset`}
+          className="select"
+          value={preset?.name ?? CUSTOM}
+          onChange={(e) => {
+            const next = CAMERA_PRESETS.find((p) => p.name === e.currentTarget.value)
+            if (next) setSetting('camera', { ...next.camera })
+          }}
+        >
+          {!preset && (
+            <option value={CUSTOM} disabled>
+              Personnalisé
+            </option>
+          )}
+          {CAMERA_PRESETS.map((p) => (
+            <option key={p.name} value={p.name}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="field">
+        <label className="field__label" htmlFor={`${id}-style`}>
+          Style
+        </label>
+        <select
+          id={`${id}-style`}
+          className="select"
+          value={camera.style}
+          aria-describedby={`${id}-style-hint`}
+          onChange={(e) => update({ style: e.currentTarget.value as CameraStyle })}
+        >
+          {CAMERA_STYLES.map((style) => (
+            <option key={style} value={style}>
+              {CAMERA_STYLE_LABELS[style]}
+            </option>
+          ))}
+        </select>
+        <p id={`${id}-style-hint`} className="field__hint">
+          {STYLE_HINTS[camera.style]}
+        </p>
+      </div>
+
+      {camera.style === 'top' && (
+        <label className="checkbox" htmlFor={`${id}-north-up`}>
+          <input
+            id={`${id}-north-up`}
+            type="checkbox"
+            checked={camera.northUp}
+            onChange={(e) => update({ northUp: e.currentTarget.checked })}
+          />
+          Nord en haut
+        </label>
+      )}
+
+      {SLIDERS.map(({ key, label, format }) => {
+        const range = CAMERA_RANGES[key]
+        const inputId = `${id}-${key}`
+        return (
+          <div key={key} className="field">
+            <label className="field__label" htmlFor={inputId}>
+              {label}
+            </label>
+            <div className="range-row">
+              <input
+                id={inputId}
+                className="range"
+                type="range"
+                min={range.min}
+                max={range.max}
+                step={range.step}
+                value={camera[key]}
+                onChange={(e) => update({ [key]: Number(e.currentTarget.value) })}
+                aria-valuetext={format(camera[key])}
+              />
+              <output className="range-row__value range-row__value--wide" htmlFor={inputId}>
+                {format(camera[key])}
+              </output>
+            </div>
+          </div>
+        )
+      })}
+
+      <div className="field">
+        <label className="field__label" htmlFor={`${id}-duration`}>
+          Durée du survol (à ×1)
+        </label>
+        <div className="range-row">
+          <input
+            id={`${id}-duration`}
+            className="range"
+            type="range"
+            min={FLYOVER_DURATION_RANGE.min}
+            max={FLYOVER_DURATION_RANGE.max}
+            step={FLYOVER_DURATION_RANGE.step}
+            value={durationS}
+            onChange={(e) => setSetting('flyoverDurationS', Number(e.currentTarget.value))}
+            aria-valuetext={formatSeconds(durationS)}
+          />
+          <output className="range-row__value range-row__value--wide" htmlFor={`${id}-duration`}>
+            {formatSeconds(durationS)}
+          </output>
+        </div>
+      </div>
+    </section>
+  )
+}

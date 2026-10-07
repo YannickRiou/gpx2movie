@@ -1,5 +1,5 @@
 import { useId, useMemo, type PointerEvent } from 'react'
-import { buildTrackPath, elevationProfile, samplePath, type ElevationProfile } from '../flyover/path'
+import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath, type ElevationProfile } from '../flyover/path'
 import { useAppStore } from '../state/store'
 import { formatDistance, formatNumber } from './format'
 
@@ -11,6 +11,12 @@ const PROFILE_SAMPLES = 400
 const PROFILE_HEIGHT = 100
 /** Smallest elevation range drawn full height: a flat track stays flat instead of magnifying GPS noise. */
 const PROFILE_MIN_SPAN_M = 100
+
+/** Recorded instant -> "14 h 32", in the browser time zone. */
+function formatClock(ms: number): string {
+  const date = new Date(ms)
+  return `${date.getHours()} h ${String(date.getMinutes()).padStart(2, '0')}`
+}
 
 /** Closed SVG area under the profile, one sub-path per run of known elevations. */
 function profileAreaPath(profile: ElevationProfile): string {
@@ -34,7 +40,7 @@ function profileAreaPath(profile: ElevationProfile): string {
 
 /**
  * Flyover controls over the 3D view: play / pause, elevation profile (click or drag to seek) above the
- * progress slider, distance covered and current elevation, speed.
+ * progress slider, distance covered, current elevation and recorded time, speed.
  */
 export function Timeline() {
   const track = useAppStore((s) => s.tracks[0])
@@ -51,6 +57,9 @@ export function Timeline() {
   if (!track || !path) return null
   const total = track.stats.distanceM
   const ele = profile && path.count > 0 ? samplePath(path, progress * path.lengthM).ele : undefined
+  // startTime is set as soon as one point has a time: skips the scan of an untimed track
+  const time =
+    track.stats.startTime !== undefined && path.count > 0 ? recordedTimeAt(path, progress * path.lengthM) : undefined
   const width = PROFILE_SAMPLES - 1
 
   const seek = (e: PointerEvent<SVGSVGElement>) => {
@@ -112,11 +121,20 @@ export function Timeline() {
       </div>
       <span className="timeline__distance">
         <strong>{formatDistance(progress * total)}</strong> / {formatDistance(total)}
+        {(ele !== undefined || time !== undefined) && <br />}
         {ele !== undefined && (
           <>
-            <br />
             <span className="visually-hidden">Altitude : </span>
             <strong>{formatNumber(ele)} m</strong>
+          </>
+        )}
+        {ele !== undefined && time !== undefined && ' · '}
+        {time !== undefined && (
+          <>
+            <span className="visually-hidden">Heure enregistrée : </span>
+            <time dateTime={new Date(time).toISOString()}>
+              <strong>{formatClock(time)}</strong>
+            </time>
           </>
         )}
       </span>

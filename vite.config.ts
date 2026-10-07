@@ -36,8 +36,8 @@ function atmosphereAssets(): Plugin {
  */
 const TILE_PROXIES: Record<string, string> = {
   // Empty on purpose: every catalogue source (Mapterhorn, AWS Terrain Tiles, IGN Géoplateforme,
-  // swisstopo, Esri World Imagery, EOX) sent Access-Control-Allow-Origin for http://127.0.0.1:5173
-  // on 2026-10-05 (see docs/sources.md). If a provider drops CORS, add it here, e.g.
+  // swisstopo, Esri World Imagery, EOX, OpenTopoMap) sent Access-Control-Allow-Origin for
+  // http://127.0.0.1:5173 on 2026-10-05 / 2026-10-07 (see docs/sources.md). If a provider drops CORS, add it here, e.g.
   //   'ign-ortho': 'https://data.geopf.fr',
   // and set that source's urlTemplate to '/tiles/ign-ortho/wmts?...' (the query string is preserved).
 }

@@ -1,4 +1,5 @@
-import { useId } from 'react'
+import { useId, useMemo } from 'react'
+import { TRACK_COLOR_MODES, TRACK_METRICS, hasMetric } from '../flyover/trackColor'
 import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
@@ -18,6 +19,15 @@ const SUN_HOUR_MIN = 0
 const SUN_HOUR_MAX = 23.75
 const SUN_HOUR_STEP = 0.25
 
+const EXPOSURE_EV_MIN = -2
+const EXPOSURE_EV_MAX = 2
+const EXPOSURE_EV_STEP = 0.5
+
+/** 0.5 -> "+0,5 IL" */
+function formatEv(ev: number): string {
+  return `${ev > 0 ? '+' : ev < 0 ? '−' : ''}${formatNumber(Math.abs(ev), 1)} IL`
+}
+
 /** 10.5 -> "10 h 30" */
 function formatHour(hour: number): string {
   const h = Math.floor(hour)
@@ -35,7 +45,23 @@ export function SettingsPanel() {
   const exaggerationId = `${id}-exaggeration`
   const wireframeId = `${id}-wireframe`
   const atmosphereId = `${id}-atmosphere`
+  const shadowsId = `${id}-shadows`
   const sunHourId = `${id}-sun-hour`
+  const sunFromTrackId = `${id}-sun-from-track`
+  const trackHasTime = useAppStore((s) => s.tracks[0]?.stats.startTime !== undefined)
+  const sunFollowsTrack = settings.sunFromTrack && trackHasTime
+  const exposureId = `${id}-exposure`
+  const trackColorId = `${id}-track-color`
+  const firstTrack = useAppStore((s) => s.tracks[0])
+  const colorModes = useMemo(
+    () =>
+      TRACK_COLOR_MODES.map((mode) =>
+        mode === 'none'
+          ? { mode, label: 'Unie', available: true }
+          : { mode, label: TRACK_METRICS[mode].label, available: !!firstTrack && hasMetric(firstTrack, mode) },
+      ),
+    [firstTrack],
+  )
 
   return (
     <section className="settings" aria-labelledby={`${id}-title`}>
@@ -118,6 +144,24 @@ export function SettingsPanel() {
         </div>
       </div>
 
+      <div className="field">
+        <label className="field__label" htmlFor={trackColorId}>
+          Couleur de la trace
+        </label>
+        <select
+          id={trackColorId}
+          className="select"
+          value={settings.trackColorBy}
+          onChange={(e) => setSetting('trackColorBy', e.currentTarget.value as Settings['trackColorBy'])}
+        >
+          {colorModes.map(({ mode, label, available }) => (
+            <option key={mode} value={mode} disabled={!available}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <label className="checkbox" htmlFor={wireframeId}>
         <input
           id={wireframeId}
@@ -139,6 +183,39 @@ export function SettingsPanel() {
       </label>
 
       {settings.atmosphere && (
+        <label className="checkbox" htmlFor={shadowsId}>
+          <input
+            id={shadowsId}
+            type="checkbox"
+            checked={settings.shadows}
+            onChange={(e) => setSetting('shadows', e.currentTarget.checked)}
+          />
+          Ombres du relief
+        </label>
+      )}
+
+      {settings.atmosphere && (
+        <div className="field">
+          <label className="checkbox" htmlFor={sunFromTrackId}>
+            <input
+              id={sunFromTrackId}
+              type="checkbox"
+              checked={sunFollowsTrack}
+              disabled={!trackHasTime}
+              aria-describedby={trackHasTime ? undefined : `${sunFromTrackId}-hint`}
+              onChange={(e) => setSetting('sunFromTrack', e.currentTarget.checked)}
+            />
+            Soleil à l'heure de la sortie
+          </label>
+          {!trackHasTime && (
+            <p id={`${sunFromTrackId}-hint`} className="field__hint">
+              Disponible avec une trace horodatée.
+            </p>
+          )}
+        </div>
+      )}
+
+      {settings.atmosphere && (
         <div className="field">
           <label className="field__label" htmlFor={sunHourId}>
             Heure solaire
@@ -152,11 +229,36 @@ export function SettingsPanel() {
               max={SUN_HOUR_MAX}
               step={SUN_HOUR_STEP}
               value={settings.sunHour}
+              disabled={sunFollowsTrack}
               onChange={(e) => setSetting('sunHour', Number(e.currentTarget.value))}
               aria-valuetext={formatHour(settings.sunHour)}
             />
             <output className="range-row__value range-row__value--wide" htmlFor={sunHourId}>
               {formatHour(settings.sunHour)}
+            </output>
+          </div>
+        </div>
+      )}
+
+      {settings.atmosphere && (
+        <div className="field">
+          <label className="field__label" htmlFor={exposureId}>
+            Exposition (en plus de l'automatique)
+          </label>
+          <div className="range-row">
+            <input
+              id={exposureId}
+              className="range"
+              type="range"
+              min={EXPOSURE_EV_MIN}
+              max={EXPOSURE_EV_MAX}
+              step={EXPOSURE_EV_STEP}
+              value={settings.exposureEv}
+              onChange={(e) => setSetting('exposureEv', Number(e.currentTarget.value))}
+              aria-valuetext={formatEv(settings.exposureEv)}
+            />
+            <output className="range-row__value range-row__value--wide" htmlFor={exposureId}>
+              {formatEv(settings.exposureEv)}
             </output>
           </div>
         </div>

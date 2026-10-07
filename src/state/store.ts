@@ -6,7 +6,14 @@
  */
 import { create } from 'zustand'
 import type { LonLat, LonLatBounds, TerrainStats, Track } from '../core/types'
+import { DEFAULT_VIDEO_SETTINGS } from '../export/schedule'
+import type { VideoSettings } from '../export/schedule'
+import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S } from '../flyover/cameraSettings'
+import type { CameraSettings } from '../flyover/cameraSettings'
+import type { TrackColorBy } from '../flyover/trackColor'
 import { centroid } from '../geo/ellipsoid'
+import { DEFAULT_OVERLAY } from '../overlay/settings'
+import type { OverlaySettings } from '../overlay/settings'
 import { IMAGERY_SOURCES, sourceCovers } from '../terrain/sources'
 
 export interface Settings {
@@ -17,8 +24,28 @@ export interface Settings {
   wireframe: boolean
   /** physically based sky, sun light and aerial perspective */
   atmosphere: boolean
+  /** cast shadows of the relief (atmosphere only) */
+  shadows: boolean
   /** local mean solar time (hours, 12 = solar noon) on the day of the first track */
   sunHour: number
+  /** the sun follows the recorded time under the flyover marker when the first track has one (else sunHour) */
+  sunFromTrack: boolean
+  /** exposure compensation in stops, on top of the automatic exposure (atmosphere only) */
+  exposureEv: number
+  /** colour the tracks by a recorded quantity ('none' = each track's own colour) */
+  trackColorBy: TrackColorBy
+  /** flyover camera style and parameters (replaced as a whole, e.g. by a camera preset) */
+  camera: CameraSettings
+  /** flyover duration at speed x1 (seconds), whatever the track length */
+  flyoverDurationS: number
+  /** 3D labels on the relief: tops of the detected climbs of the first track, GPX waypoints */
+  labels: { climbs: boolean; waypoints: boolean }
+  /** historical weather of the first timed track (Open-Meteo archive, network) */
+  weather: { enabled: boolean }
+  /** film overlay (« habillage »): style and widgets, drawn by src/overlay/draw.ts */
+  overlay: OverlaySettings
+  /** exported film: size, frame rate, encoding quality */
+  video: VideoSettings
 }
 
 /** Flyover playback along the first track (progress at constant ground speed). */
@@ -26,7 +53,7 @@ export interface Playback {
   playing: boolean
   /** 0 = start of the track, 1 = end */
   progress: number
-  /** multiplier of the base flyover duration */
+  /** playback speed multiplier, on top of settings.flyoverDurationS */
   speed: number
 }
 
@@ -65,7 +92,17 @@ export const DEFAULT_SETTINGS: Settings = {
   exaggeration: 1,
   wireframe: false,
   atmosphere: true,
+  shadows: true,
   sunHour: 10,
+  sunFromTrack: true,
+  exposureEv: 0,
+  trackColorBy: 'none',
+  camera: DEFAULT_CAMERA,
+  flyoverDurationS: DEFAULT_FLYOVER_DURATION_S,
+  labels: { climbs: true, waypoints: true },
+  weather: { enabled: true },
+  overlay: DEFAULT_OVERLAY,
+  video: DEFAULT_VIDEO_SETTINGS,
 }
 
 export const DEFAULT_PLAYBACK: Playback = { playing: false, progress: 0, speed: 1 }

@@ -2,7 +2,7 @@
  * GPX 1.0 / 1.1 parser built on DOMParser. Namespace-agnostic: elements are matched on
  * `localName`, so Garmin (gpxtpx), Cluetrust and other extension vocabularies all work.
  */
-import type { Track, TrackPoint, TrackSegment } from '../core/types'
+import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'
 import { buildTrack, stripExtension } from './stats'
 
 type ExtensionField = 'hr' | 'cad' | 'power' | 'temp'
@@ -125,7 +125,8 @@ interface TrackCandidate {
  * Parse a GPX document into tracks.
  * - one Track per <trk>, <trkseg> preserved as segments (empty segments dropped);
  * - when the file has no usable <trk>, each <rte> becomes a single-segment track;
- * - name: <trk><name>, else <metadata><name>, else the file name without extension.
+ * - name: <trk><name>, else <metadata><name>, else the file name without extension;
+ * - the file's <wpt> become the `waypoints` of the first track (none when the file has no valid <wpt>).
  * Throws `Error('Fichier GPX invalide : …')` on malformed XML or when no point is found.
  */
 export function parseGpx(text: string, fileName: string): Track[] {
@@ -163,9 +164,26 @@ export function parseGpx(text: string, fileName: string): Track[] {
 
   if (candidates.length === 0) throw invalid('aucun point trouvé')
 
+  const waypoints = parseWaypoints(childrenNamed(root, 'wpt'))
   return candidates.map((candidate, index) => {
     let name = candidate.name
     if (name === '') name = candidates.length > 1 ? `${fallbackName} (${index + 1})` : fallbackName
-    return buildTrack({ name, source: 'gpx', segments: candidate.segments, activityType: candidate.activityType })
+    const track = buildTrack({ name, source: 'gpx', segments: candidate.segments, activityType: candidate.activityType })
+    if (index === 0 && waypoints.length > 0) track.waypoints = waypoints
+    return track
   })
+}
+
+/** <wpt> elements with valid coordinates; unnamed ones are called « Point n » (n = rank in the file). */
+export function parseWaypoints(elements: Element[]): Waypoint[] {
+  const waypoints: Waypoint[] = []
+  elements.forEach((element, index) => {
+    const point = parseGpxPoint(element)
+    if (!point) return
+    const name = textOf(firstChildNamed(element, 'name')) || `Point ${index + 1}`
+    const waypoint: Waypoint = { lon: point.lon, lat: point.lat, name }
+    if (point.ele !== undefined) waypoint.ele = point.ele
+    waypoints.push(waypoint)
+  })
+  return waypoints
 }

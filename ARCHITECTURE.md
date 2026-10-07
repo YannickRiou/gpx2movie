@@ -39,7 +39,11 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/terrain/mesh.ts` | géométrie d'une tuile | `buildTileGeometry(key, grid, frame, opts: BuildTileGeometryOptions): TileGeometryResult` |
 | `src/terrain/quadtree.ts` + `engine.ts` | LOD, chargement, groupe Three | `createTerrainEngine(options: TerrainEngineOptions, deps?: Partial<EngineDeps>, tuning?: Partial<EngineTuning>): TerrainEngine` (deps injectables pour les tests) |
 | `src/scene/*.tsx` | composants R3F | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `CameraRig`, `FlyoverRig`, `useDebouncedCallback` |
-| `src/flyover/path.ts` | chemin de survol | `buildTrackPath(track): TrackPath` (segments concaténés, distances cumulées), `samplePath(path, distanceM): PathSample`, `elevationProfile(path, samples)` |
+| `src/flyover/path.ts` | chemin de survol | `buildTrackPath(track): TrackPath` (segments concaténés, distances cumulées, `time` en ms ou NaN), `samplePath(path, distanceM): PathSample` (`ele` et `time` interpolés seulement si les deux voisins les ont), `recordedTimeAt(path, distanceM)` (comble les points sans heure), `elevationProfile(path, samples)` |
+| `src/flyover/sun.ts` | date du soleil | `solarHourToDate(dayMs, lon, solarHour)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date` |
+| `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
+| `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
+| `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` ; `importFlow.ts` (orchestration d'import sans React, testée) |
 
@@ -57,6 +61,13 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 1. **Sources** (`sources.ts`) : élévation Mapterhorn `https://tiles.mapterhorn.com/{z}/{x}/{y}.webp` (Terrarium, webp),
    AWS Terrain Tiles `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` (Terrarium, z ≤ 15).
    Imagerie : IGN BD ORTHO (Géoplateforme WMTS, PM), EOX Sentinel-2 cloudless, ArcGIS World Imagery, swisstopo SWISSIMAGE.
+   Le catalogue contient aussi des fonds non photographiques et datés, jamais choisis automatiquement (`AUTO_IMAGERY_IDS` =
+   `ign-ortho`, `swisstopo`) : cartes topographiques `ign-plan` (Plan IGN, France, z19), `swisstopo-carte` (carte nationale
+   suisse, z19 ; blanche hors Suisse au-delà de z15) et `opentopomap` (mondial, z17, CC BY-SA, serveur bénévole : pas de
+   téléchargement massif, donc exclu des futurs packs hors ligne) ; orthophotos IGN datées pour « remonter le temps » :
+   `ign-ortho-1950-1965` (France complète, niveaux de gris), `ign-ortho-1965-1980` (partiel, style `BDORTHOHISTORIQUE`, z3–18)
+   et `ign-ortho-2000-2005` (z6–18), sur la boîte `FRANCE_BOX` (sur-approximation). Sources écartées (clé requise : Stadia,
+   Thunderforest, SCAN 25) : `docs/sources.md`.
    Les URL exactes, zooms max, encodage et support CORS sont vérifiés empiriquement (`docs/sources.md`) ; `sources.ts` est la seule vérité.
    Une source sans CORS passe par le proxy Vite (`/tiles/<id>/...`, cf. `vite.config.ts`).
 2. **Fetch** (`fetch.ts`) : `fetch()` + `createImageBitmap`, file de priorité, concurrence ~12, dédoublonnage des requêtes en vol,
@@ -164,7 +175,62 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 - **Profondeur logarithmique** : `postprocessing` la signale par `LOG_DEPTH`, le shader Takram attend
   `USE_LOGARITHMIC_DEPTH_BUFFER` ; le define est ajouté à l'effet, sinon toute la scène est vue comme infiniment loin.
 - **Trace** : matériaux non éclairés, leur couleur est divisée par `renderer.toneMappingExposure` (`applyExposure`).
+- **Soleil à l'heure de la sortie** (`settings.sunFromTrack`, actif par défaut) : quand la première trace est horodatée, la date
+  d'éclairage est l'heure **enregistrée** du point sous le marqueur (`sunDateAt`), mise à jour à chaque image par
+  `atmosphereRef.current.updateByDate(date)` dans `useFrame` (pas la prop `date` : les deux ne se combinent pas). Les points sans
+  heure sont comblés par interpolation en distance (`recordedTimeAt`) ; une pause ou un saut entre segments est franchi
+  instantanément. Sans horodatage ou option décochée : heure solaire fixe. La timeline affiche l'heure enregistrée au marqueur
+  (fuseau du navigateur).
+- **Exposition** (`src/scene/exposure.ts`) : `DAYLIGHT_EXPOSURE` (5) × 2^(automatique + `settings.exposureEv`). L'automatique
+  s'ouvre quand le soleil descend : 0 IL au-dessus de 10°, +3 IL au crépuscule civil (−6°), +6 IL la nuit (−18°). Une faible
+  lumière de ciel nocturne (`nightFillIntensity`) garde le relief lisible : l'atmosphère ne modélise que la lumière du soleil.
 - **Réglages** : `settings.atmosphere` (désactivable : retour à l'éclairage fixe sans tone mapping) et `settings.sunHour`
   (heure **solaire** locale, 0 h–24 h, indépendante des fuseaux ; la nuit : étoiles et lune), le jour étant celui du début de la première trace
   (aujourd'hui à défaut).
-- Reste à faire : ombres portées du relief, soleil qui suit l'horodatage réel pendant le survol.
+- **Ombres portées du relief** (`src/scene/terrainShadow.ts`, `settings.shadows`, case « Ombres du relief » visible avec
+  l'atmosphère) : le `SunLight` Takram reçoit une `TerrainShadow` (une carte d'ombre 4096², PCF via `shadows="percentage"`).
+  Ses bornes orthographiques sont recalculées dans `updateMatrices(light, viewCamera)`, que three appelle juste avant de
+  dessiner la carte : zone = frustum de vue coupé à max(30 km, 5 × hauteur de la caméra au-dessus du relief le plus bas),
+  intersecté avec la boîte des tuiles visibles (`fitShadowFrustum`, pure et testée) ; plan proche repoussé vers le soleil
+  jusqu'au sommet de cette boîte ; bornes arrondies par pas de 2^(1/8) et calées sur des texels entiers (pas de scintillement) ;
+  biais selon le texel (normalBias 1,5 texel, profondeur 2 m). Texel ≈ 8–9 m en poursuite, 15–25 m en vue d'ensemble.
+- **Projecteurs hors champ** (`engine.ts`) : toutes les tuiles projettent et reçoivent ; `frustumCulled` actif. Après la
+  sélection LOD, les tuiles prêtes visitées mais hors frustum et non couvertes par une tuile dessinée restent `visible` : une
+  crête derrière la caméra atteint la carte d'ombre, three les écarte de la passe principale. `stats.visibleTiles` ne compte que
+  les tuiles dessinées.
+- **Pourquoi des ombres** : sans occultation, un soleil rasant (~1° au coucher) éclaire le versant ensoleillé de chaque bosse des
+  vallées censées être à l'ombre des crêtes — c'était l'origine des stries orange (N·L > 0 sur des facettes minces).
+- Limites : rien hors de l'emprise chargée (trace + 25 km) ne projette ; ombres coupées net au-delà de la distance d'ombre (la
+  brume le masque) ; une seule carte (pas de cascades) ; carte redessinée à chaque image.
+
+## Couleur de la trace
+
+- **Réglage** `settings.trackColorBy` : `'none'` (couleur propre de chaque trace, défaut), `speed`, `slope`, `elevation`,
+  `heartRate`, `cadence`, `power`, `temperature`. Les grandeurs absentes de la première trace sont désactivées.
+- **Valeurs** (`src/flyover/trackColor.ts`, pur), sur les points enregistrés : vitesse en km/h sur une fenêtre centrée d'au moins
+  ±25 m **et** ±15 s (plafonnée à ±300 s) contre le bruit GPS ; pente en % sur ±50 m (inconnue sous 20 m) ; altitude ; capteurs
+  moyennés sur ±5 s.
+- **Plage** commune à toutes les traces : 2ᵉ–98ᵉ centile. **Palettes** séquentielles perceptuellement uniformes : viridis par
+  défaut, magma (à partir de 0,2) pour FC, puissance et température. **Valeurs manquantes** : gris `#55626b`, jamais interpolées.
+- **TrackLines** : couleurs par sommet (`LineGeometry.setColors`, `vertexColors` sur les matériaux plein et fantôme) ; les points
+  insérés par `densify` sont interpolés (`resampleValues`). Changer de mode ne réécrit que le tampon de couleurs. Avec les
+  couleurs par sommet, la couleur du matériau est le blanc divisé par l'exposition (`applyExposure`).
+- **Légende** `TrackLegend` (au-dessus de la timeline, seulement si `trackColorBy !== 'none'`) : dégradé, bornes avec unités,
+  pastille « Sans donnée » s'il manque des valeurs.
+
+## Projet (phase 4)
+
+- Un projet est un seul fichier JSON `<nom>.openflyover.json` (`format: "openflyover-project"`, `version`, `name`, `settings`,
+  `playback.speed`, `tracks`). Les traces sont **embarquées** (fichier autonome) en colonnes par segment (`lon`, `lat`, puis
+  `ele` / `time` / `hr` / `cad` / `power` / `temp` seulement si présents, `null` pour un point sans valeur), arrondies à 1e-7° et
+  0,01 (ms entières pour le temps) ; stats et emprise recalculées au chargement par `buildTrack`, ids et couleurs conservés.
+- Réglages traités **génériquement sur les clés de `DEFAULT_SETTINGS`** : chaque valeur est vérifiée contre le type de sa valeur
+  par défaut (objets imbriqués compris), sinon retour au défaut pour cette clé ; clés inconnues ignorées. **Un nouveau réglage
+  ne demande aucun code ici** ; ajouter une entrée à `SETTING_CHECKS` seulement si une valeur du bon type peut être invalide
+  (énumération, id de catalogue, plage). Tout changement de format incrémente `PROJECT_VERSION` et ajoute `MIGRATIONS[n]`.
+- **Historique** des réglages hors du store : abonné à `useAppStore`, chaque pas ne garde que les clés modifiées ; changements des
+  mêmes clés à moins de 400 ms fusionnés (un glissé = un pas), un préréglage = un pas ; l'imagerie régionale choisie à l'import
+  n'est pas enregistrée ; ouvrir un projet vide l'historique. Raccourcis Ctrl/Cmd+Z, Ctrl/Cmd+Maj+Z, Ctrl+Y (ignorés dans les
+  champs texte).
+- **Préréglages** dans `localStorage` (`openflyover.presets.v1`, repli en mémoire) ; une clé absente d'un préréglage garde sa
+  valeur courante.

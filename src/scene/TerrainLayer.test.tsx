@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { LonLatBounds } from '../core/types'
+import { DEFAULT_OVERLAY } from '../overlay/settings'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
 
 vi.mock('@react-three/fiber', () => ({ useFrame: vi.fn(), useThree: vi.fn() }))
@@ -61,7 +62,17 @@ describe('engine options from settings', () => {
     exaggeration: 1,
     wireframe: false,
     atmosphere: true,
+    shadows: true,
     sunHour: 10,
+    sunFromTrack: true,
+    exposureEv: 0,
+    trackColorBy: 'none' as const,
+    camera: { style: 'chase' as const, distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
+    flyoverDurationS: 60,
+    labels: { climbs: true, waypoints: true },
+    weather: { enabled: true },
+    overlay: DEFAULT_OVERLAY,
+    video: { format: '1920x1080' as const, fps: 30 as const, quality: 'high' as const },
   }
 
   it('resolves the sources from the catalogue', () => {

@@ -80,10 +80,11 @@ Dans l'application : glisser un fichier `.gpx` ou `.fit` dans la zone de dépôt
 |---|---|
 | 1 — Visionneuse (fait) | import GPX / FIT, relief streamé, imagerie composée, trace plaquée, caméra orbitale |
 | 2 — Survol (fait) | caméra de survol automatique le long de la trace, timeline, lecture / pause, vitesse, marqueur de progression, profil altimétrique |
-| 3 — Atmosphère (en cours) | fait : ciel et diffusion atmosphérique (modèle Takram), brume de distance, soleil et heure solaire, ciel de nuit étoilé ; reste : ombres portées, eau réfléchissante (masque d'eau, reflets du ciel et du soleil, vagues), hauteurs calées sur le niveau de la mer (géoïde), fonds de carte supplémentaires (styles satellite, topographique, aquarelle — sources ouvertes à vérifier) |
-| 4 — Personnalisation | tout le film est réglable : caméra, rythme, titres, données affichées, style de trace, points d'intérêt, rendu, format (détail ci-dessous) |
+| 3 — Atmosphère (en cours) | fait : ciel et diffusion atmosphérique (modèle Takram), brume de distance, soleil et heure solaire, ciel de nuit étoilé, exposition automatique et correction, ombres portées du relief, fonds de carte topographiques (Plan IGN, carte nationale suisse, OpenTopoMap) ; reste : eau réfléchissante (masque d'eau, reflets du ciel et du soleil, vagues), hauteurs calées sur le niveau de la mer (géoïde) — l'aquarelle (Stadia) exige une clé, exclue |
+| 4 — Personnalisation (en cours) | fait : document de projet (enregistrer / ouvrir un fichier autonome), annuler / rétablir, préréglages ; à venir : tout le film est réglable : caméra, rythme, titres, données affichées, style de trace, points d'intérêt, rendu, format (détail ci-dessous) |
 | 5 — Export vidéo | rendu hors écran à résolution fixe et encodage MP4 / WebM via WebCodecs, titres et widgets inclus, formats de la phase 4, images fixes haute résolution depuis les prises de vue |
 | 6 — Application de bureau | emballage Tauri (binaire natif, accès disque), stockage local SQLite des projets et préréglages, packs de tuiles hors ligne |
+| 7 — Au-delà du survol | fonctionnalités propres à OpenFlyover : lumière et météo réelles de la sortie, trace colorée par les données, course fantôme, vidéo embarquée synchronisée, repères automatiques, remonter le temps, rendu en lot, affiche, calage musical, reconnaissance (détail ci-dessous) |
 
 ### Phase 4 — Personnalisation
 
@@ -104,21 +105,23 @@ ce qui sera rendu.
 | Thèmes | habillage du film (polices, couleurs des titres et widgets) indépendant de l'interface, thèmes fournis et personnalisés ; styles de carte, d'éléments et d'habillage enregistrables séparément |
 | Éditeur | une page, cinq modes (Trajet, Carte, Habillage, Survol, Prises de vue) sans recharger la scène ; onglets Contenu / Style / Visibilité par élément ; pastille « modifié » et bouton rétablir sur tout réglage qui s'écarte du style ; prises de vue enregistrées (caméra, cadrage, lumière) pour des images fixes |
 
-### Pistes propres à OpenFlyover (proposées, à arbitrer)
+### Phase 7 — Au-delà du survol
 
-| Piste | Intérêt |
-|---|---|
-| Lumière réelle de la sortie | le soleil suit l'horodatage de chaque point : on revit le lever ou le coucher de soleil au bon endroit, ombres portées comprises |
-| Météo historique | nuages, vent et température du jour de la sortie (archives Open-Meteo, sans clé) rendus dans la scène et affichables en widget |
-| Trace colorée par une donnée | vitesse, pente, fréquence cardiaque, puissance, en échelle séquentielle perceptuellement uniforme (viridis, magma…) avec légende |
-| Course fantôme | plusieurs traces rejouées ensemble sur leur temps réel : comparer des amis, ou ses sorties successives sur un même parcours |
-| Vidéo embarquée synchronisée | incrustation d'une vidéo GoPro / Insta360 calée sur l'horodatage ; export de l'habillage seul sur fond transparent pour le montage |
-| Repères automatiques | sommets, cols, refuges et lacs tirés d'OpenStreetMap avec leur altitude ; montées détectées et catégorisées, qui déclenchent ralentis et titres |
-| Remonter le temps | orthophotos historiques (IGN 1950–1965) ou d'une autre saison, en comparatif avant / après |
-| Rendu en lot | un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface |
-| Affiche imprimable | la trace sur le relief en très haute résolution, habillage compris, pour un tirage |
-| Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale |
-| Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller |
+Ce qui distingue OpenFlyover : tout reste local, et les données de la sortie (horodatage, capteurs, lieu) pilotent le film.
+
+| Fonctionnalité | Contenu | État |
+|---|---|---|
+| Lumière réelle de la sortie | le soleil suit l'horodatage de chaque point : on revit le lever ou le coucher de soleil au bon endroit, ombres portées comprises | fait |
+| Météo historique | nuages, vent et température du jour de la sortie (archives Open-Meteo, sans clé) rendus dans la scène et affichables en widget | à faire |
+| Trace colorée par une donnée | vitesse, pente, fréquence cardiaque, puissance, en échelle séquentielle perceptuellement uniforme (viridis, magma…) avec légende | fait (vitesse, pente, altitude, FC, cadence, puissance, température) |
+| Course fantôme | plusieurs traces rejouées ensemble sur leur temps réel : comparer des amis, ou ses sorties successives sur un même parcours | à faire |
+| Vidéo embarquée synchronisée | incrustation d'une vidéo GoPro / Insta360 calée sur l'horodatage ; export de l'habillage seul sur fond transparent pour le montage | après la phase 5 |
+| Repères automatiques | sommets, cols, refuges et lacs tirés d'OpenStreetMap avec leur altitude ; montées détectées et catégorisées, qui déclenchent ralentis et titres | à faire |
+| Remonter le temps | orthophotos historiques (IGN 1950–1965) ou d'une autre saison, en comparatif avant / après | photos IGN 1950–1965, 1965–1980 (partiel) et 2000–2005 faites ; comparatif à faire |
+| Rendu en lot | un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface | après la phase 5 |
+| Affiche imprimable | la trace sur le relief en très haute résolution, habillage compris, pour un tirage | après la phase 5 |
+| Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale | à faire |
+| Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller | à faire |
 
 ## Sources de données et licences
 
