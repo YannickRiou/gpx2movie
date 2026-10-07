@@ -1,195 +1,129 @@
 # État du projet et reprise
 
-Mis à jour le 2026-10-07. `master` réécrit sans trailers et poussé. PR « phases 2 à 5 » :
-https://github.com/YannickRiou/gpx2movie/pull/1 (`phase3-atmosphere` → `master`, à fusionner par l'utilisateur). Travail en
-cours sur la branche `timeline` (partie de `phase3-atmosphere`), une PR par fonctionnalité.
+Mis à jour le 2026-10-07 (fin de journée). Ce fichier suffit pour reprendre sans l'historique de conversation : lire
+d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
-Pousser : `~/.gitconfig` réécrit les URL GitHub vers le SSH du compte `yriouvortex` (sans droits sur le dépôt) et git 2.25
-ignore `GIT_CONFIG_GLOBAL` ; passer par le compte `YannickRiou` de `gh` avec un HOME temporaire :
+## Branches, PR, dépôt
+
+- `master` : phases 1–2, historique réécrit sans trailers (poussé).
+- `phase3-atmosphere` : phases 2 à 5 + début de la phase 7. PR #1 → `master` :
+  https://github.com/YannickRiou/gpx2movie/pull/1 (**à fusionner par l'utilisateur**, la fusion automatique est refusée).
+- `timeline` (branche de travail courante, partie de `phase3-atmosphere`) : timeline de montage + nouvelle interface.
+  PR #2 → `phase3-atmosphere`, en brouillon : https://github.com/YannickRiou/gpx2movie/pull/2. À fusionner après la #1.
+- Règle demandée : une branche et une PR par fonctionnalité, description à jour + procédure de test manuel ; l'utilisateur
+  fusionne.
+- **Pousser** : `~/.gitconfig` réécrit les URL GitHub vers le SSH du compte `yriouvortex` (sans droits) et git 2.25 ignore
+  `GIT_CONFIG_GLOBAL`. Passer par le compte `YannickRiou` de `gh` avec un HOME temporaire :
 
 ```bash
-G=$HOME/.config/gh; T=$(mktemp -d); HOME=$T GH_CONFIG_DIR=$G git -c credential.helper='!gh auth git-credential' push https://github.com/YannickRiou/gpx2movie.git <branche>; rm -rf $T
+G=$HOME/.config/gh; T=$(mktemp -d); HOME=$T GH_CONFIG_DIR=$G git -c credential.helper='!gh auth git-credential' push https://github.com/YannickRiou/gpx2movie.git timeline; rm -rf $T
 ```
 
-## Environnement (WSL)
+  (`~/.gitconfig` contient aussi un jeton d'accès personnel en clair du compte `yriouvortex` : à révoquer et supprimer ; signalé à
+  l'utilisateur, pas touché.)
 
-- Node 24 via nvm : `source ~/.nvm/nvm.sh && nvm use 24` avant `npm …` (les chemins Windows de `CLAUDE.md` ne valent pas ici).
-- Vérifications : `npm run typecheck`, `npm run lint`, `npx vitest run --maxWorkers=1` (un seul cœur évite les délais de
-  démarrage des workers quand la machine est chargée).
-- Contrôle visuel sans écran : Chromium headless (`~/.cache/ms-playwright/chromium_headless_shell-1223`) piloté par
-  puppeteer-core (`~/.npm/_npx/e0b87bb3fb84adaa/node_modules/puppeteer-core`), GPU logiciel (SwiftShader) : très lent, compter
-  20–40 s par capture et un seul navigateur à la fois. Script générique dans le répertoire temporaire de session (effacé au
-  redémarrage) — à recréer : charge la page, clique « Charger l'exemple », règle des curseurs / cases / listes par libellé,
-  capture.
-- Ne jamais mentionner d'outil d'IA dans le code, les commentaires, la doc ou les messages de commit (pas de trailer).
-- Charte « Carte alpine » (`src/ui/theme.css`), pas la charte Vortex.
+- **Le dernier commit de `timeline` n'a pas pu être poussé** (GitHub répondait « Internal Server Error » le 2026-10-07 vers
+  17 h) : pousser en premier à la reprise avec la commande ci-dessus, puis vérifier `git status -sb`.
 
-## Fait et commité (du plus récent au plus ancien)
+## Environnement et méthode (WSL)
+
+- Node 24 via nvm : `source ~/.nvm/nvm.sh && nvm use 24` avant `npm …`.
+- Vérifications : `npm run typecheck`, `npm run lint` (34 avertissements préexistants dans `src/scene`, 0 erreur),
+  `npx vitest run --maxWorkers=1` (63 fichiers, 844 tests au dernier commit vert), `npm run build`.
+- Serveur de dev utilisé pour les captures : `npm run dev -- --port 5190` (à relancer).
+- Contrôle visuel sans écran : Chromium headless (`~/.cache/ms-playwright/chromium_headless_shell-1223/…`) piloté par
+  puppeteer-core (`~/.npm/_npx/e0b87bb3fb84adaa/node_modules/puppeteer-core`), GPU logiciel SwiftShader : 20–40 s par
+  capture, **un seul navigateur à la fois**. Script générique à recréer dans le répertoire temporaire de session : charge
+  `http://127.0.0.1:<port>/`, clique « Essayer avec l'exemple », exécute des étapes (`click` par texte de bouton, `check`
+  par libellé, `eval` JS, `shot`), viewport via `W`/`H`.
+- **Ne plus mesurer la vitesse de l'export sur cette machine** (décision de l'utilisateur, GPU logiciel) : il la mesure
+  sur une machine avec GPU. La console affiche en fin d'export `[export] N images … rendu … attente … encodage …`.
+- Sous-agents : interdiction totale de git (deux ont fait `git stash` / `pop` malgré la consigne, sans perte constatée).
+- Aucune mention d'outil d'IA nulle part (code, doc, commits : pas de trailer). Charte « Carte alpine » (`src/ui/theme.css`),
+  pas la charte Vortex. Licence du code : MIT (`LICENSE`).
+
+## Décisions prises par l'utilisateur (ne pas redemander)
+
+- Usage personnel, faible trafic ; hébergement non décidé (exe local, serveur perso ou type OVH). Deux cibles à garder
+  fonctionnelles : site statique et application de bureau Tauri (phase 6). Pas de clé d'API, sources ouvertes seulement.
+- Timeline façon logiciel de montage : la base est le survol du GPX ; pistes séparées pour arrêts, textes, photos (vidéos
+  plus tard) ; film monté automatiquement au chargement puis retouché. Préréglages sans arrêts / textes / médias.
+- Interface « hyper ergonomique comme les interfaces récentes » : MapDirector sert d'inspiration, pas de modèle.
+  Icônes Lucide (ISC, embarquées), cadre sombre (encre) autour de la vue avec panneaux clairs (papier), onglets
+  Trace · Carte · Survol · Habillage · Projet, export depuis la barre du haut.
+- README écrit simplement, phrases courtes, chaque chose dite une fois.
+
+## Fait et commité (branche `timeline`, du plus récent au plus ancien)
 
 | Commit | Contenu |
 |---|---|
-| `ef6fe3e` | l'export suit le rythme du survol (ralentis, pauses) |
-| `814fb37` | export vidéo image par image (MP4 H.264, repli HEVC / WebM VP9 / VP8), habillage incrusté, annulation |
-| `ca1d5cc` | rythme : ralentis et pauses aux temps forts (montées, cols, sommets) |
-| `736b1c5` | polices embarquées (hors ligne) |
-| `1f3eccc` | mini-carte, étiquettes effacées derrière les cartes, mise à niveau des anciens réglages (`SETTING_UPGRADES`) |
-| `0f4ac4b` | habillage du film (3 styles, cartes, compteurs, profil, logo, météo, texte) |
-| `5ca3c0f` | repères OpenStreetMap (Overpass, cache, étiquettes 3D) |
-| `e98519d` | montées détectées (cat. 4 à HC), waypoints GPX, étiquettes 3D WebGL |
-| `8da79b1` | styles de caméra (poursuite, hélicoptère, orbite, dessus, cinéma), préréglages, durée |
-| `0a19626` | météo historique Open-Meteo (panneau) |
-| `f9ddccd` | montage étiquettes + export dans la scène, pont habillage → export |
-| `f48ab83` | ombres portées, soleil à l'heure de la sortie, exposition auto, trace colorée, document de projet, fonds de carte |
-| `fd1a4f0` | atmosphère physique Takram (ciel, brume, nuit) |
-| `a68ee54` | phase 2 : survol, timeline, profil |
+| `6ce6085` | Survol : nombre d'arrêts dans la durée du film |
+| `a215704` | messages éphémères (toasts), dépôt n'importe où, écran d'accueil, aide des raccourcis « ? », infobulles ; onglets Carte et Survol en sections, « Plus de réglages », heure du soleil (lever / coucher, boutons rapides) |
+| `46b6b39` | le tiroir d'export réduit la vue (bug : la fenêtre s'élargissait) |
+| `5e85a04` | photos dans la timeline (EXIF GPS / heure, plein écran ou carte, enregistrées dans le projet) + nouvelle interface (barre du haut, rail, cadrage au format, tiroir d'export, icônes) |
+| `9bc52e3` | README : captures (`docs/images/interface.jpg`, `habillage.jpg`) — **périmées depuis la nouvelle interface** |
+| `ca4453e` | textes de la timeline dans le film, cartons calés sur les plans, crédits des sources incrustés à l'export |
+| `69569a7`, `fac1f81` | timeline sous la vue (pistes Plans / Arrêts / Textes, glisser-déposer, inspecteur, arrêts automatiques) |
+| `1996237` | README réécrit + licence MIT |
+| `b7ffe55` | modèle du film, horloge du film, caméra des plans d'ensemble |
+| `e45ccd0` et avant | voir `git log` ; phases 2–5 et 7 sur `phase3-atmosphere` (PR #1) |
 
-Le détail technique de chaque module est dans `ARCHITECTURE.md`, la feuille de route dans `README.md`.
+Détail technique : `ARCHITECTURE.md` (sections « Interface », « Film et timeline », « Habillage », « Export vidéo »…).
+Feuille de route et fonctionnalités : `README.md`.
 
-## Travaux en cours
+## Travail en cours, probablement NON commité à la reprise
 
-Lancer `git status` et `npm run typecheck` en premier.
+Dernier chantier d'interface, lancé juste avant l'arrêt (vérifier avec `git status` ; si l'arbre est vert, finir et
+commiter ; sinon terminer d'abord). Fichiers : `src/App.tsx`, `src/ui/Timeline.tsx`, `src/ui/FilmInspector.tsx`,
+`src/ui/shell.ts`, `src/ui/shortcuts.ts`, `src/ui/icons.tsx`, `src/state/store.ts`, `src/film/timeline.ts`,
+`src/flyover/path.ts`, `src/scene/usePacing.ts`, `src/scene/FlyoverCanvas.tsx`, nouveau `src/scene/TrackPicker.tsx`
+(+ tests). Contenu prévu :
 
-1. **Course fantôme — faite et montée** (`<RaceMarkers />` après `<FlyoverRig />`), documentée. Reste un contrôle visuel :
-   taille et couleur des marqueurs (atmosphère active ou non), halo sur neige et forêt, classement en direct, options
-   désactivées sans horodatage. Limite : les arrêts de la trace de tête sont franchis instantanément.
-2. **Export : vitesse et formats × résolutions — commités (`2b467e7`)** : préchargement des tuiles, attente limitée aux
-   tuiles visibles (délai 5 s), replaquage synchrone, second placement de caméra seulement si le sol bouge de plus d'1 m ;
-   formats 16:9 / 9:16 / 1:1 / 4:5 / 21:9 × 720p / 1080p / 1440p / 4K.
-   - **Mesure à refaire sur une machine avec GPU** (décision de l'utilisateur : plus de benchmark sur la machine WSL, dont le
-     GPU logiciel SwiftShader fausse tout). Mesure partielle WSL, 320×180, 10 i/s, 3 s, cache froid : ≈ 33 s / image après
-     (27 images sur 30) contre 73 s avant, 12 délais dépassés contre 14. Le poste « encodage » (≈ 22 s / image) est en fait
-     la copie de l'image WebGL (`composeFrame` → `drawImage`) qui attend la fin du rendu GPU.
-   - **Comment mesurer** : lancer un export depuis le panneau ; à la fin, la console affiche
-     `[export] N images (M rendues) en … s : rendu … s, attente des tuiles … s, encodage … s, K délai(s) dépassé(s)`.
-     Faire deux exports identiques de suite (cache froid puis chaud). Pour un « avant », comparer avec `c8a00ed`.
-   - Échelle de rendu appliquée à la trace (`TrackLines.tsx`) et aux étiquettes ; à vérifier à l'œil sur un export 4K.
-3. **Météo dans la scène — faite** (`src/weather/sceneWeather.ts`, `src/scene/weatherEffect.ts`, réglage
-   `settings.weatherScene`), documentée, vérifiée sur données réelles (effet discret le jour de l'exemple) et synthétiques
-   (couvert, pluie, brouillard). Suite possible : nuages volumétriques `@takram/three-clouds` (voir ARCHITECTURE.md).
+1. inspecteur de la timeline rendu dans le panneau de droite (`.dock`) au lieu de flotter sur la vue ; sélection dans le
+   store ; grille 3×3 pour la position d'un texte ; Échap : dialogue → tiroir → sélection ;
+2. timeline : arrêts dessinés sur la barre du survol, curseur de zoom + « Ajuster », bouton stop, barre aux contrôles
+   harmonisés (icônes + infobulles), « modifié / Par défaut » et « Arrêts automatiques » dans un menu ▾, message photos en
+   toast, raccourcis S / T (arrêt / texte au curseur) ;
+3. vue 3D : clic sur la trace = déplacer le curseur ; clic droit = « Ajouter un arrêt / un texte ici » (`TrackPicker`).
 
-4. **Film et timeline, incrément 1 sur 4 — fait (`b7ffe55`)** : modèle pur du film (`src/film/model.ts`, réglage
-   `settings.film`), assemblage automatique (`src/film/assemble.ts`), horloge du film (`src/film/clock.ts`) qui remplace le
-   rythme dans l'aperçu (`FlyoverRig`) et l'export (`ExportController`), caméra des plans d'ouverture / clôture et des arrêts
-   (`src/flyover/filmCamera.ts`), pauses du rythme devenues des arrêts (`flightPacing`). Aucune interface ajoutée (les
-   panneaux caméra et export lisent l'horloge par `usePacing`). Détail : ARCHITECTURE.md, « Film et timeline ».
-   - **Contrôle visuel à faire** : ouverture « descente » au lancement (la vue d'ensemble plonge vers le départ sans virage ni
-     traversée du relief), raccord avec chaque style de caméra (orbite et cinéma compris), clôture en fin de lecture, export
-     9:16 (toute la trace dans le cadre), arrêts avec rythme actif (pause tenue, caméra fixe), pause dans l'ouverture puis
-     réglage caméra, image fixe pendant l'ouverture.
-   - **Incrément 2 (timeline sous la vue) — fait, non commité** : `src/film/timeline.ts` (pur, testé : échelle, règle,
-     aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits), `src/ui/Timeline.tsx` réécrit (pistes Plans / Arrêts /
-     Textes, règle en temps du film, zoom Ctrl+molette, clavier), `src/ui/FilmInspector.tsx`, vue 3D dans `.view__stage`
-     au-dessus de la timeline. Film : `autoMode` (`'temps-forts'` pour les nouveaux projets : un arrêt en orbite de 4 s à chaque
-     temps fort même rythme désactivé ; `'rythme'` pour les anciens, par `withFilmDefaults` et la migration v1 → v2 du
-     document), `materializeStops` à la première retouche d'un arrêt. Préréglages : seuls ouverture et clôture du film.
-     `FlyoverRig` garde le temps du film quand l'horloge change. Détail : ARCHITECTURE.md, « Film et timeline ».
-   - **Contrôle visuel à faire (incrément 2)** : à 1280 px de large, barre sur une ligne (sinon passage à la ligne propre),
-     hauteur ~150 px, pistes repliées / dépliées ; profil dans le bloc du survol, plat pendant les arrêts ; glisser un arrêt
-     (le bloc suit le pointeur, aimantation sur les temps forts, Alt sans aimant), étirer son bord droit, déplacer / étirer un
-     texte par ses deux bords, bord de l'ouverture / clôture ; un geste = un Ctrl+Z ; arrêts pointillés tant qu'automatiques,
-     pleins après une retouche, case « Arrêts automatiques » ; règle cliquée dans l'ouverture et la clôture (la caméra suit le
-     plan), retouche en pause sans saut de la tête de lecture ; inspecteur au-dessus de la timeline sans masquer la barre,
-     champs (texte, sous-titre, position, taille, début, durée ; libellé, durée, caméra ; style, durée) ; Espace, Suppr,
-     flèches, Échap ; Ctrl+molette (zoom autour du pointeur, pas de zoom de la page) et défilement horizontal ; focus visible
-     sur les blocs ; contrastes de la pastille « modifié » sur fond encre ; légende de couleur de la trace en bas à gauche.
-   - **Incrément 3 (textes de la timeline dans le film) et crédits des sources incrustés — faits, non commités** :
-     `drawOverlay(…, extras)` reçoit le temps du film (`OverlayTime`, `overlayTime(clock, progress, timeS)`), les textes
-     (`settings.film.texts`, fondus 0,4 s, style du « Texte libre », empilés par ancre, un tiers de largeur à côté d'un texte
-     d'une autre ancre de la rangée) et les crédits (`overlayCredits`, mêmes chaînes que la barre d'état ; réglage
-     `overlay.credits { enabled, position }`, activés par défaut et pour les anciens projets, dessinés même habillage
-     désactivé). Cartes d'ouverture / clôture calées sur le temps du film (première image → ouverture + `end` × vol ;
-     ouverture + `start` × vol → dernière image), étiquettes 3D comprises. Export : une image tenue est rendue à nouveau
-     quand l'habillage minuté change (`overlayTimedState`). Détail : ARCHITECTURE.md, « Habillage du film ».
-   - **Contrôle visuel à faire (incrément 3 et crédits)** : texte de la timeline dans les 3 styles (aperçu et export,
-     tailles 0,5 et 2), fondus d'entrée / sortie, sous-titre, deux textes à la même ancre (empilés) et à deux ancres d'une
-     rangée (pas de chevauchement), texte long (deux lignes puis « … »), texte posé pendant un arrêt « fixe » (fondu
-     visible à l'export) ; carte d'ouverture pendant le plan d'ouverture puis effacée peu après le départ, carte de clôture
-     tenue pendant la clôture, étiquettes 3D effacées en même temps ; ligne des crédits dans les 4 coins et les 3 styles, sur
-     neige et sur forêt, en 9:16 (repliée sur deux lignes ?), en 720p (lisibilité), avec météo et repères chargés, sans
-     habillage, et absente une fois décochée ; recouvrement possible avec la légende de couleur de la trace (bas à gauche de
-     l'aperçu, hors export).
-   - **Incrément 4 (piste « Médias », photos) — fait, non commité** : `src/film/exif.ts` (EXIF pur : GPS, heure),
-     `src/film/media.ts` (table des médias du document, `readPhoto` : réduction 2 560 px JPEG 0,85 + vignette, images
-     décodées à la demande et libérées), « + Photo » et dépôt sur la timeline, proposition « Placer sur le parcours »
-     (`photoFilmTime` : point le plus proche, sinon heure), piste « Médias » avec vignettes, inspecteur (plein écran /
-     carte, Ken Burns, légende, position, taille, début, durée), dessin dans `drawOverlay` (plein écran sous tout avec
-     Ken Burns, carte encadrée aux 3 styles), export (images décodées avant chaque image, `overlayTimedState`), champ
-     `media` du document (sans changement de version). Vidéos : réservées (ignorées à l'ajout). Lien photo → arrêt : non
-     fait. Détail : ARCHITECTURE.md, « Film et timeline » (Photos, Table des médias) et « Habillage du film ».
-   - **Contrôle visuel à faire (incrément 4)** : « + Photo » sur la barre à 1280 px (passage à la ligne propre), dépôt de
-     plusieurs JPEG sur la timeline, message et « Placer sur le parcours » avec des photos de téléphone (GPS) et d'appareil
-     (heure seule), photo HEIC (message d'erreur), vignettes lisibles dans les blocs, glisser / étirer / Suppr / flèches ;
-     plein écran : fondus, mouvement lent régulier (sans saccade à l'aperçu et à l'export), photo en hauteur recadrée,
-     widgets en direct effacés dessous, légende ; carte dans les 3 styles, aux 9 positions, tailles 0,5 et 2, légende
-     longue ; habillage désactivé (photos toujours dessinées) ; crédits au-dessus ; export 9:16 et 4K ; enregistrer,
-     rouvrir (photos et vignettes revenues), Ctrl+Z après suppression (photo revenue).
+Puis : typecheck, lint, tests, build ; captures 1440 / 1280 / 1000 ; mettre à jour ARCHITECTURE.md, README
+(« Utilisation »), ce fichier ; commit, push, description de la PR #2 (étape « interface » cochée).
 
-5. **Interface, incrément « coque + barre du haut » — fait, non commité** : coque sombre / panneaux clairs
-   (`src/ui/shell.css`, jetons de gabarit et surfaces sémantiques dans `theme.css`), rail d'onglets Trace · Carte · Survol ·
-   Habillage · Projet et un panneau à la fois (tous montés), barre du haut (`TopBar.tsx` : nom du projet dans le store,
-   état « Modifié / Enregistré », annuler / rétablir, Ouvrir unique GPX / FIT / projet, Enregistrer, format de sortie
-   centré, « Exporter »), vue cadrée au format (`Stage.tsx`, « Libre » = aperçu seulement), tiroir d'export à droite
-   (tuiles de format, « Plus d'options »), « Recadrer » flottant (F), bande d'état 24 px avec ⓘ « Sources et licences »,
-   icônes Lucide en ligne (`icons.tsx`), raccourcis Ctrl+S / O / E, F, `[`. Logique pure testée dans `src/ui/shell.ts`.
-   Détail : ARCHITECTURE.md, « Interface ».
-   - **Contrôle visuel à faire** (1440×900, 1280×800, 1000×700, puis < 700 px) : barre du haut sur une ligne sans
-     chevauchement (format bien centré, nom tronqué proprement), infobulles (délai, position, pas de débordement à droite),
-     rail (onglet actif, repli, focus visible orange sur l'encre), en-têtes de section collants avec « modifié / Par défaut »,
-     sections Montées / Météo repliables, cadrage 16:9 / 9:16 / 21:9 avec bandes encre et habillage dans le cadre, légende
-     de couleur de la trace dans le cadre, tiroir d'export (repli auto du panneau sous 1360 px et retour à la fermeture),
-     export observé dans la vue avec « 42 % · Annuler », coque verrouillée pendant l'export, panneau en tiroir sous 1024 px,
-     barre d'onglets en bas sous 700 px, boîte « Sources et licences », messages d'import / d'ouverture en haut de la vue.
-   - **Incrément « Carte et Survol plus simples » — fait, non commité** : sections repliables (`src/ui/PanelSection.tsx` :
-     `PanelSection`, `MoreSettings` « Plus de réglages » avec « modifié » des réglages cachés, `InfoTip` ⓘ), onglet Carte
-     en « Fond de carte », « Relief et trace », « Lumière », « Atmosphère et météo » ; onglet Survol en « Caméra » (style
-     en tuiles à icônes) et « Durée et rythme ». « Lumière » : bascule « Suivre la trace » / « Heure fixe », curseur sur une
-     barre nuit / jour avec lever et coucher (`sunTimes`, `solarDay` dans `src/flyover/sun.ts`, testés), raccourcis Lever ·
-     Matin · Midi · Heure dorée · Coucher · Nuit (`sunChipHour`, une étape d'annulation chacun). `modifiedPaths` dans
-     `src/project/apply.ts`. Styles : bloc délimité en fin de `app.css`. Clés de réglages inchangées.
-   - **Contrôle visuel à faire (Carte et Survol)** : en-têtes collants et repli de chaque section, « Plus de réglages »
-     (chevron, pastille « modifié » quand l'exposition ou la distance caméra changent), infobulles ⓘ (retour à la ligne,
-     pas coupées à droite du panneau à 280 et 320 px, au clavier), barre nuit / jour alignée sur le pouce du curseur
-     (repères du lever et du coucher sous le pouce quand on clique « Lever » / « Coucher »), raccourcis sur deux lignes à
-     280 px, « Suivre la trace » grisé sur une trace sans heure, trace en Laponie l'été (jour polaire : Lever / Coucher /
-     Nuit grisés), Ctrl+Z après deux raccourcis rapides (deux étapes), tuiles de style (libellés lisibles, focus visible),
-     « Lumière » avec l'atmosphère décochée.
-6. **Interface, incrément « retours, aide et accueil » — fait, non commité** : messages en bas de la vue (`toast.ts`,
-   `Toaster.tsx`) à la place des bandeaux (import, projet, préréglages, export, « Réglages remis par défaut · Annuler »
-   avec annulation gardée par `resetSettings`) ; dépôt de traces ou d'un projet n'importe où avec voile (`openFiles`,
-   `isFileDrag`), `importFiles` dans `importFlow.ts` ; carte d'accueil sur la vue sans trace (`EmptyState.tsx`, plus de
-   zone de dépôt dans l'onglet Trace : `ImportPanel` et `DropZone` supprimés) ; registre des raccourcis et boîte « ? »
-   (`shortcuts.ts`, `HelpDialog.tsx`), ← / → / Maj / Début / Fin, Échap dans l'ordre boîte → tiroir → sélection ;
-   infobulles `data-tip` sur tous les boutons à icône seule (`data-tip-side="top"`, `data-tip-align`). Détail :
-   ARCHITECTURE.md, « Interface ».
-   - **Contrôle visuel à faire** : carte d'accueil (centrée, lisible sur le ciel, « Import en cours… »), voile pendant un
-     glissement (disparaît au-dessus de la timeline, pas de clignotement, Firefox compris), dépôt d'un `.json`, d'un
-     `.gpx` et d'une photo hors timeline (message d'erreur) ; messages : empilement, survol qui suspend, erreur qui reste,
-     « Annuler » après « Par défaut » (disparaît si on touche un autre réglage), « Télécharger à nouveau » ; boîte « ? »
-     (deux colonnes, une sous 600 px) ; infobulles du bouton ⓘ, de la fermeture du tiroir, de ▶ / repli / zoom de la
-     timeline et de la suppression d'une trace (jamais coupées) ; ← / → pendant la lecture, sur un bloc sélectionné (le
-     bloc bouge, pas la tête), sur un curseur du panneau (le curseur bouge).
-   - Incrément suivant de l'interface : menu du projet (Nouveau, Ouvrir, Enregistrer, Préréglages) ; retirer `importError`
-     du store (plus affiché) ; message des photos de la timeline en toast.
+## Contrôles visuels encore à faire (jamais vus à l'écran)
 
-Pour intégrer proprement : finir chaque chantier, `npx vitest run --maxWorkers=1` + typecheck + lint verts, puis un commit
-par fonctionnalité (les fichiers partagés `store.ts`, `document.ts`, fixtures de test contiennent des morceaux de plusieurs
-chantiers : committer par hunks ou tout ensemble une fois l'arbre vert).
+- Timeline : glisser un arrêt (aimantation, Alt), étirer un texte des deux bords, bord de l'ouverture, Ctrl+Z par geste,
+  Ctrl+molette, un film long (défilement).
+- Photos : ajout, miniatures, plein écran avec zoom lent, carte dans les 3 styles, placement GPS, export avec photo.
+- Habillage : textes à plusieurs positions, cartons d'ouverture / clôture calés sur les plans, crédits dans les 4 coins,
+  en 9:16 et 720p.
+- Interface : 1280 et 1000 px de large (panneau en tiroir), tiroir d'export pendant un vrai export (« 42 % · Annuler »,
+  interface verrouillée), toasts (empilement, « Annuler » après « Par défaut »), dépôt d'un fichier (voile), onglet Projet,
+  heure du soleil : curseur aligné sur les repères lever / coucher, boutons sur deux lignes à 280 px.
+- Plus ancien : marqueurs de course fantôme, mini-carte dans les 3 styles, étiquettes effacées sous les cartes, ralentis.
+- Export réel sur machine avec GPU : vitesse (avant `c8a00ed` / après), film 60 s en 1080p puis 4K (mémoire), 9:16,
+  trace et étiquettes à l'échelle en 4K, crédits incrustés, image fixe.
 
-## Prochaines étapes proposées (après les travaux en cours)
+## Prochaines étapes proposées
 
-- Contrôle visuel groupé : mini-carte dans les 3 styles, polices hors ligne, ralentis (sensation à 35 % sur ±1 km), course
-  fantôme, étiquettes effacées sous les cartes, export complet 1080p d'un film de 60 s.
-- Phase 4 restante : vidéos de la piste des médias, lien d'une photo à un arrêt, caméra par étape et images-clés, plan de situation
-  (ouverture depuis le pays), ouverture / fermeture « balayage », vitesse par portion à la main, couleurs et polices par widget, thèmes de film, éditeur en modes
-  (Trajet, Carte, Habillage, Survol, Prises de vue). Pastille « modifié » + « Par défaut » : faite par panneau,
-  contrôle visuel à faire (position sur la ligne du titre, titres longs, bouton désactivé pendant un export) ; reste le
-  grain plus fin (par sous-groupe, par réglage) et les sections hors panneaux (étiquettes des montées, course fantôme).
-- Phase 3 restante : eau réfléchissante (masque d'eau), hauteurs calées sur le géoïde, nuages volumétriques
-  (`@takram/three-clouds` compatible, non installé).
-- Phase 5 restante : écriture directe sur disque pour les films longs. Image fixe PNG / JPEG faite (bouton « Image fixe »
-  du panneau d'export) : contrôle visuel à faire (voir ARCHITECTURE.md, export).
-- Phase 7 : vidéo embarquée synchronisée, comparatif avant / après (photos IGN anciennes), rendu en lot, affiche, calage musical,
-  reconnaissance d'itinéraire.
-- Limites connues : OpenTopoMap à exclure des futurs packs hors ligne ; Open-Meteo et EOX non commerciaux.
-- Orbite et cinéma pendant les pauses du rythme, pause finale dans l'aperçu : corrigés (temps du film `playback.timeS`) ;
-  contrôle visuel à faire (aperçu et export avec rythme actif).
+1. Finir le chantier ci-dessus, puis **refaire les captures du README** (`docs/images/*.jpg`, 1440×900, JPEG ~85) :
+   interface complète, habillage, timeline avec photos, tiroir d'export.
+2. Fusion des PR #1 puis #2 par l'utilisateur ; ensuite repartir de `master` avec une branche par fonctionnalité.
+3. Timeline : vidéos dans la piste Médias (modèle déjà prêt, `kind: 'video'`), photo attachée à un arrêt, défilement
+   automatique pendant un glisser au bord, textes ancrés à un arrêt, mémoriser l'état ouvert / fermé des sections.
+4. Restes d'interface : Échap ferme le panneau-tiroir en écran étroit ; `importError` encore dans le store (plus affiché) ;
+   toast « Préréglage appliqué » / « Export annulé » ; section « Repères » repliable ; glisser lent de curseur = plusieurs
+   pas d'annulation (> 400 ms) ; lever / coucher affichés en heure solaire, pas en heure légale.
+5. Phase 6 (bureau, Tauri) : WebCodecs absent sous Linux (WebKitGTK) → encodeur natif ; `dragDropEnabled` intercepte les
+   dépôts HTML5 ; accès disque pour les photos derrière `readPhoto`. Hébergement en sous-dossier : `/fonts/`, `/samples/`,
+   `/favicon.svg` sont absolus → `import.meta.env.BASE_URL` (seulement si nécessaire).
+6. Phase 3 restante : eau réfléchissante, géoïde, nuages volumétriques. Phase 5 : écriture directe sur disque pour les films
+   longs. Phase 7 : vidéo embarquée, comparatif photos IGN anciennes, rendu en lot, affiche, calage musical.
+
+## Limites et points ouverts
+
+- Licence du SDK Garmin FIT (non libre, redistribution « sauf cas prévus ») : à trancher avant diffusion publique ; usage
+  perso OK. Conditions Esri (sans clé) à relire. Open-Meteo et EOX non commerciaux ; OpenTopoMap CC BY-SA, à exclure des
+  futurs packs hors ligne. Catalogue d'étoiles de Yale : licence non indiquée.
+- Photos HEIC refusées (le navigateur ne les décode pas) ; EXIF lu seulement dans les JPEG.
+- Firefox / Safari non testés pour l'export (WebCodecs). HTTPS obligatoire hors `localhost`.
+- Aucun test de rendu de composants (pas de Testing Library) ; tout le visuel se vérifie à la main, par captures.
