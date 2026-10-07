@@ -32,6 +32,7 @@ import { Line2 } from 'three/addons/lines/Line2.js'
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 import type { LocalFrame, TerrainEngine, Track, TrackPoint } from '../core/types'
+import { useExportStore } from '../export/store'
 import {
   TRACK_METRICS,
   colorizeValues,
@@ -405,6 +406,14 @@ function applyResolution(sets: Iterable<TrackLineSet>, width: number, height: nu
   }
 }
 
+/** Line width in pixels of the canvas: times the export render scale, so a 4K video looks like the 1080p one. */
+function applyLineWidth(sets: Iterable<TrackLineSet>, renderScale: number): void {
+  for (const set of sets) {
+    set.solidMaterial.linewidth = LINE_WIDTH_PX * renderScale
+    set.ghostMaterial.linewidth = LINE_WIDTH_PX * renderScale
+  }
+}
+
 /**
  * Reconcile the Three objects with the store: keep sets whose track and frame are unchanged, rebuild the
  * others, drop the ones whose track disappeared.
@@ -456,6 +465,8 @@ export function TrackLines() {
   const sizeRef = useRef(size)
   /** exposure the line colours were last compensated for (NaN = after a rebuild) */
   const exposureRef = useRef(Number.NaN)
+  /** render scale the line width was last set for (NaN = after a rebuild) */
+  const lineScaleRef = useRef(Number.NaN)
 
   // Keep the material resolution in sync with the canvas size (Line2 also refreshes it before each
   // render, this covers objects that are not rendered yet).
@@ -476,6 +487,7 @@ export function TrackLines() {
     const { width, height } = sizeRef.current
     syncTrackLineSets(group, setsRef.current, tracks, frame, sharedRef.current, width, height)
     exposureRef.current = Number.NaN
+    lineScaleRef.current = Number.NaN
     drapeAll(engine, exaggeration)
   }, [tracks, frame, engine, exaggeration, drapeAll])
 
@@ -486,6 +498,11 @@ export function TrackLines() {
   }, [tracks, frame, colorBy])
 
   useFrame(({ gl }) => {
+    const { renderScale } = useExportStore.getState()
+    if (renderScale !== lineScaleRef.current) {
+      lineScaleRef.current = renderScale
+      applyLineWidth(setsRef.current.values(), renderScale)
+    }
     if (gl.toneMappingExposure === exposureRef.current) return
     exposureRef.current = gl.toneMappingExposure
     applyExposure(setsRef.current.values(), gl.toneMappingExposure)

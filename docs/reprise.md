@@ -61,9 +61,7 @@ Lancer `git status` et `npm run typecheck` en premier.
    - **Comment mesurer** : lancer un export depuis le panneau ; à la fin, la console affiche
      `[export] N images (M rendues) en … s : rendu … s, attente des tuiles … s, encodage … s, K délai(s) dépassé(s)`.
      Faire deux exports identiques de suite (cache froid puis chaud). Pour un « avant », comparer avec `c8a00ed`.
-   - **Reste à faire** : échelle de rendu (`exportRenderScale = petit côté / 1080`, déjà appliquée aux étiquettes dans
-     `Labels.tsx`) à brancher sur `LINE_WIDTH_PX` dans `TrackLines.tsx` et `MARKER_SCREEN_FACTOR` dans `FlyoverRig.tsx` et
-     `RaceMarkers.tsx`, sinon trace et marqueurs paraissent plus fins en 4K qu'en 1080p.
+   - Échelle de rendu appliquée à la trace (`TrackLines.tsx`) et aux étiquettes ; à vérifier à l'œil sur un export 4K.
 3. **Météo dans la scène — faite** (`src/weather/sceneWeather.ts`, `src/scene/weatherEffect.ts`, réglage
    `settings.weatherScene`), documentée, vérifiée sur données réelles (effet discret le jour de l'exemple) et synthétiques
    (couvert, pluie, brouillard). Suite possible : nuages volumétriques `@takram/three-clouds` (voir ARCHITECTURE.md).
