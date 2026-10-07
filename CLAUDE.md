@@ -2,6 +2,10 @@
 
 Visionneuse / générateur de films de survol 3D à partir de GPX et FIT, 100 % local.
 
+- Deux cibles, toujours garder les deux en état de marche : site web statique hébergé (aucun serveur applicatif) et
+  application de bureau (Tauri, phase 6). Pas de dépendance Node côté exécution ; accès disque et stockage derrière une
+  interface commune (navigateur / Tauri).
+
 - Lire `ARCHITECTURE.md` avant de toucher au code : conventions de coordonnées, contrats (`src/core/types.ts`), modules.
 - Sous WSL : Node 24 via nvm, préfixer par `source ~/.nvm/nvm.sh && nvm use 24`. Tests : `npx vitest run --maxWorkers=1`.
 - État du projet et reprise : `docs/reprise.md`.
