@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Group } from 'three'
+import { Color, Group } from 'three'
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import { Line2 } from 'three/addons/lines/Line2.js'
 import type { InterleavedBufferAttribute, TypedArray } from 'three'
@@ -19,6 +19,8 @@ const {
   drapeTrackLineSet,
   disposeTrackLineSet,
   applyExposure,
+  applyTrackColors,
+  writeLineColors,
   LINE_LIFT_M,
   LINE_WIDTH_PX,
   GHOST_OPACITY,
@@ -274,6 +276,76 @@ describe('applyExposure', () => {
     expect(set.ghostMaterial.color.equals(set.solidMaterial.color)).toBe(true)
     applyExposure(sets.values(), 1)
     expect(set.solidMaterial.color.getHexString()).toBe('ff0000')
+  })
+})
+
+describe('applyTrackColors', () => {
+  const colorStart = (set: TrackLineSet, k = 0) =>
+    set.segments[k].geometry.getAttribute('instanceColorStart') as InterleavedBufferAttribute | undefined
+
+  it('colours every densified vertex by the metric, with one range for all tracks, and restores the track colour', () => {
+    const sets = new Map<string, TrackLineSet>()
+    const low = makeTrack('low', [segmentA]) // 1000 -> 1050 m over 12 densified points
+    const high = makeTrack('high', [segmentB]) // 1100 -> 1110 m
+    syncTrackLineSets(new Group(), sets, [low, high], frame, createSharedResources(), 800, 600)
+    const setLow = sets.get('low')!
+    const setHigh = sets.get('high')!
+    const geometry = setLow.segments[0].geometry
+    drapeTrackLineSet(setLow, null, 1)
+    const positions = geometry.getAttribute('instanceStart')
+
+    applyTrackColors(sets.values(), 'elevation')
+    for (const set of [setLow, setHigh]) {
+      expect(set.solidMaterial.vertexColors).toBe(true)
+      expect(set.ghostMaterial.vertexColors).toBe(true)
+    }
+    const colors = colorStart(setLow)!
+    expect(colors.count).toBe(setLow.segments[0].buffer.count - 1)
+    // viridis: lightness (green channel) grows with elevation along the densified points
+    for (let i = 1; i < colors.count; i++) expect(colors.getY(i)).toBeGreaterThan(colors.getY(i - 1))
+    // the range spans both tracks: 1000 m is the dark end, 1110 m the bright one (#440154 / #fde725)
+    expect(new Color().setRGB(colors.getX(0), colors.getY(0), colors.getZ(0)).getHexString()).toBe('440154')
+    const end = colorStart(setHigh)!
+    expect(new Color().setRGB(end.getX(0), end.getY(0), end.getZ(0)).getHexString()).not.toBe('440154')
+
+    // exposure: vertex colours are scaled by a white material colour
+    applyExposure(sets.values(), 4)
+    expect(setLow.solidMaterial.color.toArray()).toEqual([0.25, 0.25, 0.25])
+
+    // another mode rewrites the colours in place; geometry positions are untouched
+    const colorBuffer = colors.data
+    applyTrackColors(sets.values(), 'slope')
+    expect(colorStart(setLow)!.data).toBe(colorBuffer)
+    expect(geometry.getAttribute('instanceStart')).toBe(positions)
+
+    applyTrackColors(sets.values(), 'none')
+    expect(setLow.solidMaterial.vertexColors).toBe(false)
+    expect(colorStart(setLow)).toBeUndefined()
+    applyExposure(sets.values(), 1)
+    expect(setLow.solidMaterial.color.getHexString()).toBe('ff0000')
+  })
+
+  it('greys out a track without the quantity', () => {
+    const sets = new Map<string, TrackLineSet>()
+    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA])], frame, createSharedResources(), 800, 600)
+    applyTrackColors(sets.values(), 'heartRate')
+    const colors = colorStart(sets.get('a')!)!
+    expect(new Color().setRGB(colors.getX(0), colors.getY(0), colors.getZ(0)).getHexString()).toBe('55626b')
+  })
+})
+
+describe('writeLineColors', () => {
+  it('builds the colour pairs once, then updates them in place', () => {
+    const geometry = new LineGeometry()
+    writeLineColors(geometry, new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]))
+    const start = geometry.getAttribute('instanceColorStart') as InterleavedBufferAttribute
+    expect(Array.from(start.data.array as TypedArray)).toEqual([1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1])
+    const version = start.data.version
+    writeLineColors(geometry, new Float32Array([0, 0, 0, 0.5, 0.5, 0.5, 1, 1, 1]))
+    expect(geometry.getAttribute('instanceColorStart')).toBe(start)
+    expect(start.data.version).toBeGreaterThan(version)
+    expect(Array.from(start.data.array as TypedArray)).toEqual([0, 0, 0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1, 1, 1])
+    geometry.dispose()
   })
 })
 

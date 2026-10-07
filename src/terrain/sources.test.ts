@@ -162,6 +162,18 @@ describe('catalogue integrity (values verified 2026-10-05, see docs/sources.md)'
       'arcgis-world-imagery':
         'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/12/1458/2126',
       'eox-s2cloudless': 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/12/1458/2126.jpg',
+      'ign-plan':
+        'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX=12&TILEROW=1458&TILECOL=2126&FORMAT=image/png',
+      'swisstopo-carte':
+        'https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/12/2126/1458.jpeg',
+      // (2126 + 1458) % 3 = 2 -> subdomain 'c'
+      opentopomap: 'https://c.tile.opentopomap.org/12/2126/1458.png',
+      'ign-ortho-2000-2005':
+        'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS2000-2005&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX=12&TILEROW=1458&TILECOL=2126&FORMAT=image/jpeg',
+      'ign-ortho-1965-1980':
+        'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS.1965-1980&STYLE=BDORTHOHISTORIQUE&TILEMATRIXSET=PM&TILEMATRIX=12&TILEROW=1458&TILECOL=2126&FORMAT=image/png',
+      'ign-ortho-1950-1965':
+        'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS.1950-1965&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX=12&TILEROW=1458&TILECOL=2126&FORMAT=image/png',
     }
     for (const s of all) expect(buildTileUrl(s, CHAMONIX_Z12), s.id).toBe(expected[s.id])
   })
@@ -178,5 +190,26 @@ describe('catalogue integrity (values verified 2026-10-05, see docs/sources.md)'
     expect(byId['swisstopo'].maxZoom).toBe(20)
     expect(byId['arcgis-world-imagery'].maxZoom).toBe(19)
     expect(byId['eox-s2cloudless'].maxZoom).toBe(16)
+    expect(byId['ign-plan'].maxZoom).toBe(19)
+    expect(byId['swisstopo-carte'].maxZoom).toBe(19)
+    expect(byId['opentopomap'].maxZoom).toBe(17)
+    expect(byId['ign-ortho-2000-2005']).toMatchObject({ minZoom: 6, maxZoom: 18 })
+    expect(byId['ign-ortho-1965-1980']).toMatchObject({ minZoom: 3, maxZoom: 18 })
+    expect(byId['ign-ortho-1950-1965']).toMatchObject({ minZoom: 0, maxZoom: 18 })
+  })
+
+  it('dated orthophotos show their period in the label and share the IGN France box', () => {
+    const ign = getImagerySource('ign-ortho')
+    for (const [id, period] of [
+      ['ign-ortho-2000-2005', '2000–2005'],
+      ['ign-ortho-1965-1980', '1965–1980'],
+      ['ign-ortho-1950-1965', '1950–1965'],
+    ]) {
+      const source = getImagerySource(id)
+      expect(source.id).toBe(id)
+      expect(source.name).toContain(period)
+      expect(source.attribution).toContain(period)
+      expect(source.coverage).toEqual(ign.coverage)
+    }
   })
 })

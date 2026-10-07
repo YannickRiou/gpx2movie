@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TrackPoint } from '../core/types'
 import { haversineM } from '../geo/ellipsoid'
 import { buildTrack } from '../import/stats'
-import { buildTrackPath, elevationProfile, samplePath } from './path'
+import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath } from './path'
 
 const A: TrackPoint = { lon: 6.8, lat: 45.9, ele: 1000 }
 const B: TrackPoint = { lon: 6.81, lat: 45.9, ele: 1100 }
@@ -75,5 +75,50 @@ describe('elevationProfile', () => {
     const flat = buildTrack({ name: 'f', source: 'gpx', segments: [{ points: [{ lon: 6.8, lat: 45.9 }, C] }] })
     expect(elevationProfile(buildTrackPath(flat), 10)).toBeUndefined()
     expect(elevationProfile({ ...path, count: 0 }, 10)).toBeUndefined()
+  })
+})
+
+describe('recorded time', () => {
+  const T0 = Date.UTC(2026, 6, 14, 4, 30)
+  const MIN = 60_000
+  // A at T0, B without time, C at T0 + 20 min, pause at C until T0 + 30 min (no distance), D at T0 + 40 min
+  const timed = buildTrack({
+    name: 'h',
+    source: 'gpx',
+    segments: [
+      { points: [{ ...A, time: T0 }, B, { ...C, time: T0 + 20 * MIN }, { ...C, time: T0 + 30 * MIN }] },
+      { points: [{ ...D, time: T0 + 40 * MIN }] },
+    ],
+  })
+  const path = buildTrackPath(timed)
+
+  it('keeps the time per point, NaN when unknown', () => {
+    expect(path.time[0]).toBe(T0)
+    expect(path.time[1]).toBeNaN()
+    expect(path.time[3]).toBe(T0 + 30 * MIN)
+  })
+
+  it('samplePath interpolates the time only between two timed points', () => {
+    // like the elevation: undefined as soon as one end has no time, even exactly on a timed point
+    expect(samplePath(path, 0).time).toBeUndefined()
+    expect(samplePath(path, path.dist[1] / 2).time).toBeUndefined()
+    // pause then segment jump: no distance, the playback crosses them instantly (last point wins)
+    expect(samplePath(path, path.lengthM).time).toBe(T0 + 40 * MIN)
+  })
+
+  it('recordedTimeAt bridges points without time by distance', () => {
+    expect(recordedTimeAt(path, 0)).toBe(T0)
+    const at = path.dist[1] / 2
+    expect(recordedTimeAt(path, at)).toBeCloseTo(T0 + 20 * MIN * (at / path.dist[2]), 3)
+    expect(recordedTimeAt(path, path.dist[1])).toBeCloseTo(T0 + 20 * MIN * (path.dist[1] / path.dist[2]), 3)
+    expect(recordedTimeAt(path, path.lengthM)).toBe(T0 + 40 * MIN)
+  })
+
+  it('uses the only timed side at the ends, undefined without any time', () => {
+    const tail = buildTrack({ name: 't', source: 'gpx', segments: [{ points: [A, B, { ...C, time: T0 }, D] }] })
+    const tailPath = buildTrackPath(tail)
+    expect(recordedTimeAt(tailPath, 0)).toBe(T0)
+    expect(recordedTimeAt(tailPath, tailPath.lengthM)).toBe(T0)
+    expect(recordedTimeAt(buildTrackPath(track), 100)).toBeUndefined()
   })
 })

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { LonLatBounds, Track } from '../core/types'
+import { DEFAULT_OVERLAY } from '../overlay/settings'
 import { computeFrameOrigin, pickRegionalImagery, resetAppStore, unionBounds, useAppStore } from './store'
 
 function makeTrack(id: string, bounds: LonLatBounds): Track {
@@ -144,7 +145,17 @@ describe('settings and misc', () => {
       exaggeration: 1.5,
       wireframe: true,
       atmosphere: true,
+      shadows: true,
       sunHour: 10,
+      sunFromTrack: true,
+      exposureEv: 0,
+      trackColorBy: 'none',
+      camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
+      flyoverDurationS: 60,
+      labels: { climbs: true, waypoints: true },
+      weather: { enabled: true },
+      overlay: DEFAULT_OVERLAY,
+      video: { format: '1920x1080', fps: 30, quality: 'high' },
     })
   })
 

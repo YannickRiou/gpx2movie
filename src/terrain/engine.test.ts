@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Mesh, PerspectiveCamera, Texture, Vector3 } from 'three'
+import { Frustum, Matrix4, Mesh, PerspectiveCamera, Texture, Vector3 } from 'three'
 import type { MeshStandardMaterial } from 'three'
 import type {
   HeightGrid,
@@ -170,6 +170,11 @@ function cameraAbove(heightM: number, fov = 50): PerspectiveCamera {
   return camera
 }
 
+function viewFrustum(camera: PerspectiveCamera): Frustum {
+  camera.updateMatrixWorld()
+  return new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))
+}
+
 /** Let every pending promise chain settle. */
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
@@ -262,8 +267,27 @@ describe('createTerrainEngine', () => {
       const parent = meshesOf(engine).find((m) => m.name === parentName)
       expect(parent?.visible ?? false).toBe(false)
     }
-    expect(engine.stats.visibleTiles).toBe(visible.length)
+    // the visible meshes outside the view are shadow casters, not counted as drawn tiles
+    const view = viewFrustum(camera)
+    const drawn = visible.filter((m) => view.intersectsSphere(m.geometry.boundingSphere!))
+    expect(drawn.length).toBeLessThan(visible.length)
+    expect(engine.stats.visibleTiles).toBe(drawn.length)
     expect(engine.stats.loadedTiles).toBe(meshesOf(engine).length)
+  })
+
+  it('makes every tile cast and receive shadows, frustum-culled by three', async () => {
+    const deps = createFakeDeps()
+    const engine = engineWith(deps)
+    engine.update(cameraAbove(600_000), 1000)
+    await settle()
+    engine.update(cameraAbove(600_000), 1000)
+    const meshes = meshesOf(engine)
+    expect(meshes.length).toBeGreaterThan(0)
+    for (const mesh of meshes) {
+      expect(mesh.castShadow).toBe(true)
+      expect(mesh.receiveShadow).toBe(true)
+      expect(mesh.frustumCulled).toBe(true)
+    }
   })
 
   it('coalesces onChange to once per update and supports unsubscribe', async () => {

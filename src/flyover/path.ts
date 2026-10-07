@@ -13,6 +13,8 @@ export interface TrackPath {
   lat: Float64Array
   /** recorded elevation, NaN when the point has none */
   ele: Float64Array
+  /** recorded time (ms since epoch), NaN when the point has none */
+  time: Float64Array
   /** cumulative ground distance at each point (metres), non-decreasing */
   dist: Float64Array
   /** total length (metres) = dist[count - 1]; equals track.stats.distanceM */
@@ -24,6 +26,8 @@ export interface PathSample {
   lat: number
   /** interpolated recorded elevation, undefined when unknown */
   ele?: number
+  /** interpolated recorded time (ms since epoch), undefined when unknown */
+  time?: number
 }
 
 /**
@@ -38,6 +42,7 @@ export function buildTrackPath(track: Track): TrackPath {
     lon: new Float64Array(count),
     lat: new Float64Array(count),
     ele: new Float64Array(count),
+    time: new Float64Array(count),
     dist: new Float64Array(count),
     lengthM: 0,
   }
@@ -51,6 +56,7 @@ export function buildTrackPath(track: Track): TrackPath {
       path.lon[i] = p.lon
       path.lat[i] = p.lat
       path.ele[i] = p.ele !== undefined && Number.isFinite(p.ele) ? p.ele : Number.NaN
+      path.time[i] = p.time !== undefined && Number.isFinite(p.time) ? p.time : Number.NaN
       path.dist[i] = total
       i++
     }
@@ -59,9 +65,9 @@ export function buildTrackPath(track: Track): TrackPath {
   return path
 }
 
-/** Position at `distanceM` along the path (clamped to [0, lengthM]), linearly interpolated. */
-export function samplePath(path: TrackPath, distanceM: number): PathSample {
-  const { count, lon, lat, ele, dist } = path
+/** Points a, b = a + 1 around `distanceM` (clamped) and the fraction t between them. */
+function locate(path: TrackPath, distanceM: number): { d: number; a: number; b: number; t: number } {
+  const { count, dist } = path
   if (count === 0) throw new RangeError('samplePath : chemin vide')
   const d = Math.min(path.lengthM, Math.max(0, distanceM))
 
@@ -77,12 +83,40 @@ export function samplePath(path: TrackPath, distanceM: number): PathSample {
   const b = Math.min(count - 1, a + 1)
   const span = dist[b] - dist[a]
   const t = span > 0 ? (d - dist[a]) / span : 0
+  return { d, a, b, t }
+}
 
+/** Position at `distanceM` along the path (clamped to [0, lengthM]), linearly interpolated. */
+export function samplePath(path: TrackPath, distanceM: number): PathSample {
+  const { lon, lat, ele, time } = path
+  const { a, b, t } = locate(path, distanceM)
   const sample: PathSample = { lon: lon[a] + (lon[b] - lon[a]) * t, lat: lat[a] + (lat[b] - lat[a]) * t }
   const ea = ele[a]
   const eb = ele[b]
   if (!Number.isNaN(ea) && !Number.isNaN(eb)) sample.ele = ea + (eb - ea) * t
+  const ta = time[a]
+  const tb = time[b]
+  if (!Number.isNaN(ta) && !Number.isNaN(tb)) sample.time = ta + (tb - ta) * t
   return sample
+}
+
+/**
+ * Recorded time at `distanceM`, bridging points without time: interpolated by distance between the nearest
+ * timed points on each side, or the time of the only side that has one. Undefined when no point has a time.
+ * A pause (time passes, distance does not) is crossed instantly, like a recording gap between segments.
+ */
+export function recordedTimeAt(path: TrackPath, distanceM: number): number | undefined {
+  const { count, time, dist } = path
+  const { d, a, b, t } = locate(path, distanceM)
+  if (!Number.isNaN(time[a]) && !Number.isNaN(time[b])) return time[a] + (time[b] - time[a]) * t
+  let before = a
+  while (before >= 0 && Number.isNaN(time[before])) before--
+  let after = b
+  while (after < count && Number.isNaN(time[after])) after++
+  if (before < 0) return after < count ? time[after] : undefined
+  if (after >= count) return time[before]
+  const span = dist[after] - dist[before]
+  return span > 0 ? time[before] + (time[after] - time[before]) * ((d - dist[before]) / span) : time[after]
 }
 
 export interface ElevationProfile {

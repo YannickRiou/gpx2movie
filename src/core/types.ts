@@ -92,6 +92,17 @@ export interface Track {
   bounds: LonLatBounds
   /** CSS colour used for the 3D line and the UI swatch */
   color: string
+  /** named points of the file (GPX <wpt>), attached to the first track of the file; absent when none */
+  waypoints?: Waypoint[]
+}
+
+/** A named point stored with a track (GPX <wpt>), not part of the path. */
+export interface Waypoint {
+  lon: number
+  lat: number
+  /** metres, as recorded (may be undefined) */
+  ele?: number
+  name: string
 }
 
 // ---------------------------------------------------------------------------
