@@ -4,6 +4,7 @@ import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
 import { useWeatherStore } from '../weather/store'
+import { ModifiedMarker } from './ModifiedMarker'
 import { formatNumber } from './format'
 
 const ZOOM_OFFSETS: { value: Settings['imageryZoomOffset']; label: string }[] = [
@@ -25,6 +26,21 @@ const EXPOSURE_EV_MAX = 2
 const EXPOSURE_EV_STEP = 0.5
 
 const WEATHER_STRENGTH_STEP = 0.05
+
+/** Keys of the « modifié » marker; the imagery source is left out: the import picks it per region (IGN, swisstopo). */
+const MARKED_KEYS: (keyof Settings)[] = [
+  'terrainSourceId',
+  'imageryZoomOffset',
+  'exaggeration',
+  'trackColorBy',
+  'wireframe',
+  'atmosphere',
+  'shadows',
+  'sunHour',
+  'sunFromTrack',
+  'exposureEv',
+  'weatherScene',
+]
 
 /** 0.75 -> "75 %" */
 const formatPercent = (v: number) => `${formatNumber(v * 100)} %`
@@ -78,6 +94,7 @@ export function SettingsPanel() {
       <h2 id={`${id}-title`} className="section-title settings__title">
         Réglages
       </h2>
+      <ModifiedMarker keys={MARKED_KEYS} label="Réglages" />
 
       <div className="field">
         <label className="field__label" htmlFor={terrainId}>

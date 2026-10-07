@@ -4,6 +4,7 @@ import { useAppStore } from '../state/store'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import { summarizeOuting, weatherWidgetData } from '../weather/series'
 import { syncWeather, useWeatherStore } from '../weather/store'
+import { ModifiedMarker } from './ModifiedMarker'
 import { formatNumber } from './format'
 
 /** Recorded instant -> "14 h 32", in the browser time zone (as the timeline). */
@@ -50,6 +51,7 @@ export function WeatherPanel() {
       <h2 id={`${id}-title`} className="section-title settings__title">
         Météo de la sortie
       </h2>
+      <ModifiedMarker keys={['weather']} label="Météo de la sortie" />
 
       <label className="checkbox" htmlFor={`${id}-enabled`}>
         <input

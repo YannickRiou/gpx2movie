@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildTrack } from '../import/stats'
 import { DEFAULT_SETTINGS, resetAppStore, useAppStore } from '../state/store'
-import { createHistory, getSettingsHistory, installHistoryShortcuts } from './history'
+import { createHistory, getSettingsHistory, installHistoryShortcuts, resetSettings } from './history'
 import type { History } from './history'
 
 interface Value {
@@ -161,6 +161,20 @@ describe('getSettingsHistory (app store)', () => {
     getSettingsHistory().undo()
     expect(useAppStore.getState().settings).toEqual({ ...DEFAULT_SETTINGS, imagerySourceId: 'ign-ortho' })
     expect(getSettingsHistory().getState().canUndo).toBe(false)
+  })
+
+  it('resets a group of settings to the defaults in one undo step, leaving the other keys alone', () => {
+    const { setSetting } = useAppStore.getState()
+    const camera = { ...DEFAULT_SETTINGS.camera, distance: 2 }
+    setSetting('camera', camera)
+    setSetting('flyoverDurationS', 120)
+    setSetting('wireframe', true)
+    resetSettings(['camera', 'flyoverDurationS'])
+    expect(useAppStore.getState().settings).toEqual({ ...DEFAULT_SETTINGS, wireframe: true })
+    getSettingsHistory().undo()
+    expect(useAppStore.getState().settings).toEqual({ ...DEFAULT_SETTINGS, camera, flyoverDurationS: 120, wireframe: true })
+    getSettingsHistory().redo()
+    expect(useAppStore.getState().settings).toEqual({ ...DEFAULT_SETTINGS, wireframe: true })
   })
 })
 

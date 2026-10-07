@@ -343,6 +343,7 @@
 
 /* Settings ---------------------------------------------------------------- */
 .settings {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -353,6 +354,49 @@
 
 .settings__title {
   margin-bottom: 0;
+}
+
+/* « modifié » marker + « Rétablir » (ModifiedMarker), on the title line; long titles wrap before it */
+.modified {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.settings:has(> .modified) > .settings__title {
+  padding-right: 136px;
+}
+
+.modified__badge {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-accent-strong);
+  border-radius: 999px;
+  color: var(--color-accent-strong);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.modified__reset {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modified__reset:hover:not(:disabled) {
+  border-color: var(--color-ink);
+}
+
+.modified__reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 /* <fieldset> used as a plain field group (segmented control) */

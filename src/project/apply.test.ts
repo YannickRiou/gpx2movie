@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Track } from '../core/types'
 import { buildTrack } from '../import/stats'
 import { DEFAULT_SETTINGS, resetAppStore, useAppStore } from '../state/store'
-import { applyProject, applySettings } from './apply'
+import { applyProject, applySettings, modifiedSettings, sameValue } from './apply'
 import type { LoadedProject } from './document'
 
 /** A short track in the Chamonix valley (inside the IGN coverage). */
@@ -30,6 +30,32 @@ describe('applySettings', () => {
     expect(useAppStore.getState().settings).toBe(before)
     applySettings({ ...before, exaggeration: 2 })
     expect(useAppStore.getState().settings).toEqual({ ...DEFAULT_SETTINGS, exaggeration: 2 })
+  })
+})
+
+describe('sameValue', () => {
+  it('compares primitives, arrays and nested plain objects by value', () => {
+    expect(sameValue(1, 1)).toBe(true)
+    expect(sameValue(Number.NaN, Number.NaN)).toBe(true)
+    expect(sameValue({ a: [1, { b: 'x' }] }, { a: [1, { b: 'x' }] })).toBe(true)
+    expect(sameValue({ a: [1, { b: 'x' }] }, { a: [1, { b: 'y' }] })).toBe(false)
+    expect(sameValue({ a: 1 }, { a: 1, b: undefined })).toBe(false)
+    expect(sameValue([1], { 0: 1 })).toBe(false)
+    expect(sameValue(null, {})).toBe(false)
+    expect(sameValue(0, '0')).toBe(false)
+  })
+})
+
+describe('modifiedSettings', () => {
+  it('lists the keys of the group that differ from the defaults, nested values compared deeply', () => {
+    const keys = ['exaggeration', 'camera', 'overlay'] as const
+    expect(modifiedSettings(DEFAULT_SETTINGS, keys)).toEqual([])
+    // a copy equal to the default is not modified
+    const copy = { ...DEFAULT_SETTINGS, camera: { ...DEFAULT_SETTINGS.camera } }
+    expect(modifiedSettings(copy, keys)).toEqual([])
+    const overlay = { ...DEFAULT_SETTINGS.overlay, title: { ...DEFAULT_SETTINGS.overlay.title, title: 'Col' } }
+    const changed = { ...DEFAULT_SETTINGS, exaggeration: 2, wireframe: true, overlay }
+    expect(modifiedSettings(changed, keys)).toEqual(['exaggeration', 'overlay'])
   })
 })
 
