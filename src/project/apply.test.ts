@@ -3,7 +3,7 @@ import type { Track } from '../core/types'
 import { buildTrack } from '../import/stats'
 import { DEFAULT_SETTINGS, resetAppStore, useAppStore } from '../state/store'
 import { useMediaStore } from '../film/media'
-import { applyProject, applySettings, modifiedSettings, sameValue } from './apply'
+import { applyProject, applySettings, modifiedPaths, modifiedSettings, sameValue } from './apply'
 import type { LoadedProject } from './document'
 
 /** A short track in the Chamonix valley (inside the IGN coverage). */
@@ -44,6 +44,27 @@ describe('sameValue', () => {
     expect(sameValue([1], { 0: 1 })).toBe(false)
     expect(sameValue(null, {})).toBe(false)
     expect(sameValue(0, '0')).toBe(false)
+  })
+})
+
+describe('modifiedPaths', () => {
+  it('compares whole settings and single fields of object settings with their defaults', () => {
+    const paths = ['exposureEv', 'weatherScene.strength', 'camera.distance', 'pacing'] as const
+    expect(modifiedPaths(DEFAULT_SETTINGS, paths)).toEqual([])
+    // a field shown elsewhere (weatherScene.enabled, camera.style) does not count
+    const visibleOnly = {
+      ...DEFAULT_SETTINGS,
+      weatherScene: { ...DEFAULT_SETTINGS.weatherScene, enabled: !DEFAULT_SETTINGS.weatherScene.enabled },
+      camera: { ...DEFAULT_SETTINGS.camera, style: 'orbit' as const },
+    }
+    expect(modifiedPaths(visibleOnly, paths)).toEqual([])
+    const hidden = {
+      ...visibleOnly,
+      exposureEv: 1,
+      camera: { ...visibleOnly.camera, distance: 2 },
+      pacing: { ...DEFAULT_SETTINGS.pacing },
+    }
+    expect(modifiedPaths(hidden, paths)).toEqual(['exposureEv', 'camera.distance'])
   })
 })
 

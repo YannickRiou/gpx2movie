@@ -122,7 +122,8 @@ function AddTracksButton() {
         className="btn btn--secondary btn--small"
         onClick={() => input.current?.click()}
         disabled={loading}
-        title="Ajouter des traces GPX ou FIT"
+        data-tip="Ajouter des traces GPX ou FIT"
+        data-tip-align="end"
       >
         <Icon name="plus" size={16} />
         Ajouter
@@ -155,10 +156,10 @@ export function TrackList() {
         <h2 id="tracks-title" className="section-title">
           Traces
         </h2>
-        {tracks.length > 0 && <AddTracksButton />}
+        <AddTracksButton />
       </div>
       {tracks.length === 0 ? (
-        <p className="tracks__empty">Aucune trace pour l'instant. Importez un fichier GPX ou FIT pour commencer.</p>
+        <p className="tracks__empty">Aucune trace pour l'instant. Glissez un fichier GPX ou FIT dans la fenêtre, ou ajoutez-le ici.</p>
       ) : (
         <ul className="tracks">
           {tracks.map((track) => (
@@ -171,7 +172,8 @@ export function TrackList() {
                 type="button"
                 className="track__delete"
                 aria-label={`Supprimer la trace ${track.name}`}
-                title="Supprimer la trace"
+                data-tip="Supprimer la trace"
+                data-tip-side="left"
                 onClick={() => removeTrack(track.id)}
               >
                 ×

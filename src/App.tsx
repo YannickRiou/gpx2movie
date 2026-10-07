@@ -1,27 +1,30 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { isExportBusy, useExportStore } from './export/store'
-import { getSettingsHistory, installHistoryShortcuts, isTextEntry } from './project/history'
+import { getSettingsHistory, installHistoryShortcuts } from './project/history'
+import { useFilmClock } from './scene/usePacing'
 import { useAppStore } from './state/store'
 import type { Settings } from './state/store'
 import { CameraPanel } from './ui/CameraPanel'
 import { ClimbList } from './ui/ClimbList'
+import { EmptyState } from './ui/EmptyState'
 import { ExportPanel } from './ui/ExportPanel'
+import { HelpDialog } from './ui/HelpDialog'
 import { Icon } from './ui/icons'
 import type { IconName } from './ui/icons'
-import { ImportPanel } from './ui/ImportPanel'
 import { LandmarkPanel } from './ui/LandmarkPanel'
 import { ModifiedMarker } from './ui/ModifiedMarker'
 import { OverlayPanel } from './ui/OverlayPanel'
-import { importTrackFiles, openProject, saveProject } from './ui/projectActions'
-import type { ProjectMessage } from './ui/projectActions'
+import { openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
-import { ONE_SIDE_MAX_WIDTH, SHELL_TABS, nextTabIndex, parseShellPrefs, routeOpenedFiles, shellReducer, shellShortcut } from './ui/shell'
+import { ONE_SIDE_MAX_WIDTH, SHELL_TABS, isFileDrag, nextTabIndex, parseShellPrefs, shellReducer } from './ui/shell'
 import type { ShellTab } from './ui/shell'
+import { keyFocus, matchShortcut, seekTime, withShortcut } from './ui/shortcuts'
 import { Stage } from './ui/Stage'
 import { StatusBar } from './ui/StatusBar'
 import { Timeline } from './ui/Timeline'
+import { Toaster } from './ui/Toaster'
 import { TopBar } from './ui/TopBar'
 import { TrackList } from './ui/TrackList'
 import { WeatherPanel } from './ui/WeatherPanel'
@@ -48,6 +51,40 @@ function loadPrefs() {
 
 const isNarrow = () => window.innerWidth < ONE_SIDE_MAX_WIDTH
 const isExporting = () => isExportBusy(useExportStore.getState().phase)
+/** a modal dialog (help, sources) is open: it takes the keyboard, Escape closes it */
+const isDialogOpen = () => document.querySelector('dialog[open]') !== null
+
+/**
+ * ← / → (Shift: 5 s), Home and End move the playhead in film time. Its own component: the film clock changes with
+ * the settings and must not re-render the shell. Listens in the bubble phase, after a timeline block that moves
+ * with the arrows (it prevents the default).
+ */
+function SeekShortcuts() {
+  const clock = useFilmClock()
+  const clockRef = useRef(clock)
+  useEffect(() => {
+    clockRef.current = clock
+  }, [clock])
+
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.isComposing || e.defaultPrevented || isDialogOpen()) return
+      const action = matchShortcut(e, keyFocus(e.target))
+      const store = useAppStore.getState()
+      if (!action || store.tracks.length === 0 || isExporting()) return
+      const c = clockRef.current
+      const total = c.totalTime()
+      const playhead = Math.min(store.playback.timeS ?? c.timeAtProgress(store.playback.progress), total)
+      const t = seekTime(action, playhead, total)
+      if (t === null) return
+      e.preventDefault()
+      store.setProgress(c.progressAtTime(t), t < total ? t : null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+  return null
+}
 
 /** Foldable section of a tab (still mounted when folded: the weather panel syncs the weather store). */
 function Fold({ title, keys, hidden, children }: { title: string; keys?: (keyof Settings)[]; hidden: boolean; children: ReactNode }) {
@@ -70,11 +107,12 @@ function Fold({ title, keys, hidden, children }: { title: string; keys?: (keyof 
 
 export default function App() {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
-  const importError = useAppStore((s) => s.importError)
   const exporting = useExportStore((s) => isExportBusy(s.phase))
   const [shell, dispatch] = useReducer(shellReducer, undefined, () => ({ ...loadPrefs(), dockOpen: false, collapsedByDock: false }))
-  const [message, setMessage] = useState<ProjectMessage | null>(null)
+  const [dragging, setDragging] = useState(false)
   const openInput = useRef<HTMLInputElement>(null)
+  const helpDialog = useRef<HTMLDialogElement>(null)
+  const dockOpen = useRef(shell.dockOpen)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   // remember the tab and the folded panel chosen by the user (not a fold caused by the export drawer)
@@ -87,15 +125,25 @@ export default function App() {
     }
   }, [shell.tab, keptCollapsed])
 
+  useEffect(() => {
+    dockOpen.current = shell.dockOpen
+  }, [shell.dockOpen])
+
   useEffect(() => installHistoryShortcuts(getSettingsHistory()), [])
 
   useEffect(() => {
+    // capture phase: Escape closes the export drawer before the timeline deselects its block
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (e.isComposing) return
-      const typing = isTextEntry(e.target) || e.target instanceof HTMLSelectElement
-      const action = shellShortcut(e, typing)
-      if (!action) return
-      if (action === 'save') saveProject()
+      if (e.isComposing || isDialogOpen()) return
+      const action = matchShortcut(e, keyFocus(e.target))
+      if (!action || action.startsWith('seek')) return
+      if (action === 'close') {
+        if (!dockOpen.current || isExporting()) return
+        dispatch({ type: 'close-dock' })
+        e.stopPropagation()
+      } else if (action === 'help') {
+        helpDialog.current?.showModal()
+      } else if (action === 'save') saveProject()
       else if (action === 'open') {
         if (!isExporting()) openInput.current?.click()
       } else if (action === 'export') {
@@ -109,21 +157,47 @@ export default function App() {
       }
       e.preventDefault()
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [])
 
-  const openFiles = async (files: File[]) => {
-    const { project, tracks, extraProjects } = routeOpenedFiles(files)
-    let next: ProjectMessage | null = null
-    if (project) next = await openProject(project)
-    if (tracks.length > 0) importTrackFiles(tracks)
-    if (extraProjects.length > 0 && !next?.error) {
-      const ignored = `Un seul projet à la fois : ${extraProjects.map((f) => `« ${f.name} »`).join(', ')} non ouvert(s).`
-      next = { text: next ? `${next.text}\n${ignored}` : ignored, error: false }
+  // files dropped anywhere: tracks imported, a project opened; the timeline keeps its own drop (photos)
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => {
+      if (!isFileDrag(e.dataTransfer?.types)) return
+      if (e.defaultPrevented) {
+        setDragging(false)
+        return
+      }
+      // without this, the browser would open the dropped file in place of the app
+      e.preventDefault()
+      const accepted = !isExporting()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = accepted ? 'copy' : 'none'
+      setDragging(accepted)
     }
-    setMessage(next)
-  }
+    const onDragLeave = (e: DragEvent) => {
+      // the pointer left the window
+      if (!e.relatedTarget) setDragging(false)
+    }
+    const onDrop = (e: DragEvent) => {
+      setDragging(false)
+      if (e.defaultPrevented || !isFileDrag(e.dataTransfer?.types)) return
+      e.preventDefault()
+      const files = Array.from(e.dataTransfer?.files ?? [])
+      if (files.length > 0 && !isExporting()) void openFiles(files)
+    }
+    const stop = () => setDragging(false)
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('dragleave', onDragLeave)
+    window.addEventListener('drop', onDrop)
+    window.addEventListener('dragend', stop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('dragleave', onDragLeave)
+      window.removeEventListener('drop', onDrop)
+      window.removeEventListener('dragend', stop)
+    }
+  }, [])
 
   const onTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const next = nextTabIndex(index, e.key, SHELL_TABS.length)
@@ -145,6 +219,7 @@ export default function App() {
         onOpen={() => openInput.current?.click()}
         exportOpen={shell.dockOpen}
         onToggleExport={() => dispatch({ type: 'toggle-dock', narrow: isNarrow() })}
+        onHelp={() => helpDialog.current?.showModal()}
       />
       <input
         ref={openInput}
@@ -198,7 +273,7 @@ export default function App() {
             aria-expanded={!shell.collapsed}
             aria-controls="side-panel"
             aria-label={shell.collapsed ? 'Déplier le panneau' : 'Replier le panneau'}
-            data-tip={shell.collapsed ? 'Déplier le panneau ([)' : 'Replier le panneau ([)'}
+            data-tip={withShortcut(shell.collapsed ? 'Déplier le panneau' : 'Replier le panneau', 'toggle-panel')}
             data-tip-side="right"
           >
             <Icon name={shell.collapsed ? 'panel-left-open' : 'panel-left-close'} />
@@ -210,7 +285,6 @@ export default function App() {
           {panel(
             'trace',
             <>
-              <ImportPanel />
               <TrackList />
               <Fold title="Montées" hidden={!hasTracks}>
                 <ClimbList />
@@ -234,31 +308,8 @@ export default function App() {
 
         <main className="view">
           <Stage>
-            {(importError || message) && (
-              <div className="notices">
-                {importError && (
-                  <div className="alert" role="alert">
-                    <span className="alert__text">{importError}</span>
-                    <button
-                      type="button"
-                      className="alert__close"
-                      aria-label="Fermer le message d'erreur"
-                      onClick={() => useAppStore.getState().setImportError(null)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                {message && (
-                  <div className="alert" role={message.error ? 'alert' : 'status'}>
-                    <span className="alert__text">{message.text}</span>
-                    <button type="button" className="alert__close" aria-label="Fermer le message" onClick={() => setMessage(null)}>
-                      ×
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            {!hasTracks && <EmptyState />}
+            <Toaster />
           </Stage>
           <Timeline />
         </main>
@@ -269,6 +320,17 @@ export default function App() {
       </div>
 
       <StatusBar />
+      <HelpDialog dialogRef={helpDialog} />
+      <SeekShortcuts />
+      {dragging && (
+        <div className="drop-veil" aria-hidden="true">
+          <div className="drop-veil__box">
+            <Icon name="upload" size={32} />
+            <p className="drop-veil__title">Déposez vos traces GPX ou FIT</p>
+            <p className="drop-veil__hint">ou un projet .json</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

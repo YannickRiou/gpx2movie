@@ -7,16 +7,18 @@ import { FlyoverCanvas } from '../scene/FlyoverCanvas'
 import { useAppStore } from '../state/store'
 import { Icon } from './icons'
 import { frameRect } from './shell'
+import { withShortcut } from './shortcuts'
 import { TrackLegend } from './TrackLegend'
 
 /**
  * Centre of the shell: the 3D view and its overlay framed to the output format (letterbox in ink, the export
- * renders exactly this area), or filling the stage with « Libre »; the « Recadrer » button and the notices
- * (`children`) float over it.
+ * renders exactly this area), or filling the stage with « Libre » or without a track; the « Recadrer » button, the
+ * welcome card and the messages (`children`) float over it.
  */
 export function Stage({ children }: { children?: ReactNode }) {
   const aspect = useAppStore((s) => {
-    if (s.freeFraming) return null
+    // nothing to frame before the first track: the welcome card sits on the whole stage
+    if (s.freeFraming || s.tracks.length === 0) return null
     const a = VIDEO_ASPECTS.find((v) => v.id === s.settings.video.aspect)
     return a ? a.x / a.y : null
   })
@@ -53,7 +55,7 @@ export function Stage({ children }: { children?: ReactNode }) {
           onClick={() => useAppStore.getState().requestFit()}
           disabled={exporting}
           aria-label="Recadrer la vue"
-          data-tip="Recadrer la vue (F)"
+          data-tip={withShortcut('Recadrer la vue', 'fit')}
           data-tip-side="left"
         >
           <Icon name="crosshair" />

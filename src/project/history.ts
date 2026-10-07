@@ -7,7 +7,7 @@
  * automatically on import). Rapid changes of the same keys (dragging a slider) are coalesced into one step;
  * `transaction` groups several changes (a preset).
  * `getSettingsHistory` binds one instance to `useAppStore`; `installHistoryShortcuts` adds the keyboard;
- * `resetSettings` puts a group of settings back to their defaults as one step.
+ * `resetSettings` puts a group of settings back to their defaults as one step (and returns its guarded undo).
  */
 import { DEFAULT_SETTINGS, useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
@@ -184,10 +184,21 @@ export function getSettingsHistory(): History {
   return appHistory
 }
 
-/** Put `keys` back to their values in `DEFAULT_SETTINGS`, as a single undo step. */
-export function resetSettings(keys: readonly (keyof Settings)[], history: History = getSettingsHistory()): void {
+/**
+ * Put `keys` back to their values in `DEFAULT_SETTINGS`, as a single undo step. Returns the undo of this reset (the
+ * « Annuler » of its message): it undoes only while the settings are still those the reset left, so it never undoes a
+ * later step, nor an earlier one when the reset changed nothing; true when it undid.
+ */
+export function resetSettings(keys: readonly (keyof Settings)[], history: History = getSettingsHistory()): () => boolean {
   const defaults = pick(DEFAULT_SETTINGS, keys)
-  history.transaction(() => applySettings({ ...useAppStore.getState().settings, ...defaults }))
+  const before = useAppStore.getState().settings
+  history.transaction(() => applySettings({ ...before, ...defaults }))
+  const after = useAppStore.getState().settings
+  return () => {
+    if (after === before || useAppStore.getState().settings !== after) return false
+    history.undo()
+    return true
+  }
 }
 
 /** Inputs where Ctrl+Z belongs to the text field, not to the settings history. */

@@ -3,11 +3,7 @@ import { applySettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
 import { getPresetStore, normalizePresetName, presetSettings } from '../project/presets'
 import { useAppStore } from '../state/store'
-
-interface Message {
-  text: string
-  error: boolean
-}
+import { showToast } from './toast'
 
 /** "Projet" tab: presets of the settings (save, open and undo / redo live in the top bar). */
 export function ProjectPanel() {
@@ -16,7 +12,6 @@ export function ProjectPanel() {
   const [presets, setPresets] = useState(() => presetStore.list())
   const [selectedPreset, setSelectedPreset] = useState('')
   const [presetName, setPresetName] = useState('')
-  const [message, setMessage] = useState<Message | null>(null)
   const id = useId()
 
   const selected = presets.find((p) => p.name === selectedPreset)
@@ -29,12 +24,13 @@ export function ProjectPanel() {
   const savePreset = () => {
     try {
       presetStore.save(presetName, useAppStore.getState().settings)
+      const name = normalizePresetName(presetName)
       setPresets(presetStore.list())
-      setSelectedPreset(normalizePresetName(presetName))
+      setSelectedPreset(name)
       setPresetName('')
-      setMessage(null)
+      showToast({ kind: 'success', text: `Préréglage « ${name} » enregistré` })
     } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : String(err), error: true })
+      showToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -104,15 +100,6 @@ export function ProjectPanel() {
           </button>
         </div>
       </form>
-
-      {message && (
-        <div className="alert" role={message.error ? 'alert' : 'status'}>
-          <span className="alert__text">{message.text}</span>
-          <button type="button" className="alert__close" aria-label="Fermer le message" onClick={() => setMessage(null)}>
-            ×
-          </button>
-        </div>
-      )}
     </section>
   )
 }

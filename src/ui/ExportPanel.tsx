@@ -17,6 +17,8 @@ import { useAppStore } from '../state/store'
 import { ModifiedMarker } from './ModifiedMarker'
 import { formatNumber } from './format'
 import { AspectIcon, Icon } from './icons'
+import { withShortcut } from './shortcuts'
+import { showToast } from './toast'
 
 const QUALITIES: { value: VideoQuality; label: string }[] = [
   { value: 'standard', label: 'Standard' },
@@ -109,12 +111,21 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
   const secondsPerImage =
     timings.rendered > 0 ? (timings.renderMs + timings.waitMs + timings.encodeMs) / timings.rendered / 1000 : null
 
-  // Download the film automatically once it is ready (the link stays available).
+  // Download the film automatically once it is ready (the link stays available), and say so.
   useEffect(() => {
     if (!result || downloadedRef.current === result.url) return
     downloadedRef.current = result.url
     download(result.url, result.fileName)
+    if (result.mimeType.startsWith('image/')) showToast({ kind: 'success', text: 'Image prête' })
+    else {
+      const again = { label: 'Télécharger à nouveau', run: () => download(result.url, result.fileName) }
+      showToast({ kind: 'success', text: 'Vidéo prête', action: again })
+    }
   }, [result])
+
+  useEffect(() => {
+    if (phase === 'error' && error) showToast({ kind: 'error', text: `Échec de l'export : ${error}` })
+  }, [phase, error])
 
   const update = (patch: Partial<VideoSettings>) => setSetting('video', { ...video, ...patch })
 
@@ -149,11 +160,7 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
       ? 'Export en cours…'
       : phase === 'finalizing'
         ? 'Finalisation du fichier…'
-        : phase === 'done'
-          ? result?.mimeType.startsWith('image/')
-            ? 'Image prête.'
-            : 'Vidéo prête.'
-          : phase === 'canceled'
+        : phase === 'canceled'
             ? 'Export annulé.'
             : ''
 
@@ -164,7 +171,14 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
       </h2>
       <ModifiedMarker keys={['video']} label="Exporter" disabled={busy} />
       {onClose && (
-        <button type="button" className="icon-btn settings__close" onClick={onClose} aria-label="Fermer le panneau d'export" title="Fermer (Ctrl+E)">
+        <button
+          type="button"
+          className="icon-btn settings__close"
+          onClick={onClose}
+          aria-label="Fermer le panneau d'export"
+          data-tip={withShortcut('Fermer', 'export')}
+          data-tip-align="end"
+        >
           <Icon name="x" size={18} />
         </button>
       )}
@@ -285,20 +299,6 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
           {result.incompleteFrames > 0 &&
             ` — ${formatNumber(result.incompleteFrames)} image(s) rendue(s) avant la fin du chargement du relief.`}
         </p>
-      )}
-
-      {phase === 'error' && error && (
-        <div className="alert" role="alert">
-          <span className="alert__text">Échec de l'export : {error}</span>
-          <button
-            type="button"
-            className="alert__close"
-            aria-label="Fermer le message"
-            onClick={() => useExportStore.getState().reset()}
-          >
-            ×
-          </button>
-        </div>
       )}
 
       <details className="export__more">

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Track } from '../core/types'
-import { errorMessage, formatImportError, runImportJobs } from './importFlow'
+import { errorMessage, formatImportError, importFiles, importedMessage, runImportJobs } from './importFlow'
+import type { ImportSink } from './importFlow'
 
 function track(id: string): Track {
   return {
@@ -86,5 +87,59 @@ describe('errorMessage', () => {
     expect(errorMessage('texte')).toBe('texte')
     expect(errorMessage(new Error(''))).toBe('erreur inconnue')
     expect(errorMessage(undefined)).toBe('erreur inconnue')
+  })
+})
+
+describe('importFiles', () => {
+  /** sink that records every call in order */
+  function sink(count = 0) {
+    const calls: string[] = []
+    const added: Track[] = []
+    const value: ImportSink = {
+      trackCount: () => count + added.length,
+      setLoading: (on) => calls.push(`loading:${on}`),
+      addTracks: (tracks) => {
+        added.push(...tracks)
+        calls.push(`add:${tracks.map((t) => t.id).join(',')}`)
+      },
+      notify: (kind, text) => calls.push(`${kind}:${text}`),
+    }
+    return { value, calls }
+  }
+
+  it('adds every parsed track at once, then says what was imported and what failed', async () => {
+    const s = sink(2)
+    const colors: number[] = []
+    const parse = (id: string) => async (i: number) => {
+      colors.push(i)
+      return [track(id)]
+    }
+    await importFiles(
+      [
+        { label: 'a.gpx', run: parse('a') },
+        { label: 'b.tcx', run: () => Promise.reject(new Error('Format non supporté : .tcx')) },
+        { label: 'c.fit', run: parse('c') },
+      ],
+      s.value,
+    )
+    expect(colors).toEqual([2, 3])
+    expect(s.calls).toEqual([
+      'loading:true',
+      'add:a,c',
+      'success:2 traces importées',
+      'error:Import impossible — b.tcx : Format non supporté : .tcx',
+      'loading:false',
+    ])
+  })
+
+  it('shows only the error when nothing could be read, and clears the loading flag', async () => {
+    const s = sink()
+    const outcome = await importFiles([{ label: 'x.gpx', run: () => Promise.reject(new Error('illisible')) }], s.value)
+    expect(outcome.tracks).toEqual([])
+    expect(s.calls).toEqual(['loading:true', 'error:Import impossible — x.gpx : illisible', 'loading:false'])
+  })
+
+  it('names the track when there is only one', () => {
+    expect(importedMessage([{ name: 'Col du Galibier' }])).toBe('Trace « Col du Galibier » importée')
   })
 })

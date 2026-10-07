@@ -47,7 +47,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses données par le film) ; `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
 | `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits, `addPhotos`, `updateMedia`, `photoFilmTime` ; `exif.ts` : `parseExif`, `photoTimeMs` ; `media.ts` (seul module non pur du dossier) : `MediaAsset`, `MediaTable`, `sanitizeMediaTable`, `usedMedia`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` |
 | `src/flyover/filmCamera.ts` | caméra du film | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `blendViews`, `shotBlend`, `stopOrbitRad`, `filmViewMovesWithTime` |
-| `src/flyover/sun.ts` | date du soleil | `solarHourToDate(dayMs, lon, solarHour)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date` |
+| `src/flyover/sun.ts` | date du soleil, lever / coucher | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
 | `src/weather/*` | météo historique de la sortie | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
@@ -128,7 +128,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 8. **État** (`store.ts`) : `tracks: Track[]`, `addTracks`, `removeTrack`, `clearTracks`, `settings { terrainSourceId, imagerySourceId,
    imageryZoomOffset, exaggeration, wireframe }`, `setSetting`, `terrainStats`, `bounds` (union des traces) et `frameOrigin` (centroïde du
    premier lot arrondi à 0,01°, fixe tant qu'il reste une trace) ; l'`area` du moteur est dérivée dans la scène (`TerrainLayer`).
-   `fitRequest` (compteur incrémenté pour demander un recadrage), `importError`, `loading`. À l'import, l'imagerie bascule automatiquement sur
+   `fitRequest` (compteur incrémenté pour demander un recadrage), `importError` (plus affiché : les échecs passent par les messages, voir « Interface »), `loading`. À l'import, l'imagerie bascule automatiquement sur
    IGN puis swisstopo si la trace est entièrement dans leur emprise, sauf si l'utilisateur a déjà choisi une source à la main.
 9. **UI** (`ui/`) : voir « Interface » (coque, onglets, barre du haut, tiroir d'export, bande d'état). Libellés en
    français. Charte : `src/ui/theme.css`.
@@ -170,15 +170,17 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   dernier enregistrement ou à la dernière ouverture, comparés par référence, `isProjectDirty` ; pas d'enregistrement
   automatique), annuler / rétablir, « Ouvrir » (un seul sélecteur : `.json` → projet, le reste → import de traces,
   `routeOpenedFiles` ; ouvrir un projet vide l'historique), « Enregistrer » ; au centre le **format de sortie** (Libre,
-  16:9, 9:16, 1:1, 4:5, 21:9) ; à droite « Exporter », seul bouton principal de la coque, qui ouvre le tiroir d'export et
-  devient « 42 % · Annuler » pendant un export.
+  16:9, 9:16, 1:1, 4:5, 21:9) ; à droite « ? » (raccourcis) et « Exporter », seul bouton principal de la coque, qui ouvre
+  le tiroir d'export et devient « 42 % · Annuler » pendant un export.
 - **Format de sortie** : un format écrit `settings.video.aspect` (enregistré, annulable) ; « Libre » est un drapeau
   d'aperçu (`freeFraming` du store, ni enregistré ni annulable). Hors « Libre », `Stage.tsx` cadre la vue 3D au format
   (`frameRect`, bandes encre) : `.view__stage`, qui porte le canvas 3D, l'habillage et la légende, prend le rectangle
   cadré ; l'habillage suit donc l'aire exportée sans changement de `src/overlay`. L'export rend dans ce canvas visible.
+  Sans trace, pas de cadrage : la carte d'accueil (`EmptyState.tsx`) occupe le centre de la vue (« Choisir un fichier »,
+  « Essayer avec l'exemple (Tour du Mont-Blanc) », « Ouvrir un projet… », un seul sélecteur dont `accept` change).
 - **Rail et panneau** : rail vertical d'icônes (`tablist`, focus itinérant, flèches / Origine / Fin, infobulles) et un
-  panneau de 320 px, un onglet à la fois : **Trace** (zone de dépôt tant qu'aucune trace, puis liste des traces avec
-  « + Ajouter », Montées et Météo repliables), **Carte** (réglages de la scène, repères OSM), **Survol** (caméra, rythme),
+  panneau de 320 px, un onglet à la fois : **Trace** (liste des traces avec « + Ajouter », message d'attente sans trace,
+  Montées et Météo repliables), **Carte** (réglages de la scène, repères OSM), **Survol** (caméra, rythme),
   **Habillage**, **Projet** (préréglages). Tous les onglets restent montés (`hidden`) : météo, repères et export ont des
   effets de bord. Sections à plat séparées d'un filet, en-tête de section collant (titre + « modifié / Par défaut »). Un clic
   sur l'onglet ouvert, le bouton du bas du rail ou `[` replient le panneau. Onglet et repli mémorisés par le navigateur
@@ -188,15 +190,57 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   côté ouvert à la fois : ouvrir le tiroir replie le panneau et le rouvre à la fermeture (`shellReducer`).
 - **Pendant un export** : onglets, repli du panneau, format, « Ouvrir », « Recadrer », annuler / rétablir (boutons) et
   fermeture du tiroir sont désactivés (redimensionner la scène redimensionnerait le canvas).
-- **Vue** : bouton flottant « Recadrer la vue » (F) ; messages d'import et d'ouverture de projet en haut de la vue.
+- **Vue** : bouton flottant « Recadrer la vue » (F).
+- **Messages** (`toast.ts`, `Toaster.tsx`) : petit store zustand (`showToast`, `dismissToast`, `pushToast` pur : le même
+  message remplace l'ancien, 4 au plus, l'erreur la plus ancienne part en dernier), affichés en bas au centre de la vue,
+  au-dessus de la timeline, dans une seule région `aria-live` toujours montée. Succès et info disparaissent après
+  `toastDuration` (5 s, jusqu'à 12 s pour un long texte), minuterie suspendue au survol ou au focus ; erreurs en
+  `role="alert"`, jusqu'à fermeture ; bouton d'action facultatif. Sources : import (`importFiles` de `importFlow.ts`, lié
+  au store par `projectActions.ts` : « Trace « … » importée », échecs), projet ouvert / enregistré / avertissements du
+  fichier, préréglages, export (« Vidéo prête · Télécharger à nouveau », « Image prête », échec), « Réglages remis par
+  défaut · Annuler » (`resetSettings` renvoie une annulation gardée : elle n'agit que si les réglages sont encore ceux du
+  retour, donc jamais sur une étape postérieure ni antérieure ; le message disparaît au changement suivant des réglages).
+  Le message des photos de la timeline reste sous sa barre.
+- **Dépôt partout** : `dragover` / `drop` sur `window` (dans `App`) : fichiers `.gpx` / `.fit` importés, `.json` ouvert
+  comme projet (`openFiles`, routage `routeOpenedFiles`), voile plein écran « Déposez vos traces GPX ou FIT »
+  (`pointer-events: none`) pendant le glissement (`isFileDrag`). Un dépôt déjà traité (`defaultPrevented` : la timeline
+  prend les photos) est laissé tel quel, et le voile s'efface au-dessus de la timeline ; rien n'est accepté pendant un export.
 - **Bande d'état** (24 px, sous la timeline) : tuiles, import en cours, attributions sur une ligne (`overlayCredits`,
   mêmes chaînes que dans le film) et ⓘ qui ouvre « Sources et licences » (`<dialog>`).
-- **Raccourcis** : `installHistoryShortcuts` installé une seule fois par `App` (Ctrl/Cmd+Z, Ctrl/Cmd+Maj+Z, Ctrl+Y) ;
-  `shellShortcut` : Ctrl/Cmd+S enregistrer, Ctrl/Cmd+O ouvrir, Ctrl/Cmd+E tiroir d'export, F recadrer, `[` replier (AltGr
-  accepté) ; ignorés dans un champ texte ou une liste (`isTextEntry`). Espace (lecture) reste dans la timeline.
+- **Raccourcis** (`src/ui/shortcuts.ts`) : registre `SHORTCUTS` (id, touches, libellé, groupe Lecture / Montage / Projet /
+  Vue) affiché par la boîte « Raccourcis clavier » (`HelpDialog.tsx`, `<dialog>` natif, « ? » ou le bouton de la barre)
+  et repris dans les infobulles (`withShortcut`). `matchShortcut(touche, keyFocus(cible))`, pur : Ctrl/Cmd+S enregistrer,
+  Ctrl/Cmd+O ouvrir, Ctrl/Cmd+E tiroir d'export, F recadrer, `[` replier et `?` aide (AltGr / Maj acceptés), Échap, ← / →
+  (Maj : 5 s, `seekTime`), Début / Fin ; rien dans un champ texte ou une liste (`isTextEntry`), ni flèches ni Début / Fin
+  sur un contrôle qui s'en sert (curseur, radio, onglet, règle de la timeline). Pas de raccourci à chiffre (AZERTY). `App`
+  écoute en phase de capture (aucun raccourci tant qu'une boîte modale est ouverte) ; Échap ferme dans l'ordre la boîte
+  (native), le tiroir d'export, puis la sélection de la timeline. Le déplacement de la tête de lecture vit dans
+  `SeekShortcuts` (composant sans rendu, horloge du film, phase de bulle : un bloc sélectionné garde ses flèches).
+  `installHistoryShortcuts` (Ctrl/Cmd+Z, Ctrl/Cmd+Maj+Z, Ctrl+Y) et Espace (timeline) restent à leur place.
+- **Infobulles** : `data-tip` en CSS (`shell.css`), après 450 ms, au survol et au focus clavier, sur chaque bouton à icône
+  seule ; `data-tip-side` (`top`, `left`, `right`) et `data-tip-align` (`start`, `end`) près des bords de la fenêtre ou
+  d'une colonne qui défile. Les blocs de la timeline gardent leur `title` (libellé complet, un pseudo-élément serait coupé
+  par le bloc).
 - **Largeurs** : à 1280 px panneau et dock passent à 280 px et « Ouvrir / Enregistrer » à l'icône seule ; sous 1024 px le
   panneau devient un tiroir au-dessus de la vue ; sous 700 px les onglets passent dans une barre en bas, panneau et tiroir
   d'export en feuilles au-dessus, sans sélecteur de format dans la barre (les tuiles du tiroir restent).
+- **Sections des onglets Carte et Survol** (`PanelSection.tsx`) : `PanelSection` = section repliable à plat (classes `fold`,
+  en-tête collant : titre, « modifié / Par défaut » de ses clés, chevron), ouverte au départ. Carte : « Fond de carte »
+  (imagerie), « Relief et trace » (exagération, couleur de la trace), « Lumière », « Atmosphère et météo » (atmosphère,
+  ombres, météo dans la scène), puis « Repères ». Survol : « Caméra » (préréglage, style en tuiles à icônes, nord en haut),
+  « Durée et rythme » (durée, durée du film, ralentis oui / non). Les réglages rares sont dans `MoreSettings` (« Plus de
+  réglages », `<details>` fermé) : détail imagerie, source du relief, filaire, exposition, intensité de la météo, distance /
+  inclinaison / visée / lissage, temps forts et paramètres du rythme. Son résumé porte « modifié » quand un réglage caché
+  s'écarte du défaut (`modifiedPaths(settings, paths)` de `project/apply.ts`, chemins `'clé'` ou `'clé.champ'`). Clés des
+  réglages et comportement inchangés. `InfoTip` (ⓘ, infobulle `data-tip` d'une phrase, focusable, `aria-label`) seulement
+  sur le jargon : exagération, filaire, exposition, temps forts. Styles : bloc délimité en fin de `app.css`.
+- **Lumière** : bascule « Suivre la trace » (= `sunFromTrack`, désactivée avec une explication sans horodatage) / « Heure
+  fixe ». En heure fixe : curseur de l'heure solaire au-dessus d'une barre nuit / aube / jour / crépuscule avec les repères
+  du lever et du coucher (`solarDay` au point d'origine du repère local et au jour UTC du début de la première trace, comme la
+  scène ; journée type 6 h – 18 h sans trace), et six raccourcis « Lever » (premier quart d'heure après le lever), « Matin »
+  (mi-chemin vers midi), « Midi », « Heure dorée » (1 h avant le coucher), « Coucher » (dernier quart d'heure avant),
+  « Nuit » (minuit solaire), grisés quand le moment n'existe pas (jour ou nuit polaire). Chaque raccourci est une étape
+  d'annulation (`transaction`) ; un glissé du curseur en est une par le regroupement habituel (400 ms).
 - **Icônes** : tracés Lucide (ISC, mention dans l'en-tête de `src/ui/icons.tsx`), SVG en ligne, seulement celles utilisées ;
   cadres des formats dessinés d'après le ratio (`AspectIcon`).
 
@@ -223,7 +267,7 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - **Réglages caméra** : `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp }` et préréglages
   nommés (`CAMERA_PRESETS` : Poursuite, Hélicoptère, Drone haut, Vue du dessus, Orbite, Cinéma) dans
   `src/flyover/cameraSettings.ts` ; `settings.flyoverDurationS` (15–600 s, 60 par défaut) = durée à ×1, la vitesse de la
-  timeline s'y ajoute. Section « Caméra » (`src/ui/CameraPanel.tsx`). En pause, un changement de réglage caméra replace la caméra.
+  timeline s'y ajoute. Onglet « Survol » (`src/ui/CameraPanel.tsx`, sections « Caméra » et « Durée et rythme »). En pause, un changement de réglage caméra replace la caméra.
 - **Rythme** (`src/flyover/pacing.ts`, pur ; `settings.pacing`, section « Caméra ») : la progression reste la fraction de
   distance, seul le lien temps du film → progression change. Temps forts : sommets des montées (`climbsOf`) et, parmi les repères
   OSM passés en argument, cols franchis (≤ 150 m) et sommets à ≤ 300 m. Vitesse relative
@@ -271,6 +315,10 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - **Réglages** : `settings.atmosphere` (désactivable : retour à l'éclairage fixe sans tone mapping) et `settings.sunHour`
   (heure **solaire** locale, 0 h–24 h, indépendante des fuseaux ; la nuit : étoiles et lune), le jour étant celui du début de la première trace
   (aujourd'hui à défaut).
+- **Lever et coucher** (`sunTimes`, pur et testé) : équations solaires de la NOAA évaluées vers le midi local du jour UTC
+  (déclinaison, équation du temps ; zénith 90,833° : réfraction et demi-disque), environ une minute d'écart hors des pôles ;
+  jour ou nuit polaire signalés (`polar`, lever et coucher `null`). Converti en heure solaire par `solarHourOf` (inverse de
+  `solarHourToDate`) pour l'interface « Lumière ».
 - **Ombres portées du relief** (`src/scene/terrainShadow.ts`, `settings.shadows`, case « Ombres du relief » visible avec
   l'atmosphère) : le `SunLight` Takram reçoit une `TerrainShadow` (une carte d'ombre 4096², PCF via `shadows="percentage"`).
   Ses bornes orthographiques sont recalculées dans `updateMatrices(light, viewCamera)`, que three appelle juste avant de
