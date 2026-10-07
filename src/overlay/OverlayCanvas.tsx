@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { Track } from '../core/types'
 import { useAppStore } from '../state/store'
+import { useWeatherStore } from '../weather/store'
+import type { WeatherSeries } from '../weather/series'
 import { loadLogo, loadOverlayFonts } from './assets'
 import { overlayFrameAt, prepareOverlayTrack } from './data'
 import type { OverlayTrack } from './data'
@@ -9,8 +11,8 @@ import type { OverlayAssets } from './draw'
 
 /**
  * Preview of the film overlay: a 2D canvas stacked over the 3D view, redrawn by `drawOverlay` on the next
- * animation frame after the progress, the overlay settings, the first track or the view size change
- * (store subscription, no React render per frame). Rendered only while the overlay is enabled.
+ * animation frame after the progress, the overlay settings, the first track, its weather or the view size
+ * change (store subscriptions, no React render per frame). Rendered only while the overlay is enabled.
  */
 export function OverlayCanvas() {
   const enabled = useAppStore((s) => s.settings.overlay.enabled && s.tracks.length > 0)
@@ -28,6 +30,7 @@ function OverlayPreview() {
     let disposed = false
     let fontsReady = false
     let track: Track | undefined
+    let series: WeatherSeries | null = null
     let data: OverlayTrack | null = null
     let logoSource = ''
     let assets: OverlayAssets = {}
@@ -50,9 +53,11 @@ function OverlayPreview() {
       // first frame only once the fonts are there: no flash of fallback faces
       if (!fontsReady || !tracks[0] || width === 0 || height === 0) return
 
-      if (tracks[0] !== track || !data) {
+      const weather = useWeatherStore.getState().series
+      if (tracks[0] !== track || weather !== series || !data) {
         track = tracks[0]
-        data = prepareOverlayTrack(track)
+        series = weather
+        data = prepareOverlayTrack(track, weather)
       }
       const frame = overlayFrameAt(data, playback.progress)
       if (overlay.logo.image !== logoSource) {
@@ -85,6 +90,9 @@ function OverlayPreview() {
         schedule()
       }
     })
+    const unsubscribeWeather = useWeatherStore.subscribe((state, prev) => {
+      if (state.series !== prev.series) schedule()
+    })
     // size changes, including a devicePixelRatio change (browser zoom, moving to another screen)
     const observer = new ResizeObserver(schedule)
     observer.observe(canvas)
@@ -99,6 +107,7 @@ function OverlayPreview() {
       disposed = true
       cancelAnimationFrame(raf)
       unsubscribe()
+      unsubscribeWeather()
       observer.disconnect()
       window.removeEventListener('resize', schedule)
     }

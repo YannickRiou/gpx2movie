@@ -8,7 +8,8 @@
  * beforehand (see `assets.ts`).
  */
 import { formatDistance, formatDuration, formatNumber } from '../ui/format'
-import { overlayFrameAt } from './data'
+import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
+import type { WeatherSummary } from '../weather/series'
 import type { OverlayFrame, OverlayTrack } from './data'
 import type { CounterId, OverlayAnchor, OverlaySettings } from './settings'
 import { COUNTER_IDS } from './settings'
@@ -252,8 +253,8 @@ function drawPanel(p: Painter, x: number, y: number, w: number, h: number, align
     ctx.translate(x + w / 2, y + h / 2)
     ctx.scale(rx, ry)
     const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 1)
-    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.36)')
-    gradient.addColorStop(0.55, 'rgba(0, 0, 0, 0.24)')
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.5)')
+    gradient.addColorStop(0.6, 'rgba(0, 0, 0, 0.32)')
     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)')
     ctx.fillStyle = gradient
     ctx.beginPath()
@@ -372,19 +373,43 @@ function drawCell(p: Painter, m: ReturnType<typeof cellMetrics>, cell: Cell, x: 
 
 function countersWidget(p: Painter, frame: OverlayFrame, settings: OverlaySettings, opacity: number): Widget | null {
   const { counters } = settings
-  const { theme, u, ctx } = p
-  const s = counters.size
-  const m = cellMetrics(p, s)
+  const m = cellMetrics(p, counters.size)
   const cells: Cell[] = []
   for (const id of COUNTER_IDS) {
     if (!counters.fields[id]) continue
     const text = counterText(id, frame)
     if (text) cells.push(makeCell(p, m, COUNTER_LABELS[id], text, counterTemplate(id, frame.track)))
   }
-  if (cells.length === 0) return null
+  return cellsWidget(p, m, cells, counters.anchor, counters.size, opacity)
+}
 
-  const vertical = counters.anchor === 'middle-left' || counters.anchor === 'middle-right'
-  const align: CanvasTextAlign = vertical ? alignOf(counters.anchor) : 'left'
+/** Weather under the marker: condition and temperature, wind speed and direction. */
+function weatherWidget(p: Painter, frame: OverlayFrame, settings: OverlaySettings, opacity: number): Widget | null {
+  const w = frame.weather
+  if (!w) return null
+  const { weather } = settings
+  const m = cellMetrics(p, weather.size)
+  const cells = [
+    // the longest condition label sets the width: the panel does not jump when the sky changes
+    makeCell(p, m, w.condition.label, { value: formatNumber(w.temperatureC), unit: '°C' }, { value: '-00', unit: '°C' }),
+    makeCell(p, m, `Vent ${w.windFrom}`.trim(), { value: formatNumber(w.windSpeedKmh), unit: 'km/h' }, { value: '000', unit: 'km/h' }),
+  ]
+  return cellsWidget(p, m, cells, weather.anchor, weather.size, opacity)
+}
+
+/** Row (or column, at the middle anchors) of label-over-value cells, in one panel or one panel each. */
+function cellsWidget(
+  p: Painter,
+  m: ReturnType<typeof cellMetrics>,
+  cells: Cell[],
+  anchor: OverlayAnchor,
+  s: number,
+  opacity: number,
+): Widget | null {
+  const { theme, u, ctx } = p
+  if (cells.length === 0) return null
+  const vertical = anchor === 'middle-left' || anchor === 'middle-right'
+  const align: CanvasTextAlign = vertical ? alignOf(anchor) : 'left'
   const grouped = theme.groupedCounters
   const padX = (theme.panel ? 2 : 0.5) * u * s
   const padY = (theme.panel ? 1.6 : 0.5) * u * s
@@ -398,7 +423,7 @@ function countersWidget(p: Painter, frame: OverlayFrame, settings: OverlaySettin
   const extraY = grouped ? 2 * padY : 0
 
   return {
-    anchor: counters.anchor,
+    anchor,
     width: innerW + extraX,
     height: innerH + extraY,
     opacity,
@@ -541,7 +566,8 @@ function cardWidget(
   // title: wrapped on up to three lines, shrunk when longer
   const title: TextStyle = {
     family: theme.titleFamily,
-    weight: theme.titleWeight,
+    // a light face only holds at display size: the smaller closing title gets more weight
+    weight: content.titleScale < 1 ? Math.max(theme.titleWeight, 500) : theme.titleWeight,
     sizePx: (theme.titleUppercase ? 5.6 : 6.6) * u * scale * content.titleScale,
     color: theme.text,
     uppercase: theme.titleUppercase,
@@ -638,7 +664,28 @@ function endWidget(p: Painter, frame: OverlayFrame, settings: OverlaySettings, o
     ['Vitesse max', s.maxSpeedKmh === undefined ? null : { value: formatNumber(s.maxSpeedKmh, 1), unit: 'km/h' }],
   ]
   const cells = stats.flatMap(([label, text]) => (text ? [makeCell(p, m, label, text, text)] : []))
-  return cardWidget(p, { title: e.title.trim() || frame.track.name, subtitle: '', titleScale: 0.6, cells }, e.anchor, e.size, opacity, m)
+  const subtitle = e.showWeather ? weatherSummaryLine(s.weather) : ''
+  return cardWidget(p, { title: e.title.trim() || frame.track.name, subtitle, titleScale: 0.6, cells }, e.anchor, e.size, opacity, m)
+}
+
+/** "Ciel dégagé · 8 à 17 °C · vent jusqu'à 25 km/h"; '' without weather. */
+export function weatherSummaryLine(summary: WeatherSummary | undefined): string {
+  if (!summary) return ''
+  const min = Math.round(summary.minTemperatureC)
+  const max = Math.round(summary.maxTemperatureC)
+  const temperature = min === max ? `${formatNumber(min)} °C` : `${formatNumber(min)} à ${formatNumber(max)} °C`
+  return `${summary.dominant.label} · ${temperature} · vent jusqu'à ${formatNumber(summary.maxWindKmh)} km/h`
+}
+
+/** Source credit of the weather, small along the bottom edge (required by the Open-Meteo licence). */
+function drawWeatherCredit(p: Painter): void {
+  const { u, size } = p
+  const style: TextStyle = { family: p.theme.bodyFamily, weight: 500, sizePx: 1.2 * u, color: '#FFFFFF' }
+  const shadowed = { ...p, theme: { ...p.theme, textShadow: { color: 'rgba(0, 0, 0, 0.8)', blur: 0.5 } } }
+  p.ctx.save()
+  p.ctx.globalAlpha = 0.85
+  fillText(shadowed, OPEN_METEO_ATTRIBUTION, size.width * (1 - SAFE_MARGIN), size.height - 1.4 * u, style, 'right')
+  p.ctx.restore()
 }
 
 function textWidget(p: Painter, settings: OverlaySettings): Widget | null {
@@ -728,6 +775,8 @@ export function drawOverlay(
   if (endOpacity > 0) add(endWidget(p, frame, settings, endOpacity))
   if (settings.counters.enabled && live > 0) add(countersWidget(p, frame, settings, live))
   if (settings.profile.enabled && live > 0) add(profileWidget(p, frame, settings, live))
+  const weather = settings.weather.enabled && live > 0 ? weatherWidget(p, frame, settings, live) : null
+  add(weather)
   if (settings.text.enabled) add(textWidget(p, settings))
   if (settings.logo.enabled) add(logoWidget(p, settings, assets))
 
@@ -738,14 +787,9 @@ export function drawOverlay(
     widget.draw(positions[i].x, positions[i].y)
     ctx.restore()
   })
+  if ((weather && weather.opacity > 0.001) || (endOpacity > 0 && settings.end.showWeather && frame.track.stats.weather)) {
+    drawWeatherCredit(p)
+  }
   ctx.restore()
 }
 
-/**
- * `drawOverlay` bound to one track, settings and assets, with the signature of the video export
- * (`DrawOverlay` in src/export/capture.ts): (context, progress, width, height) in video pixels.
- */
-export function createOverlayDrawer(track: OverlayTrack, settings: OverlaySettings, assets: OverlayAssets = {}) {
-  return (ctx: OverlayContext2D, progress: number, width: number, height: number): void =>
-    drawOverlay(ctx, overlayFrameAt(track, progress), settings, { width, height }, assets)
-}

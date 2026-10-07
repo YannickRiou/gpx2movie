@@ -7,6 +7,8 @@
 import type { Track } from '../core/types'
 import type { DrawOverlay } from '../export/capture'
 import { useAppStore } from '../state/store'
+import { useWeatherStore } from '../weather/store'
+import type { WeatherSeries } from '../weather/series'
 import { loadLogo } from './assets'
 import { overlayFrameAt, prepareOverlayTrack } from './data'
 import type { OverlayTrack } from './data'
@@ -20,6 +22,7 @@ export interface OverlayDrawer {
 
 export function createOverlayDrawer(): OverlayDrawer {
   let track: Track | undefined
+  let series: WeatherSeries | null = null
   let data: OverlayTrack | null = null
   let logoSource = ''
   let assets: OverlayAssets = {}
@@ -46,9 +49,11 @@ export function createOverlayDrawer(): OverlayDrawer {
       const { tracks, settings } = useAppStore.getState()
       const first = tracks[0]
       if (!first) return
-      if (first !== track || !data) {
+      const weather = useWeatherStore.getState().series
+      if (first !== track || weather !== series || !data) {
         track = first
-        data = prepareOverlayTrack(first)
+        series = weather
+        data = prepareOverlayTrack(first, weather)
       }
       drawOverlay(ctx, overlayFrameAt(data, progress), settings.overlay, { width, height }, assets)
     },
