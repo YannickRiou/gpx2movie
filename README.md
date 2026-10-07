@@ -2,11 +2,11 @@
 
 Visionneuse 3D de traces GPX / FIT sur relief réel, 100 % locale et sans clé d'API : la trace est
 plaquée sur un terrain streamé (élévation Mapterhorn ou AWS Terrain Tiles) habillé d'orthophotos
-(IGN, swisstopo, Esri, Sentinel-2), avec une caméra orbitale. C'est la fondation d'un générateur de
-films de survol (« flyover ») dans l'esprit de mapdirector.com, construit uniquement sur des sources de
-données ouvertes.
+(IGN, swisstopo, Esri, Sentinel-2), avec une caméra orbitale et un survol automatique le long de la
+trace (timeline, profil altimétrique). C'est la fondation d'un générateur de
+films de survol (« flyover »), construit uniquement sur des sources de données ouvertes.
 
-Phase 1 (ce dépôt) : la visionneuse. Les phases suivantes ajoutent le survol caméra, l'atmosphère,
+Phases 1 et 2 (ce dépôt) : la visionneuse et le survol. Les phases suivantes ajoutent l'atmosphère,
 l'export vidéo et l'application de bureau (voir la feuille de route).
 
 ## Stack
@@ -14,7 +14,7 @@ l'export vidéo et l'application de bureau (voir la feuille de route).
 - Vite 8, React 19, TypeScript 6 strict (`verbatimModuleSyntax`, `erasableSyntaxOnly`), oxlint.
 - three 0.186, @react-three/fiber 9, @react-three/drei 10 pour le rendu ; zustand 5 pour l'état ;
   @garmin/fitsdk pour les fichiers FIT.
-- vitest 5 (environnement jsdom) : 320 tests unitaires à côté des modules (`*.test.ts`).
+- vitest 5 (environnement jsdom) : 330 tests unitaires à côté des modules (`*.test.ts`).
 - CSS vanilla avec la charte dans `src/ui/theme.css` (pas de Tailwind).
 
 L'architecture détaillée (conventions de coordonnées, contrats `src/core/types.ts`, moteur de terrain,
@@ -78,8 +78,8 @@ Dans l'application : glisser un fichier `.gpx` ou `.fit` dans la zone de dépôt
 
 | Phase | Contenu |
 |---|---|
-| 1 — Visionneuse (ce dépôt) | import GPX / FIT, relief streamé, imagerie composée, trace plaquée, caméra orbitale |
-| 2 — Survol | caméra de survol automatique le long de la trace, timeline, lecture / pause, vitesse, marqueur de progression, profil altimétrique |
+| 1 — Visionneuse (fait) | import GPX / FIT, relief streamé, imagerie composée, trace plaquée, caméra orbitale |
+| 2 — Survol (fait) | caméra de survol automatique le long de la trace, timeline, lecture / pause, vitesse, marqueur de progression, profil altimétrique |
 | 3 — Atmosphère | ciel et diffusion atmosphérique (modèle Takram), brume de distance, soleil et heure du jour, ombres |
 | 4 — Export vidéo | rendu hors écran à résolution fixe et encodage MP4 / WebM via WebCodecs, presets 16:9 / 9:16 |
 | 5 — Application de bureau | emballage Tauri (binaire natif, accès disque), stockage local SQLite des trips et presets, packs de tuiles hors ligne |

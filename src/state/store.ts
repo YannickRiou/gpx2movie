@@ -17,6 +17,15 @@ export interface Settings {
   wireframe: boolean
 }
 
+/** Flyover playback along the first track (progress at constant ground speed). */
+export interface Playback {
+  playing: boolean
+  /** 0 = start of the track, 1 = end */
+  progress: number
+  /** multiplier of the base flyover duration */
+  speed: number
+}
+
 export interface AppState {
   tracks: Track[]
   addTracks(tracks: Track[]): void
@@ -37,6 +46,12 @@ export interface AppState {
   setImportError(msg: string | null): void
   loading: boolean
   setLoading(v: boolean): void
+  playback: Playback
+  /** starting from the end rewinds to the start */
+  setPlaying(v: boolean): void
+  /** clamped to [0, 1]; reaching 1 stops the playback */
+  setProgress(progress: number): void
+  setSpeed(speed: number): void
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -46,6 +61,8 @@ export const DEFAULT_SETTINGS: Settings = {
   exaggeration: 1,
   wireframe: false,
 }
+
+export const DEFAULT_PLAYBACK: Playback = { playing: false, progress: 0, speed: 1 }
 
 const EMPTY_STATS: TerrainStats = { visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0 }
 
@@ -111,6 +128,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   fitRequest: 0,
   importError: null,
   loading: false,
+  playback: { ...DEFAULT_PLAYBACK },
 
   addTracks(incoming) {
     if (incoming.length === 0) return
@@ -134,11 +152,16 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const state = get()
     const tracks = state.tracks.filter((t) => t.id !== id)
     if (tracks.length === state.tracks.length) return
-    set({ tracks, bounds: unionBounds(tracks), frameOrigin: tracks.length === 0 ? null : state.frameOrigin })
+    set({
+      tracks,
+      bounds: unionBounds(tracks),
+      frameOrigin: tracks.length === 0 ? null : state.frameOrigin,
+      playback: { ...state.playback, playing: false, progress: 0 },
+    })
   },
 
   clearTracks() {
-    set({ tracks: [], bounds: null, frameOrigin: null })
+    set({ tracks: [], bounds: null, frameOrigin: null, playback: { ...get().playback, playing: false, progress: 0 } })
   },
 
   setSetting(key, value) {
@@ -151,7 +174,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   requestFit() {
-    set({ fitRequest: get().fitRequest + 1 })
+    const state = get()
+    set({ fitRequest: state.fitRequest + 1, playback: { ...state.playback, playing: false } })
   },
 
   setImportError(msg) {
@@ -160,6 +184,25 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   setLoading(v) {
     set({ loading: v })
+  },
+
+  setPlaying(v) {
+    const playback = get().playback
+    if (playback.playing === v) return
+    const progress = v && playback.progress >= 1 ? 0 : playback.progress
+    set({ playback: { ...playback, playing: v, progress } })
+  },
+
+  setProgress(progress) {
+    const playback = get().playback
+    const clamped = Math.min(1, Math.max(0, progress))
+    const playing = playback.playing && clamped < 1
+    if (clamped === playback.progress && playing === playback.playing) return
+    set({ playback: { ...playback, progress: clamped, playing } })
+  },
+
+  setSpeed(speed) {
+    set({ playback: { ...get().playback, speed } })
   },
 }))
 
@@ -175,5 +218,6 @@ export function resetAppStore(): void {
     fitRequest: 0,
     importError: null,
     loading: false,
+    playback: { ...DEFAULT_PLAYBACK },
   })
 }

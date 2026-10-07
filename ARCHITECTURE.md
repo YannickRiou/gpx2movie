@@ -3,7 +3,6 @@
 Objectif phase 1 : importer un GPX / FIT, afficher le relief 3D (élévation Mapterhorn ou AWS Terrarium)
 habillé d'orthophotos, la trace plaquée sur le relief, et une caméra orbitale. 100 % local, aucune clé d'API.
 
-Référence : mapdirector.com (Three.js + React Three Fiber, terrain streamé, imagerie composée).
 Phases suivantes (hors scope ici) : survol caméra & timeline, atmosphère Takram, export vidéo WebCodecs, packs hors ligne, Tauri.
 
 ## Stack
@@ -20,7 +19,7 @@ Phases suivantes (hors scope ici) : survol caméra & timeline, atmosphère Takra
   Les conversions ECEF → local sont faites en doubles JS, jamais dans le shader.
 - Tuiles Web Mercator, schéma XYZ (y = 0 au nord).
 
-## Modules et propriétaires (développés en parallèle — fichiers disjoints)
+## Modules
 
 | Dossier | Rôle | Exports attendus |
 |---|---|---|
@@ -38,13 +37,13 @@ Phases suivantes (hors scope ici) : survol caméra & timeline, atmosphère Takra
 | `src/terrain/imagery.ts` | texture composée | `loadImageryTexture: LoadImageryTexture` |
 | `src/terrain/mesh.ts` | géométrie d'une tuile | `buildTileGeometry(key, grid, frame, opts: BuildTileGeometryOptions): TileGeometryResult` |
 | `src/terrain/quadtree.ts` + `engine.ts` | LOD, chargement, groupe Three | `createTerrainEngine(options: TerrainEngineOptions, deps?: Partial<EngineDeps>, tuning?: Partial<EngineTuning>): TerrainEngine` (deps injectables pour les tests) |
-| `src/scene/*.tsx` | composants R3F | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `CameraRig`, `useDebouncedCallback` |
-| `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `AppState`, `resetAppStore` |
+| `src/scene/*.tsx` | composants R3F | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `CameraRig`, `FlyoverRig`, `useDebouncedCallback` |
+| `src/flyover/path.ts` | chemin de survol | `buildTrackPath(track): TrackPath` (segments concaténés, distances cumulées), `samplePath(path, distanceM): PathSample`, `elevationProfile(path, samples)` |
+| `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` ; `importFlow.ts` (orchestration d'import sans React, testée) |
 
-### Règles pour le travail en parallèle
+### Règles de développement
 
-- Chaque agent n'écrit **que** dans ses fichiers. Pas de `npm install` (tout est déjà installé) ; si un paquet manque, le signaler dans le rapport.
 - Importer les types depuis `src/core/types.ts` avec `import type`.
 - Pas de dépendance React dans `geo/`, `import/`, `terrain/`.
 - Node n'est pas dans le PATH global. Préfixer chaque commande :
@@ -57,7 +56,7 @@ Phases suivantes (hors scope ici) : survol caméra & timeline, atmosphère Takra
 1. **Sources** (`sources.ts`) : élévation Mapterhorn `https://tiles.mapterhorn.com/{z}/{x}/{y}.webp` (Terrarium, webp),
    AWS Terrain Tiles `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` (Terrarium, z ≤ 15).
    Imagerie : IGN BD ORTHO (Géoplateforme WMTS, PM), EOX Sentinel-2 cloudless, ArcGIS World Imagery, swisstopo SWISSIMAGE.
-   Les URL exactes, zooms max, encodage et support CORS sont vérifiés par un agent dédié ; `sources.ts` est la seule vérité.
+   Les URL exactes, zooms max, encodage et support CORS sont vérifiés empiriquement (`docs/sources.md`) ; `sources.ts` est la seule vérité.
    Une source sans CORS passe par le proxy Vite (`/tiles/<id>/...`, cf. `vite.config.ts`).
 2. **Fetch** (`fetch.ts`) : `fetch()` + `createImageBitmap`, file de priorité, concurrence ~12, dédoublonnage des requêtes en vol,
    LRU ~600 bitmaps, support `AbortSignal`, 1 retry sur erreur réseau.
@@ -89,7 +88,7 @@ Phases suivantes (hors scope ici) : survol caméra & timeline, atmosphère Takra
 7. **Scène** (`scene/`) :
    - `FlyoverCanvas` : `<Canvas gl={{ antialias: true, logarithmicDepthBuffer: true, alpha: true }} camera={{ fov: 50, near: 1, far: 5e6 }} flat>`
      (pas de tone mapping : les orthophotos sont déjà des images affichables), `HemisphereLight` 1.2 + `DirectionalLight` 2.0 (soleil fixe SE ;
-     avec l'ombrage 1/π de three un sol plat rend ~0.88 de l'albédo), fond ciel neutre `#BBD1FF` → `#FFFFFF` en dégradé CSS derrière le canvas transparent.
+     avec l'ombrage 1/π de three un sol plat rend ~0.88 de l'albédo), fond ciel glacier `#A9CCD9` → papier `#F5F2EA` en dégradé CSS derrière le canvas transparent.
    - `TerrainLayer` : crée le moteur dans un `useEffect` et le dispose dans le cleanup (StrictMode-safe ; jamais dans un useMemo), le recrée
      uniquement si le repère change ou si les traces sortent de l'`area` courante (area = `expandBounds(bounds, 25 km, min 40 km)`, collante),
      ajoute `engine.group` à la scène via `<primitive dispose={null}>`, `useFrame` → `engine.update(camera, size.height)`,
@@ -98,7 +97,7 @@ Phases suivantes (hors scope ici) : survol caméra & timeline, atmosphère Takra
    - `TrackLines` : pour chaque trace, `Line2` (three/addons/lines) largeur 4 px, couleur `track.color`, points densifiés (pas ≤ 10 m),
      hauteur = `(engine.sampleHeight(lon,lat) ?? pt.ele ?? 0) * exaggeration + 3`. Re-plaquage sur `engine.onChange` (debounce 150 ms).
      Deuxième passe `depthTest: false`, opacité 0.25 pour laisser deviner les portions cachées par le relief.
-     Sphères de départ (vert `#024442`) et d'arrivée (jaune `#DBE64C`).
+     Sphères de départ (mousse `#3F6B4A`) et d'arrivée (encre `#1C2A33`).
    - `CameraRig` : `OrbitControls` (drei) avec amortissement, `maxPolarAngle = 85°`, `minDistance = 30`, `maxDistance = 400 km` ;
      `fitToBounds(bounds)` : cible = centre, caméra au sud-est, pitch 40°, distance = 1.4 × diagonale de la boîte (min 2 km).
 8. **État** (`store.ts`) : `tracks: Track[]`, `addTracks`, `removeTrack`, `clearTracks`, `settings { terrainSourceId, imagerySourceId,
@@ -106,13 +105,46 @@ Phases suivantes (hors scope ici) : survol caméra & timeline, atmosphère Takra
    premier lot arrondi à 0,01°, fixe tant qu'il reste une trace) ; l'`area` du moteur est dérivée dans la scène (`TerrainLayer`).
    `fitRequest` (compteur incrémenté pour demander un recadrage), `importError`, `loading`. À l'import, l'imagerie bascule automatiquement sur
    IGN puis swisstopo si la trace est entièrement dans leur emprise, sauf si l'utilisateur a déjà choisi une source à la main.
-9. **UI** (`ui/`) : panneau gauche 340 px (fond blanc, texte `#113B54`) : logo « OpenFlyover » (Funnel Display), zone de dépôt
+9. **UI** (`ui/`) : panneau gauche 340 px (fond papier, texte encre) : logo « OpenFlyover » (Fraunces), zone de dépôt
    « Glisse un fichier GPX ou FIT », bouton « Charger l'exemple » (`/samples/tour-du-mont-blanc-j1.gpx`), liste des traces
    (pastille couleur, nom, distance, D+, durée, bouton supprimer), réglages (source relief, source imagerie, détail imagerie 0/1/2,
-   exagération 1–2.5, filaire), bouton « Recadrer » (chartreuse `#DBE64C`), barre d'état (tuiles chargées / en attente) et
+   exagération 1–2.5, filaire), bouton « Recadrer » (rouge balise), barre d'état (tuiles chargées / en attente) et
    attributions obligatoires. Libellés en français. Charte : `src/ui/theme.css`.
 
-## Charte graphique (variables CSS)
+## Charte graphique « Carte alpine » (variables CSS, `src/ui/theme.css`)
 
-`--color-navy:#113B54; --color-chartreuse:#DBE64C; --color-white:#FFFFFF; --color-periwinkle:#BBD1FF; --color-water-green:#E2F4DF; --color-pine:#024442;`
-Titres : Funnel Display ; corps : Mulish (Google Fonts dans `index.html`). Texte noir/navy sur fond clair, blanc sur fond foncé. Contraste ≥ 4.5:1.
+Papier de carte topographique, encre, rouge de balisage des sentiers, glacier.
+
+| Rôle | Variable | Valeur |
+|---|---|---|
+| Fond du panneau | `--color-paper` | `#F5F2EA` |
+| Cartes, groupes | `--color-card` | `#EAE4D6` |
+| Texte, surfaces sombres | `--color-ink` | `#1C2A33` |
+| Texte secondaire | `--color-ink-soft` | `#55626B` |
+| Bordures | `--color-line` | `#D6CDBB` |
+| Action principale (rouge balise) | `--color-accent` / `--color-accent-strong` (survol) | `#C23B22` / `#A3301A` |
+| Accent sur fond encre | `--color-accent-light` | `#FF8A5C` |
+| Ciel, éléments secondaires | `--color-glacier` | `#A9CCD9` |
+| Départ | `--color-moss` | `#3F6B4A` |
+
+Titres : Fraunces ; corps et boutons : IBM Plex Sans (Google Fonts dans `index.html`). Contraste texte ≥ 4.5:1.
+Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur orthophoto, pas dans la charte.
+
+## Survol (phase 2)
+
+- **Lecture** (`store.playback { playing, progress, speed }`) : `progress` ∈ [0, 1] le long de la **première** trace, à vitesse
+  au sol constante ; durée 60 s à ×1 quelle que soit la longueur. Atteindre 1 met en pause, relancer depuis la fin rembobine ;
+  `requestFit` met en pause, retirer une trace remet à 0.
+- **`FlyoverRig`** (dans `TerrainLayer`) : avance `progress` dans `useFrame`, place le marqueur (sphère blanche non éclairée,
+  `depthTest: false`, taille écran constante) et pilote la caméra pendant la lecture ou quand `progress` change en pause
+  (scrub) ; sinon l'orbite reste libre autour du marqueur.
+- **Caméra de poursuite** (`computeChaseView`) : fonction pure de `progress` (pas d'état de lissage), pour que l'export vidéo
+  puisse rendre n'importe quelle image isolément. Cap = corde [d − w, d + w] (w = 2 % de la trace, 150 m–1,5 km), distance
+  4 % de la trace (600 m–4 km), tangage 30°. La caméra est relevée pour rester à 80 m au-dessus du sol et pour que la ligne de
+  visée vers le marqueur passe au-dessus du relief (13 échantillons, marge décroissante jusqu'au marqueur).
+- **`Timeline`** (`src/ui/Timeline.tsx`) : bandeau en bas de la vue — lecture / pause, profil altimétrique au-dessus du curseur
+  (1000 pas), distance parcourue et altitude courante, vitesse ×0,5 à ×4.
+- **Profil altimétrique** : altitudes **enregistrées** de la trace rééchantillonnées à 400 pas de distance constants
+  (`elevationProfile`), aire SVG, partie parcourue en rouge clair, trait à la position courante ; cliquer-glisser sur le profil
+  déplace la lecture (le curseur reste le contrôle accessible). Amplitude verticale d'au moins 100 m pour ne pas grossir le
+  bruit GPS ; profil masqué si la trace n'a aucune altitude.

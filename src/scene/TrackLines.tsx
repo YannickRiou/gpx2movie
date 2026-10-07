@@ -54,8 +54,8 @@ export const REDRAPE_DEBOUNCE_MS = 150
 export const REDRAPE_MAX_WAIT_MS = 600
 /** Start / end marker spheres (metres, true scale). */
 export const MARKER_RADIUS_M = 12
-export const START_COLOR = '#024442'
-export const END_COLOR = '#DBE64C'
+export const START_COLOR = '#3F6B4A'
+export const END_COLOR = '#1C2A33'
 
 // ---------------------------------------------------------------------------
 // Pure helpers (unit-tested)

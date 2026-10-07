@@ -12,11 +12,11 @@ body,
 }
 
 body {
-  font-family: var(--font-body, 'Mulish', system-ui, sans-serif);
+  font-family: var(--font-body, 'IBM Plex Sans', system-ui, sans-serif);
   font-size: 14px;
   line-height: 1.45;
-  color: var(--color-navy, #113b54);
-  background: var(--color-white, #fff);
+  color: var(--color-ink, #1c2a33);
+  background: var(--color-paper, #f5f2ea);
   -webkit-font-smoothing: antialiased;
 }
 

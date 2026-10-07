@@ -1,6 +1,6 @@
 # OpenFlyover
 
-Visionneuse / générateur de films de survol 3D à partir de GPX et FIT, 100 % local (inspiré de mapdirector.com).
+Visionneuse / générateur de films de survol 3D à partir de GPX et FIT, 100 % local.
 
 - Lire `ARCHITECTURE.md` avant de toucher au code : conventions de coordonnées, contrats (`src/core/types.ts`), modules.
 - Node n'est pas dans le PATH global de cette machine. Préfixer les commandes :

@@ -1,7 +1,7 @@
 /**
  * FlyoverCanvas — the React Three Fiber root of the viewer.
  *
- * The canvas is transparent (alpha) over a CSS sky gradient (periwinkle at the top, white at the
+ * The canvas is transparent (alpha) over a CSS sky gradient (glacier blue at the top, map paper at the
  * horizon). Lighting is a fixed hemisphere + a sun from the south-east. With no track loaded the scene
  * is left empty (lights only); otherwise the terrain layer provides the engine to the track lines and
  * the camera rig.
@@ -16,11 +16,12 @@ import type { CSSProperties } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { useAppStore } from '../state/store'
 import { CameraRig } from './CameraRig'
+import { FlyoverRig } from './FlyoverRig'
 import { TerrainLayer } from './TerrainLayer'
 import { TrackLines } from './TrackLines'
 
-export const SKY_TOP_COLOR = '#BBD1FF'
-export const SKY_HORIZON_COLOR = '#FFFFFF'
+export const SKY_TOP_COLOR = '#A9CCD9'
+export const SKY_HORIZON_COLOR = '#F5F2EA'
 
 const HEMISPHERE_SKY = '#ffffff'
 const HEMISPHERE_GROUND = '#6b7a8f'
@@ -60,6 +61,7 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
           <TerrainLayer>
             <TrackLines />
             <CameraRig />
+            <FlyoverRig />
           </TerrainLayer>
         )}
       </Canvas>
