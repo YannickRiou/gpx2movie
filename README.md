@@ -112,7 +112,7 @@ Ce qui distingue OpenFlyover : tout reste local, et les données de la sortie (h
 | Fonctionnalité | Contenu | État |
 |---|---|---|
 | Lumière réelle de la sortie | le soleil suit l'horodatage de chaque point : on revit le lever ou le coucher de soleil au bon endroit, ombres portées comprises | fait |
-| Météo historique | nuages, vent et température du jour de la sortie (archives Open-Meteo, sans clé) rendus dans la scène et affichables en widget | à faire |
+| Météo historique | température, ressenti, vent et rafales, nuages (3 couches), pluie et neige heure par heure sur la trace, du jour de la sortie (archive Open-Meteo depuis 1940, sans clé, cache local) : bilan de la sortie et conditions au marqueur dans le panneau ; rendu dans la scène et widget du film à venir | panneau fait ; scène et widget à faire |
 | Trace colorée par une donnée | vitesse, pente, fréquence cardiaque, puissance, en échelle séquentielle perceptuellement uniforme (viridis, magma…) avec légende | fait (vitesse, pente, altitude, FC, cadence, puissance, température) |
 | Course fantôme | plusieurs traces rejouées ensemble sur leur temps réel : comparer des amis, ou ses sorties successives sur un même parcours | à faire |
 | Vidéo embarquée synchronisée | incrustation d'une vidéo GoPro / Insta360 calée sur l'horodatage ; export de l'habillage seul sur fond transparent pour le montage | après la phase 5 |
@@ -138,6 +138,7 @@ attribution (faite dans la barre d'état). Les gabarits d'URL, zooms, formats, e
 | swisstopo SWISSIMAGE | imagerie Suisse | OGD swisstopo, usage loyal |
 | Esri World Imagery | imagerie mondiale | Esri Master Agreement : attribution obligatoire, à relire avant distribution commerciale ou mise en cache hors ligne |
 | EOX Sentinel-2 cloudless | imagerie mondiale 10 m | **CC BY-NC-SA 4.0** (non commercial) |
+| Open-Meteo (archive ERA5) | météo historique | CC BY 4.0 ; API gratuite réservée à un usage **non commercial** (licence Open-Meteo sinon) |
 
 Points de vigilance avant une distribution payante ou la phase « packs hors ligne » : les conditions
 Esri et la clause non commerciale d'EOX (voir « Points d'attention » dans `docs/sources.md`).

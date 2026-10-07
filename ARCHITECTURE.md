@@ -43,6 +43,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/sun.ts` | date du soleil | `solarHourToDate(dayMs, lon, solarHour)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
+| `src/weather/*` | météo historique de la sortie | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
 | `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` ; `importFlow.ts` (orchestration d'import sans React, testée) |
@@ -234,3 +235,27 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   champs texte).
 - **Préréglages** dans `localStorage` (`openflyover.presets.v1`, repli en mémoire) ; une clé absente d'un préréglage garde sa
   valeur courante.
+
+## Météo historique (phase 7)
+
+- **Source** : archive Open-Meteo (`archive-api.open-meteo.com/v1/archive`, sans clé, CC BY 4.0, gratuit en usage non
+  commercial ; vérifications dans `docs/sources.md`). Attribution « Données météo : Open-Meteo.com (CC BY 4.0) » dans le panneau
+  et la barre d'état dès que des données sont affichées.
+- **Requête** (`src/weather/openMeteo.ts`) : 2 à 12 lieux le long de la première trace (un tous les ~10 km, départ et arrivée,
+  arrondis à 0,01°, dédoublonnés par maille 0,05°), à l'**altitude enregistrée** (le paramètre `elevation` ramène la température
+  à l'altitude de la trace : ~10 °C d'écart en montagne), sur les jours UTC de la sortie (±1 h) en une seule requête
+  (`timezone=GMT`, `timeformat=unixtime`). Refusé sans requête : trace non horodatée, date future ou antérieure à 1940, sortie de
+  plus de 31 jours. `visibility` est toujours nulle dans l'archive et n'est pas demandée.
+- **Cache** : par lieu arrondi et jour UTC, en mémoire puis `localStorage` (`openflyover.weather.v1`, ≤ 300 jours-lieux, LRU,
+  tout accès sous try/catch) ; les jours de moins de 7 jours ne sont pas persistés car l'archive les révise.
+- **Série** (`src/weather/series.ts`, pur) : 13 variables horaires par lieu (NaN si manquante). `weatherAt` interpole
+  linéairement en temps et par inverse de la distance au carré entre lieux (code WMO du lieu le plus proche, direction du vent
+  en vecteur) ; les cumuls horaires valent pour l'heure qui se termine. `weatherWidgetData(series, path, progress)` donne les
+  conditions sous le marqueur (heure enregistrée via `recordedTimeAt`), `summarizeOuting` le bilan pondéré par le temps réel.
+  Codes WMO → libellé français + id d'icône.
+- **État** (`src/weather/store.ts`) : `status` idle / loading / ready / unavailable / error, `message`, `series`, `trackId` ;
+  `syncWeather` est appelé par le panneau à chaque changement de première trace ou de `settings.weather.enabled` (vrai par
+  défaut), annule la requête précédente et explique l'absence de données.
+- **À venir** : widget météo du film (`weatherWidgetData` est prêt) et pilotage de la scène — brume dérivée des nuages bas et des
+  précipitations, atténuation du soleil et du ciel selon la nébulosité, nuages volumétriques (`@takram/three-clouds`, non
+  installé), particules de pluie et de neige.
