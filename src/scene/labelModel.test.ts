@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Track } from '../core/types'
 import type { Climb } from '../flyover/climbs'
 import { buildTrack } from '../import/stats'
-import { cardOpacityAt } from '../overlay/draw'
+import { cardOpacityAt, progressTime } from '../overlay/draw'
 import { DEFAULT_OVERLAY } from '../overlay/settings'
 import {
   LABEL_FADE_END_M,
@@ -145,7 +145,7 @@ describe('labels under the overlay cards', () => {
 
   it('fades out with the opening and closing cards, and back in between', () => {
     const overlay = { ...DEFAULT_OVERLAY, enabled: true }
-    const at = (progress: number, settings = overlay) => labelOpacity(1, cardOpacityAt(progress, settings))
+    const at = (progress: number, settings = overlay) => labelOpacity(1, cardOpacityAt(progressTime(progress), settings))
     expect(at(0.02)).toBe(0) // opening card fully shown
     expect(at(0.09)).toBeGreaterThan(0) // opening card fading out
     expect(at(0.09)).toBeLessThan(1)

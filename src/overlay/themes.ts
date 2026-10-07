@@ -40,6 +40,8 @@ export interface OverlayTheme {
   profile: { area: string; played: string; line: string; marker: string; markerRing: string }
   /** mini-map: route still ahead, covered part, start and end dots (ringed with `profile.markerRing`) */
   minimap: { route: string; covered: string; start: string; end: string }
+  /** source credits: subtle backing and text, legible on snow as on forest */
+  credits: { fill: string; text: string }
 }
 
 const FRAUNCES = '"Fraunces", Georgia, serif'
@@ -81,6 +83,7 @@ export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {
       markerRing: '#FFFFFF',
     },
     minimap: { route: 'rgba(255, 255, 255, 0.5)', covered: TRAIL_RED_LIGHT, start: MOSS, end: '#FFFFFF' },
+    credits: { fill: 'rgba(16, 25, 31, 0.6)', text: '#FFFFFF' },
   },
   // dark glass panels, condensed figures, trail-red bar
   broadcast: {
@@ -107,6 +110,7 @@ export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {
       markerRing: '#FFFFFF',
     },
     minimap: { route: 'rgba(255, 255, 255, 0.4)', covered: TRAIL_RED_LIGHT, start: MOSS, end: '#FFFFFF' },
+    credits: { fill: 'rgba(16, 25, 31, 0.7)', text: '#FFFFFF' },
   },
   // pale rounded cards, like a navigation app
   app: {
@@ -131,6 +135,7 @@ export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {
     accentBar: 0,
     profile: { area: GLACIER, played: TRAIL_RED, line: INK, marker: TRAIL_RED, markerRing: PAPER },
     minimap: { route: 'rgba(28, 42, 51, 0.35)', covered: TRAIL_RED, start: MOSS, end: INK },
+    credits: { fill: 'rgba(245, 242, 234, 0.82)', text: INK },
   },
 }
 
