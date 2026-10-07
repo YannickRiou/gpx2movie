@@ -152,6 +152,7 @@ describe('settings and misc', () => {
       trackColorBy: 'none',
       camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
       flyoverDurationS: 60,
+      pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true },
       labels: { climbs: true, waypoints: true },
       weather: { enabled: true },
       overlay: DEFAULT_OVERLAY,

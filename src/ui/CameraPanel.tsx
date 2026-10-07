@@ -8,8 +8,11 @@ import {
   FLYOVER_DURATION_RANGE,
 } from '../flyover/cameraSettings'
 import type { CameraSettings, CameraStyle } from '../flyover/cameraSettings'
+import { PACING_RANGES } from '../flyover/pacing'
+import type { PacingSettings } from '../flyover/pacing'
+import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
-import { formatNumber } from './format'
+import { formatDistance, formatNumber } from './format'
 
 /** Value of the preset select when the camera matches no preset. */
 const CUSTOM = ''
@@ -42,6 +45,25 @@ const SLIDERS: Slider[] = [
   { key: 'smoothing', label: 'Lissage du cap', format: (v) => `×${formatNumber(v, 2)}` },
 ]
 
+interface PacingSlider {
+  key: keyof typeof PACING_RANGES
+  label: string
+  format(value: number): string
+  /** spoken value (aria-valuetext), when it differs from the displayed one */
+  spoken?(value: number): string
+}
+
+const PACING_SLIDERS: PacingSlider[] = [
+  { key: 'slowFactor', label: 'Vitesse au temps fort', format: (v) => `${formatNumber(v * 100)} %` },
+  {
+    key: 'windowM',
+    label: 'Étendue du ralenti',
+    format: (v) => `±${formatDistance(v)}`,
+    spoken: (v) => `${formatDistance(v)} de chaque côté`,
+  },
+  { key: 'pauseS', label: 'Pause', format: (v) => (v === 0 ? 'Aucune' : `${formatNumber(v, 1)} s`) },
+]
+
 /** One-line description of each style (hint under the style select). */
 const STYLE_HINTS: Record<CameraStyle, string> = {
   chase: 'Derrière le marqueur, dans la direction du trajet.',
@@ -51,14 +73,18 @@ const STYLE_HINTS: Record<CameraStyle, string> = {
   cinematic: 'Plus loin et plus bas, avec un lent mouvement latéral.',
 }
 
-/** "Caméra" section: camera preset, style and parameters of the flyover, flyover duration. */
+/** "Caméra" section: camera preset, style and parameters of the flyover, flyover duration and pacing. */
 export function CameraPanel() {
   const camera = useAppStore((s) => s.settings.camera)
   const durationS = useAppStore((s) => s.settings.flyoverDurationS)
+  const pacing = useAppStore((s) => s.settings.pacing)
+  const film = usePacing()
+  const highlightCount = film.highlights.length
   const setSetting = useAppStore((s) => s.setSetting)
   const id = useId()
   const preset = findCameraPreset(camera)
   const update = (patch: Partial<CameraSettings>) => setSetting('camera', { ...camera, ...patch })
+  const updatePacing = (patch: Partial<PacingSettings>) => setSetting('pacing', { ...pacing, ...patch })
 
   return (
     <section className="settings" aria-labelledby={`${id}-title`}>
@@ -174,6 +200,74 @@ export function CameraPanel() {
             {formatSeconds(durationS)}
           </output>
         </div>
+      </div>
+
+      <div className="overlay-widget" role="group" aria-labelledby={`${id}-pacing`}>
+        <p id={`${id}-pacing`} className="field__label">
+          Rythme
+        </p>
+        <label className="checkbox">
+          <input type="checkbox" checked={pacing.enabled} onChange={(e) => updatePacing({ enabled: e.currentTarget.checked })} />
+          Ralentir aux temps forts
+        </label>
+        {pacing.enabled && (
+          <div className="overlay-widget__body">
+            <fieldset className="field fieldset">
+              <legend className="field__label">Temps forts</legend>
+              <label className="checkbox">
+                <input type="checkbox" checked={pacing.climbs} onChange={(e) => updatePacing({ climbs: e.currentTarget.checked })} />
+                Sommets des montées
+              </label>
+              <label className="checkbox">
+                <input type="checkbox" checked={pacing.landmarks} onChange={(e) => updatePacing({ landmarks: e.currentTarget.checked })} />
+                Repères (cols, sommets)
+              </label>
+            </fieldset>
+
+            {PACING_SLIDERS.map(({ key, label, format, spoken = format }) => {
+              const range = PACING_RANGES[key]
+              const inputId = `${id}-pacing-${key}`
+              return (
+                <div key={key} className="field">
+                  <label className="field__label" htmlFor={inputId}>
+                    {label}
+                  </label>
+                  <div className="range-row">
+                    <input
+                      id={inputId}
+                      className="range"
+                      type="range"
+                      min={range.min}
+                      max={range.max}
+                      step={range.step}
+                      value={pacing[key]}
+                      onChange={(e) => updatePacing({ [key]: Number(e.currentTarget.value) })}
+                      aria-valuetext={spoken(pacing[key])}
+                    />
+                    <output className="range-row__value range-row__value--wide" htmlFor={inputId}>
+                      {format(pacing[key])}
+                    </output>
+                  </div>
+                </div>
+              )
+            })}
+
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={pacing.keepDuration}
+                onChange={(e) => updatePacing({ keepDuration: e.currentTarget.checked })}
+              />
+              Garder la durée du survol
+            </label>
+            <p className="field__hint">
+              Durée du film : {formatSeconds(Math.round(film.totalTime()))} ·{' '}
+              {highlightCount === 0
+                ? 'aucun temps fort détecté'
+                : `${highlightCount} temps fort${highlightCount > 1 ? 's' : ''}`}
+            </p>
+          </div>
+        )}
       </div>
     </section>
   )

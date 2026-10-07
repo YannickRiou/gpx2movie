@@ -9,6 +9,7 @@
  */
 import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'
 import { FLYOVER_DURATION_RANGE, isValidCamera } from '../flyover/cameraSettings'
+import { isValidPacing } from '../flyover/pacing'
 import { TRACK_COLORS } from '../import'
 import { buildTrack } from '../import/stats'
 import { isValidVideoSettings } from '../export/schedule'
@@ -90,6 +91,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   sunHour: (v) => v >= 0 && v <= 24,
   camera: isValidCamera,
   flyoverDurationS: (v) => v >= FLYOVER_DURATION_RANGE.min && v <= FLYOVER_DURATION_RANGE.max,
+  pacing: isValidPacing,
   exposureEv: (v) => v >= -4 && v <= 4,
   trackColorBy: (v) => (TRACK_COLOR_MODES as readonly string[]).includes(v),
   overlay: isValidOverlay,
