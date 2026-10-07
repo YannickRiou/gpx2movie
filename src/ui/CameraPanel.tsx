@@ -94,7 +94,7 @@ export function CameraPanel() {
   const durationS = useAppStore((s) => s.settings.flyoverDurationS)
   const pacing = useAppStore((s) => s.settings.pacing)
   const film = usePacing()
-  const highlightCount = film.highlights.length
+  const stopCount = film.stops.length
   const setSetting = useAppStore((s) => s.setSetting)
   const id = useId()
   const preset = findCameraPreset(camera)
@@ -219,9 +219,7 @@ export function CameraPanel() {
           </div>
           <p className="field__hint">
             Durée du film : {formatSeconds(Math.round(film.totalTime()))} ·{' '}
-            {highlightCount === 0
-              ? 'aucun temps fort détecté'
-              : `${highlightCount} temps fort${highlightCount > 1 ? 's' : ''}`}
+            {stopCount === 0 ? 'aucun arrêt' : `${stopCount} arrêt${stopCount > 1 ? 's' : ''}`}
           </p>
         </div>
 
