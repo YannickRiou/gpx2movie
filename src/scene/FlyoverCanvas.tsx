@@ -15,12 +15,15 @@
  * the sky receives (hemisphere + sun x sin(sun elevation)) / pi = (1.2 + 2.0 x 0.79) / pi = 0.88 of its
  * albedo and a slope facing the sun peaks just under 1.0 (nothing clips).
  */
-import type { CSSProperties } from 'react'
+import { useEffect, useMemo, type CSSProperties } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { useAppStore } from '../state/store'
+import { ExportController } from '../export/ExportController'
+import { createOverlayDrawer } from '../overlay/exportOverlay'
 import { AtmosphereLayer } from './AtmosphereLayer'
 import { CameraRig } from './CameraRig'
 import { FlyoverRig } from './FlyoverRig'
+import { Labels } from './Labels'
 import { TerrainLayer } from './TerrainLayer'
 import { TrackLines } from './TrackLines'
 
@@ -56,6 +59,9 @@ export interface FlyoverCanvasProps {
 export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
   const atmosphere = useAppStore((s) => s.settings.atmosphere)
+  // the video export draws the film overlay through the same code as the preview
+  const overlayDrawer = useMemo(createOverlayDrawer, [])
+  useEffect(() => () => overlayDrawer.dispose(), [overlayDrawer])
 
   return (
     <div className={className} style={style ? { ...wrapperStyle, ...style } : wrapperStyle}>
@@ -71,7 +77,9 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
             <TrackLines />
             <CameraRig />
             <FlyoverRig />
+            <Labels />
             {atmosphere && <AtmosphereLayer />}
+            <ExportController drawOverlay={overlayDrawer.draw} />
           </TerrainLayer>
         )}
       </Canvas>
