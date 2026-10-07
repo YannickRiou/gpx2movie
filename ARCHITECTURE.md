@@ -160,14 +160,18 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 
 ## Survol (phase 2)
 
-- **Lecture** (`store.playback { playing, progress, speed }`) : `progress` ∈ [0, 1] le long de la **première** trace, à vitesse
-  au sol constante ; durée `settings.flyoverDurationS` à ×1 (60 s par défaut) quelle que soit la longueur. Atteindre 1 met en pause, relancer depuis la fin rembobine ;
-  `requestFit` met en pause, retirer une trace remet à 0.
+- **Lecture** (`store.playback { playing, progress, timeS, speed }`) : `progress` ∈ [0, 1] le long de la **première** trace, à vitesse
+  au sol constante ; durée `settings.flyoverDurationS` à ×1 (60 s par défaut) quelle que soit la longueur. `timeS` = temps du
+  film (s à ×1, rythme compris) quand la lecture ou l'export le fixent, `null` après un déplacement de l'extérieur (curseur,
+  montées, repères : il se déduit alors de la progression par le rythme). Atteindre 1 sans temps du film met en pause, relancer
+  depuis la fin rembobine ; `requestFit` met en pause, retirer une trace remet à 0.
 - **`FlyoverRig`** (dans `TerrainLayer`) : avance `progress` dans `useFrame`, place le marqueur (sphère blanche non éclairée,
   `depthTest: false`, taille écran constante) et pilote la caméra pendant la lecture ou quand `progress` change en pause
   (scrub) ; sinon l'orbite reste libre autour du marqueur.
-- **Caméra** (`src/flyover/camera.ts`, `computeCameraView`) : fonction pure de (progression, réglages, échantillonneur de
-  relief), sans état d'une image à l'autre, pour que l'export vidéo rende n'importe quelle image isolément. Cap = corde
+- **Caméra** (`src/flyover/camera.ts`, `computeCameraView`) : fonction pure de (progression, temps du film, réglages,
+  échantillonneur de relief), sans état d'une image à l'autre, pour que l'export vidéo rende n'importe quelle image isolément.
+  Orbite et cinéma (`movesWithTime`) suivent le temps du film (`timeS`, à défaut progression × durée) et continuent donc de
+  tourner pendant les pauses du rythme ; les autres styles ne dépendent que de la progression. Cap = corde
   [d − w, d + w] (w = 2 % de la trace, 150 m–1,5 km, × lissage), distance automatique 4 % de la trace (600 m–4 km, × distance).
   Styles (`settings.camera.style`) : `chase` (derrière le marqueur), `sway` (balancement vers l'extérieur des virages :
   50° · tanh(0,8 · T / 50°), T = somme des angles de virage pondérée par une tente sur ±2w, continue et calme), `orbit` (6°/s
@@ -185,8 +189,10 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   Temps de déplacement tabulé (vitesse constante par pas : inverse exact par dichotomie). Pauses : temps forts à moins de
   windowM regroupés, une pause par groupe, chacune ajoute exactement `pauseS` avec entrée et sortie en cosinus surélevé
   (≤ 1,5 s). `keepDuration` (défaut) relève la vitesse de base pour garder `flyoverDurationS` (pauses ≤ 50 % de la durée), sinon
-  le film s'allonge. Désactivé ou sans temps fort : identique à `advanceProgress`. `FlyoverRig` garde le temps du film dans une
-  référence (en pause la progression ne bouge pas) et se recale après un déplacement du curseur ; `usePacing`
+  le film s'allonge. Désactivé ou sans temps fort : identique à `advanceProgress`. `FlyoverRig` avance le temps du film
+  (`playback.timeS`, en pause du rythme la progression ne bouge pas) et repart de `pacing.positionAt` après un déplacement du
+  curseur ou un changement de rythme ; la lecture ne s'arrête qu'à `pacing.totalTime()`, pause finale comprise (progression 1
+  tenue avec un temps du film, puis 1 sans temps). `timeAtProgress(1)` = fin du film. `usePacing`
   (`src/scene/usePacing.ts`) partage le calcul avec le panneau. L'export appelle `pacing.progressAtTime(t)` sur
   `pacing.totalTime()`.
 - **`Timeline`** (`src/ui/Timeline.tsx`) : bandeau en bas de la vue — lecture / pause, profil altimétrique au-dessus du curseur
@@ -361,14 +367,16 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 
 ## Export vidéo (phase 5)
 
-- Le survol étant une fonction pure de `playback.progress`, un film est une liste de progressions (`buildFrameSchedule` : rampe
-  0 → 1 sur `durée × fps` images, plus 1 s tenue au début et 2 s à la fin). `ExportController` (dans `TerrainLayer`) exécute la
+- Le survol étant une fonction pure de `playback.progress` et du temps du film, un film est une liste de temps du film
+  (`buildFrameTimes` : rampe 0 → durée sur `durée × fps` images, plus 1 s tenue au début et 2 s à la fin) et des progressions
+  correspondantes (`buildFrameSchedule`) ; chaque image fixe les deux (`setProgress(progression, temps)`). `ExportController` (dans `TerrainLayer`) exécute la
   demande déposée dans le store d'export (`src/export/store.ts`, distinct du store de l'application) : lecture en pause,
   `frameloop 'never'`, rendu et caméra à la taille de la vidéo avec un ratio de pixels de 1 (réappliqués avant chaque rendu ;
   canvas affiché en letterbox pendant l'export), pointeur désactivé.
 - Le calendrier suit le rythme du survol : la rampe dure `pacing.totalTime()` et l'image k montre
   `pacing.progressAtTime(k / (n − 1) × durée)` (ralentis et pauses aux temps forts comme dans l'aperçu ; les images de pause
-  réutilisent l'image déjà composée).
+  réutilisent l'image déjà composée, sauf en orbite et cinéma où la caméra continue de tourner ; les images tenues du début et
+  de la fin restent figées sur les temps 0 et durée).
 - Pour chaque progression (`renderSettledFrame`, `src/export/capture.ts`), `advance` jusqu'à ce que la vue n'attende plus
   aucune tuile réellement dessinée (`stats.pendingVisibleTiles`, limite 5 s par image, comptée « incomplète »), puis les
   replaquages en attente de la trace et des étiquettes sont exécutés tout de suite (`flushDrapes`, au lieu de leur délai) et

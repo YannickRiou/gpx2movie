@@ -9,6 +9,7 @@ import {
   CINEMATIC_PITCH_FACTOR,
   computeCameraView,
   MIN_GROUND_CLEARANCE_M,
+  movesWithTime,
   smoothedTurn,
   TOP_DISTANCE_FACTOR,
   TOP_MIN_PITCH_DEG,
@@ -220,6 +221,19 @@ describe('computeCameraView — styles', () => {
     // a quarter period (10 s of 60) later: swung by the full amplitude
     const later = computeCameraView(northbound, 10 / 60, frame, null, options({ style: 'cinematic' }))
     expect(Math.abs(Math.abs(azimuthFromTarget(later.position, later.target)) - Math.PI)).toBeCloseTo((35 * Math.PI) / 180, 3)
+  })
+
+  it('orbit and cinematic follow the film time when given: they keep moving while the progress is held', () => {
+    for (const style of CAMERA_STYLES) {
+      const at = (timeS?: number) => computeCameraView(northbound, 0.25, frame, null, { ...options({ style }), timeS })
+      // default film time = progress × duration
+      expect(at(15).position.distanceTo(at().position)).toBeCloseTo(0, 6)
+      const moved = at(20).position.distanceTo(at(15).position)
+      expect(moved > 1).toBe(movesWithTime(style))
+    }
+    // 5 s more of film at 6°/s: 30° further around the marker
+    const held = computeCameraView(northbound, 0.25, frame, null, { ...options({ style: 'orbit' }), timeS: 20 })
+    expect(azimuthFromTarget(held.position, held.target)).toBeCloseTo(-Math.PI / 3, 3)
   })
 })
 

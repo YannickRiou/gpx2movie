@@ -139,7 +139,10 @@ export interface Pacing {
   totalTime(): number
   /** progress at film time `tS` (clamped to [0, totalTime()]); continuous and non-decreasing */
   progressAtTime(tS: number): number
-  /** first film time at which the progress reaches `progress` (start of the hold for a paused highlight) */
+  /**
+   * first film time at which the progress reaches `progress` (start of the hold for a paused highlight); 1 is the
+   * end of the film, after a final pause
+   */
   timeAtProgress(progress: number): number
   /** position of a progress set from outside (scrub, rewind) */
   positionAt(progress: number): PacingPosition
@@ -305,6 +308,7 @@ export function pacingFromHighlights(
   }
 
   const timeAtProgress = (progress: number): number => {
+    if (progress >= 1) return total
     const u = uOfProgress(progress)
     const k = lastAtOrBelow(startU, u)
     if (k < 0) return u

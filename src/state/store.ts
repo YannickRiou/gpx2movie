@@ -69,6 +69,11 @@ export interface Playback {
   playing: boolean
   /** 0 = start of the track, 1 = end */
   progress: number
+  /**
+   * film time of the progress (seconds at x1, pacing included) when the playback clock or the export set it;
+   * null when the progress was set from outside (scrub, rewind): the pacing then gives it
+   */
+  timeS: number | null
   /** playback speed multiplier, on top of settings.flyoverDurationS */
   speed: number
 }
@@ -94,10 +99,13 @@ export interface AppState {
   loading: boolean
   setLoading(v: boolean): void
   playback: Playback
-  /** starting from the end rewinds to the start */
+  /** starting from the end (progress 1 without film time) rewinds to the start */
   setPlaying(v: boolean): void
-  /** clamped to [0, 1]; reaching 1 stops the playback */
-  setProgress(progress: number): void
+  /**
+   * clamped to [0, 1]; reaching 1 stops the playback unless a film time is given (the playback clock plays the
+   * final pause of the pacing, then sets 1 without film time)
+   */
+  setProgress(progress: number, timeS?: number | null): void
   setSpeed(speed: number): void
 }
 
@@ -125,7 +133,7 @@ export const DEFAULT_SETTINGS: Settings = {
   race: DEFAULT_RACE,
 }
 
-export const DEFAULT_PLAYBACK: Playback = { playing: false, progress: 0, speed: 1 }
+export const DEFAULT_PLAYBACK: Playback = { playing: false, progress: 0, timeS: null, speed: 1 }
 
 const EMPTY_STATS: TerrainStats = { visibleTiles: 0, loadedTiles: 0, pendingTiles: 0, failedTiles: 0 }
 
@@ -219,12 +227,13 @@ export const useAppStore = create<AppState>()((set, get) => ({
       tracks,
       bounds: unionBounds(tracks),
       frameOrigin: tracks.length === 0 ? null : state.frameOrigin,
-      playback: { ...state.playback, playing: false, progress: 0 },
+      playback: { ...state.playback, playing: false, progress: 0, timeS: null },
     })
   },
 
   clearTracks() {
-    set({ tracks: [], bounds: null, frameOrigin: null, playback: { ...get().playback, playing: false, progress: 0 } })
+    const playback = { ...get().playback, playing: false, progress: 0, timeS: null }
+    set({ tracks: [], bounds: null, frameOrigin: null, playback })
   },
 
   setSetting(key, value) {
@@ -252,16 +261,16 @@ export const useAppStore = create<AppState>()((set, get) => ({
   setPlaying(v) {
     const playback = get().playback
     if (playback.playing === v) return
-    const progress = v && playback.progress >= 1 ? 0 : playback.progress
-    set({ playback: { ...playback, playing: v, progress } })
+    if (v && playback.progress >= 1 && playback.timeS === null) set({ playback: { ...playback, playing: v, progress: 0 } })
+    else set({ playback: { ...playback, playing: v } })
   },
 
-  setProgress(progress) {
+  setProgress(progress, timeS = null) {
     const playback = get().playback
     const clamped = Math.min(1, Math.max(0, progress))
-    const playing = playback.playing && clamped < 1
-    if (clamped === playback.progress && playing === playback.playing) return
-    set({ playback: { ...playback, progress: clamped, playing } })
+    const playing = playback.playing && (clamped < 1 || timeS !== null)
+    if (clamped === playback.progress && timeS === playback.timeS && playing === playback.playing) return
+    set({ playback: { ...playback, progress: clamped, timeS, playing } })
   },
 
   setSpeed(speed) {

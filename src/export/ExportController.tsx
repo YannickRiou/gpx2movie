@@ -14,7 +14,7 @@ import { useEffect, useRef } from 'react'
 import { useThree, type RootState } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
 import type { LocalFrame, TerrainEngine } from '../core/types'
-import { computeCameraView, type CameraView } from '../flyover/camera'
+import { computeCameraView, movesWithTime, type CameraView } from '../flyover/camera'
 import { buildTrackPath, type TrackPath } from '../flyover/path'
 import { loadOverlayFonts } from '../overlay/assets'
 import { useTerrainContext } from '../scene/TerrainLayer'
@@ -22,7 +22,7 @@ import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
 import { useAppStore } from '../state/store'
 import { REPLACE_EPSILON, composeFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
 import { ExportCanceledError, createVideoEncoder, type VideoEncodeSession } from './encoder'
-import { buildFrameSchedule } from './schedule'
+import { buildFrameSchedule, buildFrameTimes } from './schedule'
 import {
   EMPTY_TIMINGS,
   exportRenderScale,
@@ -56,8 +56,14 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** Camera placement of FlyoverRig at `progress` with the terrain loaded now (same inputs as the rig). */
-function viewAt(path: TrackPath, progress: number, frame: LocalFrame, engine: TerrainEngine | null): CameraView {
+/** Camera placement of FlyoverRig at `progress` and film time `timeS` with the terrain loaded now (same inputs as the rig). */
+function viewAt(
+  path: TrackPath,
+  progress: number,
+  timeS: number | null,
+  frame: LocalFrame,
+  engine: TerrainEngine | null,
+): CameraView {
   const { settings } = useAppStore.getState()
   const sampler: HeightSampler | null = engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null
   return computeCameraView(path, progress, frame, sampler, {
@@ -65,6 +71,7 @@ function viewAt(path: TrackPath, progress: number, frame: LocalFrame, engine: Te
     liftM: LINE_LIFT_M,
     camera: settings.camera,
     durationS: settings.flyoverDurationS,
+    timeS: timeS ?? undefined,
   })
 }
 
@@ -84,6 +91,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     return
   }
   if (!exportStore().begin(request.id, schedule.length, performance.now())) return
+  // film time of every frame: the time-based camera styles keep moving during the pauses of the pacing
+  const times = request.still ? [] : buildFrameTimes(request)
 
   const { width, height, fps } = request
   const three = deps.get()
@@ -93,6 +102,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     size: { ...three.size },
     dpr: three.viewport.dpr,
     progress: useAppStore.getState().playback.progress,
+    timeS: useAppStore.getState().playback.timeS,
     pointerEvents: canvas.style.pointerEvents,
     objectFit: canvas.style.objectFit,
   }
@@ -136,7 +146,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     const frame = deps.frame()
     if (!path || path.count === 0 || !frame) return 0
     const camera = deps.get().camera
-    const view = viewAt(path, useAppStore.getState().playback.progress, frame, deps.engine())
+    const { progress, timeS } = useAppStore.getState().playback
+    const view = viewAt(path, progress, timeS, frame, deps.engine())
     camera.getWorldDirection(direction)
     toTarget.subVectors(view.target, camera.position)
     const offAxis = toTarget.addScaledVector(direction, -toTarget.dot(direction)).length()
@@ -154,7 +165,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     for (const ahead of PREFETCH_AHEAD) {
       const j = i + ahead
       if (j >= schedule.length) break
-      const view = viewAt(path, schedule[j], frame, engine)
+      const view = viewAt(path, schedule[j], times[j], frame, engine)
       prefetchCamera.position.copy(view.position)
       prefetchCamera.lookAt(view.target)
       engine.prefetch(prefetchCamera, height)
@@ -175,6 +186,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     // a canvas never downloads web fonts by itself: the overlay faces must be ready before the first frame
     if (deps.overlay()) await loadOverlayFonts()
 
+    /** film time set with every progress (a still keeps the current one) */
+    let frameTimeS = saved.timeS
     const frameDeps = {
       advance,
       pendingTiles: () => {
@@ -185,7 +198,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       now: () => performance.now(),
       wait: timedWait,
       isCanceled,
-      setProgress: (p: number) => useAppStore.getState().setProgress(p),
+      setProgress: (p: number) => useAppStore.getState().setProgress(p, frameTimeS),
       cameraDrift,
     }
 
@@ -209,12 +222,14 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     }
 
     session = await createVideoEncoder(compositor, request)
+    const moving = movesWithTime(useAppStore.getState().settings.camera.style)
     let previous = Number.NaN
     for (let i = 0; i < schedule.length; i++) {
       if (isCanceled()) throw new ExportCanceledError()
       const progress = schedule[i]
-      // held frames (holds, pauses of the pacing) repeat the composed image as is
-      if (progress !== previous) {
+      // held frames (holds, pauses of the pacing) repeat the composed image as is, unless the camera moves with time
+      if (progress !== previous || (moving && times[i] !== frameTimeS)) {
+        frameTimeS = times[i]
         const complete = await renderSettledFrame(progress, frameDeps)
         // same task as the last render: the drawing buffer still holds the frame
         const t0 = performance.now()
@@ -266,7 +281,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     canvas.style.objectFit = saved.objectFit
     canvas.style.pointerEvents = saved.pointerEvents
     state.setFrameloop(saved.frameloop)
-    useAppStore.getState().setProgress(saved.progress)
+    useAppStore.getState().setProgress(saved.progress, saved.timeS)
   }
 }
 

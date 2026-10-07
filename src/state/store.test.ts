@@ -188,7 +188,7 @@ describe('settings and misc', () => {
 describe('playback', () => {
   it('starts paused at 0 and clamps the progress', () => {
     const s = useAppStore.getState()
-    expect(s.playback).toEqual({ playing: false, progress: 0, speed: 1 })
+    expect(s.playback).toEqual({ playing: false, progress: 0, timeS: null, speed: 1 })
     s.setProgress(1.5)
     expect(useAppStore.getState().playback.progress).toBe(1)
     s.setProgress(-1)
@@ -204,6 +204,22 @@ describe('playback', () => {
     expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 0 })
   })
 
+  it('keeps playing at the end while a film time is given (final pause), forgets it when set from outside', () => {
+    const s = useAppStore.getState()
+    s.setPlaying(true)
+    s.setProgress(1, 61)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 1, timeS: 61 })
+    s.setProgress(1, 62)
+    expect(useAppStore.getState().playback.timeS).toBe(62)
+    // paused during the final pause: playing again resumes it instead of rewinding
+    s.setPlaying(false)
+    s.setPlaying(true)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 1, timeS: 62 })
+    // the end of the film: no film time, stops
+    s.setProgress(1)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: false, progress: 1, timeS: null })
+  })
+
   it('pauses on a fit request and resets when a track is removed', () => {
     const s = useAppStore.getState()
     s.addTracks([FR])
@@ -211,8 +227,8 @@ describe('playback', () => {
     s.setProgress(0.4)
     s.setPlaying(true)
     s.requestFit()
-    expect(useAppStore.getState().playback).toEqual({ playing: false, progress: 0.4, speed: 2 })
+    expect(useAppStore.getState().playback).toEqual({ playing: false, progress: 0.4, timeS: null, speed: 2 })
     s.removeTrack('fr')
-    expect(useAppStore.getState().playback).toEqual({ playing: false, progress: 0, speed: 2 })
+    expect(useAppStore.getState().playback).toEqual({ playing: false, progress: 0, timeS: null, speed: 2 })
   })
 })

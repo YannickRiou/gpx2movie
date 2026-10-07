@@ -83,6 +83,6 @@ chantiers : committer par hunks ou tout ensemble une fois l'arbre vert).
   du panneau d'export) : contrôle visuel à faire (voir ARCHITECTURE.md, export).
 - Phase 7 : vidéo embarquée synchronisée, comparatif avant / après (photos IGN anciennes), rendu en lot, affiche, calage musical,
   reconnaissance d'itinéraire.
-- Limites connues : orbite et cinéma figés pendant les pauses du rythme (la caméra lit la progression, pas le temps du film) ;
-  pause finale non jouée dans l'aperçu (jouée à l'export) ; OpenTopoMap à exclure des futurs packs hors ligne ; Open-Meteo et
-  EOX non commerciaux.
+- Limites connues : OpenTopoMap à exclure des futurs packs hors ligne ; Open-Meteo et EOX non commerciaux.
+- Orbite et cinéma pendant les pauses du rythme, pause finale dans l'aperçu : corrigés (temps du film `playback.timeS`) ;
+  contrôle visuel à faire (aperçu et export avec rythme actif).

@@ -1,9 +1,10 @@
 /**
  * Video export formats and frame schedule.
  *
- * The flyover is a pure function of `playback.progress`, so a film is fully described by the list of progress
- * values of its frames: a ramp 0 → 1 over the film duration (linear, or following the variable pacing of the
- * flyover), optionally preceded and followed by frames held on the first / last image.
+ * The flyover is a pure function of `playback.progress` and its film time, so a film is fully described by the
+ * list of film times of its frames and the progress values they map to: a ramp 0 → 1 over the film duration
+ * (linear, or following the variable pacing of the flyover), optionally preceded and followed by frames held on
+ * the first / last image.
  */
 
 /**
@@ -107,17 +108,11 @@ export interface ScheduleOptions {
 }
 
 /**
- * Progress value of every frame of the film. The ramp has `round(durationS × fps)` frames (at least 2), frame k
- * shows `progressAt(k / (ramp − 1) × durationS)` and the ramp is exactly 0 on its first frame and 1 on its last;
- * holds add `round(holdS × fps)` frames.
+ * Film time of every frame of the film (seconds at ×1). The ramp has `round(durationS × fps)` frames (at least 2),
+ * frame k is at `k / (ramp − 1) × durationS`, exactly 0 on its first frame and `durationS` on its last; holds add
+ * `round(holdS × fps)` frames at 0 and `durationS`.
  */
-export function buildFrameSchedule({
-  durationS,
-  fps,
-  progressAt,
-  holdStartS = 0,
-  holdEndS = 0,
-}: ScheduleOptions): number[] {
+export function buildFrameTimes({ durationS, fps, holdStartS = 0, holdEndS = 0 }: ScheduleOptions): number[] {
   if (!(fps > 0) || !Number.isFinite(fps)) throw new RangeError(`invalid frame rate: ${fps}`)
   if (!(durationS > 0) || !Number.isFinite(durationS)) throw new RangeError(`invalid duration: ${durationS}`)
   const ramp = Math.max(2, Math.round(durationS * fps))
@@ -127,11 +122,18 @@ export function buildFrameSchedule({
   const frames = new Array<number>(before + ramp + after)
   let i = 0
   for (let k = 0; k < before; k++) frames[i++] = 0
-  for (let k = 0; k < ramp; k++) {
-    const f = k / (ramp - 1)
-    const progress = k === 0 ? 0 : k === ramp - 1 ? 1 : progressAt ? progressAt(f * durationS) : f
-    frames[i++] = Math.min(1, Math.max(0, progress))
-  }
-  for (let k = 0; k < after; k++) frames[i++] = 1
+  for (let k = 0; k < ramp; k++) frames[i++] = (k / (ramp - 1)) * durationS
+  for (let k = 0; k < after; k++) frames[i++] = durationS
   return frames
+}
+
+/**
+ * Progress value of every frame of the film (`buildFrameTimes`): `progressAt(time)`, exactly 0 at time 0 and 1 at
+ * `durationS`.
+ */
+export function buildFrameSchedule(options: ScheduleOptions): number[] {
+  const { durationS, progressAt } = options
+  return buildFrameTimes(options).map((t) =>
+    t <= 0 ? 0 : t >= durationS ? 1 : Math.min(1, Math.max(0, progressAt ? progressAt(t) : t / durationS)),
+  )
 }
