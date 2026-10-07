@@ -92,8 +92,23 @@ Lancer `git status` et `npm run typecheck` en premier.
      champs (texte, sous-titre, position, taille, début, durée ; libellé, durée, caméra ; style, durée) ; Espace, Suppr,
      flèches, Échap ; Ctrl+molette (zoom autour du pointeur, pas de zoom de la page) et défilement horizontal ; focus visible
      sur les blocs ; contrastes de la pastille « modifié » sur fond encre ; légende de couleur de la trace en bas à gauche.
-   - Incréments suivants : 3 piste des textes dans l'habillage, 4 piste des médias (accès aux fichiers derrière une
-     abstraction, pour le web et Tauri).
+   - **Incrément 3 (textes de la timeline dans le film) et crédits des sources incrustés — faits, non commités** :
+     `drawOverlay(…, extras)` reçoit le temps du film (`OverlayTime`, `overlayTime(clock, progress, timeS)`), les textes
+     (`settings.film.texts`, fondus 0,4 s, style du « Texte libre », empilés par ancre, un tiers de largeur à côté d'un texte
+     d'une autre ancre de la rangée) et les crédits (`overlayCredits`, mêmes chaînes que la barre d'état ; réglage
+     `overlay.credits { enabled, position }`, activés par défaut et pour les anciens projets, dessinés même habillage
+     désactivé). Cartes d'ouverture / clôture calées sur le temps du film (première image → ouverture + `end` × vol ;
+     ouverture + `start` × vol → dernière image), étiquettes 3D comprises. Export : une image tenue est rendue à nouveau
+     quand l'habillage minuté change (`overlayTimedState`). Détail : ARCHITECTURE.md, « Habillage du film ».
+   - **Contrôle visuel à faire (incrément 3 et crédits)** : texte de la timeline dans les 3 styles (aperçu et export,
+     tailles 0,5 et 2), fondus d'entrée / sortie, sous-titre, deux textes à la même ancre (empilés) et à deux ancres d'une
+     rangée (pas de chevauchement), texte long (deux lignes puis « … »), texte posé pendant un arrêt « fixe » (fondu
+     visible à l'export) ; carte d'ouverture pendant le plan d'ouverture puis effacée peu après le départ, carte de clôture
+     tenue pendant la clôture, étiquettes 3D effacées en même temps ; ligne des crédits dans les 4 coins et les 3 styles, sur
+     neige et sur forêt, en 9:16 (repliée sur deux lignes ?), en 720p (lisibilité), avec météo et repères chargés, sans
+     habillage, et absente une fois décochée ; recouvrement possible avec la légende de couleur de la trace (bas à gauche de
+     l'aperçu, hors export).
+   - Incrément suivant : 4 piste des médias (accès aux fichiers derrière une abstraction, pour le web et Tauri).
 
 Pour intégrer proprement : finir chaque chantier, `npx vitest run --maxWorkers=1` + typecheck + lint verts, puis un commit
 par fonctionnalité (les fichiers partagés `store.ts`, `document.ts`, fixtures de test contiennent des morceaux de plusieurs
@@ -103,7 +118,7 @@ chantiers : committer par hunks ou tout ensemble une fois l'arbre vert).
 
 - Contrôle visuel groupé : mini-carte dans les 3 styles, polices hors ligne, ralentis (sensation à 35 % sur ±1 km), course
   fantôme, étiquettes effacées sous les cartes, export complet 1080p d'un film de 60 s.
-- Phase 4 restante : timeline de montage (incréments 3 et 4, ci-dessus), caméra par étape et images-clés, plan de situation
+- Phase 4 restante : timeline de montage (incrément 4, ci-dessus), caméra par étape et images-clés, plan de situation
   (ouverture depuis le pays), ouverture / fermeture « balayage », vitesse par portion à la main, couleurs et polices par widget, thèmes de film, éditeur en modes
   (Trajet, Carte, Habillage, Survol, Prises de vue). Pastille « modifié » + « Par défaut » : faite par panneau,
   contrôle visuel à faire (position sur la ligne du titre, titres longs, bouton désactivé pendant un export) ; reste le

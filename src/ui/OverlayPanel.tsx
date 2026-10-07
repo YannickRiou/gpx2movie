@@ -4,6 +4,7 @@ import { hasMetric } from '../flyover/trackColor'
 import { fileToLogoDataUrl } from '../overlay/assets'
 import {
   COUNTER_IDS,
+  CREDITS_POSITIONS,
   END_START_MAX,
   END_START_MIN,
   OVERLAY_ANCHORS,
@@ -19,7 +20,7 @@ import {
   WIDGET_SIZE_MAX,
   WIDGET_SIZE_MIN,
 } from '../overlay/settings'
-import type { CounterId, OverlayAnchor, OverlaySettings } from '../overlay/settings'
+import type { CounterId, CreditsPosition, OverlayAnchor, OverlaySettings } from '../overlay/settings'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
 import { ModifiedMarker } from './ModifiedMarker'
@@ -130,7 +131,10 @@ function WidgetGroup({ label, enabled, onToggle, children }: { label: string; en
   )
 }
 
-/** "Habillage" section: film overlay style and widgets (titles, counters, profile, mini-map, weather, logo, free text). */
+/**
+ * "Habillage" section: film overlay style and widgets (titles, counters, profile, mini-map, weather, logo, free
+ * text), and the credits of the sources, burned in even without the rest of the overlay.
+ */
 export function OverlayPanel() {
   const overlay = useAppStore((s) => s.settings.overlay)
   const setSetting = useAppStore((s) => s.setSetting)
@@ -342,6 +346,31 @@ export function OverlayPanel() {
           </WidgetGroup>
         </>
       )}
+
+      <WidgetGroup label="Crédits des sources" enabled={overlay.credits.enabled} onToggle={(enabled) => setWidget('credits', { enabled })}>
+        <div className="field">
+          <label className="field__label" htmlFor={`${id}-credits`}>
+            Position
+          </label>
+          <select
+            id={`${id}-credits`}
+            className="select"
+            value={overlay.credits.position}
+            onChange={(e) => setWidget('credits', { position: e.currentTarget.value as CreditsPosition })}
+          >
+            {CREDITS_POSITIONS.map((position) => (
+              <option key={position} value={position}>
+                {OVERLAY_ANCHOR_LABELS[position]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </WidgetGroup>
+      <p className="field__hint">
+        Relief, imagerie, météo et repères OpenStreetMap : leurs licences demandent de citer les sources dans le film
+        publié. Les crédits sont incrustés en petit dans chaque image exportée ; si vous les retirez, citez les sources
+        ailleurs (description de la vidéo, générique).
+      </p>
     </section>
   )
 }

@@ -262,12 +262,12 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 - **Légende** `TrackLegend` (en bas à gauche de la vue 3D, seulement si `trackColorBy !== 'none'`) : dégradé, bornes avec unités,
   pastille « Sans donnée » s'il manque des valeurs.
 
-## Film et timeline (phase 4, incréments 1 et 2 sur 4 : modèle, moteur, timeline)
+## Film et timeline (phase 4, incréments 1 à 3 sur 4 : modèle, moteur, timeline, textes)
 
 - **Principe** : comme un logiciel de montage, « la base, c'est le GPX » : le survol continu de la première trace porte le
   film ; des éléments posés sur des pistes séparées s'y ajoutent. Incréments : 1 modèle pur et moteur (fait) ; 2 timeline sous
-  la vue (pistes, glisser pour déplacer / étirer, inspecteur ; fait) ; 3 piste des textes dessinée dans l'habillage ; 4 piste des
-  médias (images, vidéos).
+  la vue (pistes, glisser pour déplacer / étirer, inspecteur ; fait) ; 3 piste des textes dessinée dans l'habillage (fait) ;
+  4 piste des médias (images, vidéos).
 - **Modèle** (`src/film/model.ts`, `settings.film` : enregistré dans le document de projet, annulable, validé par
   `isValidFilm` dans `SETTING_CHECKS`, aucune migration : un ancien projet reçoit `DEFAULT_FILM`) :
   `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut', durationS }` (1–30 s ; défaut descente 6 s / 5 s) ;
@@ -341,8 +341,9 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 - **Inspecteur** (au-dessus de la timeline, à droite de la vue, 300 px) : plan (style, durée), arrêt (libellé, durée,
   caméra orbite / fixe, position et fenêtre), texte (texte, sous-titre, position, taille, début, durée). Les modifications
   passent par `setSetting` (frappes fusionnées en un pas) ; retoucher un arrêt généré écrit d'abord tous les arrêts.
-- Limites (incréments suivants) : les cartes d'ouverture et de clôture de l'habillage sont en fractions de progression, donc
-  affichées pendant tout le plan d'ouverture / de clôture ; les textes et médias ne sont pas encore dessinés ; l'aperçu 3D ne
+- **Textes dans le film** (incrément 3) : dessinés par l'habillage (voir « Habillage du film », temps du film et textes de
+  la timeline), dans l'aperçu comme à l'export.
+- Limites (incréments suivants) : les médias ne sont pas encore dessinés ; l'aperçu 3D ne
   suit un geste qu'au relâcher ; pas de défilement automatique quand on glisse au bord ; en mode `'temps-forts'`, le curseur
   « pause » du rythme ne règle pas la durée des arrêts générés (4 s, à retoucher par arrêt).
 
@@ -450,13 +451,36 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   widgets — carte d'ouverture, carte de clôture, compteurs, profil, mini-carte (flèche du nord en option), logo, texte libre,
   météo — chacun avec `enabled`, `anchor`, `size`. Les widgets ajoutés après le premier format (`minimap`) sont complétés par
   leur défaut avant validation (`withOverlayDefaults`, via `SETTING_UPGRADES` dans `src/project/document.ts`) : anciens projets
-  et préréglages se chargent toujours. Les temps sont des fractions du survol (fondus de 1 % et 2,5 %) ; les widgets en direct s'effacent pendant les cartes.
+  et préréglages se chargent toujours (`minimap` désactivée, `credits` activés). Les widgets en direct s'effacent pendant les
+  cartes.
   Logo en data URL PNG d'au plus 512 px (projets autonomes). Validation : `isValidOverlay` (`SETTING_CHECKS`).
+- **Temps du film** : `drawOverlay(ctx, frame, settings, size, assets, extras)` ; `extras.time` (`OverlayTime` : temps du film
+  de l'image, durées de l'ouverture, du vol et du film, par `overlayTime(clock, progress, timeS)` = `timeS ??
+  clock.timeAtProgress(progress)`, comme `FlyoverRig`) ; sans horloge, `progressTime(progress)` (vol d'une seconde, temps =
+  progression : les tests et l'ancien comportement). Les cartes sont calées sur le temps du film : la carte d'ouverture
+  apparaît à la première image (plan d'ouverture compris) et s'efface à `ouverture + title.end × vol` ; la carte de clôture
+  apparaît à `ouverture + end.start × vol` et reste jusqu'à la dernière image (plan de clôture compris) ; fondus de 1 % et
+  2,5 % du vol. Les étiquettes 3D (`Labels`) lisent la même opacité (`cardOpacityAt(time, …)`).
+- **Textes de la timeline** (`extras.texts` = `settings.film.texts`) : visibles dans `[startS, startS + durationS)` du temps
+  du film, fondus de 0,4 s (au plus un quart de la durée, `filmTextOpacity`), même style que le « Texte libre » (corps, panneau
+  du style, taille × `size`, marges de sécurité), texte sur deux lignes au plus (la seconde coupée par « … »), sous-titre en
+  dessous au style des libellés. Ils s'ajoutent après les widgets de leur ancre (empilés) ; un texte seul sur sa rangée
+  (haut, milieu, bas) peut prendre toute la largeur sûre, à côté d'un texte d'une autre ancre de la rangée un tiers
+  (`filmTextMaxWidths`) : pas de chevauchement entre textes. Ils ne s'effacent pas sous les cartes.
+- **Crédits des sources** (`settings.overlay.credits { enabled, position }`, activés par défaut, quatre coins) : petite ligne
+  le long du bord, hors des marges de sécurité, sur un fond discret propre à chaque style (`theme.credits` : encre translucide
+  et texte blanc pour Éditorial et Diffusion, papier et encre pour Application, lisible sur neige comme sur forêt), repliée
+  sur la largeur sûre si elle est longue. Contenu : `overlayCredits` (`data.ts`), les mêmes chaînes que la barre d'état
+  (relief et imagerie en cours, Open-Meteo quand la météo est chargée, OpenStreetMap quand des repères le sont), lu des
+  stores par `overlayExtras` (`exportOverlay.ts`) pour l'aperçu comme pour l'export. Dessinés même habillage désactivé
+  (l'aperçu monte `OverlayCanvas` dès que l'un des deux est actif). Crédits désactivés, le crédit Open-Meteo reste dessiné
+  seul quand la météo est affichée (comme avant) ; activés, il rejoint la ligne. Les désactiver revient à citer les sources
+  ailleurs (texte du panneau Habillage).
 - **Polices** : un canvas ne déclenche pas seul le téléchargement des polices web ; `loadOverlayFonts()` les demande avant la
   première image, l'export doit l'attendre aussi. Polices embarquées (`src/ui/fonts.css`, `public/fonts/`) :
   Fraunces 300–700, IBM Plex Sans et Sans Condensed disponibles hors ligne.
 - **Météo** : widget et ligne de la carte de clôture (`weatherWidgetData`, `summarizeOuting`), avec le crédit Open-Meteo dessiné
-  en bas de l'image dès qu'ils sont visibles.
+  dès qu'ils sont visibles (dans la ligne des crédits, ou seul en bas à droite si elle est désactivée).
 
 ## Export vidéo (phase 5)
 
@@ -469,7 +493,8 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 - Le calendrier suit l'horloge du film (voir « Film et timeline ») : la rampe dure `clock.totalTime()` (ouverture et clôture
   comprises) et l'image k montre `clock.progressAtTime(k / (n − 1) × durée)` à ce temps du film (ralentis et arrêts comme dans
   l'aperçu ; les images tenues réutilisent l'image déjà composée, sauf quand la vue bouge avec le temps : plans d'ouverture
-  et de clôture, arrêts en orbite, styles orbite et cinéma ; les images tenues du début et de la fin restent figées sur les
+  et de clôture, arrêts en orbite, styles orbite et cinéma, ou quand l'habillage minuté change (`overlayTimedState` :
+  opacités des cartes et des textes de la timeline ; un texte qui apparaît pendant un arrêt fixe est donc rendu) ; les images tenues du début et de la fin restent figées sur les
   temps 0 et durée).
 - Pour chaque progression (`renderSettledFrame`, `src/export/capture.ts`), `advance` jusqu'à ce que la vue n'attende plus
   aucune tuile réellement dessinée (`stats.pendingVisibleTiles`, limite 5 s par image, comptée « incomplète »), puis les
@@ -478,7 +503,8 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   de plus d'1 m, jamais après un dépassement de délai. Toutes les 5 images rendues, les tuiles des images +5 à +40 sont
   demandées à l'avance (`engine.prefetch`).
 - L'image WebGL est composée dans la même tâche que le rendu sur un `OffscreenCanvas` (dégradé de ciel, image, puis habillage
-  `drawOverlay(ctx, progress, w, h)` après chargement de ses polices), puis encodée par mediabunny (WebCodecs) : MP4 H.264,
+  `DrawOverlay(ctx, { progress, time }, w, h)` après chargement de ses polices, `time` = `overlayTime(horloge, progression,
+  temps de l'image)` ; image fixe : temps de lecture courant), puis encodée par mediabunny (WebCodecs) : MP4 H.264,
   sinon MP4 HEVC, WebM VP9, WebM VP8, le premier accepté par `VideoEncoder.isConfigSupported` ; débit = pixels × fps × 0,06 /
   0,10 / 0,16 bit selon la qualité, corrigé par codec, borné à 1–80 Mbit/s ; image-clé toutes les 2 s ; fichier en mémoire.
 - Tout est restauré en fin d'export, en cas d'erreur ou d'annulation (taille, ratio de pixels, frameloop, pointeur,

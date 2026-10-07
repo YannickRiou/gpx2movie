@@ -18,6 +18,7 @@ import type { FilmClock } from '../film/clock'
 import { computeFilmView, filmViewMovesWithTime, type FilmView } from '../flyover/filmCamera'
 import { buildTrackPath, type TrackPath } from '../flyover/path'
 import { loadOverlayFonts } from '../overlay/assets'
+import { overlayTime, overlayTimedState } from '../overlay/draw'
 import { useTerrainContext } from '../scene/TerrainLayer'
 import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
 import { useFilmClock } from '../scene/usePacing'
@@ -211,7 +212,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
 
     if (request.still) {
       const complete = await renderSettledFrame(schedule[0], frameDeps)
-      composeFrame(ctx, canvas, request.still.progress, width, height, deps.overlay())
+      const { progress } = request.still
+      composeFrame(ctx, canvas, { progress, time: overlayTime(filmClock, progress, saved.timeS) }, width, height, deps.overlay())
       exportStore().reportFrame(1, performance.now())
       exportStore().finalizing()
       const blob = await compositor.convertToBlob({ type: request.still.type, quality: STILL_JPEG_QUALITY })
@@ -229,22 +231,28 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     }
 
     session = await createVideoEncoder(compositor, request)
-    const style = useAppStore.getState().settings.camera.style
+    const settings = useAppStore.getState().settings
+    /** opacities of the timed overlay (cards, timeline texts) at a frame, '' without overlay */
+    const overlayKey = (progress: number, timeS: number) =>
+      deps.overlay() ? overlayTimedState(settings.overlay, settings.film.texts, overlayTime(filmClock, progress, timeS)).join() : ''
     let previous = Number.NaN
     /** the view of the last rendered frame moved with time */
     let previousTimed = false
+    let previousOverlay = ''
     for (let i = 0; i < schedule.length; i++) {
       if (isCanceled()) throw new ExportCanceledError()
       const progress = schedule[i]
-      // held frames (holds, stops) repeat the composed image as is, unless the view moves with time
-      const timed = filmViewMovesWithTime(filmClock.stateAt(times[i]), style)
-      if (progress !== previous || ((timed || previousTimed) && times[i] !== frameTimeS)) {
+      // held frames (holds, stops) repeat the composed image as is, unless the view or the overlay moves with time
+      const timed = filmViewMovesWithTime(filmClock.stateAt(times[i]), settings.camera.style)
+      const overlayNow = overlayKey(progress, times[i])
+      if (progress !== previous || ((timed || previousTimed) && times[i] !== frameTimeS) || overlayNow !== previousOverlay) {
         frameTimeS = times[i]
         previousTimed = timed
+        previousOverlay = overlayNow
         const complete = await renderSettledFrame(progress, frameDeps)
         // same task as the last render: the drawing buffer still holds the frame
         const t0 = performance.now()
-        composeFrame(ctx, canvas, progress, width, height, deps.overlay())
+        composeFrame(ctx, canvas, { progress, time: overlayTime(filmClock, progress, frameTimeS) }, width, height, deps.overlay())
         timings.encodeMs += performance.now() - t0
         timings.rendered++
         if (!complete) timings.timeouts++

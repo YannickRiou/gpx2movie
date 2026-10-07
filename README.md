@@ -42,7 +42,7 @@ Ce qui existe aujourd'hui :
 | Repères | sommets, cols, refuges, lacs… tirés d'OpenStreetMap ; montées détectées et classées (cat. 4 à HC) ; étiquettes 3D |
 | Trace | colorée selon la vitesse, la pente, l'altitude, le cardio, la cadence, la puissance ou la température |
 | Course fantôme | plusieurs traces rejouées ensemble, avec un classement en direct |
-| Habillage | titres, compteurs, profil, mini-carte, météo, logo et texte incrustés dans le film ; trois styles |
+| Habillage | titres, compteurs, profil, mini-carte, météo, logo, texte et textes de la timeline incrustés dans le film, crédits des sources ; trois styles |
 | Export | vidéo MP4 ou WebM en 16:9, 9:16, 1:1, 4:5 ou 21:9, de 720p à 4K, à 24, 30 ou 60 images/s ; image fixe PNG ou JPEG |
 | Projet | fichier de projet à enregistrer et rouvrir, annuler / rétablir, préréglages |
 
@@ -286,7 +286,8 @@ Toutes les sources sont ouvertes et sans clé. Le code les déclare dans `src/te
 | OpenStreetMap (API Overpass) | repères | `overpass-api.de`, secours `maps.mail.ru` | « © contributeurs OpenStreetMap (ODbL) » |
 
 La barre d'état affiche les attributions du relief et de l'imagerie en cours. Celles d'Open-Meteo et d'OpenStreetMap
-s'ajoutent quand la météo ou les repères sont chargés.
+s'ajoutent quand la météo ou les repères sont chargés. Les mêmes lignes sont incrustées dans les vidéos et images exportées
+([voir Licences](#licences)).
 
 | Source | Licence | À savoir |
 |---|---|---|
@@ -339,8 +340,10 @@ Fichiers embarqués :
 
 **Vidéos exportées.** Elles contiennent des données cartographiques sous leur propre licence
 ([voir les sources](#sources-de-données-et-attributions)). Vous devez donc citer ces sources quand vous diffusez une
-vidéo. L'application ne les incruste pas dans l'image, sauf le crédit Open-Meteo quand la météo est affichée. Recopiez
-les lignes de la barre d'état dans la description de la vidéo, ou dans le widget « Texte libre ».
+vidéo. L'application les incruste en petit dans un coin de chaque vidéo et image fixe exportée (mêmes lignes que la barre
+d'état : relief, imagerie, et Open-Meteo / OpenStreetMap quand la météo ou les repères sont chargés). Ces crédits se
+désactivent dans le panneau Habillage (« Crédits des sources ») : citez alors les sources ailleurs, par exemple dans la
+description de la vidéo.
 
 ## Architecture et contribution
 
@@ -365,7 +368,7 @@ Conventions :
 | 1 — Visionneuse (fait) | import GPX / FIT, relief streamé, imagerie composée, trace plaquée, caméra orbitale |
 | 2 — Survol (fait) | caméra de survol automatique le long de la trace, timeline, lecture / pause, vitesse, marqueur de progression, profil altimétrique |
 | 3 — Atmosphère (en cours) | fait : ciel et diffusion atmosphérique (modèle Takram), brume de distance, soleil et heure solaire, ciel de nuit étoilé, exposition automatique et correction, ombres portées du relief, météo réelle dans la scène (soleil voilé, brume, brouillard, ombres adoucies), fonds de carte topographiques (Plan IGN, carte nationale suisse, OpenTopoMap) ; reste : eau réfléchissante (masque d'eau, reflets du ciel et du soleil, vagues), hauteurs calées sur le niveau de la mer (géoïde) — l'aquarelle (Stadia) exige une clé, exclue |
-| 4 — Personnalisation (en cours) | fait : document de projet (enregistrer / ouvrir un fichier autonome), annuler / rétablir, préréglages, pastille « modifié » et bouton rétablir par panneau, modèle du film et son moteur, timeline de montage sous la vue (incréments 1 et 2 sur 4) ; à venir : textes et médias de la timeline dans le film, tout le film est réglable : caméra, rythme, titres, données affichées, style de trace, points d'intérêt, rendu, format (détail ci-dessous) |
+| 4 — Personnalisation (en cours) | fait : document de projet (enregistrer / ouvrir un fichier autonome), annuler / rétablir, préréglages, pastille « modifié » et bouton rétablir par panneau, modèle du film et son moteur, timeline de montage sous la vue et ses textes dans le film (incréments 1 à 3 sur 4) ; à venir : médias de la timeline dans le film, tout le film est réglable : caméra, rythme, titres, données affichées, style de trace, points d'intérêt, rendu, format (détail ci-dessous) |
 | 5 — Export vidéo (en cours) | fait : rendu hors écran image par image, formats paysage, vertical, carré, portrait, cinéma × résolutions 720p à 4K (24 / 30 / 60 i/s ; trois qualités), attente des seules tuiles visibles et préchargement, habillage incrusté, encodage MP4 H.264 (repli HEVC, WebM VP9 / VP8) via WebCodecs, progression, temps restant, annulation, téléchargement, image fixe PNG / JPEG de la vue courante aux mêmes formats × résolutions, habillage compris ; reste : écriture directe sur disque pour les films longs |
 | 6 — Application de bureau | emballage Tauri (binaire natif, accès disque), stockage local SQLite des projets et préréglages, packs de tuiles hors ligne |
 | 7 — Au-delà du survol | fonctionnalités propres à OpenFlyover : lumière et météo réelles de la sortie, trace colorée par les données, course fantôme, vidéo embarquée synchronisée, repères automatiques, remonter le temps, rendu en lot, affiche, calage musical, reconnaissance (détail ci-dessous) |
@@ -378,7 +381,7 @@ ce qui sera rendu.
 
 | Domaine | Réglages |
 |---|---|
-| Timeline (montage) | comme un logiciel de montage, la base est le survol continu de la trace, avec des pistes séparées au-dessus : arrêts (orbite ou caméra fixe), titres et textes placés et étirés librement dans le temps, points d'intérêt avec arrêt, médias (images, vidéos) ; film assemblé automatiquement au chargement (ouverture en vue d'ensemble → survol avec arrêts aux sommets, cols et montées → clôture en vue d'ensemble), puis retouché. Quatre incréments : 1 — modèle du film et moteur (horloge du film, plans d'ouverture et de clôture « descente » ou « saut », arrêts, aperçu et export identiques) **fait** ; 2 — timeline sous la vue (pistes plans / arrêts / textes, glisser pour déplacer et étirer avec aimantation, zoom, inspecteur, film assemblé avec un arrêt en orbite à chaque temps fort) **fait** ; 3 — piste des textes dessinée dans l'habillage ; 4 — piste des médias |
+| Timeline (montage) | comme un logiciel de montage, la base est le survol continu de la trace, avec des pistes séparées au-dessus : arrêts (orbite ou caméra fixe), titres et textes placés et étirés librement dans le temps, points d'intérêt avec arrêt, médias (images, vidéos) ; film assemblé automatiquement au chargement (ouverture en vue d'ensemble → survol avec arrêts aux sommets, cols et montées → clôture en vue d'ensemble), puis retouché. Quatre incréments : 1 — modèle du film et moteur (horloge du film, plans d'ouverture et de clôture « descente » ou « saut », arrêts, aperçu et export identiques) **fait** ; 2 — timeline sous la vue (pistes plans / arrêts / textes, glisser pour déplacer et étirer avec aimantation, zoom, inspecteur, film assemblé avec un arrêt en orbite à chaque temps fort) **fait** ; 3 — piste des textes dessinée dans l'habillage (aperçu et export, fondus, empilés par position ; cartes d'ouverture et de clôture calées sur le temps du film) **fait** ; 4 — piste des médias |
 | Rythme | **fait** : durée totale réglable (15 s–10 min) ; ralentis et pauses aux temps forts (sommets des montées, cols franchis, sommets proches), durée du film conservée ou allongée ; à faire : vitesse par portion choisie à la main, plan de situation (ouverture sur le pays ou la région qui plonge vers la trace), ouverture et fermeture « balayage » ou « saut », transitions entre sections réglables |
 | Caméra | **fait** : styles poursuite, balancement (hélicoptère), orbite, vue du dessus, plan cinématique ; préréglages nommés ; distance, tangage, cap, lissage ; à faire : caméra propre à chaque étape (photo, lieu, note), images-clés sur la timeline |
 | Titres et textes | titre d'ouverture, sous-titres, générique de fin, étiquettes posées sur le relief (sommets, cols, villages) ; police, couleur, position, apparition et durée |
