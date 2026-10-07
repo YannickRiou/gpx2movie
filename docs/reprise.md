@@ -1,14 +1,15 @@
 # État du projet et reprise
 
-Mis à jour le 2026-10-07. Branche de travail : `phase3-atmosphere` (non poussée). `master` distant contient les phases 1–2
-réécrites sans trailers (`34ce39a`) ; le force-push de `master` reste à faire depuis un compte ayant les droits sur
-`YannickRiou/gpx2movie` :
+Mis à jour le 2026-10-07. `master` réécrit sans trailers et poussé. PR « phases 2 à 5 » :
+https://github.com/YannickRiou/gpx2movie/pull/1 (`phase3-atmosphere` → `master`, à fusionner par l'utilisateur). Travail en
+cours sur la branche `timeline` (partie de `phase3-atmosphere`), une PR par fonctionnalité.
+
+Pousser : `~/.gitconfig` réécrit les URL GitHub vers le SSH du compte `yriouvortex` (sans droits sur le dépôt) et git 2.25
+ignore `GIT_CONFIG_GLOBAL` ; passer par le compte `YannickRiou` de `gh` avec un HOME temporaire :
 
 ```bash
-git push --force-with-lease=master:a607fc8d3cff17764b0318f0b66d7adfd92a0952 origin master
+G=$HOME/.config/gh; T=$(mktemp -d); HOME=$T GH_CONFIG_DIR=$G git -c credential.helper='!gh auth git-credential' push https://github.com/YannickRiou/gpx2movie.git <branche>; rm -rf $T
 ```
-
-Puis supprimer la sauvegarde locale : `git branch -D backup/avant-reecriture`.
 
 ## Environnement (WSL)
 
