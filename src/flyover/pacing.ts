@@ -15,12 +15,13 @@
  * 3. Moving time u(x) = c · ∫₀ˣ dx / (v0 · r(x)), tabulated on a grid that is regular inside every window
  *    (`WINDOW_SAMPLES` steps) and has the highlights as nodes; the speed is constant on each grid step, so
  *    u ↔ x is piecewise linear and exactly invertible.
- * 4. Pauses: highlights closer than `windowM` form one cluster, paused once at its highlight nearest its
- *    middle. A pause adds exactly `pauseS` to the film: in film time, the moving clock du/dτ eases from 1 to 0
- *    over E (raised cosine), holds 0 for `pauseS` − E, eases back to 1 over E; E = min(`PAUSE_EASE_S`, pauseS,
- *    room before / after the neighbouring pauses and the ends), so the marker never stops abruptly.
+ * 4. Pauses (stops of the film, `flightPacing`; `pacingFromHighlights` derives them as before): highlights
+ *    closer than `windowM` form one cluster, paused once at its highlight nearest its middle for `pauseS`. A
+ *    pause of length P adds exactly P to the film: in film time, the moving clock du/dτ eases from 1 to 0 over E
+ *    (raised cosine), holds 0 for P − E, eases back to 1 over E; E = min(`PAUSE_EASE_S`, P, room before / after
+ *    the neighbouring pauses and the ends), so the marker never stops abruptly.
  * 5. Duration: `keepDuration` scales the base speed (factor c) so that the film lasts D at ×1 whatever the
- *    highlights; pauses then take at most `MAX_PAUSE_SHARE` of D (shortened evenly beyond). Without it,
+ *    highlights; pauses then take at most `MAX_PAUSE_SHARE` of D (shortened in proportion beyond). Without it,
  *    c = 1: slow-downs and pauses lengthen the film.
  *
  * No highlight (or pacing disabled, or nothing to slow down nor pause) gives the identity pacing, exactly the
@@ -87,11 +88,14 @@ export function isValidPacing(pacing: PacingSettings): boolean {
 // Highlights
 // ---------------------------------------------------------------------------
 
+/** A pass crossed by the track or a peak next to it. */
+export function isHighlightLandmark(l: Landmark): boolean {
+  return (l.kind === 'pass' && l.distanceM <= CROSSED_PASS_M) || (l.kind === 'peak' && l.distanceM <= PEAK_NEAR_M)
+}
+
 /** Positions (metres along the track) of the landmarks that are highlights: passes crossed, peaks nearby. */
 export function landmarkHighlights(landmarks: readonly Landmark[]): number[] {
-  return landmarks
-    .filter((l) => (l.kind === 'pass' && l.distanceM <= CROSSED_PASS_M) || (l.kind === 'peak' && l.distanceM <= PEAK_NEAR_M))
-    .map((l) => l.alongM)
+  return landmarks.filter(isHighlightLandmark).map((l) => l.alongM)
 }
 
 /** Sorted highlight positions (metres along the track) selected by the settings. */
@@ -124,9 +128,21 @@ export interface PacingPosition {
 
 export interface PacingPause {
   progress: number
-  /** film time (seconds at ×1) when the marker stops and starts again */
+  /** film time (seconds at ×1) when the marker starts slowing down to the stop (start of the ease-in) */
+  startS: number
+  /** film time when the marker stops and starts again */
   holdStartS: number
   holdEndS: number
+  /** film time when the marker is back to its speed (end of the ease-out) */
+  endS: number
+  /** time added to the film (seconds at ×1, after the `keepDuration` cap) */
+  durationS: number
+}
+
+/** A pause inserted in the flight: the marker stops at `atM` metres along the track, `durationS` added to the film. */
+export interface FlightStop {
+  atM: number
+  durationS: number
 }
 
 export interface Pacing {
@@ -216,7 +232,7 @@ function invertEase(ease: (s: number, e: number) => number, target: number, e: n
 }
 
 /** Highlights closer than `gapM` to the previous one form a cluster; each cluster's member nearest its middle. */
-function pausePositions(sorted: readonly number[], gapM: number): number[] {
+export function pausePositions(sorted: readonly number[], gapM: number): number[] {
   const out: number[] = []
   let start = 0
   for (let i = 1; i <= sorted.length; i++) {
@@ -232,7 +248,8 @@ function pausePositions(sorted: readonly number[], gapM: number): number[] {
 
 /**
  * Pacing of a track `lengthM` long with highlights at `highlightsM` (metres along it), for a flyover of
- * `durationS` at ×1. The identity pacing when disabled, without length or highlight, or with nothing to do.
+ * `durationS` at ×1, with the automatic pauses (one per cluster of highlights, `pauseS` each). The identity
+ * pacing when disabled, without length or highlight, or with nothing to do.
  */
 export function pacingFromHighlights(
   lengthM: number,
@@ -240,18 +257,36 @@ export function pacingFromHighlights(
   durationS: number,
   settings: PacingSettings,
 ): Pacing {
-  const slows = settings.slowFactor < 1
-  const pausesOn = settings.pauseS > 0
-  if (!settings.enabled || !(lengthM > 0) || !(durationS > 0) || highlightsM.length === 0 || (!slows && !pausesOn)) {
+  if (!settings.enabled || !(lengthM > 0) || !(durationS > 0) || highlightsM.length === 0) {
     return identityPacing(durationS > 0 ? durationS : 1)
   }
-  const L = lengthM
-  const W = settings.windowM
-  const highlights = [...new Set(highlightsM.map((h) => clamp(h, 0, L)))].sort((a, b) => a - b)
-  const pauseAt = pausesOn ? pausePositions(highlights, W) : []
+  const highlights = [...new Set(highlightsM.map((h) => clamp(h, 0, lengthM)))].sort((a, b) => a - b)
+  const stops = settings.pauseS > 0 ? pausePositions(highlights, settings.windowM).map((atM) => ({ atM, durationS: settings.pauseS })) : []
+  return flightPacing(lengthM, highlights, durationS, settings, stops)
+}
 
-  // grid: track ends, highlights, regular steps across every window
-  const nodes = [0, L, ...highlights]
+/**
+ * Pacing of the flight with the slow-downs at `highlightsM` (when `settings.enabled`) and the given pauses
+ * (`stops`, sorted by position; applied whatever `settings.enabled`). The identity pacing without length, or
+ * without slow-down nor pause.
+ */
+export function flightPacing(
+  lengthM: number,
+  highlightsM: readonly number[],
+  durationS: number,
+  settings: PacingSettings,
+  stops: readonly FlightStop[],
+): Pacing {
+  const L = lengthM
+  if (!(L > 0) || !(durationS > 0)) return identityPacing(durationS > 0 ? durationS : 1)
+  const highlights = settings.enabled ? [...new Set(highlightsM.map((h) => clamp(h, 0, L)))].sort((a, b) => a - b) : []
+  const slows = highlights.length > 0 && settings.slowFactor < 1
+  if (!slows && stops.length === 0) return identityPacing(durationS)
+  const W = settings.windowM
+  const pauseAt = stops.map((s) => clamp(s.atM, 0, L))
+
+  // grid: track ends, highlights, pauses, regular steps across every window
+  const nodes = [0, L, ...highlights, ...pauseAt]
   if (slows) {
     const half = WINDOW_SAMPLES / 2
     for (const h of highlights) {
@@ -273,9 +308,13 @@ export function pacingFromHighlights(
     raw[i] = raw[i - 1] + ((xs[i] - xs[i - 1]) * durationS) / (L * r)
   }
   const moving = raw[n - 1]
-  const pauseS =
-    settings.keepDuration && pauseAt.length > 0 ? Math.min(settings.pauseS, (MAX_PAUSE_SHARE * durationS) / pauseAt.length) : settings.pauseS
-  const scale = settings.keepDuration ? (durationS - pauseAt.length * pauseS) / moving : 1
+  const wanted = stops.reduce((sum, s) => sum + s.durationS, 0)
+  const share = settings.keepDuration && wanted > 0 ? Math.min(1, (MAX_PAUSE_SHARE * durationS) / wanted) : 1
+  const pauseS = stops.map((s) => s.durationS * share)
+  /** time added by the pauses before pause k (`added[k]`), and by all of them (`added[pauseS.length]`) */
+  const added = [0]
+  for (const p of pauseS) added.push(added[added.length - 1] + p)
+  const scale = settings.keepDuration ? (durationS - added[pauseS.length]) / moving : 1
 
   const xTable = Float64Array.from(xs)
   const uTable = raw.map((u) => u * scale)
@@ -284,12 +323,12 @@ export function pacingFromHighlights(
   // pauses: moving time of the paused node, eases limited by the neighbours and the ends
   const pu = pauseAt.map((x) => uTable[lastAtOrBelow(xTable, x)])
   const ease = pu.map((u, k) =>
-    Math.min(PAUSE_EASE_S, pauseS, 2 * u, 2 * (U - u), k > 0 ? u - pu[k - 1] : Infinity, k < pu.length - 1 ? pu[k + 1] - u : Infinity),
+    Math.min(PAUSE_EASE_S, pauseS[k], 2 * u, 2 * (U - u), k > 0 ? u - pu[k - 1] : Infinity, k < pu.length - 1 ? pu[k + 1] - u : Infinity),
   )
   /** film time at which each pause starts easing in, and its moving time then */
-  const startT = pu.map((u, k) => u - ease[k] / 2 + k * pauseS)
+  const startT = pu.map((u, k) => u - ease[k] / 2 + added[k])
   const startU = pu.map((u, k) => u - ease[k] / 2)
-  const total = U + pauseAt.length * pauseS
+  const total = U + added[pauseS.length]
 
   const progressOfU = (u: number) => clamp(interpolate(uTable, xTable, u) / L, 0, 1)
   const uOfProgress = (progress: number) => interpolate(xTable, uTable, clamp(progress, 0, 1) * L)
@@ -299,24 +338,26 @@ export function pacingFromHighlights(
     const k = lastAtOrBelow(startT, t)
     if (k < 0) return t
     const e = ease[k]
-    const hold = pauseS - e
+    const hold = pauseS[k] - e
     const s = t - startT[k]
     if (s < e) return startU[k] + easeIn(s, e)
     if (s < e + hold) return pu[k]
     if (s < 2 * e + hold) return pu[k] + easeOut(s - e - hold, e)
-    return t - (k + 1) * pauseS
+    return t - added[k + 1]
   }
 
   const timeAtProgress = (progress: number): number => {
     if (progress >= 1) return total
     const u = uOfProgress(progress)
-    const k = lastAtOrBelow(startU, u)
+    let k = lastAtOrBelow(startU, u)
     if (k < 0) return u
+    // pauses at the same place: the first one is reached first
+    while (k > 0 && startU[k - 1] === u) k--
     const e = ease[k]
     const d = u - startU[k]
     if (d <= e / 2) return startT[k] + (d >= e / 2 ? e : invertEase(easeIn, d, e))
-    if (d < e) return startT[k] + pauseS + invertEase(easeOut, d - e / 2, e)
-    return u + (k + 1) * pauseS
+    if (d < e) return startT[k] + pauseS[k] + invertEase(easeOut, d - e / 2, e)
+    return u + added[k + 1]
   }
 
   const progressAtTime = (tS: number) => progressOfU(movingTimeAt(tS))
@@ -326,8 +367,11 @@ export function pacingFromHighlights(
     highlights: highlights.map((h) => h / L),
     pauses: pauseAt.map((x, k) => ({
       progress: x / L,
+      startS: startT[k],
       holdStartS: startT[k] + ease[k],
-      holdEndS: startT[k] + pauseS,
+      holdEndS: startT[k] + pauseS[k],
+      endS: startT[k] + pauseS[k] + ease[k],
+      durationS: pauseS[k],
     })),
     totalTime: () => total,
     progressAtTime,

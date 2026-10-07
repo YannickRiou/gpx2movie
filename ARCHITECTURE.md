@@ -44,7 +44,9 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/cameraSettings.ts` | styles et préréglages caméra | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
 | `src/flyover/climbs.ts` | montées détectées | `detectClimbs`, `climbsOf(track)` (cache par trace), seuils exportés, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
-| `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
+| `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses données par le film) ; `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
+| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `nextFilmId`, `shotDurationS` ; `autoStops`, `assembleFilm`, `filmStops` ; `buildFilmClock`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) |
+| `src/flyover/filmCamera.ts` | caméra du film | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `blendViews`, `shotBlend`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | date du soleil | `solarHourToDate(dayMs, lon, solarHour)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
@@ -192,7 +194,8 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   le film s'allonge. Désactivé ou sans temps fort : identique à `advanceProgress`. `FlyoverRig` avance le temps du film
   (`playback.timeS`, en pause du rythme la progression ne bouge pas) et repart de `pacing.positionAt` après un déplacement du
   curseur ou un changement de rythme ; la lecture ne s'arrête qu'à `pacing.totalTime()`, pause finale comprise (progression 1
-  tenue avec un temps du film, puis 1 sans temps). `timeAtProgress(1)` = fin du film. `usePacing`
+  tenue avec un temps du film, puis 1 sans temps). `timeAtProgress(1)` = fin du film. Les pauses sont désormais les arrêts
+  du film (`flightPacing`, voir « Film et timeline ») ; `pacingFromHighlights` les dérive comme avant. `usePacing`
   (`src/scene/usePacing.ts`) partage le calcul avec le panneau. L'export appelle `pacing.progressAtTime(t)` sur
   `pacing.totalTime()`.
 - **`Timeline`** (`src/ui/Timeline.tsx`) : bandeau en bas de la vue — lecture / pause, profil altimétrique au-dessus du curseur
@@ -258,6 +261,53 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   couleurs par sommet, la couleur du matériau est le blanc divisé par l'exposition (`applyExposure`).
 - **Légende** `TrackLegend` (au-dessus de la timeline, seulement si `trackColorBy !== 'none'`) : dégradé, bornes avec unités,
   pastille « Sans donnée » s'il manque des valeurs.
+
+## Film et timeline (phase 4, incrément 1 sur 4 : modèle et moteur)
+
+- **Principe** : comme un logiciel de montage, « la base, c'est le GPX » : le survol continu de la première trace porte le
+  film ; des éléments posés sur des pistes séparées s'y ajoutent. Incréments : 1 modèle pur et moteur (fait) ; 2 timeline sous
+  la vue (pistes, glisser pour déplacer / étirer, inspecteur) ; 3 piste des textes dessinée dans l'habillage ; 4 piste des
+  médias (images, vidéos).
+- **Modèle** (`src/film/model.ts`, `settings.film` : enregistré dans le document de projet, annulable, validé par
+  `isValidFilm` dans `SETTING_CHECKS`, aucune migration : un ancien projet reçoit `DEFAULT_FILM`) :
+  `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut', durationS }` (1–30 s ; défaut descente 6 s / 5 s) ;
+  `stops[]` `{ id, atM, durationS (0,5–60 s), camera: 'orbite' | 'fixe', label?, source?: { kind, ref? } }` ;
+  `texts[]` `{ id, startS, durationS, text, subtitle?, anchor, size }` (placement du widget texte de l'habillage) et
+  `media[]` `{ id, startS, durationS, kind: 'image' | 'video', src }`, ancrés en temps du film ; ids uniques dans le film
+  (`stop-3`, `text-1`, `nextFilmId`).
+- **Assemblage automatique** (`src/film/assemble.ts`) : tant que `autoStops` est vrai, les arrêts sont générés à chaque calcul
+  (`autoStops`) aux temps forts du rythme (sommets des montées, cols franchis, sommets proches ; un par groupe, comme les
+  pauses qu'ils remplacent), `pauseS` chacun, caméra `fixe`, id `auto-<mètres>`, libellé (« Montée 1 · cat. 3 · 1 653 m »,
+  nom OSM) et source : ils suivent les repères OSM chargés après coup et les réglages du rythme (rythme désactivé = aucun
+  arrêt, comme avant). `assembleFilm` écrit ces arrêts dans le film (`autoStops: false`) : la timeline l'appellera à la
+  première retouche.
+- **Horloge du film** (`src/film/clock.ts`, `buildFilmClock` / `filmClockFor`, hook `useFilmClock` dans
+  `src/scene/usePacing.ts`, alias `usePacing` pour les panneaux) : temps du film (s à ×1 depuis la première image) →
+  `stateAt(t)` = `{ phase: 'opening' | 'flight' | 'stop' | 'closing', progress, flightTimeS, stop, localS, lengthS }`.
+  [0, O) ouverture (progression 0), [O, O + F) vol, [O + F, total] clôture (progression 1). Le vol est `flightPacing` :
+  ralentis du rythme aux temps forts, arrêts du film insérés avec entrée et sortie en cosinus surélevé (≤ 1,5 s), chacun sa
+  durée ; `keepDuration` garde F = `flyoverDurationS` (arrêts ≤ 50 %, raccourcis en proportion). La fenêtre d'un arrêt
+  (entrée, tenue, sortie) est la phase `stop`. `timeAtProgress(0)` = début du vol (après l'ouverture), `timeAtProgress(1)` =
+  fin du film ; lancer la lecture depuis le début ou la fin sans temps du film part de la première image (`setPlaying` fixe
+  `timeS = 0`), ouverture comprise. Sans ouverture ni clôture et sans retouche, l'horloge rejoue exactement l'ancien rythme
+  (tests d'équivalence).
+- **Caméra** (`src/flyover/filmCamera.ts`, pur) : vue d'ensemble = centre de la boîte de la trace dans le repère local au sol,
+  distance 1,6 × diagonale (relief compris, × hauteur / largeur pour un cadre plus haut que large : le 9:16 garde toute la
+  trace), 40° au-dessus de l'horizon, du côté d'où regarde la caméra de vol au raccord (pas de virage pendant la transition).
+  Transition : cible interpolée, direction normalisée (nlerp), distance géométrique, smootherstep, 80 m au-dessus du sol ;
+  `descente` sur toute la durée du plan, `saut` tient la vue d'ensemble puis bouge en 0,6 s. Arrêt `orbite` : rotation autour
+  du marqueur de 6°/s × durée (≤ 120°) aller et retour, nulle et immobile aux bords de la fenêtre ; `fixe` : la caméra de vol
+  tient. Les styles orbite et cinéma suivent le temps du vol (`flightTimeS`), ils démarrent donc là où l'ouverture les rend.
+  Le marqueur reste sur la trace (`view.marker`), la cible ne l'est que pendant le vol.
+- **Aperçu et export** : `FlyoverRig` et `ExportController` appellent le même `computeFilmView` avec la même horloge (le
+  rapport largeur / hauteur vient de la taille du rendu, celle de la vidéo pendant l'export). La caméra est replacée en pause
+  et une image d'export est recalculée quand la progression change **ou** quand le temps change alors que la vue en dépend
+  (`filmViewMovesWithTime` : plans d'ouverture et de clôture, arrêts en orbite, styles orbite et cinéma, à l'image courante
+  ou précédente). Le panneau d'export lit la durée et `progressAtTime` de la même horloge (`usePacing`).
+- Limites (incréments suivants) : la timeline du bas reste en progression (le début du curseur montre le début du vol, pas
+  l'ouverture) ; les cartes d'ouverture et de clôture de l'habillage sont en fractions de progression, donc affichées pendant
+  tout le plan d'ouverture / de clôture ; un changement du film en pause repart du temps déduit de la progression ; les
+  textes et médias ne sont pas encore dessinés ; un préréglage enregistre aussi le film.
 
 ## Projet (phase 4)
 
@@ -378,10 +428,11 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   demande déposée dans le store d'export (`src/export/store.ts`, distinct du store de l'application) : lecture en pause,
   `frameloop 'never'`, rendu et caméra à la taille de la vidéo avec un ratio de pixels de 1 (réappliqués avant chaque rendu ;
   canvas affiché en letterbox pendant l'export), pointeur désactivé.
-- Le calendrier suit le rythme du survol : la rampe dure `pacing.totalTime()` et l'image k montre
-  `pacing.progressAtTime(k / (n − 1) × durée)` (ralentis et pauses aux temps forts comme dans l'aperçu ; les images de pause
-  réutilisent l'image déjà composée, sauf en orbite et cinéma où la caméra continue de tourner ; les images tenues du début et
-  de la fin restent figées sur les temps 0 et durée).
+- Le calendrier suit l'horloge du film (voir « Film et timeline ») : la rampe dure `clock.totalTime()` (ouverture et clôture
+  comprises) et l'image k montre `clock.progressAtTime(k / (n − 1) × durée)` à ce temps du film (ralentis et arrêts comme dans
+  l'aperçu ; les images tenues réutilisent l'image déjà composée, sauf quand la vue bouge avec le temps : plans d'ouverture
+  et de clôture, arrêts en orbite, styles orbite et cinéma ; les images tenues du début et de la fin restent figées sur les
+  temps 0 et durée).
 - Pour chaque progression (`renderSettledFrame`, `src/export/capture.ts`), `advance` jusqu'à ce que la vue n'attende plus
   aucune tuile réellement dessinée (`stats.pendingVisibleTiles`, limite 5 s par image, comptée « incomplète »), puis les
   replaquages en attente de la trace et des étiquettes sont exécutés tout de suite (`flushDrapes`, au lieu de leur délai) et

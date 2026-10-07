@@ -67,6 +67,18 @@ Lancer `git status` et `npm run typecheck` en premier.
    `settings.weatherScene`), documentée, vérifiée sur données réelles (effet discret le jour de l'exemple) et synthétiques
    (couvert, pluie, brouillard). Suite possible : nuages volumétriques `@takram/three-clouds` (voir ARCHITECTURE.md).
 
+4. **Film et timeline, incrément 1 sur 4 — fait, non commité** : modèle pur du film (`src/film/model.ts`, réglage
+   `settings.film`), assemblage automatique (`src/film/assemble.ts`), horloge du film (`src/film/clock.ts`) qui remplace le
+   rythme dans l'aperçu (`FlyoverRig`) et l'export (`ExportController`), caméra des plans d'ouverture / clôture et des arrêts
+   (`src/flyover/filmCamera.ts`), pauses du rythme devenues des arrêts (`flightPacing`). Aucune interface ajoutée (les
+   panneaux caméra et export lisent l'horloge par `usePacing`). Détail : ARCHITECTURE.md, « Film et timeline ».
+   - **Contrôle visuel à faire** : ouverture « descente » au lancement (la vue d'ensemble plonge vers le départ sans virage ni
+     traversée du relief), raccord avec chaque style de caméra (orbite et cinéma compris), clôture en fin de lecture, export
+     9:16 (toute la trace dans le cadre), arrêts avec rythme actif (pause tenue, caméra fixe), pause dans l'ouverture puis
+     réglage caméra, image fixe pendant l'ouverture.
+   - Incréments suivants : 2 timeline sous la vue (pistes, glisser / étirer, inspecteur ; appeler `assembleFilm` à la première
+     retouche des arrêts, timeline en temps du film), 3 piste des textes dans l'habillage, 4 piste des médias.
+
 Pour intégrer proprement : finir chaque chantier, `npx vitest run --maxWorkers=1` + typecheck + lint verts, puis un commit
 par fonctionnalité (les fichiers partagés `store.ts`, `document.ts`, fixtures de test contiennent des morceaux de plusieurs
 chantiers : committer par hunks ou tout ensemble une fois l'arbre vert).
@@ -75,8 +87,8 @@ chantiers : committer par hunks ou tout ensemble une fois l'arbre vert).
 
 - Contrôle visuel groupé : mini-carte dans les 3 styles, polices hors ligne, ralentis (sensation à 35 % sur ±1 km), course
   fantôme, étiquettes effacées sous les cartes, export complet 1080p d'un film de 60 s.
-- Phase 4 restante : caméra par étape et images-clés, plan de situation (ouverture depuis le pays), ouverture / fermeture
-  « balayage » ou « saut », vitesse par portion à la main, couleurs et polices par widget, thèmes de film, éditeur en modes
+- Phase 4 restante : timeline de montage (incréments 2 à 4, ci-dessus), caméra par étape et images-clés, plan de situation
+  (ouverture depuis le pays), ouverture / fermeture « balayage », vitesse par portion à la main, couleurs et polices par widget, thèmes de film, éditeur en modes
   (Trajet, Carte, Habillage, Survol, Prises de vue). Pastille « modifié » + « Par défaut » : faite par panneau,
   contrôle visuel à faire (position sur la ligne du titre, titres longs, bouton désactivé pendant un export) ; reste le
   grain plus fin (par sous-groupe, par réglage) et les sections hors panneaux (étiquettes des montées, course fantôme).

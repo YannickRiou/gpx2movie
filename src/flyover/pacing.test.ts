@@ -7,6 +7,7 @@ import { advanceProgress } from './cameraSettings'
 import {
   buildPacing,
   DEFAULT_PACING,
+  flightPacing,
   isValidPacing,
   landmarkHighlights,
   MAX_PAUSE_SHARE,
@@ -260,6 +261,65 @@ describe('pauses', () => {
     expect(pacing.pauses).toHaveLength(3)
     expect(pacing.totalTime()).toBeCloseTo(15 + 12, 9)
     expectWellFormed(pacing, 1 / 15)
+  })
+})
+
+describe('flight stops (pauses given by the film)', () => {
+  const off: PacingSettings = { ...DEFAULT_PACING, keepDuration: false }
+
+  it('equal the automatic pauses when placed at them with pauseS', () => {
+    const settings: PacingSettings = { ...ON, pauseS: 3, keepDuration: true }
+    const auto = pacingFromHighlights(L, [2500, 7500], D, settings)
+    const given = flightPacing(L, [2500, 7500], D, settings, [
+      { atM: 2500, durationS: 3 },
+      { atM: 7500, durationS: 3 },
+    ])
+    expect(given.totalTime()).toBeCloseTo(auto.totalTime(), 12)
+    expect(given.pauses).toEqual(auto.pauses)
+    for (let t = 0; t <= auto.totalTime(); t += 0.7) expect(given.progressAtTime(t)).toBeCloseTo(auto.progressAtTime(t), 12)
+  })
+
+  it('hold anywhere on the track, each for its own duration, even with the pacing off', () => {
+    const pacing = flightPacing(L, [], D, off, [
+      { atM: 1234, durationS: 2 },
+      { atM: 6000, durationS: 8 },
+    ])
+    expect(pacing.active).toBe(true)
+    expect(pacing.highlights).toEqual([])
+    expect(pacing.totalTime()).toBeCloseTo(D + 10, 9)
+    const [a, b] = pacing.pauses
+    expect(a.progress).toBeCloseTo(0.1234, 12)
+    expect(b.durationS).toBe(8)
+    expect(b.holdEndS - b.holdStartS).toBeCloseTo(8 - PAUSE_EASE_S, 9)
+    expect(b.endS - b.startS).toBeCloseTo(8 + PAUSE_EASE_S, 9)
+    expect(pacing.progressAtTime((a.holdStartS + a.holdEndS) / 2)).toBe(a.progress)
+    // away from the stops: the constant ground speed, shifted by the time already added
+    expect(pacing.progressAtTime(30)).toBeCloseTo((30 - 2) / D, 9)
+    expectWellFormed(pacing, 1 / D)
+  })
+
+  it('keep the duration: stops shortened in proportion beyond the share of the film', () => {
+    const pacing = flightPacing(L, [], D, { ...off, keepDuration: true }, [
+      { atM: 3000, durationS: 30 },
+      { atM: 7000, durationS: 10 },
+    ])
+    expect(pacing.totalTime()).toBeCloseTo(D, 9)
+    expect(pacing.pauses.map((p) => p.durationS)).toEqual([22.5, 7.5])
+  })
+
+  it('two stops at the same place: one after the other, reached at the first', () => {
+    const pacing = flightPacing(L, [], D, off, [
+      { atM: 5000, durationS: 2 },
+      { atM: 5000, durationS: 3 },
+    ])
+    expect(pacing.totalTime()).toBeCloseTo(D + 5, 9)
+    expect(pacing.timeAtProgress(0.5)).toBeCloseTo(pacing.pauses[0].startS, 9)
+    expectWellFormed(pacing, 1 / D)
+  })
+
+  it('no stop and no slow-down: the identity', () => {
+    expect(flightPacing(L, [5000], D, off, []).active).toBe(false)
+    expect(flightPacing(0, [], D, off, [{ atM: 0, durationS: 2 }]).active).toBe(false)
   })
 })
 
