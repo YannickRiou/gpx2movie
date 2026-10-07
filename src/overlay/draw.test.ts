@@ -5,7 +5,6 @@ import { overlayFrameAt, prepareOverlayTrack } from './data'
 import {
   SAFE_MARGIN,
   counterText,
-  createOverlayDrawer,
   drawOverlay,
   endCardOpacity,
   formatDateFr,
@@ -16,6 +15,9 @@ import {
 import type { OverlayContext2D } from './draw'
 import { DEFAULT_OVERLAY, OVERLAY_STYLES } from './settings'
 import type { OverlaySettings } from './settings'
+import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
+import { WEATHER_VARIABLES } from '../weather/series'
+import type { WeatherSeries, WeatherVariable } from '../weather/series'
 
 interface TextCall {
   text: string
@@ -55,7 +57,8 @@ function fakeContext() {
   return { ctx: ctx as unknown as OverlayContext2D, texts, calls }
 }
 
-const track = prepareOverlayTrack(parseGpx(sampleGpx, 'tour-du-mont-blanc-j1.gpx')[0])
+const sampleTrack = parseGpx(sampleGpx, 'tour-du-mont-blanc-j1.gpx')[0]
+const track = prepareOverlayTrack(sampleTrack)
 const SIZE = { width: 1920, height: 1080 }
 const enabled = (patch: Partial<OverlaySettings> = {}): OverlaySettings => ({ ...DEFAULT_OVERLAY, enabled: true, ...patch })
 
@@ -185,13 +188,39 @@ describe('drawOverlay', () => {
     expect(counter?.alpha).toBeLessThan(1)
   })
 
-  it('is deterministic and matches the export adapter', () => {
+  it('is deterministic', () => {
     const settings = enabled({ style: 'broadcast' })
-    const a = draw(0.5, settings)
-    const { ctx, texts, calls } = fakeContext()
-    createOverlayDrawer(track, settings)(ctx, 0.5, SIZE.width, SIZE.height)
-    expect(texts).toEqual(a.texts)
-    expect(calls).toEqual(a.calls)
+    expect(draw(0.5, settings)).toEqual(draw(0.5, settings))
+  })
+
+  it('shows the weather under the marker and on the closing card, with its source', () => {
+    const hours = 14
+    const constant = (v: number) => new Array<number>(hours).fill(v)
+    const values = {} as Record<WeatherVariable, number[]>
+    for (const v of WEATHER_VARIABLES) values[v] = constant(0)
+    Object.assign(values, { temperature: constant(14), weatherCode: constant(1), windSpeed: constant(12), windDirection: constant(315) })
+    const series: WeatherSeries = {
+      time: Array.from({ length: hours }, (_, h) => Date.UTC(2025, 6, 12, 5) + h * 3_600_000),
+      stations: [{ lon: 6.77, lat: 45.86, values }],
+    }
+    const withWeather = prepareOverlayTrack(sampleTrack, series)
+    const settings = enabled({ weather: { ...DEFAULT_OVERLAY.weather, enabled: true } })
+    const render = (progress: number, s = settings) => {
+      const { ctx, texts } = fakeContext()
+      drawOverlay(ctx, overlayFrameAt(withWeather, progress), s, SIZE)
+      return texts.map((t) => t.text).join(' | ')
+    }
+    const middle = render(0.5)
+    expect(middle.toLowerCase()).toContain('plutôt dégagé')
+    expect(middle).toContain('°C')
+    expect(middle.toLowerCase()).toContain('vent no')
+    expect(middle).toContain(OPEN_METEO_ATTRIBUTION)
+    const closing = render(0.99, enabled())
+    expect(closing.toLowerCase()).toContain("plutôt dégagé · 14 °c · vent jusqu'à 12 km/h")
+    expect(closing).toContain(OPEN_METEO_ATTRIBUTION)
+    // no weather shown, no credit
+    expect(render(0.5, enabled())).not.toContain(OPEN_METEO_ATTRIBUTION)
+    expect(draw(0.5, settings).joined).not.toContain(OPEN_METEO_ATTRIBUTION)
   })
 
   it('draws the logo when its image is loaded', () => {

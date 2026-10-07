@@ -21,6 +21,7 @@ import {
 } from '../overlay/settings'
 import type { CounterId, OverlayAnchor, OverlaySettings } from '../overlay/settings'
 import { useAppStore } from '../state/store'
+import { useWeatherStore } from '../weather/store'
 import { formatNumber } from './format'
 
 const COUNTER_LABELS: Record<CounterId, string> = {
@@ -133,6 +134,7 @@ export function OverlayPanel() {
   const overlay = useAppStore((s) => s.settings.overlay)
   const setSetting = useAppStore((s) => s.setSetting)
   const track = useAppStore((s) => s.tracks[0])
+  const hasWeather = useWeatherStore((s) => s.series !== null)
   const [logoError, setLogoError] = useState<string | null>(null)
   const id = useId()
 
@@ -231,6 +233,15 @@ export function OverlayPanel() {
               format={(v) => `à ${percent(v)}`}
               onChange={(start) => setWidget('end', { start })}
             />
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={overlay.end.showWeather && hasWeather}
+                disabled={!hasWeather}
+                onChange={(e) => setWidget('end', { showWeather: e.currentTarget.checked })}
+              />
+              Météo de la sortie
+            </label>
             <AnchorField value={overlay.end.anchor} onChange={(anchor) => setWidget('end', { anchor })} />
             <SizeField value={overlay.end.size} onChange={(size) => setWidget('end', { size })} />
           </WidgetGroup>
@@ -275,6 +286,16 @@ export function OverlayPanel() {
               onChange={(height) => setWidget('profile', { height })}
             />
             <AnchorField value={overlay.profile.anchor} onChange={(anchor) => setWidget('profile', { anchor })} />
+          </WidgetGroup>
+
+          <WidgetGroup label="Météo" enabled={overlay.weather.enabled} onToggle={(enabled) => setWidget('weather', { enabled })}>
+            <p className="field__hint">
+              {hasWeather
+                ? 'Ciel, température et vent sous le marqueur ; la source Open-Meteo est créditée dans le film.'
+                : 'Disponible une fois la météo de la sortie chargée (trace horodatée).'}
+            </p>
+            <AnchorField value={overlay.weather.anchor} onChange={(anchor) => setWidget('weather', { anchor })} />
+            <SizeField value={overlay.weather.size} onChange={(size) => setWidget('weather', { size })} />
           </WidgetGroup>
 
           <WidgetGroup label="Logo" enabled={overlay.logo.enabled} onToggle={(enabled) => setWidget('logo', { enabled })}>

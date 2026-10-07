@@ -86,6 +86,8 @@ export interface EndCardSettings extends Sized {
   title: string
   /** start of the card, fraction of the flyover */
   start: number
+  /** weather summary line of the outing (when known) */
+  showWeather: boolean
 }
 
 export interface CountersSettings extends Sized {
@@ -117,13 +119,15 @@ export interface OverlaySettings {
   profile: ProfileSettings
   logo: LogoSettings
   text: TextSettings
+  /** weather under the marker: condition, temperature, wind (Open-Meteo, when the outing's weather is known) */
+  weather: Sized
 }
 
 export const DEFAULT_OVERLAY: OverlaySettings = {
   enabled: false,
   style: 'editorial',
   title: { enabled: true, anchor: 'center', size: 1, title: '', subtitle: '', showDate: true, end: 0.1 },
-  end: { enabled: true, anchor: 'center', size: 1, title: '', start: 0.9 },
+  end: { enabled: true, anchor: 'center', size: 1, title: '', start: 0.9, showWeather: true },
   counters: {
     enabled: true,
     anchor: 'top-left',
@@ -133,6 +137,7 @@ export const DEFAULT_OVERLAY: OverlaySettings = {
   profile: { enabled: true, anchor: 'top-right', width: 0.3, height: 0.12 },
   logo: { enabled: false, anchor: 'bottom-right', size: 1, image: '' },
   text: { enabled: false, anchor: 'bottom-left', size: 1, text: '' },
+  weather: { enabled: false, anchor: 'top-left', size: 1 },
 }
 
 const within = (v: number, min: number, max: number) => v >= min && v <= max
@@ -156,6 +161,7 @@ export function isValidOverlay(o: OverlaySettings): boolean {
     within(o.profile.height, PROFILE_HEIGHT_MIN, PROFILE_HEIGHT_MAX) &&
     validSized(o.logo) &&
     (o.logo.image === '' || /^data:image\/(png|jpeg|webp);base64,/.test(o.logo.image)) &&
-    validSized(o.text)
+    validSized(o.text) &&
+    validSized(o.weather)
   )
 }

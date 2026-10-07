@@ -49,6 +49,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
 | `src/weather/*` | météo historique de la sortie | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
 | `src/osm/*` | repères OpenStreetMap | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures` ; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `LANDMARK_DISTANCE_RANGE` ; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
+| `src/overlay/*` | habillage du film | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `DEFAULT_OVERLAY`, `isValidOverlay`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (pont vers l'export), `OverlayCanvas` |
 | `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` ; `importFlow.ts` (orchestration d'import sans React, testée) |
@@ -310,3 +311,24 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
 - **État** (`src/osm/store.ts`) : `useLandmarkStore` piloté par `syncLandmarks` depuis `LandmarkPanel` ; les repères de toutes les
   traces sont publiés aux étiquettes 3D par `setLabelSource('osm', …)` (liste vide à la désactivation). La liste du panneau suit
   la première trace (clic = `setProgress`).
+
+## Habillage du film (phase 4)
+
+- **Principe** : l'habillage n'est pas du DOM. Une fonction pure et synchrone, `drawOverlay(ctx, frame, settings, size, assets)`
+  (`src/overlay/draw.ts`), le dessine sur un contexte 2D, à l'écran ou hors écran. L'aperçu (`OverlayCanvas`, canvas 2D au-dessus
+  du canvas 3D et sous la timeline, sans événements souris) et l'export vidéo (`exportOverlay.ts` → `ExportController`) appellent
+  la même fonction : le film montre exactement l'aperçu.
+- **Unités** : 1 u = 1 % du plus petit côté de l'image ; marges de sécurité de 5 % de chaque côté ; flous d'ombre corrigés de la
+  transformation du contexte (devicePixelRatio). Les widgets qui partagent l'une des 9 ancres s'empilent.
+- **Données** (`data.ts`) : `prepareOverlayTrack(track, weather?)` une fois par trace : chemin, D+ cumulé (même lissage et même
+  hystérésis de 3 m que `computeStats`, donc la dernière valeur vaut `stats.ascentM`), vitesse et fréquence cardiaque lissées,
+  profil, statistiques de clôture, résumé météo. `overlayFrameAt(data, progress)` est une fonction pure de la progression.
+- **Réglages** : `settings.overlay` (`src/overlay/settings.ts`, désactivé par défaut) : style (`editorial`, `broadcast`, `app`) et
+  widgets — carte d'ouverture, carte de clôture, compteurs, profil, logo, texte libre, météo — chacun avec `enabled`, `anchor`,
+  `size`. Les temps sont des fractions du survol (fondus de 1 % et 2,5 %) ; les widgets en direct s'effacent pendant les cartes.
+  Logo en data URL PNG d'au plus 512 px (projets autonomes). Validation : `isValidOverlay` (`SETTING_CHECKS`).
+- **Polices** : un canvas ne déclenche pas seul le téléchargement des polices web ; `loadOverlayFonts()` les demande avant la
+  première image, l'export doit l'attendre aussi. Polices Google Fonts (Fraunces 300–700, IBM Plex Sans et Sans Condensed) :
+  hors ligne, repli sur Georgia / system-ui.
+- **Météo** : widget et ligne de la carte de clôture (`weatherWidgetData`, `summarizeOuting`), avec le crédit Open-Meteo dessiné
+  en bas de l'image dès qu'ils sont visibles.

@@ -11,6 +11,8 @@ import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath } from '..
 import type { ElevationProfile, TrackPath } from '../flyover/path'
 import { metricValues } from '../flyover/trackColor'
 import { ELEVATION_HYSTERESIS_M, smoothElevations } from '../import/stats'
+import { summarizeOuting, weatherWidgetData } from '../weather/series'
+import type { WeatherSeries, WeatherSummary, WeatherWidgetData } from '../weather/series'
 
 /** Samples of the overlay elevation profile over the track. */
 export const OVERLAY_PROFILE_SAMPLES = 240
@@ -26,6 +28,8 @@ export interface OverlayTrackStats {
   maxSpeedKmh?: number
   /** recorded time of the start (ms since epoch) */
   startTime?: number
+  /** weather of the outing, when its series is known */
+  weather?: WeatherSummary
 }
 
 export interface OverlayTrack {
@@ -38,6 +42,8 @@ export interface OverlayTrack {
   /** heart rate averaged over a few seconds at each path point (bpm), NaN when unknown */
   heartRate: Float64Array
   profile?: ElevationProfile
+  /** historical weather along the track (Open-Meteo), when fetched */
+  weatherSeries?: WeatherSeries
   stats: OverlayTrackStats
 }
 
@@ -52,6 +58,8 @@ export interface OverlayFrame {
   elapsedS?: number
   speedKmh?: number
   heartRate?: number
+  /** weather under the marker, when the track has a weather series */
+  weather?: WeatherWidgetData
 }
 
 /**
@@ -108,7 +116,8 @@ function maxOf(values: Float64Array): number | undefined {
   return max > -Infinity ? max : undefined
 }
 
-export function prepareOverlayTrack(track: Track): OverlayTrack {
+/** Per-track data of the overlay; `weather` is the series of the outing (`useWeatherStore`), when fetched. */
+export function prepareOverlayTrack(track: Track, weather?: WeatherSeries | null): OverlayTrack {
   const path = buildTrackPath(track)
   const hasEle = track.stats.maxEle !== undefined
   const speed = concat(
@@ -120,9 +129,11 @@ export function prepareOverlayTrack(track: Track): OverlayTrack {
     path.count,
   )
   const ascent = hasEle ? cumulativeAscent(track) : new Float64Array(path.count).fill(Number.NaN)
+  const weatherSeries = weather ?? undefined
   return {
     name: track.name,
     path,
+    weatherSeries,
     ascent,
     speed,
     heartRate,
@@ -134,6 +145,7 @@ export function prepareOverlayTrack(track: Track): OverlayTrack {
       durationS: track.stats.durationS,
       maxSpeedKmh: maxOf(speed),
       startTime: track.stats.startTime,
+      weather: weatherSeries && path.count > 0 ? summarizeOuting(weatherSeries, path) : undefined,
     },
   }
 }
@@ -179,5 +191,6 @@ export function overlayFrameAt(data: OverlayTrack, progress: number): OverlayFra
     const now = recordedTimeAt(path, distanceM)
     if (start !== undefined && now !== undefined) frame.elapsedS = Math.max(0, (now - start) / 1000)
   }
+  if (data.weatherSeries) frame.weather = weatherWidgetData(data.weatherSeries, path, p)
   return frame
 }
