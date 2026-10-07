@@ -3,7 +3,8 @@
 Objectif phase 1 : importer un GPX / FIT, afficher le relief 3D (élévation Mapterhorn ou AWS Terrarium)
 habillé d'orthophotos, la trace plaquée sur le relief, et une caméra orbitale. 100 % local, aucune clé d'API.
 
-Phases suivantes (hors scope ici) : survol caméra & timeline, atmosphère Takram, export vidéo WebCodecs, packs hors ligne, Tauri.
+Phase 2 (survol caméra, timeline, profil) : section « Survol » en fin de document. Phases suivantes : atmosphère Takram,
+personnalisation complète via un document de projet unique, export vidéo WebCodecs, Tauri et packs hors ligne (voir README).
 
 ## Stack
 
@@ -108,7 +109,7 @@ Phases suivantes (hors scope ici) : survol caméra & timeline, atmosphère Takra
 9. **UI** (`ui/`) : panneau gauche 340 px (fond papier, texte encre) : logo « OpenFlyover » (Fraunces), zone de dépôt
    « Glisse un fichier GPX ou FIT », bouton « Charger l'exemple » (`/samples/tour-du-mont-blanc-j1.gpx`), liste des traces
    (pastille couleur, nom, distance, D+, durée, bouton supprimer), réglages (source relief, source imagerie, détail imagerie 0/1/2,
-   exagération 1–2.5, filaire), bouton « Recadrer » (rouge balise), barre d'état (tuiles chargées / en attente) et
+   exagération 1–3, filaire), bouton « Recadrer » (rouge balise), barre d'état (tuiles chargées / en attente) et
    attributions obligatoires. Libellés en français. Charte : `src/ui/theme.css`.
 
 ## Charte graphique « Carte alpine » (variables CSS, `src/ui/theme.css`)
@@ -148,3 +149,22 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   (`elevationProfile`), aire SVG, partie parcourue en rouge clair, trait à la position courante ; cliquer-glisser sur le profil
   déplace la lecture (le curseur reste le contrôle accessible). Amplitude verticale d'au moins 100 m pour ne pas grossir le
   bruit GPS ; profil masqué si la trace n'a aucune altitude.
+
+## Atmosphère (phase 3, en cours)
+
+- **`AtmosphereLayer`** (`src/scene/AtmosphereLayer.tsx`, dans `TerrainLayer`) : modèle de diffusion précalculé de Takram
+  (`@takram/three-atmosphere`). `worldToECEFMatrix` = `frame.localToEcef`. Éclairage **par sources** (`SunLight` +
+  `SkyLight` placées à l'origine, 1000 m) : le terrain garde son `MeshStandardMaterial`. Post-process (`EffectComposer`) :
+  perspective aérienne (brume selon la distance réelle), tone mapping **Khronos Neutral** (garde les teintes des
+  orthophotos), SMAA. Exposition 5.
+- **Textures précalculées** : fichiers EXR du paquet (~9,5 Mo), servis à `/atmosphere/` en dev et copiés dans le build par un
+  plugin de `vite.config.ts` — rien n'est téléchargé chez un tiers ni versionné ici. Ne pas les générer au démarrage : la
+  génération tourne dans des `requestIdleCallback` qui ne se déclenchent jamais tant que la scène occupe le fil principal,
+  et les lumières restent noires.
+- **Profondeur logarithmique** : `postprocessing` la signale par `LOG_DEPTH`, le shader Takram attend
+  `USE_LOGARITHMIC_DEPTH_BUFFER` ; le define est ajouté à l'effet, sinon toute la scène est vue comme infiniment loin.
+- **Trace** : matériaux non éclairés, leur couleur est divisée par `renderer.toneMappingExposure` (`applyExposure`).
+- **Réglages** : `settings.atmosphere` (désactivable : retour à l'éclairage fixe sans tone mapping) et `settings.sunHour`
+  (heure **solaire** locale, 0 h–24 h, indépendante des fuseaux ; la nuit : étoiles et lune), le jour étant celui du début de la première trace
+  (aujourd'hui à défaut).
+- Reste à faire : ombres portées du relief, soleil qui suit l'horodatage réel pendant le survol.

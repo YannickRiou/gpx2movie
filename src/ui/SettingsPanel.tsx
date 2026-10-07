@@ -11,10 +11,21 @@ const ZOOM_OFFSETS: { value: Settings['imageryZoomOffset']; label: string }[] = 
 ]
 
 const EXAGGERATION_MIN = 1
-const EXAGGERATION_MAX = 2.5
+const EXAGGERATION_MAX = 3
 const EXAGGERATION_STEP = 0.1
 
-/** "Réglages" section: terrain / imagery sources, imagery detail, exaggeration, wireframe. */
+const SUN_HOUR_MIN = 0
+const SUN_HOUR_MAX = 23.75
+const SUN_HOUR_STEP = 0.25
+
+/** 10.5 -> "10 h 30" */
+function formatHour(hour: number): string {
+  const h = Math.floor(hour)
+  const m = Math.round((hour - h) * 60)
+  return `${h} h ${String(m).padStart(2, '0')}`
+}
+
+/** "Réglages" section: terrain / imagery sources, imagery detail, exaggeration, wireframe, atmosphere. */
 export function SettingsPanel() {
   const settings = useAppStore((s) => s.settings)
   const setSetting = useAppStore((s) => s.setSetting)
@@ -23,6 +34,8 @@ export function SettingsPanel() {
   const imageryId = `${id}-imagery`
   const exaggerationId = `${id}-exaggeration`
   const wireframeId = `${id}-wireframe`
+  const atmosphereId = `${id}-atmosphere`
+  const sunHourId = `${id}-sun-hour`
 
   return (
     <section className="settings" aria-labelledby={`${id}-title`}>
@@ -114,6 +127,40 @@ export function SettingsPanel() {
         />
         Filaire
       </label>
+
+      <label className="checkbox" htmlFor={atmosphereId}>
+        <input
+          id={atmosphereId}
+          type="checkbox"
+          checked={settings.atmosphere}
+          onChange={(e) => setSetting('atmosphere', e.currentTarget.checked)}
+        />
+        Atmosphère (ciel, lumière du soleil, brume)
+      </label>
+
+      {settings.atmosphere && (
+        <div className="field">
+          <label className="field__label" htmlFor={sunHourId}>
+            Heure solaire
+          </label>
+          <div className="range-row">
+            <input
+              id={sunHourId}
+              className="range"
+              type="range"
+              min={SUN_HOUR_MIN}
+              max={SUN_HOUR_MAX}
+              step={SUN_HOUR_STEP}
+              value={settings.sunHour}
+              onChange={(e) => setSetting('sunHour', Number(e.currentTarget.value))}
+              aria-valuetext={formatHour(settings.sunHour)}
+            />
+            <output className="range-row__value range-row__value--wide" htmlFor={sunHourId}>
+              {formatHour(settings.sunHour)}
+            </output>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

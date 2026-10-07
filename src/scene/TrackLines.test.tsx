@@ -18,6 +18,7 @@ const {
   syncTrackLineSets,
   drapeTrackLineSet,
   disposeTrackLineSet,
+  applyExposure,
   LINE_LIFT_M,
   LINE_WIDTH_PX,
   GHOST_OPACITY,
@@ -259,6 +260,20 @@ describe('syncTrackLineSets', () => {
 
     syncTrackLineSets(group, sets, [], frame, shared, 800, 600)
     shared.dispose()
+  })
+})
+
+describe('applyExposure', () => {
+  it('divides the line colours by the exposure and restores them at 1', () => {
+    const sets = new Map<string, TrackLineSet>()
+    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA])], frame, createSharedResources(), 800, 600)
+    const set = sets.get('a')!
+
+    applyExposure(sets.values(), 10)
+    expect(set.solidMaterial.color.r).toBeCloseTo(0.1, 6)
+    expect(set.ghostMaterial.color.equals(set.solidMaterial.color)).toBe(true)
+    applyExposure(sets.values(), 1)
+    expect(set.solidMaterial.color.getHexString()).toBe('ff0000')
   })
 })
 

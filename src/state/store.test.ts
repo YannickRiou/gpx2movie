@@ -143,6 +143,8 @@ describe('settings and misc', () => {
       imageryZoomOffset: 1,
       exaggeration: 1.5,
       wireframe: true,
+      atmosphere: true,
+      sunHour: 10,
     })
   })
 

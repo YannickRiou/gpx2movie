@@ -15,6 +15,10 @@ export interface Settings {
   imageryZoomOffset: 0 | 1 | 2
   exaggeration: number
   wireframe: boolean
+  /** physically based sky, sun light and aerial perspective */
+  atmosphere: boolean
+  /** local mean solar time (hours, 12 = solar noon) on the day of the first track */
+  sunHour: number
 }
 
 /** Flyover playback along the first track (progress at constant ground speed). */
@@ -60,6 +64,8 @@ export const DEFAULT_SETTINGS: Settings = {
   imageryZoomOffset: 1,
   exaggeration: 1,
   wireframe: false,
+  atmosphere: true,
+  sunHour: 10,
 }
 
 export const DEFAULT_PLAYBACK: Playback = { playing: false, progress: 0, speed: 1 }
