@@ -10,6 +10,8 @@ import { DEFAULT_VIDEO_SETTINGS } from '../export/schedule'
 import type { VideoSettings } from '../export/schedule'
 import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S } from '../flyover/cameraSettings'
 import type { CameraSettings } from '../flyover/cameraSettings'
+import { DEFAULT_PACING } from '../flyover/pacing'
+import type { PacingSettings } from '../flyover/pacing'
 import type { TrackColorBy } from '../flyover/trackColor'
 import { centroid } from '../geo/ellipsoid'
 import { DEFAULT_LANDMARK_SETTINGS } from '../osm/landmarks'
@@ -40,6 +42,8 @@ export interface Settings {
   camera: CameraSettings
   /** flyover duration at speed x1 (seconds), whatever the track length */
   flyoverDurationS: number
+  /** variable pacing of the flyover: slow-downs and pauses at the highlights of the first track */
+  pacing: PacingSettings
   /** 3D labels on the relief: tops of the detected climbs of the first track, GPX waypoints */
   labels: { climbs: boolean; waypoints: boolean }
   /** historical weather of the first timed track (Open-Meteo archive, network) */
@@ -103,6 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   trackColorBy: 'none',
   camera: DEFAULT_CAMERA,
   flyoverDurationS: DEFAULT_FLYOVER_DURATION_S,
+  pacing: DEFAULT_PACING,
   labels: { climbs: true, waypoints: true },
   weather: { enabled: true },
   overlay: DEFAULT_OVERLAY,

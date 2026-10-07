@@ -44,6 +44,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/cameraSettings.ts` | styles et préréglages caméra | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
 | `src/flyover/climbs.ts` | montées détectées | `detectClimbs`, `climbsOf(track)` (cache par trace), seuils exportés, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
+| `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
 | `src/flyover/sun.ts` | date du soleil | `solarHourToDate(dayMs, lon, solarHour)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
@@ -174,6 +175,17 @@ Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur ort
   nommés (`CAMERA_PRESETS` : Poursuite, Hélicoptère, Drone haut, Vue du dessus, Orbite, Cinéma) dans
   `src/flyover/cameraSettings.ts` ; `settings.flyoverDurationS` (15–600 s, 60 par défaut) = durée à ×1, la vitesse de la
   timeline s'y ajoute. Section « Caméra » (`src/ui/CameraPanel.tsx`). En pause, un changement de réglage caméra replace la caméra.
+- **Rythme** (`src/flyover/pacing.ts`, pur ; `settings.pacing`, section « Caméra ») : la progression reste la fraction de
+  distance, seul le lien temps du film → progression change. Temps forts : sommets des montées (`climbsOf`) et, parmi les repères
+  OSM passés en argument, cols franchis (≤ 150 m) et sommets à ≤ 300 m. Vitesse relative
+  r(x) = 1 − (1 − slowFactor)·max c(|x − h| / windowM), c = cosinus surélevé (creux le plus profond en cas de chevauchement).
+  Temps de déplacement tabulé (vitesse constante par pas : inverse exact par dichotomie). Pauses : temps forts à moins de
+  windowM regroupés, une pause par groupe, chacune ajoute exactement `pauseS` avec entrée et sortie en cosinus surélevé
+  (≤ 1,5 s). `keepDuration` (défaut) relève la vitesse de base pour garder `flyoverDurationS` (pauses ≤ 50 % de la durée), sinon
+  le film s'allonge. Désactivé ou sans temps fort : identique à `advanceProgress`. `FlyoverRig` garde le temps du film dans une
+  référence (en pause la progression ne bouge pas) et se recale après un déplacement du curseur ; `usePacing`
+  (`src/scene/usePacing.ts`) partage le calcul avec le panneau. L'export appelle `pacing.progressAtTime(t)` sur
+  `pacing.totalTime()`.
 - **`Timeline`** (`src/ui/Timeline.tsx`) : bandeau en bas de la vue — lecture / pause, profil altimétrique au-dessus du curseur
   (1000 pas), distance parcourue et altitude courante, vitesse ×0,5 à ×4.
 - **Profil altimétrique** : altitudes **enregistrées** de la trace rééchantillonnées à 400 pas de distance constants

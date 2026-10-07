@@ -1,7 +1,8 @@
 /**
  * FlyoverRig — plays the flyover along the first track: advances the store's playback progress (over
- * `settings.flyoverDurationS` at speed x1), moves a progress marker on the draped track and drives the camera
- * in the style of `settings.camera` (see `flyover/camera.ts`).
+ * `settings.flyoverDurationS` at speed x1, or through the slow-downs and pauses of `settings.pacing`, see
+ * `flyover/pacing.ts`), moves a progress marker on the draped track and drives the camera in the style of
+ * `settings.camera` (see `flyover/camera.ts`).
  *
  * The view is a pure function of the progress and the settings (no smoothing state), so a given progress
  * always gives the same frame: the future video export can render any frame independently.
@@ -15,9 +16,11 @@ import { useFrame, useThree } from '@react-three/fiber'
 import type { Mesh, Vector3 } from 'three'
 import { computeCameraView } from '../flyover/camera'
 import { advanceProgress } from '../flyover/cameraSettings'
+import type { Pacing, PacingPosition } from '../flyover/pacing'
 import { buildTrackPath } from '../flyover/path'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
+import { usePacing } from './usePacing'
 import { LINE_LIFT_M, type HeightSampler } from './TrackLines'
 
 /** Marker radius as a fraction of its distance to the camera (constant on-screen size, ~7 px at 1000 px). */
@@ -41,6 +44,9 @@ export function FlyoverRig() {
   const controls = useThree((s) => s.controls) as unknown as DefaultControls | null
 
   const path = useMemo(() => (track ? buildTrackPath(track) : null), [track])
+  const pacing = usePacing()
+  /** film time of the last progress set by the playback: progress alone cannot tell where a pause is at */
+  const clockRef = useRef<{ pacing: Pacing; position: PacingPosition } | null>(null)
   const markerRef = useRef<Mesh>(null)
   /** progress and settings the camera was last placed for; start at the mount values so the initial fit is kept */
   const appliedRef = useRef(useAppStore.getState().playback.progress)
@@ -50,7 +56,17 @@ export function FlyoverRig() {
     const store = useAppStore.getState()
     const { playing, speed } = store.playback
     const { settings } = store
-    if (playing) store.setProgress(advanceProgress(store.playback.progress, delta, speed, settings.flyoverDurationS))
+    if (playing && !settings.pacing.enabled) {
+      store.setProgress(advanceProgress(store.playback.progress, delta, speed, settings.flyoverDurationS))
+    } else if (playing) {
+      const clock = clockRef.current
+      const current = store.playback.progress
+      // resynchronise after a scrub, a rewind or a change of pacing
+      const from = clock && clock.pacing === pacing && clock.position.progress === current ? clock.position : pacing.positionAt(current)
+      const position = pacing.advance(from, delta, speed)
+      clockRef.current = { pacing, position }
+      store.setProgress(position.progress)
+    }
     const { progress } = useAppStore.getState().playback
 
     if (controls) controls.enabled = !playing
