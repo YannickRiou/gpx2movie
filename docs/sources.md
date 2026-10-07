@@ -285,3 +285,25 @@ Contrôle visuel (Chromium headless, trace d'exemple Les Houches → Les Contami
 10. **`minZoom` > 0** (`ign-ortho-2000-2005` : 6, `ign-ortho-1965-1980` : 3) : les tuiles de relief plus grossières restent grises (comportement documenté d'`imagery.ts`), invisible en pratique dans un survol.
 11. **OpenTopoMap** : serveur bénévole ; ne pas l'utiliser pour des téléchargements massifs (packs hors ligne, rendu vidéo pré-chargé) sans accord.
 12. **CC BY-SA (OpenTopoMap)** : une vidéo exportée avec ce fond doit porter l'attribution et peut être considérée comme une adaptation (partage dans les mêmes conditions) : à signaler à l'export.
+
+## Météo historique — Open-Meteo (2026-10-07)
+
+Archive ERA5 / modèles régionaux réanalysés, sans clé : `https://archive-api.open-meteo.com/v1/archive`. Licence des
+données **CC BY 4.0**, API gratuite pour un usage **non commercial** (≤ 10 000 requêtes/jour, 5 000/h, 600/min annoncés ;
+aucun en-tête de quota renvoyé). Attribution affichée : « Données météo : Open-Meteo.com (CC BY 4.0) ». Code : `src/weather/openMeteo.ts`.
+
+| Point vérifié | Résultat |
+|---|---|
+| CORS (Origin `http://127.0.0.1:5173`) | `access-control-allow-origin: *`, GET/POST/OPTIONS, `max-age` 600 |
+| Variables horaires | `temperature_2m`, `apparent_temperature`, `precipitation`, `rain`, `snowfall` (cm), `cloud_cover` (+ `_low`/`_mid`/`_high`), `wind_speed_10m`, `wind_direction_10m`, `wind_gusts_10m`, `weather_code`, `is_day` : toutes renseignées |
+| `visibility` | acceptée mais **toujours `null`** dans l'archive (unité « undefined ») ; disponible seulement sur l'API prévision (`api.open-meteo.com/v1/forecast`, `past_days` ≤ 92, sans clé, CORS `*`), non utilisée |
+| Fuseau | `timezone=GMT` → heures UTC ; `timeformat=unixtime` donne des secondes Unix (début de chaque heure) |
+| Étendue | `start_date` de **1940-01-01** à **aujourd'hui** inclus (erreur 400 `{"error":true,"reason":"Parameter 'start_date' is out of allowed range from 1940-01-01 to <aujourd'hui>"}` au-delà) ; les derniers jours sont complets (prévisions rejouées, révisées quelques jours plus tard : on ne les met en cache persistant qu'au-delà de 7 jours). 1940 : `precipitation`, `wind_gusts_10m`, `weather_code` nuls les 7 premières heures |
+| Plusieurs lieux | `latitude=a,b&longitude=c,d` → tableau JSON (objet nu pour un seul lieu) ; `elevation=e1,e2` accepté par lieu |
+| Grille | ~0,07° en latitude (45,73 / 45,80 / 45,87 / 45,94 / 46,01) et ~0,1–0,14° en longitude dans les Alpes (≈ 9 km) : deux points à moins de ~5 km tombent souvent dans la même maille |
+| Altitude | le paramètre `elevation` ramène la température à l'altitude demandée : à 45,85° N 6,78° E, 12,5 °C sans paramètre (maille à 2 316 m) contre 22,8 °C à 1 000 m et 10,6 °C à 2 500 m → on passe l'altitude enregistrée de la trace |
+| Dates inversées | 400 `{"reason":"Bad Request"}` |
+| Taille | ~2,5 ko gzip par lieu et par jour pour les 14 variables |
+
+Journal (curl, 2026-10-07) : `start_date=end_date=2025-07-12`, 2 lieux (45,89/6,80 et 45,83/6,73) → 200, mailles 45,940/6,704 (1 021 m) et
+45,870/6,693 (1 109 m) ; `2026-10-07` (jour même) → 24 heures complètes ; `2026-10-10` → 400 hors plage ; `1939-12-31` → 400 hors plage.
