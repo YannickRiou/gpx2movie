@@ -104,6 +104,23 @@ Pour garder three.js hors du premier écran, l'app importe les distances et boî
 `geo/ellipsoid.ts`. React a son propre fichier (`codeSplitting.groups` dans `vite.config.ts`), gardé en cache d'une version à
 l'autre. Les fichiers paresseux de plus de 500 kB (three + fiber, Takram, mediabunny) sont attendus : seuil d'alerte à 800 kB.
 
+## Rendu à la demande
+
+La scène est dessinée seulement quand quelque chose change (`frameloop="demand"`, `src/scene/renderOnDemand.ts`) : à
+l'arrêt, plus aucune image. Une image est demandée à chaque image tant que le film joue, que des tuiles se chargent
+(`engine.stats.pendingTiles`) ou qu'un recadrage s'anime (`CameraRig`) ; puis `WAKE_FRAMES` = 30 images après tout
+changement des stores lus par la scène (application hors `terrainStats` et `loading`, météo, étiquettes, export), après
+un drapé (trace, eau, étiquettes), le chargement de la police des étiquettes ou de l'image du marqueur, et pour chaque
+texture des chargeurs de three (ciel, nuages) : le temps que le suréchantillonnage temporel des nuages converge
+(~16 images). OrbitControls (drei) demande lui-même ses images, amortissement compris. Le pas de temps d'une image est
+borné à `MAX_FRAME_DELTA_S` = 0,25 s (`frameDelta`) : la lecture et le recadrage ne sautent pas après une pause.
+L'export garde `frameloop 'never'` et dessine lui-même ses images. Mesuré en rendu logiciel : plus aucune demande d'image
+une fois la marge écoulée (~30 s là-bas, une image par seconde ; ~0,5 s sur une vraie carte graphique). Les délais du
+moteur comptés en images (nouvel essai d'une tuile en échec, déchargement) attendent la prochaine image.
+
+Aperçu des nuages : préréglage « bas » allégé (`PREVIEW_MARCH` : 120 pas d'au moins 150 m, 15 pour les ombres, au lieu de
+200, 100 m et 25), à moitié de la résolution et suréchantillonné dans le temps ; l'export revient à la qualité choisie.
+
 ## Moteur de terrain — conception
 
 1. **Sources** (`sources.ts`) : élévation Mapterhorn `https://tiles.mapterhorn.com/{z}/{x}/{y}.webp` (Terrarium, webp),

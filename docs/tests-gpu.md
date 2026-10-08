@@ -71,6 +71,16 @@ reproduire à côté de la case.
 - [ ] Trace et marqueur (onglet Survol) : épaisseur, tirets et points pendant le vol, halo sur forêt et sur neige, trace
       qui se dessine collée au marqueur, figurines lisibles et retournées dans les virages, avatar rond ; « Boule » par
       défaut identique à avant.
+- [ ] Rendu à la demande : vue immobile → le GPU retombe à presque rien (gestionnaire des tâches, onglet GPU) ; rien
+      de figé après un changement : glisser un curseur, tourner la caméra (amortissement jusqu'au bout), tuiles qui
+      arrivent, nuages qui se stabilisent (~0,5 s), police des étiquettes, image du marqueur, eau, recadrage (animation
+      complète) ; lecture qui repart sans saut après une longue pause ; export inchangé.
+- [ ] Nuages de l'aperçu (moins de pas de calcul que le préréglage « bas ») : pas de bandes ni de trous visibles par
+      rapport à avant ; l'export garde sa qualité.
+- [ ] Reconnaissance : « Préparer une sortie » (« Chamonix », puis « 45.92, 6.87 »), relief sans trace, épingles
+      « Départ » / « Étape » / « Arrivée » au clic droit, « Calculer l'itinéraire » sur de vrais chemins (sentiers
+      préférés aux routes, point à plus de 500 m refusé), film monté, « Modifier » puis recalcul (même couleur), projet
+      enregistré puis rouvert (« Modifier » toujours proposé) ; bureau Windows (Nominatim sous la CSP).
 - [ ] Zones de sécurité : bouton sous « Recadrer » ou touche G, bandes des réseaux en 9:16 et 4:5, marges en 16:9,
       absentes de l'export.
 
