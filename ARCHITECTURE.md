@@ -512,7 +512,7 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   4 piste des médias (photos et vidéos faites, avec leur son : voir « Son des vidéos »).
 - **Modèle** (`src/film/model.ts`, `settings.film` : enregistré dans le document de projet, annulable, validé par
   `isValidFilm` dans `SETTING_CHECKS`, aucune migration : un ancien projet reçoit `DEFAULT_FILM`) :
-  `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut' | 'situation', durationS }` (1–30 s ; défaut descente 6 s / 5 s) ;
+  `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut' | 'situation' | 'balayage', durationS }` (1–30 s ; défaut descente 6 s / 5 s) ;
   `autoStops` (arrêts générés) et `autoMode` : `'temps-forts'` (défaut des nouveaux projets) ou `'rythme'` (projets
   antérieurs) ;
   `stops[]` `{ id, atM, durationS (0,5–60 s), camera: 'film' | 'orbite' | 'large' | 'fixe', label?, source?: { kind, ref? } }`
@@ -587,7 +587,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   distance 1,6 × diagonale (relief compris, × hauteur / largeur pour un cadre plus haut que large : le 9:16 garde toute la
   trace), 40° au-dessus de l'horizon, du côté d'où regarde la caméra de vol au raccord (pas de virage pendant la transition).
   Transition : cible interpolée, direction normalisée (nlerp), distance géométrique, smootherstep, 80 m au-dessus du sol ;
-  `descente` sur toute la durée du plan, `saut` tient la vue d'ensemble puis bouge en 0,6 s. `situation` (« Depuis la
+  `descente` sur toute la durée du plan, `saut` tient la vue d'ensemble puis bouge en 0,6 s. `balayage` : la vue
+  d'ensemble tourne de `SWEEP_DEG` = 75° autour de sa cible (`turnedView`, `sweepRad`) pendant les premiers 60 % du plan
+  d'ouverture et finit du côté du vol, puis glisse comme `descente` (clôture : l'inverse). `situation` (« Depuis la
   région », plan de situation) : comme `descente`, mais depuis (ou, en clôture, jusqu'à) la vue de la région
   (`regionView`) : même cible et même côté que la vue d'ensemble, 65° au-dessus de l'horizon, distance
   `regionDistanceM` = 5 × diagonale (× hauteur / largeur en portrait), bornée pour que le coin le plus lointain du cadre

@@ -29,6 +29,10 @@ import {
   smootherstep,
   stopOrbitRad,
   STOP_WIDE_DISTANCE_FACTOR,
+  SWEEP_DEG,
+  SWEEP_SHARE,
+  sweepRad,
+  turnedView,
   type FilmViewOptions,
 } from './filmCamera'
 import { DEFAULT_PACING } from './pacing'
@@ -380,5 +384,29 @@ describe('stop cameras', () => {
     }
     expect(heldMotionTimeS(window, 12)).toBe(13)
     expect(heldMotionTimeS(window, 16)).toBe(16)
+  })
+})
+
+describe('balayage shot', () => {
+  it('turns the overview first, then glides, and plays the closing backwards', () => {
+    const L = 10
+    expect(sweepRad('opening', 0, L)).toBeCloseTo((SWEEP_DEG * Math.PI) / 180)
+    expect(sweepRad('opening', SWEEP_SHARE * L, L)).toBe(0)
+    expect(shotBlend('balayage', 'opening', SWEEP_SHARE * L, L)).toBe(0)
+    expect(shotBlend('balayage', 'opening', L, L)).toBe(1)
+    expect(shotBlend('balayage', 'closing', 0, L)).toBe(0)
+    expect(shotBlend('balayage', 'closing', (1 - SWEEP_SHARE) * L, L)).toBe(1)
+    expect(sweepRad('closing', (1 - SWEEP_SHARE) * L, L)).toBe(0)
+    expect(sweepRad('closing', L, L)).toBeCloseTo((SWEEP_DEG * Math.PI) / 180)
+  })
+
+  it('turns a view around the vertical through its target, keeping its distance and height', () => {
+    const view = { target: new Vector3(10, 5, 0), position: new Vector3(110, 105, 0) }
+    const turned = turnedView(view, Math.PI / 2)
+    expect(turned.target).toEqual(view.target)
+    expect(turned.position.distanceTo(view.target)).toBeCloseTo(view.position.distanceTo(view.target))
+    expect(turned.position.y).toBeCloseTo(105)
+    expect(turned.position.x).toBeCloseTo(10)
+    expect(turnedView(view, 0)).toBe(view)
   })
 })

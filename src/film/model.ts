@@ -27,10 +27,11 @@ import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { OVERLAY_ANCHORS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 
-export const SHOT_STYLES = ['aucune', 'descente', 'saut', 'situation'] as const
+export const SHOT_STYLES = ['aucune', 'descente', 'saut', 'situation', 'balayage'] as const
 /**
  * 'descente': the camera glides from the overview down to the flight; 'saut': overview held, then a quick move;
- * 'situation': like 'descente', from much higher above the region (closing: back up to it).
+ * 'situation': like 'descente', from much higher above the region (closing: back up to it); 'balayage': the
+ * overview turns slowly around the track, then glides down to the flight (closing: up, then the turn).
  */
 export type ShotStyle = (typeof SHOT_STYLES)[number]
 
