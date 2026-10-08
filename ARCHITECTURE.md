@@ -1498,9 +1498,10 @@ d'un survol des traces chargées ; la vue et l'export les lisent ensuite sans r�
   plan : plans d'ensemble et orbites hautes (niveaux grossiers, déjà là), export 4K (un niveau de plus dans un couloir
   large).
 - **Politique** (`policy.ts`) : une décision par source, motifs et liens dans le README ; une source absente de la
-  table est refusée. Refusées : OpenTopoMap, Esri World Imagery, swisstopo (photos et carte). Une imagerie refusée
-  n'empêche pas le pack : il ne contient alors que le relief et l'imagerie reste en ligne. Limite par jour et par
-  appareil : Mapterhorn 20 000, IGN 50 000 (toutes couches), EOX 20 000 ; AWS sans limite.
+  table est refusée. OpenTopoMap, Esri World Imagery et swisstopo (photos et carte) sont permis en usage personnel
+  (`personalUse`, mise en garde dans le panneau) avec une limite basse. Une imagerie refusée n'empêche pas le pack : il
+  ne contient alors que le relief et l'imagerie reste en ligne. Limite par jour et par appareil : Mapterhorn 20 000,
+  IGN 50 000 (toutes couches), EOX 20 000, Esri et swisstopo 10 000, OpenTopoMap 2 000 ; AWS sans limite.
 - **Téléchargement** (`download.ts`) : 4 requêtes à la fois, réessais de `downloadTile` (ceux du fetcher), tuiles déjà
   dans le pack sautées, 4xx = « pas de donnée ici » (Mapterhorn au-delà de z12 hors zones fines), arrêt après 20 échecs
   réseau de suite ou si le stockage refuse une tuile, pause (les requêtes en cours finissent), reprise, annulation

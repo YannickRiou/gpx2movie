@@ -27,7 +27,7 @@ services ouverts.
 Deux façons de l'utiliser :
 
 - comme **site web statique**, en local ou sur votre propre serveur ;
-- plus tard, comme **application de bureau** ([voir plus bas](#application-de-bureau)).
+- comme **application de bureau** Windows, macOS ou Linux ([voir plus bas](#application-de-bureau)).
 
 Ce qui existe aujourd'hui :
 
@@ -384,10 +384,11 @@ AddType font/woff2 .woff2
 ### Limites connues
 
 - Le site doit être servi **à la racine du domaine**. Quelques chemins sont écrits en dur : `/samples/` dans
-  `src/ui/ImportPanel.tsx`, `/favicon.svg` dans `src/App.tsx` et `/fonts/` dans `src/ui/fonts.css`. Pour un sous-dossier,
+  `src/ui/projectActions.ts`, `/favicon.svg` dans `src/App.tsx` et `/fonts/` dans `src/ui/fonts.css`. Pour un sous-dossier,
   il faut construire avec `vite build --base=/sous-dossier/` et préfixer ces chemins par `import.meta.env.BASE_URL`.
 - Un site public reste soumis aux conditions des sources ([voir plus bas](#sources-de-données-et-attributions)).
-- Une longue vidéo prend beaucoup de mémoire (environ deux fois sa taille). L'écriture directe sur disque est prévue.
+- Une longue vidéo prend beaucoup de mémoire (environ deux fois sa taille) là où elle ne peut pas être écrite
+  directement sur le disque (Firefox, Safari) ; Chrome, Edge et l'application de bureau l'écrivent au fil de l'export.
 
 ## Application de bureau
 
@@ -476,7 +477,7 @@ Les icônes de `src-tauri/icons/` viennent de `public/favicon.svg`. Pour les ref
 | `npm run lint` | analyse du code (oxlint) |
 | `npm run e2e` | tests de bout en bout dans un vrai navigateur (voir plus bas) |
 
-La suite compte **environ 1 200 tests** (8 octobre 2026). Chaque fichier de test est rangé à côté de son module
+La suite compte **environ 1 450 tests** (8 octobre 2026). Chaque fichier de test est rangé à côté de son module
 (`src/**/*.test.ts`). Les appels réseau et l'encodeur vidéo y sont simulés.
 
 Les vérifications à faire à la main sur une machine avec une vraie carte graphique sont listées dans
@@ -652,14 +653,14 @@ ce qui sera rendu.
 | Timeline (montage) | comme un logiciel de montage, la base est le survol continu de la trace, avec des pistes séparées au-dessus : arrêts (orbite ou caméra fixe), titres et textes placés et étirés librement dans le temps, points d'intérêt avec arrêt, médias (images, vidéos) ; film assemblé automatiquement au chargement (ouverture en vue d'ensemble → survol avec arrêts aux sommets, cols et montées → clôture en vue d'ensemble), puis retouché. Quatre incréments : 1 — modèle du film et moteur (horloge du film, plans d'ouverture et de clôture « descente » ou « saut », arrêts, aperçu et export identiques) **fait** ; 2 — timeline sous la vue (pistes plans / arrêts / textes, glisser pour déplacer et étirer avec aimantation, zoom, inspecteur, film assemblé avec un arrêt en orbite à chaque temps fort) **fait** ; 3 — piste des textes dessinée dans l'habillage (aperçu et export, fondus, empilés par position ; cartes d'ouverture et de clôture calées sur le temps du film) **fait** ; 4 — piste des médias : photos plein écran (mouvement lent) ou en carte encadrée, placées là où elles ont été prises (position GPS ou heure de la photo), enregistrées dans le projet **fait** ; vidéos (MP4, WebM, MOV de 50 Mo au plus, découpables, image exacte à l'export) **fait** ; son des vidéos (volume, musique baissée dessous au choix, mixé à l'export) **fait** |
 | Rythme | **fait** : durée totale réglable (15 s–10 min) ; ralentis et pauses aux temps forts (sommets des montées, cols franchis, sommets proches), durée du film conservée ou allongée ; vitesse par portion choisie à la main (piste « Vitesse », ×0,25 à ×4, transitions douces) ; plan de situation (ouverture « Depuis la région » qui plonge vers la trace) ; ouverture et clôture « descente », « saut », « depuis la région » et « balayage » ; à faire : transitions entre sections réglables |
 | Caméra | **fait** : styles poursuite, balancement (hélicoptère), orbite, vue du dessus, plan cinématique ; préréglages nommés ; distance, tangage, cap, lissage ; caméra de chaque arrêt (comme le film, tour lent, vue large, fixe) et cadrages le long de la trace (losanges de la piste « Plans »), y compris un cadrage propre à une photo ou un texte (« Cadrer la caméra pendant cet élément ») |
-| Titres et textes | titre d'ouverture, sous-titres, générique de fin, étiquettes posées sur le relief (sommets, cols, villages) ; police, couleur, position, apparition et durée |
+| Titres et textes | **fait** : titre d'ouverture (titre, sous-titre, date), textes et sous-titres de la timeline, étiquettes posées sur le relief (sommets, cols, villages), 9 positions, apparition et durée de chaque texte, couleurs et polices de l'habillage ou par élément ; partiel : carte de clôture sans générique déroulant ; à faire : police et couleur par texte, réglage d'apparition des étiquettes 3D |
 | Données à l'écran | **fait** : habillage dessiné sur canvas (même rendu en aperçu et à l'export), trois styles (éditorial, diffusion sombre, application claire), carte d'ouverture, carte de clôture (distance, D+, altitude max, durée, vitesse max, météo), compteurs au choix, profil de dimensions réglables, mini-carte (partie parcourue, flèche du nord), météo au marqueur, logo, texte libre, 9 positions et une taille par widget ; étiquettes 3D effacées derrière les cartes ; couleurs et polices modifiables par-dessus le style, pour tout l'habillage ou par widget. Prévu à l'origine : compteurs (distance, altitude, D+, vitesse, fréquence cardiaque, temps), profil altimétrique (dimensions réglables), mini-carte, logo, texte libre, carte de clôture (altitude max, vitesse max…) ; styles d'habillage prédéfinis (éditorial, diffusion sombre, application claire) ; position, taille et style de chaque widget |
-| Trace | couleur, épaisseur, style (pleine, pointillée, lumineuse sans perte de teinte), trace qui se dessine au fil du survol, enchaînement de plusieurs traces, trace affichée mais exclue du survol ; marqueurs départ / progression / arrivée en figurines 3D animées selon la vitesse et la pente (randonneur, coureur, alpiniste, skieur de randonnée, cycliste route et VTT, bikepacking, moto, parapente, avion léger) ou en autocollant / avatar personnel |
-| Points d'intérêt | ajout manuel ou depuis les waypoints GPX, photos géolocalisées, icônes, types d'épingles ; un seul réglage de timing (apparition / disparition) pour waypoints, photos, bornes kilométriques, départ et arrivée |
-| Rendu | sources de relief et d'imagerie, exagération, atmosphère (date, heure, brume), étalonnage (exposition, contraste, saturation, vignettage) |
-| Format | ratio 16:9 / 9:16 / 1:1 / 4:5, résolution, cadence, zones de sécurité affichées |
-| Thèmes | habillage du film (polices, couleurs des titres et widgets) indépendant de l'interface, thèmes fournis et personnalisés ; styles de carte, d'éléments et d'habillage enregistrables séparément |
-| Éditeur | une page, cinq modes (Trajet, Carte, Habillage, Survol, Prises de vue) sans recharger la scène ; onglets Contenu / Style / Visibilité par élément ; pastille « modifié » et bouton rétablir sur tout réglage qui s'écarte du style ; prises de vue enregistrées (caméra, cadrage, lumière) pour des images fixes |
+| Trace | **fait** : épaisseur, style (pleine, tirets, points, halo lumineux), trace qui se dessine au fil du survol, enchaînement de plusieurs traces, marqueur boule, figurine (randonneur, coureur, cycliste, VTT, skieur, parapente, voiture) ou image personnelle ; partiel : couleur attribuée automatiquement (pas de choix), seule la première trace est survolée ; à faire : choix de la couleur et de la trace survolée, marqueurs de départ et d'arrivée réglables, figurines animées et activités manquantes (alpiniste, bikepacking, moto, avion léger) |
+| Points d'intérêt | **fait** : ajout manuel (clic droit ou au marqueur), waypoints GPX affichés ; partiel : photos placées par leur GPS dans le temps du film, mais pas épinglées sur le relief ; à faire : icônes et types d'épingles, bornes kilométriques, réglage commun d'apparition (waypoints, photos, bornes, départ, arrivée) |
+| Rendu | **fait** : sources de relief et d'imagerie, exagération, heure du soleil, exposition, étalonnage (contraste, saturation, température, vignettage) ; partiel : date du soleil (celle de la trace, sinon aujourd'hui), brume pilotée par la météo seulement ; à faire : choix de la date, curseur de brume |
+| Format | **fait** : 16:9, 9:16, 1:1, 4:5 et 21:9, 720p à 4K, 24 / 30 / 60 i/s, zones de sécurité affichées |
+| Thèmes | **fait** : habillage indépendant de l'interface, trois styles fournis, couleurs et polices modifiables ; partiel : un thème personnalisé ne s'enregistre que dans un préréglage complet ; à faire : styles de carte, d'éléments et d'habillage enregistrables séparément |
+| Éditeur | **fait** : une page sans recharger la scène, cinq onglets (Trace, Carte, Survol, Habillage, Projet) ; partiel : pastille « modifié » et « Par défaut » par section (pas par réglage, comparés aux valeurs par défaut) ; à faire : onglets Contenu / Style / Visibilité par élément, prises de vue enregistrées (caméra, cadrage, lumière) |
 
 ### Phase 7 — Au-delà du survol
 
