@@ -26,9 +26,9 @@ import { drawOverlay } from './draw'
 import type { OverlayAssets, OverlayExtras, OverlayTime } from './draw'
 
 /**
- * What the overlay draws beyond the track at film time `time`, from the stores: the texts, photos and epoch badges
- * of the timeline and the credits of the sources in use (as the status bar: relief, imagery, dated imagery of the
- * epochs, weather and landmarks once loaded).
+ * What the overlay draws beyond the track at film time `time`, from the stores: the texts and photos of the
+ * timeline and the credits of the sources in use (as the status bar: relief, imagery, weather and landmarks once
+ * loaded).
  */
 export function overlayExtras(time: OverlayTime): OverlayExtras {
   const { settings } = useAppStore.getState()
@@ -36,7 +36,6 @@ export function overlayExtras(time: OverlayTime): OverlayExtras {
     time,
     texts: settings.film.texts,
     media: settings.film.media,
-    epochs: settings.film.epochs,
     credits: overlayCredits({
       terrainSourceId: settings.terrainSourceId,
       imagerySourceId: settings.imagerySourceId,
@@ -44,7 +43,6 @@ export function overlayExtras(time: OverlayTime): OverlayExtras {
       landmarks:
         Object.values(useLandmarkStore.getState().landmarks).some((list) => list.length > 0) ||
         useWaterStore.getState().polygons > 0,
-      epochSourceIds: settings.film.epochs.map((e) => e.imagerySourceId),
     }),
   }
 }

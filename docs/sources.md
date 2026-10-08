@@ -177,7 +177,7 @@ GetCapabilities Géoplateforme (`https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST
 Deuxième région de contrôle : Paris (IGN), Zermatt et Berne (swisstopo), New York (OpenTopoMap, Plan IGN). Échantillonnage de couverture :
 grille de 56 points (7 longitudes −1,5 → 7,0 × 8 latitudes 43,3 → 50,3) à z14.
 
-### IGN — orthophotos datées (« remonter le temps »)
+### IGN — orthophotos datées
 
 - Couches publiques sans clé dans le GetCapabilities : `ORTHOIMAGERY.ORTHOPHOTOS.1950-1965`, `.1965-1980`, `.1980-1995`,
   `ORTHOIMAGERY.ORTHOPHOTOS2000-2005`, `2006-2010`, `2011-2015`, `2016-2020`, `2021-2023`, ainsi que des millésimes annuels (`ORTHOPHOTOS2000` … `2024`),

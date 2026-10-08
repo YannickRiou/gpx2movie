@@ -4,9 +4,8 @@
  * For a terrain tile (z, x, y) and `zoomOffset = k`, the 2^k x 2^k imagery sub-tiles at z + k are drawn
  * into one canvas of `tileSize * 2^k` pixels, which becomes a sRGB `CanvasTexture` with mipmaps.
  * When z + k exceeds the source's maxZoom, the deepest available tiles are cropped / scaled up instead.
- * Sub-tiles outside the source coverage are skipped; failed sub-tiles are left grey (transparent with
- * `transparent`, for dated imagery blended over the current one); the promise only rejects when every sub-tile
- * failed or the signal was aborted.
+ * Sub-tiles outside the source coverage are skipped; failed sub-tiles are left grey; the promise only
+ * rejects when every sub-tile failed or the signal was aborted.
  *
  * `planImagerySubtiles` is pure (and tested); `loadImageryTexture` does the fetching and drawing.
  */
@@ -117,7 +116,7 @@ function createAbortError(): DOMException {
   return new DOMException('Imagery loading was aborted.', 'AbortError')
 }
 
-function createTexture(canvas: CompositeCanvas, key: TileKey, transparent: boolean): Texture {
+function createTexture(canvas: CompositeCanvas, key: TileKey): Texture {
   const texture = new CanvasTexture<CompositeCanvas>(canvas)
   texture.name = `imagery ${tileKeyString(key)}`
   texture.colorSpace = SRGBColorSpace
@@ -128,8 +127,6 @@ function createTexture(canvas: CompositeCanvas, key: TileKey, transparent: boole
   texture.wrapT = ClampToEdgeWrapping
   texture.anisotropy = 16 // the engine clamps it to the renderer's maximum
   texture.flipY = true // canvas row 0 is the north edge; the mesh builder uses uv.y = 1 - v
-  // filtered across the edge of a gap, premultiplied texels fade out instead of darkening (the shader blends them so)
-  texture.premultiplyAlpha = transparent
   texture.needsUpdate = true
   return texture
 }
@@ -153,10 +150,8 @@ export const loadImageryTexture: LoadImageryTexture = async (
   const ctx = canvas.getContext('2d') as Canvas2D | null
   if (!ctx) throw new Error('2D canvas context unavailable: cannot composite imagery.')
 
-  if (!options.transparent) {
-    ctx.fillStyle = IMAGERY_FALLBACK_COLOR
-    ctx.fillRect(0, 0, plan.canvasSize, plan.canvasSize)
-  }
+  ctx.fillStyle = IMAGERY_FALLBACK_COLOR
+  ctx.fillRect(0, 0, plan.canvasSize, plan.canvasSize)
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
@@ -190,5 +185,5 @@ export const loadImageryTexture: LoadImageryTexture = async (
       cause: failure,
     })
   }
-  return createTexture(canvas, key, options.transparent === true)
+  return createTexture(canvas, key)
 }

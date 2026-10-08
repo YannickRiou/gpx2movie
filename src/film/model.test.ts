@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { isValidSetting, parseProject, sanitizeSettings } from '../project/document'
 import { DEFAULT_SETTINGS } from '../state/store'
-import { AUDIO_DEFAULTS, DEFAULT_FILM, EPOCH_FADE_S, EPOCH_LEAD_S, MEDIA_DEFAULTS, clipTimeS, epochAt, epochMixAt, isValidFilm, nextFilmId, shotDurationS } from './model'
-import type { Film, FilmAudio, FilmEpoch, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
+import { AUDIO_DEFAULTS, DEFAULT_FILM, MEDIA_DEFAULTS, clipTimeS, isValidFilm, nextFilmId, shotDurationS } from './model'
+import type { Film, FilmAudio, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
 
 const stop = (id: string, patch: Partial<FilmStop> = {}): FilmStop => ({ id, atM: 1000, durationS: 3, camera: 'orbite', ...patch })
 const text = (id: string, patch: Partial<FilmText> = {}): FilmText => ({
@@ -26,14 +26,6 @@ const media = (id: string, patch: Partial<FilmMedia> = {}): FilmMedia => ({
 const speed = (id: string, fromM: number, toM: number, factor = 2): FilmSpeed => ({ id, fromM, toM, factor })
 const film = (patch: Partial<Film>): Film => ({ ...DEFAULT_FILM, ...patch })
 
-const epoch = (id: string, patch: Partial<FilmEpoch> = {}): FilmEpoch => ({
-  id,
-  startS: 20,
-  durationS: 8,
-  imagerySourceId: 'ign-ortho-1950-1965',
-  badge: true,
-  ...patch,
-})
 const music = (id: string, patch: Partial<FilmAudio> = {}): FilmAudio => ({ id, src: 'audio-1', startS: 0, durationS: 30, inS: 0, ...AUDIO_DEFAULTS, ...patch })
 
 describe('film model', () => {
@@ -106,48 +98,6 @@ describe('film model', () => {
     expect(nextFilmId(good, 'music')).toBe('music-3')
   })
 
-  it('epochs: timed blocks of dated imagery, unique ids; none in a film saved before', () => {
-    expect(DEFAULT_FILM.epochs).toEqual([])
-    const good = film({ epochs: [epoch('epoch-1'), epoch('epoch-2', { startS: 0, label: 'Avant', badge: false })] })
-    expect(isValidFilm(good)).toBe(true)
-    expect(isValidSetting('film', good)).toBe(true)
-    const bad: Film[] = [
-      film({ epochs: [epoch('epoch-1', { durationS: 0.2 })] }),
-      film({ epochs: [epoch('epoch-1', { startS: -1 })] }),
-      film({ epochs: [epoch('epoch-1', { imagerySourceId: '' })] }),
-      film({ epochs: [{ ...epoch('epoch-1'), badge: undefined } as unknown as FilmEpoch] }),
-      film({ epochs: [epoch('a')], texts: [text('a')] }),
-    ]
-    for (const f of bad) expect(isValidFilm(f)).toBe(false)
-    const { epochs: _, ...saved } = film({ texts: [text('text-1')] })
-    expect(sanitizeSettings({ film: saved }).settings.film).toEqual(film({ texts: [text('text-1')] }))
-    expect(nextFilmId(good, 'epoch')).toBe('epoch-3')
-  })
-
-  it('epoch weight: smooth fades at both ends, nothing outside the block', () => {
-    const e = epoch('epoch-1')
-    expect(epochMixAt(e, 19.9)).toBe(0)
-    expect(epochMixAt(e, 20)).toBe(0)
-    expect(epochMixAt(e, 20 + EPOCH_FADE_S / 2)).toBeCloseTo(0.5, 9)
-    expect(epochMixAt(e, 24)).toBe(1)
-    expect(epochMixAt(e, 28 - EPOCH_FADE_S / 2)).toBeCloseTo(0.5, 9)
-    expect(epochMixAt(e, 28)).toBe(0)
-    // a short block fades over a quarter of its length each
-    expect(epochMixAt(epoch('epoch-2', { durationS: 2 }), 20.25)).toBeCloseTo(0.5, 9)
-  })
-
-  it('epoch shown at a film time: the block started last, else the next one ahead at weight 0', () => {
-    const a = epoch('epoch-1', { startS: 10, durationS: 20 })
-    const b = epoch('epoch-2', { startS: 15, durationS: 5, imagerySourceId: 'ign-ortho-2000-2005' })
-    expect(epochAt([a, b], 12)).toEqual({ epoch: a, mix: 1 })
-    expect(epochAt([a, b], 17)).toEqual({ epoch: b, mix: 1 })
-    expect(epochAt([b, a], 17)?.epoch).toBe(b)
-    expect(epochAt([a, b], 10 - EPOCH_LEAD_S)).toEqual({ epoch: a, mix: 0 })
-    expect(epochAt([a, b], 10 - EPOCH_LEAD_S - 0.1)).toBeNull()
-    expect(epochAt([a, b], 30)).toBeNull()
-    expect(epochAt([], 12)).toBeNull()
-  })
-
   it('rejects bad shots, items and duplicate ids', () => {
     const bad: Film[] = [
       film({ opening: { style: 'balayage' as 'saut', durationS: 5 } }),
@@ -187,6 +137,9 @@ describe('film model', () => {
     // media saved before their placement get the defaults
     const bare = { id: 'media-1', startS: 10, durationS: 5, kind: 'image', src: 'photo-1' }
     expect(sanitizeSettings({ film: { ...DEFAULT_FILM, media: [bare] } }).settings.film.media).toEqual([media('media-1')])
+    // the `epochs` key of earlier versions is dropped, the film still opens
+    const old = { ...film({ texts: [text('text-1')] }), epochs: [{ id: 'epoch-1', startS: 4, durationS: 6, imagerySourceId: 'ign-ortho-1950-1965', badge: true }] }
+    expect(sanitizeSettings({ film: old })).toEqual({ settings: { ...DEFAULT_SETTINGS, film: film({ texts: [text('text-1')] }) }, invalid: [] })
   })
 
   it('round-trips through the project document', () => {

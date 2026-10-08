@@ -27,16 +27,7 @@ export function StatusBar() {
   const water = useWaterStore((s) => s.polygons > 0)
   const dialog = useRef<HTMLDialogElement>(null)
 
-  // the dated imagery of the film's epochs is credited too
-  const epochs = useAppStore((s) => s.settings.film.epochs)
-
-  const credits = overlayCredits({
-    terrainSourceId,
-    imagerySourceId,
-    weather,
-    landmarks: landmarks || water,
-    epochSourceIds: epochs.map((e) => e.imagerySourceId),
-  })
+  const credits = overlayCredits({ terrainSourceId, imagerySourceId, weather, landmarks: landmarks || water })
 
   return (
     <footer className="status">

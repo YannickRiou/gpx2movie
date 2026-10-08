@@ -3,10 +3,8 @@ import sampleGpx from '../../public/samples/tour-du-mont-blanc-j1.gpx?raw'
 import { parseGpx } from '../import/gpx'
 import { overlayFrameAt, prepareOverlayTrack, recordedAtProgress } from './data'
 import {
-  EPOCH_BADGE_SUBTITLE,
   SAFE_MARGIN,
   cardOpacityAt,
-  epochBadgeAt,
   counterText,
   drawOverlay,
   endCardOpacity,
@@ -24,7 +22,7 @@ import {
 } from './draw'
 import type { OverlayContext2D, OverlayExtras } from './draw'
 import { MEDIA_DEFAULTS } from '../film/model'
-import type { FilmEpoch, FilmMedia, FilmText } from '../film/model'
+import type { FilmMedia, FilmText } from '../film/model'
 import { DEFAULT_OVERLAY, OVERLAY_ANCHORS, OVERLAY_STYLES } from './settings'
 import type { OverlaySettings } from './settings'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
@@ -468,38 +466,6 @@ describe('timeline texts', () => {
 
   it('is not drawn while the overlay is off', () => {
     expect(find(render(0.6, DEFAULT_OVERLAY), 'Col de Balme')).toBeUndefined()
-  })
-})
-
-describe('epoch badge', () => {
-  const epoch: FilmEpoch = { id: 'epoch-1', startS: 0.4, durationS: 0.4, imagerySourceId: 'ign-ortho-1950-1965', badge: true }
-  const render = (progress: number, settings: OverlaySettings, epochs: FilmEpoch[] = [epoch]) => {
-    const { ctx, texts } = fakeContext()
-    drawOverlay(ctx, overlayFrameAt(track, progress), settings, SIZE, {}, { epochs })
-    return texts.map((t) => t.text.toLocaleLowerCase('fr'))
-  }
-
-  it('shows the years of the source (or the label) while the block is shown, even without the overlay', () => {
-    expect(render(0.6, DEFAULT_OVERLAY)).toEqual(['1950–1965', EPOCH_BADGE_SUBTITLE.toLocaleLowerCase('fr')])
-    expect(render(0.6, enabled())).toContain('1950–1965')
-    expect(render(0.3, DEFAULT_OVERLAY)).toEqual([])
-    expect(render(0.6, DEFAULT_OVERLAY, [{ ...epoch, label: 'Avant le barrage' }])).toContain('avant le barrage')
-    expect(render(0.6, DEFAULT_OVERLAY, [{ ...epoch, badge: false }])).toEqual([])
-  })
-
-  it('fades with the dated imagery, at the top centre', () => {
-    const at = (t: number) => epochBadgeAt([{ ...epoch, startS: 10, durationS: 8 }], t)
-    expect(at(14)).toMatchObject({ opacity: 1, item: { anchor: 'top-center', text: '1950–1965' } })
-    expect(at(10.5)!.opacity).toBeCloseTo(0.5, 9)
-    expect(at(9)).toBeNull()
-  })
-
-  it('times the dated imagery for the export, overlay on or off', () => {
-    const time = { timeS: 14, openingS: 0, flightS: 100, totalS: 100 }
-    const epochs = [{ ...epoch, startS: 10, durationS: 8 }]
-    expect(overlayTimedState(DEFAULT_OVERLAY, [], time, [], epochs)).toEqual([1])
-    expect(overlayTimedState(DEFAULT_OVERLAY, [], { ...time, timeS: 10.5 }, [], epochs)[0]).toBeCloseTo(0.5, 9)
-    expect(overlayTimedState(DEFAULT_OVERLAY, [], time)).toEqual([])
   })
 })
 

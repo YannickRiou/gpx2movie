@@ -15,7 +15,6 @@ import {
 } from '../film/model'
 import type { Film, MediaLayout, MediaSync, ShotStyle, StopCamera } from '../film/model'
 import {
-  addEpochOverStop,
   clipSyncOffsetS,
   formatFilmTime,
   formatSpeedFactor,
@@ -27,14 +26,12 @@ import {
   updateStop,
   syncClip,
   syncClipPlacement,
-  updateEpoch,
   updateText,
 } from '../film/timeline'
 import { buildTrackPath } from '../flyover/path'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
-import { getHistoricalImagery, historicalImageryFor } from '../terrain/sources'
 import { useAppStore } from '../state/store'
 import { formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
@@ -104,7 +101,7 @@ function AnchorPicker({ label, value, onChange }: { label: string; value: Overla
 
 /**
  * Settings of the block selected on the timeline (`filmSelection`), in the right dock: opening / closing shot, stop,
- * speed portion, text, photo or video, music, epoch. Typing is merged into one undo step; editing a generated stop writes the stops out first.
+ * speed portion, text, photo or video. Typing is merged into one undo step; editing a generated stop writes the stops out first.
  */
 export function FilmInspector() {
   const id = useId()
@@ -115,8 +112,6 @@ export function FilmInspector() {
   const path = useMemo(() => (track ? buildTrackPath(track) : null), [track])
   if (!item || !track || !path) return null
   const lengthM = track.stats.distanceM
-  /** dated imagery covering the track, oldest first (none outside France) */
-  const epochSources = historicalImageryFor(track.bounds)
   const change = (fn: (f: Film) => Film, stops: boolean) => editFilm((f) => ({ film: fn(f) }), { stops, step: false })
   const close = () => useAppStore.getState().setFilmSelection(null)
   const range = (
@@ -240,7 +235,6 @@ export function FilmInspector() {
     const filmText = film.texts.find((t) => t.id === item)
     const media = film.media.find((m) => m.id === item)
     const music = film.audio.find((a) => a.id === item)
-    const epoch = film.epochs.find((e) => e.id === item)
     if (stop) {
       isStop = true
       title = 'Arrêt'
@@ -264,22 +258,6 @@ export function FilmInspector() {
             À {formatDistance(stop.atM)} sur {formatDistance(lengthM)}, de {formatFilmTime(stop.startS)} à {formatFilmTime(stop.endS)}
             {film.autoStops && ' · arrêt automatique : le retoucher fige les arrêts'}
           </p>
-          {epochSources.length > 0 && (
-            <>
-              <button
-                type="button"
-                className="btn btn--secondary"
-                onClick={() => editFilm((f) => addEpochOverStop(f, stop, epochSources[0].id))}
-              >
-                <Icon name="history" size={16} />
-                Avant / après
-              </button>
-              <p className="field__hint">
-                Pendant cet arrêt, le paysage passe en fondu aux photos aériennes de {epochSources[0].label}, puis revient
-                à aujourd’hui.
-              </p>
-            </>
-          )}
         </>
       )
     } else if (speed) {
@@ -421,64 +399,6 @@ export function FilmInspector() {
             {card ? `La ${title.toLowerCase()} s’affiche encadrée, au style de l’habillage.` : `La ${title.toLowerCase()} couvre la vue 3D, en fondu.`}
             {video && picture?.durationS !== undefined && ` Vidéo de ${formatFilmTime(fileS)} ; au-delà de sa fin, la dernière image reste affichée.`}
             {video && ' Le son des vidéos n’est pas repris : la vidéo est muette. Pour du son, ajoutez une musique (Options de la timeline).'}
-          </p>
-        </>
-      )
-    } else if (epoch) {
-      title = 'Époque'
-      const set = (patch: Parameters<typeof updateEpoch>[2]) => change((f) => updateEpoch(f, item, patch), false)
-      const own = getHistoricalImagery(epoch.imagerySourceId)
-      // the block's own source stays listed (a project opened over another track)
-      const choices = [...epochSources.map((h) => h.id), ...(own && !epochSources.some((h) => h.id === own.source.id) ? [own.source.id] : [])]
-      body = (
-        <>
-          <div className="field">
-            <label className="field__label" htmlFor={`${id}-epoch-source`}>
-              Photos
-            </label>
-            <select
-              id={`${id}-epoch-source`}
-              className="select"
-              value={epoch.imagerySourceId}
-              disabled={choices.length === 0}
-              aria-describedby={`${id}-epoch-hint`}
-              onChange={(e) => set({ imagerySourceId: e.currentTarget.value })}
-            >
-              {!own && <option value={epoch.imagerySourceId}>Source inconnue</option>}
-              {choices.map((sourceId) => (
-                <option key={sourceId} value={sourceId}>
-                  {getHistoricalImagery(sourceId)?.source.name}
-                </option>
-              ))}
-            </select>
-            <p id={`${id}-epoch-hint`} className="field__hint">
-              {epochSources.length === 0
-                ? 'Aucune photo d’époque ne couvre cette trace (France seulement) : le paysage actuel reste affiché.'
-                : 'Là où la photo d’époque manque, le paysage actuel reste visible.'}
-            </p>
-          </div>
-          <div className="field">
-            <label className="field__label" htmlFor={`${id}-epoch-label`}>
-              Libellé
-            </label>
-            <input
-              id={`${id}-epoch-label`}
-              className="input"
-              type="text"
-              value={epoch.label ?? ''}
-              placeholder={own?.label}
-              onChange={(e) => set({ label: e.currentTarget.value })}
-            />
-          </div>
-          <label className="checkbox">
-            <input type="checkbox" checked={epoch.badge} onChange={(e) => set({ badge: e.currentTarget.checked })} />
-            Afficher le libellé dans le film
-          </label>
-          {timing(epoch.startS, epoch.durationS, set)}
-          <p className="field__hint">
-            De {formatFilmTime(epoch.startS)} à {formatFilmTime(epoch.startS + epoch.durationS)} : le relief prend les photos
-            d’époque en fondu d’une seconde, puis revient à l’imagerie actuelle. Le libellé s’affiche en haut au centre, au style
-            de l’habillage.
           </p>
         </>
       )
