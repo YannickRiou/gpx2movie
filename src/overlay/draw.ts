@@ -18,10 +18,10 @@ import { formatDistance, formatDuration, formatNumber } from '../ui/format'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import type { WeatherSummary } from '../weather/series'
 import { recordedAtProgress } from './data'
-import type { OverlayFrame, OverlayTrack } from './data'
+import type { LeaderboardRow, OverlayFrame, OverlayTrack } from './data'
 import type { CounterId, CreditsPosition, OverlayAnchor, OverlaySettings } from './settings'
 import { COUNTER_IDS } from './settings'
-import { OVERLAY_THEMES } from './themes'
+import { resolveOverlayTheme } from './themes'
 import type { OverlayTheme } from './themes'
 
 /** On screen (preview) or offscreen (video export). */
@@ -87,6 +87,8 @@ export interface OverlayExtras {
   media?: readonly FilmMedia[]
   /** credits of the sources in the film (`overlayCredits`), drawn while `settings.credits` is on */
   credits?: readonly string[]
+  /** ghost-race leaderboard at the frame's progress (`leaderboardRows`), drawn while `settings.leaderboard` is on */
+  leaderboard?: readonly LeaderboardRow[]
 }
 
 /** Safe area: 5 % of the frame on each side. */
@@ -802,6 +804,69 @@ function minimapWidget(p: Painter, frame: OverlayFrame, settings: OverlaySetting
   }
 }
 
+const LEADERBOARD_TITLE = 'Classement'
+/** Gap column wide enough for the usual gaps, so the panel keeps its width as they change. */
+const LEADERBOARD_GAP_TEMPLATE = '+00 min 00'
+
+/** Ghost race: « Classement » over one line per racer — rank, colour dot, name, gap to the first. */
+function leaderboardWidget(p: Painter, rows: readonly LeaderboardRow[], settings: OverlaySettings, opacity: number): Widget | null {
+  if (rows.length < 2) return null
+  const { ctx, theme, u } = p
+  const { anchor, size: s } = settings.leaderboard
+  const heading: TextStyle = {
+    family: theme.bodyFamily,
+    weight: theme.labelWeight,
+    sizePx: 1.5 * u * s,
+    color: theme.textSoft,
+    uppercase: theme.labelUppercase,
+    tracking: theme.labelTracking,
+  }
+  const rank: TextStyle = { family: theme.numberFamily, weight: theme.numberWeight, sizePx: 2 * u * s, color: theme.text }
+  const name: TextStyle = { family: theme.bodyFamily, weight: 500, sizePx: 2 * u * s, color: theme.text }
+  const gap: TextStyle = { family: theme.bodyFamily, weight: theme.labelWeight, sizePx: 1.7 * u * s, color: theme.textSoft }
+  const names = rows.map((row) => truncate(p, row.name, 24 * u * s, name))
+  const rankW = Math.max(...rows.map((row) => measure(p, String(row.rank), rank)))
+  const nameW = Math.max(...names.map((n) => measure(p, n, name)))
+  const gapW = Math.max(measure(p, LEADERBOARD_GAP_TEMPLATE, gap), ...rows.map((row) => measure(p, row.gap, gap)))
+  const dot = 1.2 * u * s
+  const colGap = 1.2 * u * s
+  const lineH = 3.2 * u * s
+  const headingH = heading.sizePx * 0.74 + 1.4 * u * s
+  const innerW = Math.max(measure(p, LEADERBOARD_TITLE, heading), rankW + colGap + dot + colGap + nameW + 2 * colGap + gapW)
+  const innerH = headingH + rows.length * lineH
+  const pad = (theme.panel ? 1.6 : 0.5) * u * s
+  const bar = theme.panel ? theme.accentBar * u : 0
+  const align = alignOf(anchor)
+
+  return {
+    anchor,
+    width: innerW + 2 * pad + bar,
+    height: innerH + 2 * pad,
+    opacity,
+    draw(x, y) {
+      drawPanel(p, x, y, innerW + 2 * pad + bar, innerH + 2 * pad, align)
+      const ix = x + pad + (align === 'right' ? 0 : bar)
+      fillText(p, LEADERBOARD_TITLE, ix, y + pad + heading.sizePx * 0.74, heading)
+      rows.forEach((row, i) => {
+        const middle = y + pad + headingH + (i + 0.5) * lineH
+        // cap height centred on the row
+        const baseline = middle + name.sizePx * 0.36
+        fillText(p, String(row.rank), ix + rankW, baseline, rank, 'right')
+        const dotX = ix + rankW + colGap + dot / 2
+        ctx.beginPath()
+        ctx.arc(dotX, middle, dot / 2, 0, Math.PI * 2)
+        ctx.fillStyle = row.color
+        ctx.fill()
+        ctx.lineWidth = 0.2 * u * s
+        ctx.strokeStyle = theme.profile.markerRing
+        ctx.stroke()
+        fillText(p, names[i], dotX + dot / 2 + colGap, baseline, name)
+        fillText(p, row.gap, ix + innerW, baseline, gap, 'right')
+      })
+    },
+  }
+}
+
 interface CardContent {
   title: string
   subtitle: string
@@ -1182,7 +1247,7 @@ export function drawOverlay(
   const transform = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null
   const p: Painter = {
     ctx,
-    theme: OVERLAY_THEMES[settings.style] ?? OVERLAY_THEMES.editorial,
+    theme: resolveOverlayTheme(settings.style, settings.overrides),
     u: Math.min(size.width, size.height) / 100,
     px: transform ? Math.hypot(transform.a, transform.b) || 1 : 1,
     size,
@@ -1217,6 +1282,7 @@ export function drawOverlay(
     weather = settings.weather.enabled && live > 0 ? weatherWidget(p, frame, settings, live) : null
     add(weather)
     if (settings.minimap.enabled && live > 0) add(minimapWidget(p, frame, settings, live))
+    if (settings.leaderboard.enabled && live > 0) add(leaderboardWidget(p, extras.leaderboard ?? [], settings, live))
     if (settings.text.enabled) add(textWidget(p, settings))
     if (settings.logo.enabled) add(logoWidget(p, settings, assets))
     // texts of the timeline inside their window

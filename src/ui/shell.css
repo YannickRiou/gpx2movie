@@ -29,6 +29,7 @@
 .rail :focus-visible,
 .status :focus-visible,
 .view__fit:focus-visible,
+.view__safe-zones:focus-visible,
 .film-tl__bar :focus-visible,
 .track-menu :focus-visible {
   outline: var(--focus-ring-on-dark);
@@ -598,6 +599,73 @@
   z-index: 4;
   top: var(--space-3);
   right: var(--space-3);
+}
+
+/* « Zones de sécurité » toggle, under « Recadrer » */
+.view__safe-zones {
+  position: absolute;
+  z-index: 4;
+  top: calc(var(--space-3) + 36px + var(--space-2));
+  right: var(--space-3);
+}
+
+.view__safe-zones[aria-pressed='true'] {
+  background: var(--color-white);
+  color: var(--color-ink);
+}
+
+.view__safe-zones[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--color-glacier);
+}
+
+/* Safe zones over the framed preview (never exported): shaded hidden areas, outlined margins, tiny labels */
+.view__stage > .safe-zones {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.safe-zones__covered,
+.safe-zones__guide {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.safe-zones__covered {
+  background: repeating-linear-gradient(135deg, rgb(28 42 51 / 0.42) 0 6px, rgb(28 42 51 / 0.3) 6px 12px);
+  outline: 1px solid rgb(255 255 255 / 0.5);
+  outline-offset: -1px;
+}
+
+.safe-zones__guide {
+  border: 1px dashed rgb(255 255 255 / 0.85);
+  box-shadow: 0 0 0 1px rgb(28 42 51 / 0.35);
+}
+
+.safe-zones__label {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgb(28 42 51 / 0.72);
+  color: var(--color-white);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+/* right-aligned: the narrow band of the buttons is on the right edge, its label may overhang to the left */
+.safe-zones__covered > .safe-zones__label {
+  left: auto;
+  right: 4px;
+}
+
+.safe-zones__guide--inner > .safe-zones__label {
+  top: auto;
+  bottom: 2px;
+  left: auto;
+  right: 4px;
 }
 
 /* Welcome card (no track yet) */

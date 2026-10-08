@@ -11,6 +11,7 @@ import {
   isExportBusy,
   registerDrapeFlush,
   resetExportStore,
+  overlayBaseName,
   stillBaseName,
   useExportStore,
   videoFileName,
@@ -61,6 +62,10 @@ describe('helpers', () => {
     expect(videoFileName(stillBaseName('Tour', 0.4239), '.png')).toBe('Tour 42 %.png')
     expect(stillBaseName('Tour', 0)).toBe('Tour 0 %')
     expect(stillBaseName('Tour', 1)).toBe('Tour 100 %')
+  })
+
+  it('names the overlay alone after the track', () => {
+    expect(videoFileName(overlayBaseName('Tour du Mont-Blanc'), '.webm')).toBe('Tour du Mont-Blanc habillage.webm')
   })
 
   it('knows the busy phases', () => {

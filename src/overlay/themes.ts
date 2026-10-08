@@ -3,7 +3,7 @@
  * legibility over any imagery, from the same family as the charte « Carte alpine » (paper, ink, trail red).
  * Sizes are in overlay units (1 u = 1 % of the shorter side of the frame).
  */
-import type { OverlayStyleId } from './settings'
+import type { OverlayFontId, OverlayOverrides, OverlayStyleId } from './settings'
 
 export interface OverlayPanelStyle {
   fill: string
@@ -59,6 +59,16 @@ export interface OverlayPhotoStyle {
 const FRAUNCES = '"Fraunces", Georgia, serif'
 const PLEX = '"IBM Plex Sans", system-ui, sans-serif'
 const PLEX_CONDENSED = '"IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif'
+
+/** Families of the fonts the user can pick (`OverlayOverrides`): bundled faces, or system ones with fallbacks. */
+export const OVERLAY_FONT_FAMILIES: Record<OverlayFontId, string> = {
+  fraunces: FRAUNCES,
+  plex: PLEX,
+  'plex-condensed': PLEX_CONDENSED,
+  georgia: 'Georgia, "Times New Roman", serif',
+  system: 'system-ui, sans-serif',
+  mono: 'ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace',
+}
 
 const PAPER = '#F5F2EA'
 const INK = '#1C2A33'
@@ -175,3 +185,76 @@ export const OVERLAY_FONTS: readonly string[] = [
   `600 32px ${PLEX_CONDENSED}`,
   `700 32px ${PLEX_CONDENSED}`,
 ]
+
+// ---------------------------------------------------------------------------
+// User overrides
+// ---------------------------------------------------------------------------
+
+export interface Rgba {
+  r: number
+  g: number
+  b: number
+  a: number
+}
+
+/** '#rrggbb', 'rgb(r, g, b)' or 'rgba(r, g, b, a)' (the forms used by the themes); null otherwise. */
+export function parseColor(css: string): Rgba | null {
+  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(css)
+  if (hex) return { r: parseInt(hex[1], 16), g: parseInt(hex[2], 16), b: parseInt(hex[3], 16), a: 1 }
+  const fn = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(css)
+  if (!fn) return null
+  return { r: Number(fn[1]), g: Number(fn[2]), b: Number(fn[3]), a: fn[4] === undefined ? 1 : Number(fn[4]) }
+}
+
+/** Opaque part of a colour as '#rrggbb' (what a colour input shows), black when unreadable. */
+export function toHex(css: string): string {
+  const c = parseColor(css) ?? { r: 0, g: 0, b: 0, a: 1 }
+  return `#${[c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`
+}
+
+/** '#rrggbb' at opacity `alpha` -> 'rgba(r, g, b, alpha)'. */
+function withAlpha(hex: string, alpha: number): string {
+  const { r, g, b } = parseColor(hex) ?? { r: 0, g: 0, b: 0 }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+/** Colour and opacity of the style's panel, '#rrggbb' and 0–1; null for a style without panel. */
+export function panelColorOf(theme: OverlayTheme): { color: string; opacity: number } | null {
+  if (!theme.panel) return null
+  return { color: toHex(theme.panel.fill), opacity: parseColor(theme.panel.fill)?.a ?? 1 }
+}
+
+/** Opacity of the secondary text (labels, units) derived from a chosen text colour. */
+const SOFT_TEXT_ALPHA = 0.8
+
+/**
+ * Theme drawn for a style and the user's overrides, the same for the preview and the export. The accent also
+ * recolours what the style drew in its accent (profile, mini-map), the text colour the secondary text, and the
+ * panel colour the photo cards' mat (styles with a panel only: a style without panel keeps its look).
+ */
+export function resolveOverlayTheme(style: OverlayStyleId, overrides: OverlayOverrides | undefined): OverlayTheme {
+  const base = OVERLAY_THEMES[style] ?? OVERLAY_THEMES.editorial
+  if (!overrides || Object.keys(overrides).length === 0) return base
+  const { accent, text, titleFont, numberFont } = overrides
+  const theme: OverlayTheme = { ...base, profile: { ...base.profile }, minimap: { ...base.minimap }, photo: { ...base.photo } }
+  if (accent) {
+    const followAccent = (c: string) => (c === base.accent ? accent : c)
+    theme.accent = accent
+    theme.profile.played = followAccent(base.profile.played)
+    theme.profile.marker = followAccent(base.profile.marker)
+    theme.minimap.covered = followAccent(base.minimap.covered)
+  }
+  if (text) {
+    theme.text = text
+    theme.textSoft = withAlpha(text, SOFT_TEXT_ALPHA)
+  }
+  const stylePanel = panelColorOf(base)
+  if (base.panel && stylePanel && (overrides.panel || overrides.panelOpacity !== undefined)) {
+    const fill = withAlpha(overrides.panel ?? stylePanel.color, overrides.panelOpacity ?? stylePanel.opacity)
+    theme.panel = { ...base.panel, fill }
+    theme.photo.mat = fill
+  }
+  if (titleFont) theme.titleFamily = OVERLAY_FONT_FAMILIES[titleFont]
+  if (numberFont) theme.numberFamily = OVERLAY_FONT_FAMILIES[numberFont]
+  return theme
+}

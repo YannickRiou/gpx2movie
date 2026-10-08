@@ -7,9 +7,10 @@ const fake = vi.hoisted(() => ({
     state: string
     finalize: () => Promise<void>
     cancel: () => Promise<void>
+    videoMetadata?: { canBeTransparent?: boolean }
   }[],
   streams: [] as { options: unknown }[],
-  sources: [] as { config: { codec: string; quality: { options: { bitrate: number } } }; added: [number, number][]; closed: boolean }[],
+  sources: [] as { config: { codec: string; alpha?: string; quality: { options: { bitrate: number } } }; added: [number, number][]; closed: boolean }[],
   buffer: new ArrayBuffer(8) as ArrayBuffer | null,
   /** audio sources and what they received: [timestamp, frames, first value of each channel] */
   sounds: [] as { config: { codec: string }; added: [number, number, number[]][]; closed: boolean }[],
@@ -101,7 +102,10 @@ vi.mock('mediabunny', () => {
       this.target = target
       fake.outputs.push(this as never)
     }
-    addVideoTrack() {}
+    videoMetadata: unknown
+    addVideoTrack(_source: unknown, metadata: unknown) {
+      this.videoMetadata = metadata
+    }
     audioTracks = 0
     addAudioTrack() {
       this.audioTracks++
@@ -140,6 +144,7 @@ vi.mock('mediabunny', () => {
 })
 
 import {
+  ALPHA_CANDIDATES,
   AUDIO_LEAD_S,
   CODEC_CANDIDATES,
   ExportCanceledError,
@@ -262,6 +267,21 @@ describe('createVideoEncoder', () => {
     expect(session.extension).toBe('.webm')
     expect(fake.outputs[0].format.kind).toBe('webm')
     expect((await session.finish()).blob?.type).toBe('video/webm')
+  })
+
+  it('keeps the alpha of a transparent film, in WebM / VP9 only', async () => {
+    const session = await createVideoEncoder(canvas, { ...OPTIONS, transparent: true }, supporting('avc', 'vp9'))
+    expect(session.codec).toEqual({ container: 'webm', codec: 'vp9' })
+    expect(fake.sources[0].config.alpha).toBe('keep')
+    expect(fake.outputs[0].videoMetadata).toMatchObject({ canBeTransparent: true })
+    expect(await pickCodec(OPTIONS, supporting('avc', 'vp8'), ALPHA_CANDIDATES)).toBeNull()
+    await expect(createVideoEncoder(canvas, { ...OPTIONS, transparent: true }, supporting('avc', 'vp8'))).rejects.toThrow(/aucun format/)
+  })
+
+  it('discards the alpha of an ordinary film', async () => {
+    await createVideoEncoder(canvas, OPTIONS, supporting('avc'))
+    expect(fake.sources[0].config.alpha).toBe('discard')
+    expect(fake.outputs[0].videoMetadata).toMatchObject({ canBeTransparent: false })
   })
 
   it('rejects when no codec is available', async () => {

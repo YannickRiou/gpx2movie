@@ -33,6 +33,7 @@ export const SHORTCUTS = [
   { id: 'save', keys: ['Ctrl+S'], label: 'Enregistrer le projet', group: 'Projet' },
   { id: 'export', keys: ['Ctrl+E'], label: 'Ouvrir ou fermer le tiroir d’export', group: 'Projet' },
   { id: 'fit', keys: ['F'], label: 'Recadrer la vue sur la trace', group: 'Vue' },
+  { id: 'safe-zones', keys: ['G'], label: 'Afficher ou masquer les zones de sécurité du format (aperçu seulement)', group: 'Vue' },
   { id: 'toggle-panel', keys: ['['], label: 'Replier ou déplier le panneau', group: 'Vue' },
   { id: 'help', keys: ['?'], label: 'Afficher les raccourcis', group: 'Vue' },
   { id: 'close', keys: ['Échap'], label: 'Fermer la fenêtre, puis le tiroir d’export, puis la sélection', group: 'Vue' },
@@ -51,6 +52,7 @@ export type ShortcutAction =
   | 'open'
   | 'export'
   | 'fit'
+  | 'safe-zones'
   | 'toggle-panel'
   | 'help'
   | 'close'
@@ -87,7 +89,7 @@ export function keyFocus(target: EventTarget | null): KeyFocus {
 
 /**
  * Shortcut of the shell for a key press, null when none: Ctrl/Cmd+S save, Ctrl/Cmd+O open, Ctrl/Cmd+E export drawer,
- * F fit the view, [ fold the panel and ? the help (whatever the modifiers that type them: AltGr, Shift), Escape close,
+ * F fit the view, G the safe zones, [ fold the panel and ? the help (whatever the modifiers that type them: AltGr, Shift), Escape close,
  * S / T add a stop / a text, ← / → seek (Shift: longer), Home / End.
  */
 export function matchShortcut(e: KeyLike, focus: KeyFocus): ShortcutAction | null {
@@ -106,6 +108,7 @@ export function matchShortcut(e: KeyLike, focus: KeyFocus): ShortcutAction | nul
   }
   if (e.key === 'Escape') return e.shiftKey ? null : 'close'
   if (key === 'f') return e.shiftKey ? null : 'fit'
+  if (key === 'g') return e.shiftKey ? null : 'safe-zones'
   if (key === 's') return e.shiftKey ? null : 'add-stop'
   if (key === 't') return e.shiftKey ? null : 'add-text'
   if (focus === 'arrows') return null

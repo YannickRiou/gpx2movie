@@ -20,6 +20,9 @@ const {
   disposeTrackLineSet,
   applyExposure,
   applyTrackColors,
+  applyTrackStyle,
+  cutTrackLineSet,
+  drawOnDistances,
   writeLineColors,
   LINE_LIFT_M,
   LINE_WIDTH_PX,
@@ -159,7 +162,7 @@ function fakeEngine(height: number): TerrainEngine {
 }
 
 describe('syncTrackLineSets', () => {
-  it('builds one solid + one ghost Line2 per segment (segments are not joined) plus the two markers', () => {
+  it('builds one solid + one ghost + one glow Line2 per segment (segments are not joined) plus the two markers', () => {
     const group = new Group()
     const sets = new Map<string, TrackLineSet>()
     const shared = createSharedResources()
@@ -176,7 +179,9 @@ describe('syncTrackLineSets', () => {
     // solid and ghost share one geometry, segments never share one
     expect(set.segments[0].ghost.geometry).toBe(set.segments[0].solid.geometry)
     expect(set.segments[1].geometry).not.toBe(set.segments[0].geometry)
-    expect(set.object.children.filter((o) => o instanceof Line2)).toHaveLength(4)
+    expect(set.segments[0].glow.geometry).toBe(set.segments[0].solid.geometry)
+    expect(set.segments[0].glow.visible).toBe(false)
+    expect(set.object.children.filter((o) => o instanceof Line2)).toHaveLength(6)
     expect(set.object.children).toContain(set.startMarker)
     expect(set.object.children).toContain(set.endMarker)
 
@@ -384,5 +389,58 @@ describe('drapeTrackLineSet', () => {
 
     disposeTrackLineSet(set)
     shared.dispose()
+  })
+})
+
+describe('applyTrackStyle', () => {
+  it('sets the widths (times the render scale), the glow and the dashes of every material', () => {
+    const sets = new Map<string, TrackLineSet>()
+    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA])], frame, createSharedResources(), 800, 600)
+    const set = sets.get('a')!
+    drapeTrackLineSet(set, null, 1)
+
+    applyTrackStyle(sets.values(), { width: 6, dash: 'tirets', glow: true, drawOn: false }, 2, 0.5)
+    expect(set.solidMaterial.linewidth).toBe(12)
+    expect(set.ghostMaterial.linewidth).toBe(12)
+    expect(set.glowMaterial.linewidth).toBeGreaterThan(12)
+    expect(set.segments[0].glow.visible).toBe(true)
+    expect(set.solidMaterial.dashed).toBe(true)
+    expect(set.solidMaterial.dashScale).toBe(2)
+    // dash distances are measured along the draped line
+    expect(set.segments[0].geometry.getAttribute('instanceDistanceStart')).toBeDefined()
+
+    applyTrackStyle(sets.values(), { width: 4, dash: 'plein', glow: false, drawOn: false }, 1, 0)
+    expect(set.solidMaterial.dashed).toBe(false)
+    expect(set.segments[0].glow.visible).toBe(false)
+  })
+})
+
+describe('draw-on (« trace qui se dessine »)', () => {
+  it('draws the first track to its marker and the others whole without a race', () => {
+    const lead = { ...makeTrack('a', [segmentA]), stats: { distanceM: 200, ascentM: 0, descentM: 0, pointCount: 2 } }
+    expect(drawOnDistances([lead, makeTrack('b', [segmentB])], 0.25, null)).toEqual([50, Infinity])
+    expect(drawOnDistances([], 0.5, null)).toEqual([])
+  })
+
+  it('cuts every segment at a distance counted along the whole track, then draws it whole again', () => {
+    const sets = new Map<string, TrackLineSet>()
+    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA, segmentB])], frame, createSharedResources(), 800, 600)
+    const set = sets.get('a')!
+    drapeTrackLineSet(set, null, 1)
+    const [first, second] = set.segments
+    const pieces = first.buffer.count - 1
+
+    // halfway along the first segment: about half its pieces, the second segment hidden
+    cutTrackLineSet(set, first.dist[first.dist.length - 1] / 2)
+    expect(first.geometry.instanceCount).toBeGreaterThan(0)
+    expect(first.geometry.instanceCount).toBeLessThan(pieces)
+    expect(second.geometry.instanceCount).toBe(0)
+    // the second segment starts where the first ends (no distance across the gap)
+    expect(second.dist[0]).toBeCloseTo(first.dist[first.dist.length - 1], 6)
+
+    cutTrackLineSet(set, Infinity)
+    expect(first.geometry.instanceCount).toBe(pieces)
+    expect(second.geometry.instanceCount).toBe(1)
+    expect(first.shortened).toBe(-1)
   })
 })

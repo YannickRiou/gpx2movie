@@ -1,16 +1,21 @@
 /**
  * Music of the film (« Musique » lane): reading a sound file into the media table, its waveform, the volume of a
- * clip over time, the playback along the preview and the mix of the exported film.
+ * clip over time, the playback along the preview and the mix of the exported film, the sound of the video clips
+ * included.
  *
  * - `readAudio(file)`: MP3, M4A / AAC, OGG / Opus, WAV or FLAC of `MAX_AUDIO_BYTES` at most, kept as is (the project
  *   stays one file), decoded once by the Web Audio API to check it and draw its waveform (`peaks`).
  * - Volume of a clip (`musicEnvelope`): its volume with a linear fade in and out, the same breakpoints for the
  *   preview (`musicGainAt`) and the export (gain automation), so both sound alike.
+ * - Video clips with sound (`clipSounds`): their file played from `inS` while the clip shows it, with fades of a few
+ *   milliseconds at both edges so they never click; « Baisser la musique sous les vidéos » (`film.duckMusic`) lowers
+ *   the music by `DUCK_DB` under them, with short ramps (`duckEnvelope`).
  * - Preview (`startMusicPreview`): one HTMLAudioElement per clip, playing along while the film plays (speed,
- *   volume and fades followed, seeked again past `MUSIC_DRIFT_S` of drift), paused otherwise; muted on demand.
- * - Export (`mixFilmAudio`): deterministic, never real time: every clip is decoded and mixed by an
- *   OfflineAudioContext over the exact length of the exported film (opening, stops, closing and the held frames
- *   at both ends included), then handed to the video encoder.
+ *   volume, fades and ducking followed, seeked again past `MUSIC_DRIFT_S` of drift), paused otherwise; muted on
+ *   demand. The sound of the video clips comes from their own elements (`film/video.ts`).
+ * - Export (`mixFilmAudio`): deterministic, never real time: every music clip and every video clip with sound is
+ *   decoded and mixed by an OfflineAudioContext over the exact length of the exported film (opening, stops,
+ *   closing and the held frames at both ends included), then handed to the video encoder.
  *
  * Browser module (Web Audio, media elements); the waveform, the volume, the mix plan, the preview logic over
  * injected elements and the film length fitted to the music are pure and tested.
@@ -24,8 +29,9 @@ import { formatFilmTime } from './timeline'
 import { filmClockFor } from './clock'
 import { AUDIO_TYPES, MAX_AUDIO_BYTES, MAX_PEAKS, dataUrlToBlob, useMediaStore } from './media'
 import type { MediaAsset } from './media'
-import type { FilmAudio } from './model'
-import { blobToDataUrl } from './video'
+import { clipHasSound } from './model'
+import type { Film, FilmAudio, FilmMedia } from './model'
+import { blobToDataUrl, decodeClipSound } from './video'
 
 type AudioType = (typeof AUDIO_TYPES)[number]
 
@@ -225,6 +231,110 @@ export function musicMixPlan(
   return plan
 }
 
+// ---------------------------------------------------------------------------
+// Sound of the video clips, music lowered under them (pure)
+// ---------------------------------------------------------------------------
+
+/** Fade at both edges of a clip's sound (seconds): too short to be heard, long enough to avoid a click. */
+export const CLIP_EDGE_FADE_S = 0.02
+/** How much the music is lowered under a clip with sound (dB), and how long it takes to go down or back up (seconds). */
+export const DUCK_DB = -10
+export const DUCK_RAMP_S = 0.3
+export const DUCK_GAIN = 10 ** (DUCK_DB / 20)
+
+/** The sound of a video clip in the film: its file played from `fromS` for `lengthS`, from film time `startS`. */
+export interface ClipSound {
+  src: string
+  startS: number
+  fromS: number
+  lengthS: number
+  volume: number
+}
+
+/**
+ * The clips heard in the film (`clipHasSound`), for as long as their file runs: past `outS` or the end of the file
+ * the last frame is held, silent. Clips without their file are left out.
+ */
+export function clipSounds(media: readonly FilmMedia[], fileS: (src: string) => number | undefined): ClipSound[] {
+  const sounds: ClipSound[] = []
+  for (const m of media) {
+    const file = fileS(m.src)
+    if (!clipHasSound(m) || file === undefined) continue
+    const fromS = m.inS ?? 0
+    const lengthS = Math.min(m.durationS, Math.min(m.outS ?? Infinity, file) - fromS)
+    if (lengthS > 0) sounds.push({ src: m.src, startS: m.startS, fromS, lengthS, volume: m.volume ?? 1 })
+  }
+  return sounds
+}
+
+/** Volume of a clip's sound over its length: its volume, faded over `CLIP_EDGE_FADE_S` at both edges. */
+export function clipSoundEnvelope(sound: Pick<ClipSound, 'volume' | 'lengthS'>): GainPoint[] {
+  return musicEnvelope({ volume: sound.volume, fadeInS: CLIP_EDGE_FADE_S, fadeOutS: CLIP_EDGE_FADE_S }, sound.lengthS)
+}
+
+/**
+ * Gain of the music under the clips with sound, in film time: 1, down to `DUCK_GAIN` over the `DUCK_RAMP_S` before a
+ * clip starts (so its first words are not covered), back up over the `DUCK_RAMP_S` after it ends; clips closer than
+ * two ramps are one (no bounce in between); a clip at the very start finds the music already lowered. [] without
+ * clips: the music is left alone.
+ */
+export function duckEnvelope(sounds: readonly Pick<ClipSound, 'startS' | 'lengthS'>[]): GainPoint[] {
+  const spans = sounds.map((s) => ({ from: s.startS, to: s.startS + s.lengthS })).sort((a, b) => a.from - b.from)
+  const merged: { from: number; to: number }[] = []
+  for (const span of spans) {
+    const last = merged[merged.length - 1]
+    if (last && span.from - last.to < 2 * DUCK_RAMP_S) last.to = Math.max(last.to, span.to)
+    else merged.push({ ...span })
+  }
+  const points: GainPoint[] = []
+  for (const { from, to } of merged) {
+    if (from <= 0) points.push({ t: 0, gain: DUCK_GAIN })
+    else points.push({ t: Math.max(0, from - DUCK_RAMP_S), gain: 1 }, { t: from, gain: DUCK_GAIN })
+    points.push({ t: to, gain: DUCK_GAIN }, { t: to + DUCK_RAMP_S, gain: 1 })
+  }
+  return points
+}
+
+/** Gain of a ducking envelope at `t`: its first value before it, its last one after it, 1 without points. */
+export function duckGainAt(points: readonly GainPoint[], t: number): number {
+  if (points.length === 0) return 1
+  if (t <= points[0].t) return points[0].gain
+  if (t >= points[points.length - 1].t) return points[points.length - 1].gain
+  return envelopeAt(points, t)
+}
+
+const shifted = (points: readonly GainPoint[], byS: number) => points.map((p) => ({ t: p.t + byS, gain: p.gain }))
+
+/** Everything the exported soundtrack plays, in output time (see `filmMixPlan`). */
+export interface FilmMixPlan {
+  music: MixEntry[]
+  /** video clips with sound (`src`: the clip's file) */
+  clips: MixEntry[]
+  /** gain of the music bus (the ducking), [] to leave it at 1 */
+  duck: GainPoint[]
+}
+
+/**
+ * The soundtrack of the exported film: its music (`musicMixPlan`), its video clips with sound, each at film time +
+ * `offsetS` with its trim and its edge fades, and the music lowered under them when `duckMusic` is set; whatever
+ * starts at or after `totalS` is left out.
+ */
+export function filmMixPlan(
+  film: Pick<Film, 'audio' | 'media' | 'duckMusic'>,
+  fileS: (src: string) => number | undefined,
+  offsetS: number,
+  totalS: number,
+): FilmMixPlan {
+  const music = musicMixPlan(film.audio, fileS, offsetS, totalS)
+  const sounds = clipSounds(film.media, fileS).filter((s) => offsetS + s.startS < totalS)
+  const clips = sounds.map((s) => {
+    const atS = offsetS + s.startS
+    return { src: s.src, atS, fromS: s.fromS, lengthS: s.lengthS, points: shifted(clipSoundEnvelope(s), atS) }
+  })
+  const duck = film.duckMusic && music.length > 0 ? shifted(duckEnvelope(sounds), offsetS) : []
+  return { music, clips, duck }
+}
+
 /**
  * Flyover duration (seconds at ×1, within `range`, at 1/100) at which the film lasts `endS`: `totalFor(d)` is the
  * length of the film for a flyover duration `d` (stops, speed portions and shots included, increasing with `d`).
@@ -315,24 +425,48 @@ export interface MixedAudio {
   channels: Float32Array[]
 }
 
+/** Gain automation of `param` along `points` (linear between them; before the first, the param's own value). */
+function automate(param: AudioParam, points: readonly GainPoint[]) {
+  const [first, ...rest] = points
+  if (!first) return
+  param.setValueAtTime(first.gain, first.t)
+  for (const p of rest) param.linearRampToValueAtTime(p.gain, p.t)
+}
+
+/** Play `buffer` from `fromS` for `entry.lengthS` at `entry.atS`, its volume automated, into `out`. */
+function schedule(ctx: OfflineAudioContext, out: AudioNode, buffer: AudioBuffer, entry: MixEntry, fromS: number) {
+  const node = ctx.createBufferSource()
+  node.buffer = buffer
+  const gain = ctx.createGain()
+  automate(gain.gain, entry.points)
+  node.connect(gain).connect(out)
+  node.start(entry.atS, fromS, entry.lengthS)
+}
+
 /**
- * The music of the film mixed over `lengthS` seconds of output (`offsetS`: frames held before the film), volume
- * and fades applied; null without any clip to play. Throws a French message for a file that cannot be decoded.
+ * The soundtrack of the film mixed over `lengthS` seconds of output (`offsetS`: frames held before the film): its
+ * music (volume, fades, lowered under the clips when `duckMusic` is set) and the sound of its video clips; null
+ * when nothing is heard. Throws a French message for a file that cannot be decoded.
  */
 export async function mixFilmAudio(
-  clips: readonly FilmAudio[],
+  film: Pick<Film, 'audio' | 'media' | 'duckMusic'>,
   source: (src: string) => MediaAsset | undefined,
   { offsetS, lengthS }: { offsetS: number; lengthS: number },
 ): Promise<MixedAudio | null> {
-  const plan = musicMixPlan(clips, (src) => source(src)?.durationS, offsetS, lengthS)
-  if (plan.length === 0) return null
+  const plan = filmMixPlan(film, (src) => source(src)?.durationS, offsetS, lengthS)
+  if (plan.music.length === 0 && plan.clips.length === 0) return null
   const ctx = new OfflineAudioContext({
     numberOfChannels: MIX_CHANNELS,
     length: Math.max(1, Math.ceil(lengthS * MIX_SAMPLE_RATE)),
     sampleRate: MIX_SAMPLE_RATE,
   })
+  // the music goes through one bus, lowered under the clips; the clips straight to the output
+  const musicBus = ctx.createGain()
+  automate(musicBus.gain, plan.duck)
+  musicBus.connect(ctx.destination)
+  let heard = 0
   const decoded = new Map<string, Promise<AudioBuffer>>()
-  for (const entry of plan) {
+  for (const entry of plan.music) {
     const asset = source(entry.src)!
     let pending = decoded.get(entry.src)
     if (!pending) {
@@ -347,15 +481,23 @@ export async function mixFilmAudio(
     } catch {
       throw new Error(`Musique « ${asset.name ?? entry.src} » illisible pendant l'export.`)
     }
-    const node = ctx.createBufferSource()
-    node.buffer = buffer
-    const gain = ctx.createGain()
-    const [first, ...rest] = entry.points
-    gain.gain.setValueAtTime(first.gain, first.t)
-    for (const p of rest) gain.gain.linearRampToValueAtTime(p.gain, p.t)
-    node.connect(gain).connect(ctx.destination)
-    node.start(entry.atS, entry.fromS, entry.lengthS)
+    schedule(ctx, musicBus, buffer, entry, entry.fromS)
+    heard++
   }
+  for (const entry of plan.clips) {
+    const asset = source(entry.src)!
+    let buffer: AudioBuffer | null
+    try {
+      buffer = await decodeClipSound(asset, entry.fromS, entry.lengthS)
+    } catch {
+      throw new Error(`Son de la vidéo « ${asset.name ?? entry.src} » illisible pendant l'export : coupez-le dans l'inspecteur de la vidéo.`)
+    }
+    // a clip without sound track stays silent; its buffer starts at its trim already
+    if (!buffer) continue
+    schedule(ctx, ctx.destination, buffer, entry, 0)
+    heard++
+  }
+  if (heard === 0) return null
   const rendered = await ctx.startRendering()
   return {
     sampleRate: rendered.sampleRate,
@@ -394,8 +536,11 @@ export interface MusicPlayback {
 }
 
 export interface MusicPreview {
-  /** play, pause or seek the element of each clip for this state of the playback; drop those of removed clips */
-  update(clips: readonly FilmAudio[], playback: MusicPlayback): void
+  /**
+   * play, pause or seek the element of each clip for this state of the playback, lowered along `duck` (film time,
+   * `duckEnvelope`); drop those of removed clips
+   */
+  update(clips: readonly FilmAudio[], playback: MusicPlayback, duck?: readonly GainPoint[]): void
   dispose(): void
 }
 
@@ -413,7 +558,7 @@ export function createMusicPreview(
     entries.delete(id)
   }
   return {
-    update(clips, { playing, timeS, speed, muted }) {
+    update(clips, { playing, timeS, speed, muted }, duck = []) {
       const ids = new Set(clips.map((c) => c.id))
       for (const id of [...entries.keys()]) if (!ids.has(id)) drop(id)
       for (const clip of clips) {
@@ -438,7 +583,7 @@ export function createMusicPreview(
         }
         const fileS = clip.inS + local
         el.muted = muted
-        el.volume = Math.min(1, Math.max(0, musicGainAt(clip, timeS!, asset.durationS)))
+        el.volume = Math.min(1, Math.max(0, musicGainAt(clip, timeS!, asset.durationS) * duckGainAt(duck, timeS!)))
         if (el.playbackRate !== speed) el.playbackRate = speed
         if (el.paused) {
           el.currentTime = fileS
@@ -470,7 +615,7 @@ function musicElement(asset: MediaAsset) {
   }
 }
 
-/** Sound of the preview cut by the button of the timeline (not saved: the exported film always has its music). */
+/** Sound of the preview (music and video clips) cut by the button of the timeline (not saved: the export keeps it). */
 export const useMusicPreview = create<{ muted: boolean; setMuted(muted: boolean): void }>()((set) => ({
   muted: false,
   setMuted: (muted) => set({ muted }),
@@ -482,7 +627,10 @@ export function startMusicPreview(): () => void {
   const sync = () => {
     const { settings, playback } = useAppStore.getState()
     const { playing, timeS, speed } = playback
-    preview.update(settings.film.audio, { playing, timeS, speed, muted: useMusicPreview.getState().muted })
+    const { film } = settings
+    const table = useMediaStore.getState().table
+    const duck = film.duckMusic ? duckEnvelope(clipSounds(film.media, (src) => table[src]?.durationS)) : []
+    preview.update(film.audio, { playing, timeS, speed, muted: useMusicPreview.getState().muted }, duck)
   }
   const unsubscribe = [useAppStore.subscribe(sync), useMediaStore.subscribe(sync), useMusicPreview.subscribe(sync)]
   sync()

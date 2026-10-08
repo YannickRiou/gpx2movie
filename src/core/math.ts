@@ -30,3 +30,9 @@ export function firstIndexAtOrAbove(sorted: ArrayLike<number>, value: number): n
   }
   return lo
 }
+
+/** 0 → 1 with zero first and second derivatives at both ends. */
+export function smootherstep(x: number): number {
+  const t = clamp(x, 0, 1)
+  return t * t * t * (t * (6 * t - 15) + 10)
+}

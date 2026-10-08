@@ -11,6 +11,9 @@
  * and encoded along the frames (silent, with a note, when the browser cannot encode sound). A still image request renders its single progress the same way and keeps the composed canvas as
  * PNG / JPEG instead; an overview still (poster) shows the whole track from the south and hands the image to its
  * `compose` function. Everything is restored afterwards, on success, error or cancel.
+ *
+ * The overlay alone (`overlayOnly`) skips the scene: the same frames, each overlay drawn on a cleared canvas and encoded
+ * with its transparency, so the file lines up frame for frame with the film.
  */
 import { useEffect, useRef } from 'react'
 import { useThree, type RootState } from '@react-three/fiber'
@@ -28,7 +31,7 @@ import { useTerrainContext } from '../scene/TerrainLayer'
 import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
 import { useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
-import { REPLACE_EPSILON, composeFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
+import { REPLACE_EPSILON, composeFrame, composeOverlayFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
 import { ExportCanceledError, createVideoEncoder, type VideoEncodeSession } from './encoder'
 import { buildFrameSchedule, buildFrameTimes } from './schedule'
 import {
@@ -94,6 +97,59 @@ function viewAt(
 const direction = new Vector3()
 const toTarget = new Vector3()
 
+/** End of a failed or canceled export: nothing written is kept (the destination file is removed). */
+async function abandon(error: unknown, request: ExportRequest, session: VideoEncodeSession | null, canceled: boolean): Promise<void> {
+  await session?.cancel().catch(() => undefined)
+  // also when failing before the encoder existed
+  await request.destination?.discard().catch(() => undefined)
+  if (error instanceof ExportCanceledError || canceled) useExportStore.getState().canceled()
+  else useExportStore.getState().fail(errorMessage(error))
+}
+
+/**
+ * The overlay alone over a transparent background, at the frames of the film (`schedule`, `times`): nothing waits
+ * for the terrain, no WebGL frame, no sound. Each frame is drawn anew (cheap in 2D), at the film time of the frame.
+ */
+async function runOverlayOnly(request: ExportRequest, deps: RunDeps, schedule: number[], times: number[]): Promise<void> {
+  const exportStore = useExportStore.getState
+  const { width, height } = request
+  const clock = deps.clock()
+  const drawOverlay = deps.overlay()
+  const isCanceled = () => deps.signal.aborted || exportStore().cancelRequested
+  let session: VideoEncodeSession | null = null
+  try {
+    useAppStore.getState().setPlaying(false)
+    const compositor = new OffscreenCanvas(width, height)
+    const ctx = compositor.getContext('2d')
+    if (!ctx) throw new Error("Impossible de créer l'image de composition.")
+    if (drawOverlay) await loadOverlayFonts()
+    session = await createVideoEncoder(compositor, { ...request, transparent: true })
+    for (let i = 0; i < schedule.length; i++) {
+      if (isCanceled()) throw new ExportCanceledError()
+      const progress = schedule[i]
+      await loadFrameMedia(times[i], progress)
+      composeOverlayFrame(ctx, { progress, time: overlayTime(clock, progress, times[i]) }, width, height, drawOverlay)
+      await session.addFrame(i)
+      exportStore().reportFrame(i + 1, performance.now())
+    }
+    exportStore().finalizing()
+    const { blob, sizeBytes } = await session.finish()
+    exportStore().complete({
+      url: blob && URL.createObjectURL(blob),
+      fileName: request.destination?.fileName ?? videoFileName(request.baseName, session.extension),
+      mimeType: session.mimeType,
+      sizeBytes,
+      codec: `${session.codec.container}/${session.codec.codec}`,
+      incompleteFrames: 0,
+      note: 'fond transparent, sans le son',
+    })
+  } catch (error) {
+    await abandon(error, request, session, isCanceled())
+  } finally {
+    releaseFrameMedia()
+  }
+}
+
 async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
   const exportStore = useExportStore.getState
   let schedule: number[]
@@ -110,6 +166,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
   if (!exportStore().begin(request.id, schedule.length, performance.now())) return
   // film time of every frame: the shots, the orbiting stops and the time-based styles move while the progress holds
   const times = request.still ? [] : buildFrameTimes(request)
+  if (request.overlayOnly) return runOverlayOnly(request, deps, schedule, times)
 
   const { width, height, fps } = request
   const filmClock = deps.clock()
@@ -273,8 +330,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     }
 
     const settings = useAppStore.getState().settings
-    // the music from the first frame: film time 0 comes after the frames held at the start
-    const audio = await mixFilmAudio(settings.film.audio, (id) => useMediaStore.getState().table[id], {
+    // the soundtrack from the first frame: film time 0 comes after the frames held at the start
+    const audio = await mixFilmAudio(settings.film, (id) => useMediaStore.getState().table[id], {
       offsetS: Math.round(request.holdStartS * fps) / fps,
       lengthS: schedule.length / fps,
     })
@@ -334,14 +391,10 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       sizeBytes,
       codec: `${container}/${codec}`,
       incompleteFrames: timings.timeouts,
-      note: audio ? (session.audioCodec ? `avec la musique (${session.audioCodec === 'aac' ? 'AAC' : 'Opus'})` : 'sans la musique : ce navigateur ne sait pas encoder le son') : undefined,
+      note: audio ? (session.audioCodec ? `avec le son (${session.audioCodec === 'aac' ? 'AAC' : 'Opus'})` : 'sans le son : ce navigateur ne sait pas l’encoder') : undefined,
     })
   } catch (error) {
-    await session?.cancel().catch(() => undefined)
-    // also when failing before the encoder existed
-    await request.destination?.discard().catch(() => undefined)
-    if (error instanceof ExportCanceledError || isCanceled()) exportStore().canceled()
-    else exportStore().fail(errorMessage(error))
+    await abandon(error, request, session, isCanceled())
   } finally {
     releaseFrameMedia()
     // the layout size may have changed meanwhile: measure the canvas container again

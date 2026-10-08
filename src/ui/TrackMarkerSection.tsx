@@ -1,0 +1,230 @@
+import { useId, useState } from 'react'
+import type { ReactNode } from 'react'
+import { getPlatform } from '../platform'
+import { fileToAvatarDataUrl } from '../scene/markerBadge'
+import { FIGURE_GRID, MARKER_FIGURE_PATHS } from '../scene/markerFigures'
+import {
+  MARKER_FIGURE_LABELS,
+  MARKER_FIGURES,
+  MARKER_KIND_LABELS,
+  MARKER_KINDS,
+  MARKER_SIZE_RANGE,
+  TRACK_DASH_LABELS,
+  TRACK_DASHES,
+  TRACK_WIDTH_RANGE,
+} from '../scene/markerSettings'
+import type { MarkerFigure, MarkerSettings, TrackStyle } from '../scene/markerSettings'
+import { useAppStore } from '../state/store'
+import { formatNumber } from './format'
+import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
+
+/** 4 -> "4", 4.5 -> "4,5", 1.25 -> "1,25" */
+function formatShort(value: number): string {
+  return formatNumber(value, Number.isInteger(value) ? 0 : Number.isInteger(value * 10) ? 1 : 2)
+}
+
+/** Pictogram of a figure, drawn from the same paths as the marker badge. */
+function FigureIcon({ figure }: { figure: MarkerFigure }) {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox={`0 0 ${FIGURE_GRID} ${FIGURE_GRID}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {MARKER_FIGURE_PATHS[figure].map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  )
+}
+
+/** One choice among `options`, as chips (radio buttons). */
+function ChipChoice<T extends string>({
+  label,
+  name,
+  options,
+  value,
+  labels,
+  icon,
+  onChange,
+}: {
+  label: string
+  name: string
+  options: readonly T[]
+  value: T
+  labels: Record<T, string>
+  icon?: (option: T) => ReactNode
+  onChange(value: T): void
+}) {
+  return (
+    <fieldset className="field fieldset">
+      <legend className="field__label">{label}</legend>
+      <div className="chips">
+        {options.map((option) => (
+          <label key={option} className="chip">
+            <input type="radio" name={name} checked={value === option} onChange={() => onChange(option)} />
+            {icon?.(option)}
+            {labels[option]}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
+/** « Choisir une image » for a picture marker, through the platform file picker. */
+function MarkerImageField({ marker, update }: { marker: MarkerSettings; update(patch: Partial<MarkerSettings>): void }) {
+  const [error, setError] = useState<string | null>(null)
+  const choose = async () => {
+    try {
+      const [file] = await getPlatform().openFiles({ filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] })
+      if (!file) return
+      setError(null)
+      update({ image: await fileToAvatarDataUrl(file) })
+    } catch {
+      setError("Cette image n'a pas pu être lue.")
+    }
+  }
+  return (
+    <div className="field">
+      <div className="field__label-row">
+        <button type="button" className="btn btn--secondary" onClick={() => void choose()}>
+          {marker.image ? "Changer l'image" : 'Choisir une image'}
+        </button>
+        {marker.image && (
+          <button type="button" className="btn btn--secondary" onClick={() => update({ image: '' })}>
+            Retirer
+          </button>
+        )}
+      </div>
+      {error ? (
+        <p className="field__hint" role="alert">
+          {error}
+        </p>
+      ) : (
+        <p className="field__hint">Photo ou avatar, recadré en rond. Les autres traces gardent leur boule.</p>
+      )}
+    </div>
+  )
+}
+
+/** A slider of the section: label, range and displayed value. */
+function SliderField({
+  label,
+  range,
+  value,
+  format,
+  onChange,
+}: {
+  label: string
+  range: { min: number; max: number; step: number }
+  value: number
+  format(value: number): string
+  onChange(value: number): void
+}) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label className="field__label" htmlFor={id}>
+        {label}
+      </label>
+      <div className="range-row">
+        <input
+          id={id}
+          className="range"
+          type="range"
+          min={range.min}
+          max={range.max}
+          step={range.step}
+          value={value}
+          onChange={(e) => onChange(Number(e.currentTarget.value))}
+          aria-valuetext={format(value)}
+        />
+        <output className="range-row__value range-row__value--wide" htmlFor={id}>
+          {format(value)}
+        </output>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * « Trace et marqueur » section of the Survol tab: the marker (ball, figurine, picture), the draw-on and the glow
+ * first; line width, dashes and marker size under « Plus de réglages ».
+ */
+export function TrackMarkerSection() {
+  const style = useAppStore((s) => s.settings.trackStyle)
+  const marker = useAppStore((s) => s.settings.marker)
+  const setSetting = useAppStore((s) => s.setSetting)
+  const id = useId()
+  const updateStyle = (patch: Partial<TrackStyle>) => setSetting('trackStyle', { ...style, ...patch })
+  const updateMarker = (patch: Partial<MarkerSettings>) => setSetting('marker', { ...marker, ...patch })
+
+  return (
+    <PanelSection title="Trace et marqueur" keys={['trackStyle', 'marker']}>
+      <ChipChoice
+        label="Marqueur"
+        name={`${id}-kind`}
+        options={MARKER_KINDS}
+        value={marker.kind}
+        labels={MARKER_KIND_LABELS}
+        onChange={(kind) => updateMarker({ kind })}
+      />
+      {marker.kind === 'figurine' && (
+        <ChipChoice
+          label="Figurine"
+          name={`${id}-figure`}
+          options={MARKER_FIGURES}
+          value={marker.figure}
+          labels={MARKER_FIGURE_LABELS}
+          icon={(figure) => <FigureIcon figure={figure} />}
+          onChange={(figure) => updateMarker({ figure })}
+        />
+      )}
+      {marker.kind === 'image' && <MarkerImageField marker={marker} update={updateMarker} />}
+
+      <div className="field__label-row">
+        <label className="checkbox checkbox--switch">
+          <input type="checkbox" checked={style.drawOn} onChange={(e) => updateStyle({ drawOn: e.currentTarget.checked })} />
+          Trace qui se dessine
+        </label>
+        <InfoTip text="Seule la partie déjà parcourue est tracée ; le reste apparaît au passage du marqueur." />
+      </div>
+      <label className="checkbox checkbox--switch">
+        <input type="checkbox" checked={style.glow} onChange={(e) => updateStyle({ glow: e.currentTarget.checked })} />
+        Halo lumineux
+      </label>
+
+      <MoreSettings paths={['trackStyle.width', 'trackStyle.dash', 'marker.size']}>
+        <SliderField
+          label="Épaisseur de la trace"
+          range={TRACK_WIDTH_RANGE}
+          value={style.width}
+          format={(v) => `${formatShort(v)} px`}
+          onChange={(width) => updateStyle({ width })}
+        />
+        <ChipChoice
+          label="Trait"
+          name={`${id}-dash`}
+          options={TRACK_DASHES}
+          value={style.dash}
+          labels={TRACK_DASH_LABELS}
+          onChange={(dash) => updateStyle({ dash })}
+        />
+        <SliderField
+          label="Taille du marqueur"
+          range={MARKER_SIZE_RANGE}
+          value={marker.size}
+          format={(v) => `×${formatShort(v)}`}
+          onChange={(size) => updateMarker({ size })}
+        />
+      </MoreSettings>
+    </PanelSection>
+  )
+}

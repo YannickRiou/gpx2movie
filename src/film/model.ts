@@ -2,22 +2,26 @@
  * The film: what the timeline arranges on top of the flight along the first track (« la base, c'est le GPX »).
  *
  * - `opening` / `closing`: overview shot of the whole track before and after the flight ('aucune' = none).
- * - `stops`: the marker stops at a distance along the first track for a while (camera orbiting or held). While
+ * - `stops`: the marker stops at a distance along the first track for a while (camera as in the film, orbiting,
+ *   pulled back or held). While
  *   `autoStops` is set they are generated from the highlights (`autoStops` in `assemble.ts`, so they follow the
  *   OpenStreetMap landmarks loaded later), as `autoMode` says; the first edit on the timeline writes them into
  *   `stops` and clears the flag.
  * - `speeds`: portions of the first track (metres) flown faster or slower by hand (`factor`), not overlapping;
  *   the flight pacing eases into and out of each (`flightPacing`).
+ * - `cameraKeys`: framings of the flight camera at a distance along the first track (`keyedCamera`).
  * - `texts` and `media`: items anchored in film time (seconds at ×1 from the very start, opening included), on
  *   their own lanes, drawn by the overlay. A medium names its picture or video clip by id (`src`): the bytes live in the media
  *   table of the project document (`film/media.ts`), so the settings and the undo history stay light.
  * - `audio`: music clips of the soundtrack, in film time too, on the « Musique » lane: played along by the preview
- *   and mixed into the exported film (`film/audio.ts`); their files are in the media table as well.
+ *   and mixed into the exported film (`film/audio.ts`); their files are in the media table as well. The sound of the
+ *   video clips joins that mix (`clipHasSound`), and `duckMusic` lowers the music under it.
  *
  * Part of `Settings` (key `film`): saved in the project document, undone, read the same way by the preview and
  * the export. Ids are stable (`stop-3`, `text-1`, `auto-4520` for a generated stop) so the timeline can select
  * an item across edits. Pure module (no DOM, no React, no Three, no store).
  */
+import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { OVERLAY_ANCHORS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 
@@ -31,9 +35,14 @@ export interface FilmShot {
   durationS: number
 }
 
-export const STOP_CAMERAS = ['orbite', 'fixe'] as const
-/** 'orbite': the camera turns around the stop and comes back; 'fixe': the flight camera holds. */
+export const STOP_CAMERAS = ['film', 'orbite', 'large', 'fixe'] as const
+/**
+ * Camera during a stop. 'film': the flight camera goes on (the marker holds, so does the camera, but the orbit and
+ * cinema styles keep moving); 'orbite': the camera turns around the stop and comes back; 'large': it pulls back and
+ * up and comes back; 'fixe': the framing holds, the motion of the orbit and cinema styles too.
+ */
 export type StopCamera = (typeof STOP_CAMERAS)[number]
+export const STOP_CAMERA_LABELS: Record<StopCamera, string> = { film: 'Comme le film', orbite: 'Tour lent', large: 'Vue large', fixe: 'Fixe' }
 
 export const STOP_SOURCES = ['climb', 'landmark', 'waypoint', 'manual'] as const
 export type StopSourceKind = (typeof STOP_SOURCES)[number]
@@ -66,11 +75,11 @@ export const AUTO_STOP_MODES = ['temps-forts', 'rythme'] as const
 /**
  * How the automatic stops are made. 'temps-forts' (new projects): one at every highlight whatever the pacing,
  * `AUTO_STOP_S` each, camera orbiting (highlights are climb tops, passes and summits); 'rythme' (projects saved
- * before the timeline): the pauses of the pacing, only while it is on, `pauseS` each, camera held.
+ * before the timeline): the pauses of the pacing, only while it is on, `pauseS` each, camera as in the film.
  */
 export type AutoStopMode = (typeof AUTO_STOP_MODES)[number]
 
-/** 'image': a photo; 'video': a video clip (shown without its sound). */
+/** 'image': a photo; 'video': a video clip (with its sound unless muted, see `clipHasSound`). */
 export const MEDIA_KINDS = ['image', 'video'] as const
 export type MediaKind = (typeof MEDIA_KINDS)[number]
 
@@ -96,8 +105,10 @@ export interface FilmMedia {
   /** video: where the clip starts and ends in the file (seconds; default its start and its end) */
   inS?: number
   outS?: number
-  /** video: reserved, the sound of the clips is not handled yet */
+  /** video: its sound left out (true for clips saved before the sound was handled: their films stay as they were) */
   muted?: boolean
+  /** video: volume of its sound, 0 (silent) to 1 (as recorded, the default) */
+  volume?: number
   /** video synced with the recorded track (« Caler sur le parcours »), see `MediaSync` */
   sync?: MediaSync
 }
@@ -152,10 +163,27 @@ export const AUDIO_DEFAULTS: Pick<FilmAudio, 'volume' | 'fadeInS' | 'fadeOutS'> 
 export const AUDIO_DURATION_RANGE = { min: 0.5, max: 3600 } as const
 export const FADE_RANGE = { min: 0, max: 30, step: 0.5 } as const
 
+/**
+ * A framing of the flight camera at a place of the first track: distance, pitch and heading offset, same meaning
+ * and ranges as the camera settings. The camera eases from one key to the next, and from the film's settings into
+ * the first key and back to them after the last one (`keyedCamera`, flyover/filmCamera.ts).
+ */
+export interface FilmCameraKey {
+  id: string
+  /** distance along the first track (metres, same scale as `buildTrackPath`) */
+  atM: number
+  distance: number
+  pitchDeg: number
+  headingOffsetDeg: number
+}
+
 /** Range of the speed factor (also its validity range in a loaded project). */
 export const SPEED_FACTOR_RANGE = { min: 0.25, max: 4 } as const
 /** Shortest speed portion made on the timeline (metres). */
 export const MIN_SPEED_SPAN_M = 50
+
+/** Sound of a video clip added on the timeline: heard, as recorded. */
+export const VIDEO_SOUND_DEFAULTS: Pick<FilmMedia, 'muted' | 'volume'> = { muted: false, volume: 1 }
 
 /** Placement of a photo added on the timeline (and of a medium saved before these fields existed). */
 export const MEDIA_DEFAULTS: Pick<FilmMedia, 'layout' | 'anchor' | 'size' | 'kenBurns'> = {
@@ -174,10 +202,14 @@ export interface Film {
   stops: FilmStop[]
   /** sorted by position or not, never overlapping */
   speeds: FilmSpeed[]
+  /** sorted by position or not */
+  cameraKeys: FilmCameraKey[]
   texts: FilmText[]
   media: FilmMedia[]
   /** music of the soundtrack (they may overlap: mixed) */
   audio: FilmAudio[]
+  /** the music is lowered while a video clip with sound plays (« Baisser la musique sous les vidéos ») */
+  duckMusic: boolean
 }
 
 /** Slider ranges (also the validity ranges of a loaded project), seconds. */
@@ -194,9 +226,11 @@ export const DEFAULT_FILM: Film = {
   autoMode: 'temps-forts',
   stops: [],
   speeds: [],
+  cameraKeys: [],
   texts: [],
   media: [],
   audio: [],
+  duckMusic: false,
 }
 
 /**
@@ -213,6 +247,15 @@ export function clipTimeS(media: Pick<FilmMedia, 'startS' | 'inS' | 'outS' | 'sy
   return media.outS === undefined ? t : Math.min(t, media.outS)
 }
 
+/**
+ * The clip is heard in the film: a video not muted, at a volume above 0, not following the flight (its time in the
+ * file then runs at the pace of the marker: resampled, its sound would be ugly, so it stays silent, in the preview
+ * as in the export). A clip without `muted` was saved before the sound was handled: silent.
+ */
+export function clipHasSound(media: Pick<FilmMedia, 'kind' | 'muted' | 'volume' | 'sync'>): boolean {
+  return media.kind === 'video' && media.muted === false && (media.volume ?? 1) > 0 && !media.sync?.follow
+}
+
 /** Film time taken by an opening or closing shot. */
 export function shotDurationS(shot: FilmShot): number {
   return shot.style === 'aucune' ? 0 : shot.durationS
@@ -222,11 +265,11 @@ export function shotDurationS(shot: FilmShot): number {
 // Ids
 // ---------------------------------------------------------------------------
 
-export type FilmItemKind = 'stop' | 'speed' | 'text' | 'media' | 'music'
+export type FilmItemKind = 'stop' | 'speed' | 'camera' | 'text' | 'media' | 'music'
 
 /** Next free id `<kind>-<n>` of the film (one more than the highest number used by that kind). */
 export function nextFilmId(film: Film, kind: FilmItemKind): string {
-  const lanes = { stop: film.stops, speed: film.speeds, text: film.texts, media: film.media, music: film.audio }
+  const lanes = { stop: film.stops, speed: film.speeds, camera: film.cameraKeys, text: film.texts, media: film.media, music: film.audio }
   const items: readonly { id: string }[] = lanes[kind]
   const pattern = new RegExp(`^${kind}-(\\d+)$`)
   let max = 0
@@ -275,6 +318,18 @@ export function isValidSpeed(speed: unknown): speed is FilmSpeed {
   )
 }
 
+export function isValidCameraKey(key: unknown): key is FilmCameraKey {
+  if (!isRecord(key)) return false
+  const { distance, pitchDeg, headingOffsetDeg } = CAMERA_RANGES
+  return (
+    isId(key.id) &&
+    within(key.atM, 0, Number.MAX_VALUE) &&
+    within(key.distance, distance.min, distance.max) &&
+    within(key.pitchDeg, pitchDeg.min, pitchDeg.max) &&
+    within(key.headingOffsetDeg, headingOffsetDeg.min, headingOffsetDeg.max)
+  )
+}
+
 /** No two portions overlap (they may touch). */
 function apart(speeds: readonly FilmSpeed[]): boolean {
   const sorted = [...speeds].sort((a, b) => a.fromM - b.fromM)
@@ -312,6 +367,7 @@ export function isValidMedia(media: unknown): media is FilmMedia {
     within(inS, 0, Number.MAX_VALUE) &&
     (media.outS === undefined || within(media.outS, (inS as number) + 0.01, Number.MAX_VALUE)) &&
     (media.muted === undefined || typeof media.muted === 'boolean') &&
+    (media.volume === undefined || within(media.volume, 0, 1)) &&
     (media.sync === undefined || isValidSync(media.sync))
   )
 }
@@ -346,22 +402,32 @@ export function isValidAudio(audio: unknown): audio is FilmAudio {
  */
 export function isValidFilm(film: Film): boolean {
   if (!isValidShot(film.opening) || !isValidShot(film.closing) || typeof film.autoStops !== 'boolean') return false
+  if (typeof film.duckMusic !== 'boolean') return false
   if (!oneOf(AUTO_STOP_MODES, film.autoMode)) return false
   if (!film.stops.every(isValidStop) || !film.texts.every(isValidText) || !film.media.every(isValidMedia)) return false
   if (!film.speeds.every(isValidSpeed) || !apart(film.speeds) || !film.audio.every(isValidAudio)) return false
-  const ids = [...film.stops, ...film.speeds, ...film.texts, ...film.media, ...film.audio].map((item) => item.id)
+  if (!film.cameraKeys.every(isValidCameraKey)) return false
+  const ids = [...film.stops, ...film.speeds, ...film.cameraKeys, ...film.texts, ...film.media, ...film.audio].map((item) => item.id)
   return new Set(ids).size === ids.length
 }
 
 /**
  * Fill-in of a film saved before a field existed (`SETTING_UPGRADES`): missing fields from `DEFAULT_FILM`, except
  * `autoMode`, which keeps the automatic stops of those films following the pacing ('rythme') as they did; media
- * saved before their placement get `MEDIA_DEFAULTS`; a film saved before the music gets no music (`audio: []`).
- * The `epochs` key of earlier versions is dropped.
+ * saved before their placement get `MEDIA_DEFAULTS`; a film saved before the music gets no music (`audio: []`), one
+ * saved before the camera keys none (`cameraKeys: []`);
+ * video clips saved before their sound was handled stay silent (`muted: true`). The `epochs` key of earlier versions
+ * is dropped.
  */
 export function withFilmDefaults(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
   const { epochs: _dropped, ...saved } = raw
   const film = { ...DEFAULT_FILM, autoMode: 'rythme', ...saved }
-  return Array.isArray(film.media) ? { ...film, media: film.media.map((m: unknown) => (isRecord(m) ? { ...MEDIA_DEFAULTS, ...m } : m)) } : film
+  return Array.isArray(film.media) ? { ...film, media: film.media.map(withMediaDefaults) } : film
+}
+
+function withMediaDefaults(media: unknown): unknown {
+  if (!isRecord(media)) return media
+  const silent = media.kind === 'video' && media.muted === undefined ? { muted: true } : {}
+  return { ...MEDIA_DEFAULTS, ...media, ...silent }
 }

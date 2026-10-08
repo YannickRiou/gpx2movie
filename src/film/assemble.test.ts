@@ -47,7 +47,7 @@ describe('autoStops (rythme: films saved before the timeline)', () => {
       id: autoStopId(1500),
       atM: 1500,
       durationS: ON.pauseS,
-      camera: 'fixe',
+      camera: 'film',
       label: 'Col de Voza',
       source: { kind: 'landmark', ref: 'node/1500' },
     })

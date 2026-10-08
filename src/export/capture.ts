@@ -1,6 +1,7 @@
 /**
  * Frame capture helpers of the video export (no React): render a progress until the terrain is complete,
- * then compose the WebGL image and the optional 2D overlay into the encoder canvas.
+ * then compose the WebGL image and the optional 2D overlay into the encoder canvas (or the overlay alone over a
+ * transparent background).
  */
 import type { OverlayTime } from '../overlay/draw'
 import { ExportCanceledError } from './encoder'
@@ -121,6 +122,29 @@ export function composeFrame(
 ): void {
   fillSky(ctx, 0, 0, width, height)
   ctx.drawImage(source, 0, 0, width, height)
+  drawOverlayOn(ctx, at, width, height, drawOverlay)
+}
+
+/** Encoder canvas content for one frame of the overlay alone: cleared to transparent, then the overlay. */
+export function composeOverlayFrame(
+  ctx: OffscreenCanvasRenderingContext2D,
+  at: FrameAt,
+  width: number,
+  height: number,
+  drawOverlay?: DrawOverlay,
+): void {
+  ctx.clearRect(0, 0, width, height)
+  drawOverlayOn(ctx, at, width, height, drawOverlay)
+}
+
+/** The overlay drawn without leaking its context state (transforms, styles) into the next frame. */
+function drawOverlayOn(
+  ctx: OffscreenCanvasRenderingContext2D,
+  at: FrameAt,
+  width: number,
+  height: number,
+  drawOverlay?: DrawOverlay,
+): void {
   if (!drawOverlay) return
   ctx.save()
   try {

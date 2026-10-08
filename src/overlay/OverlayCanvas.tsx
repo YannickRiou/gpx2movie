@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { Track } from '../core/types'
 import { isExportBusy, useExportStore } from '../export/store'
+import { useMusicPreview } from '../film/audio'
 import { getMediaBitmaps, mediaToLoad } from '../film/media'
 import type { FilmMedia } from '../film/model'
 import { clipRateAt } from '../film/timeline'
@@ -22,7 +23,8 @@ import { overlayExtras, photoAssets } from './exportOverlay'
  * animation frame after the progress or film time, the settings, the film clock, the first track, its weather,
  * the landmarks, a decoded photo, a video frame or the view size change (store subscriptions, no React render per
  * frame). Video clips are video elements playing along during the playback, seeked to the film time when scrubbing
- * (none during an export, which decodes its own frames). Rendered while the overlay or the source credits are
+ * (none during an export, which decodes its own frames); their sound is heard while playing at ×1, unless the
+ * timeline's speaker button cuts the sound of the preview. Rendered while the overlay or the source credits are
  * enabled, or the film has photos or clips.
  */
 export function OverlayCanvas() {
@@ -103,10 +105,11 @@ function OverlayPreview() {
       const time = overlayTime(clockRef.current, playback.progress, playback.timeS)
       // decode the photos coming up before they fade in
       for (const id of mediaToLoad(settings.film.media, time.timeS, PHOTO_AHEAD_S)) bitmaps.get(id)
+      const sound = { ...playback, muted: useMusicPreview.getState().muted }
       const video = isExportBusy(useExportStore.getState().phase)
         ? undefined
-        : (item: FilmMedia, clipS: number) => videos.frame(item, clipS, playback, data ? clipRateAt(item, data.path, clockRef.current, time.timeS) : 1)
-      drawOverlay(ctx, frame, overlay, { width, height }, { ...assets, ...photoAssets(), video }, overlayExtras(time))
+        : (item: FilmMedia, clipS: number) => videos.frame(item, clipS, sound, data ? clipRateAt(item, data.path, clockRef.current, time.timeS) : 1)
+      drawOverlay(ctx, frame, overlay, { width, height }, { ...assets, ...photoAssets(), video }, overlayExtras(time, playback.progress))
       // clips not drawn by this frame are paused
       videos.settle()
     }
@@ -134,6 +137,7 @@ function OverlayPreview() {
     const unsubscribeLandmarks = useLandmarkStore.subscribe((state, prev) => {
       if (state.landmarks !== prev.landmarks) schedule()
     })
+    const unsubscribeSound = useMusicPreview.subscribe(schedule)
     const unsubscribePhotos = bitmaps.subscribe(schedule)
     const unsubscribeVideos = videos.subscribe(schedule)
     // size changes, including a devicePixelRatio change (browser zoom, moving to another screen)
@@ -153,6 +157,7 @@ function OverlayPreview() {
       unsubscribe()
       unsubscribeWeather()
       unsubscribeLandmarks()
+      unsubscribeSound()
       unsubscribePhotos()
       unsubscribeVideos()
       videos.settle()

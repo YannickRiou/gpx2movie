@@ -5,7 +5,8 @@
  * The export draws synchronously, so the logo is loaded ahead of time, whenever the setting changes, and the
  * pictures of the photos and the frames of the video clips shown by a frame before it is composed
  * (`loadFrameMedia`, decoded at the frame's time: never real-time playback; `releaseFrameMedia` after the export).
- * `overlayExtras` reads what both draw beyond the track (timeline texts and photos, credits of the sources in use).
+ * `overlayExtras` reads what both draw beyond the track (timeline texts and photos, credits of the sources in use,
+ * ghost-race leaderboard).
  */
 import type { Track } from '../core/types'
 import type { FilmMedia } from '../film/model'
@@ -19,21 +20,32 @@ import { useWeatherStore } from '../weather/store'
 import type { WeatherSeries } from '../weather/series'
 import { buildTrackPath } from '../flyover/path'
 import type { TrackPath } from '../flyover/path'
+import { buildRace, raceAt, raceTrackOf } from '../flyover/race'
 import { loadLogo } from './assets'
-import { overlayCredits, overlayFrameAt, prepareOverlayTrack, recordedAtProgress } from './data'
-import type { OverlayTrack } from './data'
+import { leaderboardRows, overlayCredits, overlayFrameAt, prepareOverlayTrack, recordedAtProgress } from './data'
+import type { LeaderboardRow, OverlayTrack } from './data'
 import { drawOverlay } from './draw'
 import type { OverlayAssets, OverlayExtras, OverlayTime } from './draw'
 
+/** Leaderboard of the ghost race at `progress`, while the race and its widget are on (2+ tracks). */
+function leaderboardAt(progress: number): LeaderboardRow[] | undefined {
+  const { tracks, settings } = useAppStore.getState()
+  if (!settings.overlay.leaderboard.enabled || !settings.race.enabled || tracks.length < 2) return undefined
+  // tables cached per track: building the race is cheap
+  const race = buildRace(tracks.map(raceTrackOf), settings.race.sync)
+  return leaderboardRows(raceAt(race, progress), tracks)
+}
+
 /**
- * What the overlay draws beyond the track at film time `time`, from the stores: the texts and photos of the
- * timeline and the credits of the sources in use (as the status bar: relief, imagery, weather and landmarks once
- * loaded).
+ * What the overlay draws beyond the track at film time `time` and `progress`, from the stores: the texts and photos
+ * of the timeline, the credits of the sources in use (as the status bar: relief, imagery, weather and landmarks once
+ * loaded) and the ghost-race leaderboard.
  */
-export function overlayExtras(time: OverlayTime): OverlayExtras {
+export function overlayExtras(time: OverlayTime, progress: number): OverlayExtras {
   const { settings } = useAppStore.getState()
   return {
     time,
+    leaderboard: leaderboardAt(progress),
     texts: settings.film.texts,
     media: settings.film.media,
     credits: overlayCredits({
@@ -123,7 +135,7 @@ export function createOverlayDrawer(): OverlayDrawer {
         data = prepareOverlayTrack(first, weather)
       }
       const video = (item: FilmMedia, clipS: number) => exportVideos?.get(item, clipS)
-      drawOverlay(ctx, overlayFrameAt(data, at.progress), settings.overlay, { width, height }, { ...assets, ...photoAssets(), video }, overlayExtras(at.time))
+      drawOverlay(ctx, overlayFrameAt(data, at.progress), settings.overlay, { width, height }, { ...assets, ...photoAssets(), video }, overlayExtras(at.time, at.progress))
     },
     dispose() {
       disposed = true

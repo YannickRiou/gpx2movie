@@ -8,6 +8,7 @@ import type { Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
 import { CLOUD_ALTITUDE_RANGE, type CloudMode, type CloudQuality } from '../weather/sceneClouds'
 import { useWeatherStore } from '../weather/store'
+import { GradingPanel } from './GradingPanel'
 import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
 import { formatNumber } from './format'
 
@@ -269,7 +270,7 @@ function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
       )}
 
       {clouds.mode !== 'aucun' && (
-        <MoreSettings paths={['clouds.altitudeM', 'clouds.quality']}>
+        <MoreSettings paths={['clouds.altitudeM', 'clouds.quality']} label="Réglages des nuages">
           <div className="field">
             <div className="field__label-row">
               <label className="field__label" htmlFor={`${id}-clouds-altitude`}>
@@ -366,8 +367,8 @@ function WaterControl() {
 }
 
 /**
- * « Carte » tab (before the landmarks): sections Fond de carte, Relief et trace, Lumière, Atmosphère et météo, each
- * with its essentials and its rarely used settings under « Plus de réglages ».
+ * « Carte » tab (before the landmarks): sections Fond de carte, Relief et trace, Lumière, Atmosphère et météo, Couleurs
+ * (`GradingPanel`), each with its essentials and its rarely used settings under « Plus de réglages ».
  */
 export function SettingsPanel() {
   const settings = useAppStore((s) => s.settings)
@@ -564,7 +565,7 @@ export function SettingsPanel() {
         {settings.atmosphere && <CloudsControl weatherReady={weatherReady} />}
 
         {settings.atmosphere && (
-          <MoreSettings paths={['exposureEv', 'weatherScene.strength']}>
+          <MoreSettings paths={['exposureEv', 'weatherScene.strength']} label="Exposition et intensité">
             <div className="field">
               <div className="field__label-row">
                 <label className="field__label" htmlFor={exposureId}>
@@ -618,6 +619,8 @@ export function SettingsPanel() {
           </MoreSettings>
         )}
       </PanelSection>
+
+      <GradingPanel />
     </>
   )
 }

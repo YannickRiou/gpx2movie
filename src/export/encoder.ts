@@ -13,26 +13,18 @@
  * Soundtrack (the music of the film, mixed beforehand: `film/audio.ts`): AAC in MP4, else Opus (MP4 or WebM), the first
  * one `AudioEncoder` accepts; none: the film is encoded without it (`audioCodec` null). Its samples are handed to the
  * muxer along the frames, about a second ahead, so that both tracks are interleaved in the file.
+ *
+ * Transparent film (the overlay alone, `transparent`): WebM / VP9 keeping the alpha of the canvas. mediabunny encodes
+ * the alpha itself, as a second VP9 stream stored beside each frame (WebM `BlockAdditional`), so the browser only needs
+ * a plain VP9 encoder: that is what `pickCodec` checks.
  */
 import type { MixedAudio } from '../film/audio'
 import type { WritableFile } from '../platform'
-import {
-  AudioSample,
-  AudioSampleSource,
-  BufferTarget,
-  CanvasSource,
-  Mp4OutputFormat,
-  Output,
-  Quality,
-  StreamTarget,
-  WebMOutputFormat,
-  canEncodeAudio,
-  canEncodeVideo,
-  type AudioCodec,
-  type StreamTargetChunk,
-  type VideoCodec,
-} from 'mediabunny'
+import type { AudioCodec, StreamTargetChunk, VideoCodec, canEncodeAudio, canEncodeVideo } from 'mediabunny'
 import type { VideoQuality } from './schedule'
+
+/** The muxer (mediabunny, ~700 KB) is loaded on the first export or codec check, not at startup. */
+const mediabunny = () => import('mediabunny')
 
 export type VideoContainer = 'mp4' | 'webm'
 
@@ -48,6 +40,9 @@ export const CODEC_CANDIDATES: readonly CodecCandidate[] = [
   { container: 'webm', codec: 'vp9' },
   { container: 'webm', codec: 'vp8' },
 ]
+
+/** Only candidate of a transparent film: VP9 with alpha in WebM, read by the editors that take transparent video. */
+export const ALPHA_CANDIDATES: readonly CodecCandidate[] = [{ container: 'webm', codec: 'vp9' }]
 
 /** H.264 bits per pixel and per frame for each quality (a sharp orthophoto flyover needs a generous budget). */
 export const QUALITY_BITS_PER_PIXEL: Record<VideoQuality, number> = { standard: 0.06, high: 0.1, max: 0.16 }
@@ -84,6 +79,8 @@ export interface VideoEncodeOptions {
   destination?: WritableFile
   /** soundtrack from the first frame (none: a silent film) */
   audio?: MixedAudio | null
+  /** keep the transparency of the canvas (WebM / VP9, `ALPHA_CANDIDATES`) */
+  transparent?: boolean
 }
 
 export type CanEncode = typeof canEncodeVideo
@@ -93,8 +90,10 @@ export type CanEncodeAudio = typeof canEncodeAudio
 export async function pickAudioCodec(
   container: VideoContainer,
   audio: Pick<MixedAudio, 'sampleRate' | 'channels'>,
-  canEncode: CanEncodeAudio = canEncodeAudio,
+  canEncode?: CanEncodeAudio,
 ): Promise<AudioCodec | null> {
+  const { Quality, canEncodeAudio } = await mediabunny()
+  canEncode ??= canEncodeAudio
   for (const codec of AUDIO_CANDIDATES[container]) {
     try {
       const options = { numberOfChannels: audio.channels.length, sampleRate: audio.sampleRate, quality: new Quality({ bitrate: AUDIO_BITRATE }) }
@@ -109,9 +108,11 @@ export async function pickAudioCodec(
 /** First candidate the browser can encode with these options, or null. */
 export async function pickCodec(
   options: VideoEncodeOptions,
-  canEncode: CanEncode = canEncodeVideo,
+  canEncode?: CanEncode,
   candidates: readonly CodecCandidate[] = CODEC_CANDIDATES,
 ): Promise<CodecCandidate | null> {
+  const { Quality, canEncodeVideo } = await mediabunny()
+  canEncode ??= canEncodeVideo
   const { width, height, fps, quality } = options
   for (const candidate of candidates) {
     const bitrate = videoBitrate(width, height, fps, quality, candidate.codec)
@@ -157,9 +158,9 @@ export interface VideoEncodeSession {
   cancel(): Promise<void>
 }
 
-/** mediabunny target writing to `file` (chunks at their position). */
-function diskTarget(file: WritableFile, isCanceled: () => boolean, written: (end: number) => void): StreamTarget {
-  const stream = new WritableStream<StreamTargetChunk>({
+/** Stream of mediabunny's disk target writing to `file` (chunks at their position). */
+function diskStream(file: WritableFile, isCanceled: () => boolean, written: (end: number) => void): WritableStream<StreamTargetChunk> {
+  return new WritableStream<StreamTargetChunk>({
     async write({ data, position }) {
       await file.write(data, position)
       written(position + data.length)
@@ -168,7 +169,6 @@ function diskTarget(file: WritableFile, isCanceled: () => boolean, written: (end
     close: () => (isCanceled() ? file.discard() : file.close()),
     abort: () => file.discard(),
   })
-  return new StreamTarget(stream, { chunked: true, chunkSize: STREAM_CHUNK_BYTES })
 }
 
 /**
@@ -178,18 +178,25 @@ function diskTarget(file: WritableFile, isCanceled: () => boolean, written: (end
 export async function createVideoEncoder(
   canvas: HTMLCanvasElement | OffscreenCanvas,
   options: VideoEncodeOptions,
-  canEncode: CanEncode = canEncodeVideo,
-  canEncodeSound: CanEncodeAudio = canEncodeAudio,
+  canEncode?: CanEncode,
+  canEncodeSound?: CanEncodeAudio,
 ): Promise<VideoEncodeSession> {
-  const { destination } = options
-  const codec = await pickCodec(options, canEncode, candidatesFor(destination?.fileName))
+  const { AudioSample, AudioSampleSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, Quality, StreamTarget, WebMOutputFormat } =
+    await mediabunny()
+  const { destination, transparent = false } = options
+  const codec = await pickCodec(options, canEncode, transparent ? ALPHA_CANDIDATES : candidatesFor(destination?.fileName))
   if (!codec) throw new Error("Ce navigateur ne sait encoder la vidéo dans aucun format (WebCodecs indisponible).")
 
   const bitrate = videoBitrate(options.width, options.height, options.fps, options.quality, codec.codec)
   let canceled = false
   let sizeBytes = 0
   const buffer = new BufferTarget()
-  const target = destination ? diskTarget(destination, () => canceled, (end) => (sizeBytes = Math.max(sizeBytes, end))) : buffer
+  const target = destination
+    ? new StreamTarget(
+        diskStream(destination, () => canceled, (end) => (sizeBytes = Math.max(sizeBytes, end))),
+        { chunked: true, chunkSize: STREAM_CHUNK_BYTES },
+      )
+    : buffer
   const output = new Output({
     format: codec.container === 'mp4' ? new Mp4OutputFormat(destination ? { fastStart: false } : {}) : new WebMOutputFormat(),
     target,
@@ -198,8 +205,9 @@ export async function createVideoEncoder(
     codec: codec.codec,
     quality: new Quality({ bitrate }),
     keyFrameInterval: KEY_FRAME_INTERVAL_S,
+    alpha: transparent ? 'keep' : 'discard',
   })
-  output.addVideoTrack(source, { frameRate: options.fps })
+  output.addVideoTrack(source, { frameRate: options.fps, canBeTransparent: transparent })
   const { audio } = options
   const audioCodec = audio && audio.channels.length > 0 ? await pickAudioCodec(codec.container, audio, canEncodeSound) : null
   const sound = audioCodec ? new AudioSampleSource({ codec: audioCodec, quality: new Quality({ bitrate: AUDIO_BITRATE }) }) : null

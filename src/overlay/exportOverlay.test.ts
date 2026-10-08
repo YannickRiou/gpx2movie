@@ -52,6 +52,24 @@ describe('createOverlayDrawer', () => {
     drawer.dispose()
   })
 
+  it('hands the ghost-race leaderboard to the drawing while the race and the widget are on', () => {
+    const other = buildTrack({ name: 'u', source: 'gpx', segments: [{ points: points.map((p) => ({ ...p, time: (p.time ?? 0) * 2 })) }] })
+    useAppStore.getState().addTracks([track, other])
+    const drawer = createOverlayDrawer()
+    const leaderboard = () => vi.mocked(drawOverlay).mock.lastCall?.[5]?.leaderboard
+    drawer.draw(ctx, at(0.5), 1920, 1080)
+    expect(leaderboard()).toBeUndefined()
+    const { settings, setSetting } = useAppStore.getState()
+    setSetting('race', { ...settings.race, enabled: true })
+    setSetting('overlay', { ...settings.overlay, leaderboard: { ...settings.overlay.leaderboard, enabled: true } })
+    drawer.draw(ctx, at(0.5), 1920, 1080)
+    expect(leaderboard()?.map((row) => [row.rank, row.name, row.gap])).toEqual([
+      [1, 't', 'Tête'],
+      [2, 'u', '+2 min 30'],
+    ])
+    drawer.dispose()
+  })
+
   it('stops following the store once disposed', () => {
     const drawer = createOverlayDrawer()
     drawer.dispose()
