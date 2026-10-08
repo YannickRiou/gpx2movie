@@ -7,7 +7,8 @@ import { buildTrackPath } from '../flyover/path'
 import { OSM_ATTRIBUTION } from '../osm/overpass'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
-import { cumulativeAscent, miniMapOutline, overlayCredits, overlayFrameAt, prepareOverlayTrack } from './data'
+import type { Racer } from '../flyover/race'
+import { cumulativeAscent, leaderboardRows, miniMapOutline, overlayCredits, overlayFrameAt, prepareOverlayTrack } from './data'
 
 /** metres per degree of latitude on the haversine sphere */
 const M_PER_DEG = (6371008.8 * Math.PI) / 180
@@ -155,5 +156,68 @@ describe('overlayCredits', () => {
     expect(overlayCredits({ ...sources, weather: true, landmarks: true }).slice(2)).toEqual([OPEN_METEO_ATTRIBUTION, `Repères : ${OSM_ATTRIBUTION}`])
     // unknown ids fall back to the default sources, like the scene
     expect(overlayCredits({ ...sources, imagerySourceId: 'nope' })[1]).toBe(`Imagerie : ${getImagerySource('nope').attribution}`)
+  })
+})
+
+describe('leaderboardRows', () => {
+  const base = { lon: 0, lat: 0, distanceM: 0, finished: false }
+  const tracks = ['Lead', 'Bob', 'Chloé', 'Dan'].map((name, i) => ({ name, color: `#00000${i}` }))
+
+  it('ranks the racers with their colour and their time gap to the first, not to the lead track', () => {
+    const racers: Racer[] = [
+      { ...base, index: 0, fraction: 0.5 },
+      { ...base, index: 1, fraction: 0.4, gapMs: 90_000 },
+      { ...base, index: 2, fraction: 0.6, gapMs: -60_000 },
+    ]
+    expect(leaderboardRows(racers, tracks)).toEqual([
+      { rank: 1, name: 'Chloé', color: '#000002', gap: 'Tête' },
+      { rank: 2, name: 'Lead', color: '#000000', gap: '+1 min 00' },
+      { rank: 3, name: 'Bob', color: '#000001', gap: '+2 min 30' },
+    ])
+  })
+
+  it('gives distance gaps when the race has no times', () => {
+    const racers: Racer[] = [
+      { ...base, index: 0, fraction: 0.5 },
+      { ...base, index: 1, fraction: 0.5, gapM: -300 },
+      { ...base, index: 2, fraction: 0.5, gapM: 1200 },
+    ]
+    expect(leaderboardRows(racers, tracks).map((r) => [r.name, r.gap])).toEqual([
+      ['Chloé', 'Tête'],
+      ['Lead', '−1,2 km'],
+      ['Bob', '−1,5 km'],
+    ])
+  })
+
+  it('shares the rank of racers at the same point with the same gap', () => {
+    const racers: Racer[] = [
+      { ...base, index: 0, fraction: 0.5 },
+      { ...base, index: 1, fraction: 0.5, gapMs: 0 },
+      { ...base, index: 2, fraction: 0.3, gapMs: 30_000 },
+      { ...base, index: 3, fraction: 0.3, gapMs: 30_000 },
+    ]
+    expect(leaderboardRows(racers, tracks).map((r) => [r.rank, r.gap])).toEqual([
+      [1, 'Tête'],
+      [1, 'Tête'],
+      [3, '+30 s'],
+      [3, '+30 s'],
+    ])
+  })
+
+  it('marks the first once it has finished and keeps the final gaps of the others', () => {
+    const racers: Racer[] = [
+      { ...base, index: 0, fraction: 1, finished: true },
+      { ...base, index: 1, fraction: 1, finished: true, gapMs: -45_000 },
+      { ...base, index: 2, fraction: 0.8, gapMs: 120_000 },
+    ]
+    expect(leaderboardRows(racers, tracks).map((r) => [r.name, r.gap])).toEqual([
+      ['Bob', 'Arrivée'],
+      ['Lead', '+45 s'],
+      ['Chloé', '+2 min 45'],
+    ])
+  })
+
+  it('is empty without racers', () => {
+    expect(leaderboardRows([], tracks)).toEqual([])
   })
 })

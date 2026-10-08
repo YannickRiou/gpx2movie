@@ -47,6 +47,24 @@ export interface KeyValueStore {
   keys(prefix?: string): string[]
 }
 
+/**
+ * Tiles downloaded for offline use, grouped in packs (one per prepared track), keyed by their request URL. A tile
+ * kept by two packs is stored twice: deleting a pack never touches the others.
+ */
+export interface TileCache {
+  /** the stored tile (any pack), null when no pack holds it */
+  get(url: string): Promise<Blob | null>
+  /** true when `pack` already holds this URL (a pack prepared again only downloads what it lacks) */
+  has(pack: string, url: string): Promise<boolean>
+  put(pack: string, url: string, data: Blob): Promise<void>
+  /** remove a pack and its tiles */
+  deletePack(pack: string): Promise<void>
+  /** ids of the packs present */
+  packs(): Promise<string[]>
+  /** bytes used by the site and allowed by the browser; null when the platform cannot tell (desktop: the disk) */
+  size(): Promise<{ usedBytes: number; quotaBytes: number } | null>
+}
+
 export interface Capabilities {
   /** running inside the desktop app */
   isDesktop: boolean
@@ -71,6 +89,8 @@ export interface Platform {
   createWritableFile(options: SaveFileOptions): Promise<WritableFile | null>
   /** files of an HTML drop (the desktop window keeps HTML drops: `dragDropEnabled: false`) */
   droppedFiles(dataTransfer: DataTransfer | null | undefined): File[]
+  /** offline tiles; null when the browser has no Cache Storage (page not served over HTTPS) */
+  readonly tileCache: TileCache | null
 }
 
 /** Tauri v2 sets `isTauri` (and `__TAURI_INTERNALS__`) on the window of its webview. */
@@ -196,4 +216,33 @@ export function keyValueStore(
       }
     },
   }
+}
+
+/**
+ * File name of a stored tile: two 53-bit hashes of the URL (the URL itself is too long for a file name). Pure and
+ * synchronous; ~10⁻¹⁵ chance of a clash between two tiles of a 100 000-tile pack.
+ */
+export function tileFileName(url: string): string {
+  const hash = (seed: number) => {
+    let h1 = 0xdeadbeef ^ seed
+    let h2 = 0x41c6ce57 ^ seed
+    for (let i = 0; i < url.length; i++) {
+      const c = url.charCodeAt(i)
+      h1 = Math.imul(h1 ^ c, 2654435761)
+      h2 = Math.imul(h2 ^ c, 1597334677)
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0')
+  }
+  return `${hash(0)}${hash(0x9e3779b9)}`
+}
+
+/** Image type read from the first bytes (PNG, JPEG, WebP), '' otherwise: a tile read from disk has no type. */
+export function imageTypeOf(bytes: Uint8Array): string {
+  const at = (i: number, text: string) => [...text].every((c, j) => bytes[i + j] === c.charCodeAt(0))
+  if (bytes[0] === 0x89 && at(1, 'PNG')) return 'image/png'
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'image/jpeg'
+  if (at(0, 'RIFF') && at(8, 'WEBP')) return 'image/webp'
+  return ''
 }

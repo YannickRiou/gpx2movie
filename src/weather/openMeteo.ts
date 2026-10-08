@@ -219,7 +219,7 @@ interface StoredEntry {
 
 type CacheStorage = Pick<Storage, 'getItem' | 'setItem'>
 
-/** The platform storage (same key as when it was localStorage directly: the days already cached are kept). */
+/** The platform storage (localStorage on the site: the key is unchanged, so the days already cached are kept). */
 function platformStorage(): CacheStorage {
   const storage = getPlatform().storage
   return { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value) }
@@ -357,17 +357,19 @@ export async function fetchOutingWeather(path: TrackPath, opts: FetchWeatherOpti
 
   const time: number[] = []
   for (let h = 0; h < days.length * 24; h++) time.push(dayStartMs(startDay) + h * HOUR_MS)
-  const stations: WeatherStation[] = locations.map((location) => {
-    const values = {} as Record<WeatherVariable, number[]>
-    for (const v of WEATHER_VARIABLES) values[v] = []
-    for (const day of days) {
-      const cached = cache.get(weatherCacheKey(location, day))
-      if (!cached) throw new WeatherError('error', BAD_RESPONSE)
-      for (const v of WEATHER_VARIABLES) for (const x of cached[v]) values[v].push(x ?? Number.NaN)
-    }
-    const station: WeatherStation = { lon: location.lon, lat: location.lat, values }
-    if (location.ele !== undefined) station.ele = location.ele
-    return station
-  })
-  return { time, stations }
+  return { time, stations: locations.map((location) => cachedStation(location, days, cache)) }
+}
+
+/** Hourly values of `location` over `days`, from the cache (filled just before; missing data = unreadable reply). */
+function cachedStation(location: WeatherLocation, days: readonly string[], cache: WeatherCache): WeatherStation {
+  const values = {} as Record<WeatherVariable, number[]>
+  for (const v of WEATHER_VARIABLES) values[v] = []
+  for (const day of days) {
+    const cached = cache.get(weatherCacheKey(location, day))
+    if (!cached) throw new WeatherError('error', BAD_RESPONSE)
+    for (const v of WEATHER_VARIABLES) for (const x of cached[v]) values[v].push(x ?? Number.NaN)
+  }
+  const station: WeatherStation = { lon: location.lon, lat: location.lat, values }
+  if (location.ele !== undefined) station.ele = location.ele
+  return station
 }

@@ -1,6 +1,15 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { pickCodec, videoBitrate, type CodecCandidate } from '../export/encoder'
+import {
+  batchProgressLabel,
+  batchSummary,
+  buildBatchJobs,
+  estimateBatch,
+  formatKey,
+  useBatchStore,
+  type BatchJobState,
+} from '../export/batch'
+import { ALPHA_CANDIDATES, pickCodec, videoBitrate, type CodecCandidate } from '../export/encoder'
 import {
   EXPORT_HOLD_END_S,
   EXPORT_HOLD_START_S,
@@ -15,6 +24,7 @@ import {
 import {
   chooseVideoDestination,
   isExportBusy,
+  overlayBaseName,
   stillBaseName,
   useExportStore,
   videoFileName,
@@ -23,12 +33,15 @@ import {
   type StillType,
 } from '../export/store'
 import { getPlatform, videoEncoderMissingHint } from '../platform'
+import { canPickFolder, pickFolder, type WritableFolder } from '../platform/folder'
+import { startPoster } from '../poster/export'
 import { PosterPanel } from '../poster/PosterPanel'
 import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { ModifiedMarker } from './ModifiedMarker'
 import { formatNumber } from './format'
 import { saveExportedFile } from './projectActions'
+import { effectiveProjectName } from './shell'
 import { AspectIcon, Icon } from './icons'
 import { withShortcut } from './shortcuts'
 import { showToast } from './toast'
@@ -84,8 +97,8 @@ interface CodecProbe {
 
 /**
  * "Exporter" drawer: aspect (tiles), resolution, codec and estimated size, start / cancel, progress and download;
- * also a still image of the current progress at the same size; frame rate, quality and image type under
- * « Plus de réglages ».
+ * also a still image of the current progress at the same size, or the overlay alone over a transparent background;
+ * frame rate, quality and image type under « Plus de réglages ».
  */
 function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; modes: ReactNode; hidden: boolean }) {
   const video = useAppStore((s) => s.settings.video)
@@ -97,6 +110,8 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   const { phase, frame, frameCount, etaS, result, error, timings } = useExportStore()
   const id = useId()
   const [stillType, setStillType] = useState<StillType>('image/png')
+  /** « Habillage seul »: the overlay alone, transparent WebM to lay over one's own footage */
+  const [overlayOnly, setOverlayOnly] = useState(false)
   const downloadedRef = useRef<ExportResult | null>(null)
   const streams = getPlatform().capabilities.canStreamToDisk
 
@@ -110,19 +125,22 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   }).length
 
   // Ask the browser which codec it can use at this size (H.264 may refuse large or tall frames).
-  const probeKey = `${width}x${height}@${video.fps}/${video.quality}`
+  const probeKey = `${width}x${height}@${video.fps}/${video.quality}${overlayOnly ? '/alpha' : ''}`
   const [probe, setProbe] = useState<CodecProbe | null>(null)
   useEffect(() => {
     let alive = true
-    void pickCodec({ width, height, fps: video.fps, quality: video.quality }).then((codec) => {
+    const candidates = overlayOnly ? ALPHA_CANDIDATES : undefined
+    void pickCodec({ width, height, fps: video.fps, quality: video.quality }, undefined, candidates).then((codec) => {
       if (alive) setProbe({ key: probeKey, codec })
     })
     return () => {
       alive = false
     }
-  }, [probeKey, width, height, video.fps, video.quality])
+  }, [probeKey, width, height, video.fps, video.quality, overlayOnly])
   const codec = probe?.key === probeKey ? probe.codec : undefined
-  const estimatedBytes = codec ? (videoBitrate(width, height, video.fps, video.quality, codec.codec) * totalFrames) / video.fps / 8 : 0
+  // no size estimate for the overlay alone: mostly empty frames come out far below the bitrate
+  const estimatedBytes =
+    codec && !overlayOnly ? (videoBitrate(width, height, video.fps, video.quality, codec.codec) * totalFrames) / video.fps / 8 : 0
   const secondsPerImage =
     timings.rendered > 0 ? (timings.renderMs + timings.waitMs + timings.encodeMs) / timings.rendered / 1000 : null
 
@@ -130,6 +148,8 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   useEffect(() => {
     if (!result || downloadedRef.current === result) return
     downloadedRef.current = result
+    // a batch saves its files itself
+    if (useBatchStore.getState().phase === 'running') return
     const { url, fileName } = result
     // written straight to disk: already saved
     if (url === null) return void showToast({ kind: 'success', text: `Vidéo enregistrée dans ${fileName}` })
@@ -143,6 +163,7 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   }, [result])
 
   useEffect(() => {
+    if (useBatchStore.getState().phase === 'running') return
     if (phase === 'error' && error) showToast({ kind: 'error', text: `Échec de l'export : ${error}` })
     else if (phase === 'canceled') showToast({ kind: 'info', text: 'Export annulé' })
   }, [phase, error])
@@ -162,10 +183,11 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
 
   const start = () => {
     if (!trackName || !codec) return
+    const baseName = overlayOnly ? overlayBaseName(trackName) : trackName
     // asked now: the browser's save picker needs this click
-    const fileName = videoFileName(trackName, `.${codec.container}`)
+    const fileName = videoFileName(baseName, `.${codec.container}`)
     void chooseVideoDestination(getPlatform(), fileName).then(({ start: go, destination }) => {
-      if (go) useExportStore.getState().start({ ...request, baseName: trackName, destination })
+      if (go) useExportStore.getState().start({ ...request, baseName, destination, overlayOnly })
     })
   }
 
@@ -254,9 +276,23 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         </p>
       </div>
 
+      <div className="field">
+        <label className="checkbox">
+          <input type="checkbox" checked={overlayOnly} disabled={busy} onChange={(e) => setOverlayOnly(e.currentTarget.checked)} />
+          Habillage seul (fond transparent)
+        </label>
+        {overlayOnly && (
+          <p className="field__hint">
+            Compteurs, profil, carte, titres et crédits sans la vue 3D, en WebM transparent, à poser sur vos propres images
+            dans un logiciel de montage. Mêmes images que la vidéo, sans le son.
+          </p>
+        )}
+      </div>
+
       <p className="export__summary" title="Chaque image est rendue une fois le relief visible chargé.">
         {formatClock(totalFrames / video.fps)} · {formatNumber(totalFrames)} images
-        {codec && ` · ${CODEC_LABELS[`${codec.container}/${codec.codec}`]} · ≈ ${formatMegabytes(estimatedBytes)}`}
+        {codec && ` · ${CODEC_LABELS[`${codec.container}/${codec.codec}`]}`}
+        {estimatedBytes > 0 && ` · ≈ ${formatMegabytes(estimatedBytes)}`}
       </p>
       {codec && streams && <p className="field__hint">Enregistrement direct sur le disque</p>}
       {codec && warnsInMemory(estimatedBytes, streams) && (
@@ -265,7 +301,14 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
           le disque.
         </p>
       )}
-      {codec === null && (
+      {codec === null && overlayOnly && (
+        <p className="field__hint" role="alert">
+          Ce navigateur ne sait pas encoder une vidéo WebM (VP9) de {formatNumber(width)} × {formatNumber(height)} pixels,
+          nécessaire à l'habillage transparent :{' '}
+          {videoEncoderMissingHint() ?? 'exportez-le depuis Chrome ou Edge, ou choisissez une résolution plus petite.'}
+        </p>
+      )}
+      {codec === null && !overlayOnly && (
         <p className="field__hint" role="alert">
           Ce navigateur ne sait pas encoder une vidéo de {formatNumber(width)} × {formatNumber(height)} pixels :
           {videoEncoderMissingHint() ?? 'choisissez une résolution plus petite.'}
@@ -276,7 +319,7 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         <div className="export__actions">
           <button type="button" className="btn btn--primary" onClick={start} disabled={!trackName || !codec}>
             <Icon name="download" size={18} />
-            Exporter la vidéo
+            {overlayOnly ? "Exporter l'habillage" : 'Exporter la vidéo'}
           </button>
           <button
             type="button"
@@ -408,15 +451,270 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   )
 }
 
-type ExportMode = 'video' | 'poster'
+/** Line of a job in the result list of a batch. */
+function jobStatusText(state: BatchJobState): string {
+  const { status, result, error } = state
+  if (status === 'pending') return 'en attente'
+  if (status === 'running') return 'en cours…'
+  if (status === 'canceled') return 'annulé'
+  if (status === 'error') return `échec : ${error ?? 'inconnu'}`
+  if (!result) return 'fait'
+  return `${result.url === null ? 'enregistré : ' : ''}${result.fileName} (${formatMegabytes(result.sizeBytes)})`
+}
+
+/** Message at the end of a batch. */
+function announceBatch(states: readonly BatchJobState[], folderName: string | null): void {
+  const { done, failed, canceled } = batchSummary(states)
+  const files = `${done} fichier${done > 1 ? 's' : ''}`
+  if (failed > 0) showToast({ kind: 'error', text: `Export en lot : ${files} sur ${states.length}, ${failed} échec${failed > 1 ? 's' : ''}` })
+  else if (canceled > 0) showToast({ kind: 'info', text: `Export en lot annulé (${files} prêt${done > 1 ? 's' : ''})` })
+  else showToast({ kind: 'success', text: `${files} exporté${done > 1 ? 's' : ''}${folderName ? ` dans ${folderName}` : ''}` })
+}
 
 /**
- * "Exporter" drawer in two modes: « Vidéo » (film and still image) and « Affiche » (poster, src/poster). Both stay
- * mounted, so the result of an export is always handled once, by the video mode (download, toast).
+ * « Plusieurs formats »: films ticked as aspect × resolution, plus a still image and the poster, with the total
+ * estimate and one « Tout exporter » (src/export/batch.ts). Frame rate and quality are those of the « Vidéo » mode.
+ */
+function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; modes: ReactNode; hidden: boolean }) {
+  const video = useAppStore((s) => s.settings.video)
+  const pacing = usePacing()
+  const durationS = pacing.totalTime()
+  const track = useAppStore((s) => s.tracks[0])
+  const projectName = useAppStore((s) => s.projectName)
+  const exportBusy = useExportStore((s) => isExportBusy(s.phase))
+  const fraction = useExportStore((s) => (s.phase === 'finalizing' ? 1 : s.frameCount > 0 ? s.frame / s.frameCount : 0))
+  const rate = useExportStore((s) => s.secondsPerMegapixel)
+  const { phase, selection, jobs: states, folderName, cancelRequested, select } = useBatchStore()
+  const id = useId()
+  const running = phase === 'running'
+  const busy = running || exportBusy
+  const capabilities = getPlatform().capabilities
+  const toFolder = capabilities.canStreamToDisk && canPickFolder(capabilities)
+
+  const jobs = useMemo(() => buildBatchJobs(selection, video), [selection, video])
+  const films = useMemo(() => jobs.flatMap((j) => (j.kind === 'video' ? [j] : [])), [jobs])
+  const frames = buildFrameSchedule({
+    durationS,
+    fps: video.fps,
+    holdStartS: EXPORT_HOLD_START_S,
+    holdEndS: EXPORT_HOLD_END_S,
+  }).length
+
+  // codec of each ticked film, for its size (H.264 may refuse large or tall frames)
+  const probeKey = `${films.map((j) => j.key).join()}@${video.fps}/${video.quality}`
+  const [probe, setProbe] = useState<{ key: string; codecs: Record<string, CodecCandidate | null> } | null>(null)
+  useEffect(() => {
+    let alive = true
+    void Promise.all(
+      films.map(async (j) => [j.key, await pickCodec({ width: j.width, height: j.height, fps: video.fps, quality: video.quality })] as const),
+    ).then((entries) => {
+      if (alive) setProbe({ key: probeKey, codecs: Object.fromEntries(entries) })
+    })
+    return () => {
+      alive = false
+    }
+  }, [probeKey, films, video.fps, video.quality])
+  const codecs = probe?.key === probeKey ? probe.codecs : null
+  const estimate = estimateBatch(
+    jobs,
+    frames,
+    (j) => {
+      const codec = codecs?.[j.key]
+      return codec ? (videoBitrate(j.width, j.height, video.fps, video.quality, codec.codec) * frames) / video.fps / 8 : null
+    },
+    rate,
+  )
+  const unencodable = codecs ? films.filter((j) => codecs[j.key] === null) : []
+  const finished = states.filter((s) => s.status !== 'pending' && s.status !== 'running').length
+  const stillLabel = `${video.aspect} ${VIDEO_RESOLUTIONS.find((r) => r.id === video.resolution)?.label ?? ''}`
+
+  const toggle = (key: string, on: boolean) =>
+    select({ formats: on ? [...selection.formats, key] : selection.formats.filter((k) => k !== key) })
+
+  const start = () => {
+    if (!track || jobs.length === 0) return
+    // asked now: the browser's folder picker needs this click; null = closed (no export), undefined = in memory
+    const folder: Promise<WritableFolder | null | undefined> = toFolder
+      ? pickFolder(capabilities).catch((error: unknown) => {
+          console.warn('[export] dossier impossible, fichiers enregistrés un par un :', error)
+          return undefined
+        })
+      : Promise.resolve(undefined)
+    void folder.then(async (picked) => {
+      if (picked === null) return
+      const states = await useBatchStore.getState().run(jobs, {
+        projectName: effectiveProjectName(projectName, track.name),
+        film: {
+          fps: video.fps,
+          quality: video.quality,
+          durationS,
+          progressAt: pacing.progressAtTime,
+          holdStartS: EXPORT_HOLD_START_S,
+          holdEndS: EXPORT_HOLD_END_S,
+        },
+        still: { progress: useAppStore.getState().playback.progress, type: 'image/png' },
+        folder: picked ?? null,
+        containerOf: async (j) => (await pickCodec({ width: j.width, height: j.height, fps: video.fps, quality: video.quality }))?.container ?? null,
+        startPoster,
+        save: (r) => r.url && download(r.url, r.fileName),
+      })
+      announceBatch(states, picked?.name ?? null)
+    })
+  }
+
+  return (
+    <section className="settings export" aria-labelledby={`${id}-title`} aria-busy={busy} hidden={hidden}>
+      <h2 id={`${id}-title`} className="section-title settings__title">
+        Exporter
+      </h2>
+      {onClose && (
+        <button
+          type="button"
+          className="icon-btn settings__close"
+          onClick={onClose}
+          aria-label="Fermer le panneau d'export"
+          data-tip={withShortcut('Fermer', 'export')}
+          data-tip-align="end"
+        >
+          <Icon name="x" size={18} />
+        </button>
+      )}
+      {modes}
+
+      <fieldset className="field fieldset" disabled={busy}>
+        <legend className="field__label">Formats</legend>
+        <div className="batch-formats">
+          {VIDEO_ASPECTS.map((a) => (
+            <div key={a.id} className="batch-formats__row" role="group" aria-label={a.label}>
+              <span className="batch-formats__aspect" title={a.label}>
+                <AspectIcon x={a.x} y={a.y} size={20} />
+                {a.id}
+              </span>
+              <div className="chips">
+                {VIDEO_RESOLUTIONS.map((r) => {
+                  const key = formatKey(a.id, r.id)
+                  return (
+                    <label key={r.id} className="chip">
+                      <input
+                        type="checkbox"
+                        checked={selection.formats.includes(key)}
+                        onChange={(e) => toggle(key, e.currentTarget.checked)}
+                      />
+                      {r.label}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="field fieldset" disabled={busy}>
+        <legend className="field__label">Aussi</legend>
+        <label className="checkbox">
+          <input type="checkbox" checked={selection.still} onChange={(e) => select({ still: e.currentTarget.checked })} />
+          Image fixe ({stillLabel}, position de lecture)
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={selection.poster} onChange={(e) => select({ poster: e.currentTarget.checked })} />
+          Affiche (réglages du mode « Affiche »)
+        </label>
+      </fieldset>
+
+      <p className="export__summary">
+        {estimate.files} fichier{estimate.files > 1 ? 's' : ''} · {formatNumber(estimate.frames)} images
+        {estimate.bytes > 0 && ` · ≈ ${formatMegabytes(estimate.bytes)}`}
+        {estimate.seconds !== null && ` · ≈ ${formatClock(estimate.seconds)} de rendu`}
+      </p>
+      <p className="field__hint">
+        {video.fps} i/s, qualité {QUALITIES.find((q) => q.value === video.quality)?.label.toLowerCase()} (mode « Vidéo »).{' '}
+        {toFolder
+          ? 'Un dossier vous est demandé : chaque fichier y est écrit au fur et à mesure.'
+          : "Chaque fichier se télécharge dès qu'il est prêt."}
+        {estimate.seconds === null && films.length > 0 && ' Durée estimée après un premier film exporté.'}
+      </p>
+      {warnsInMemory(estimate.bytes, toFolder) && (
+        <p className="field__hint">Au-delà de 1,5 Go en tout, les films gardés en mémoire peuvent saturer l'onglet.</p>
+      )}
+      {unencodable.length > 0 && (
+        <p className="field__hint" role="alert">
+          Ce navigateur ne sait pas encoder {unencodable.map((j) => j.label).join(', ')} : ces formats échoueront.{' '}
+          {videoEncoderMissingHint() ?? ''}
+        </p>
+      )}
+
+      {!busy && (
+        <div className="export__actions">
+          <button type="button" className="btn btn--primary" onClick={start} disabled={!track || jobs.length === 0}>
+            <Icon name="download" size={18} />
+            Tout exporter
+          </button>
+        </div>
+      )}
+
+      {running && (
+        <div className="field">
+          <progress
+            className="export__progress"
+            aria-label="Progression de l'export en lot"
+            max={Math.max(1, states.length)}
+            value={finished + (states.some((s) => s.status === 'running') ? fraction : 0)}
+          />
+          <p className="field__hint">{batchProgressLabel(states, fraction) || 'Préparation…'}</p>
+          <button
+            type="button"
+            className="btn btn--secondary btn--block"
+            onClick={() => useBatchStore.getState().cancel()}
+            disabled={cancelRequested}
+          >
+            Tout annuler
+          </button>
+        </div>
+      )}
+
+      {states.length > 0 && (
+        <div className="field">
+          {folderName && <p className="field__hint">Dossier : {folderName}</p>}
+          <ul className="batch-results">
+            {states.map((s) => (
+              <li key={s.job.key} className="batch-results__item">
+                <span className="batch-results__label">{s.job.label}</span>
+                <span className="field__hint">{jobStatusText(s)}</span>
+                {s.result?.url && (
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--small"
+                    onClick={() => s.result?.url && download(s.result.url, s.result.fileName)}
+                  >
+                    Enregistrer à nouveau
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="visually-hidden" role="status">
+        {running ? batchProgressLabel(states, 0) : ''}
+      </p>
+    </section>
+  )
+}
+
+type ExportMode = 'video' | 'batch' | 'poster'
+
+/**
+ * "Exporter" drawer in three modes: « Vidéo » (film and still image), « Plusieurs formats » (batch) and « Affiche »
+ * (poster, src/poster). All stay mounted, so the result of a single export is always handled once, by the video mode
+ * (download, toast); a batch saves and announces its own files.
  */
 export function ExportPanel({ onClose }: { onClose?: () => void }) {
   const [mode, setMode] = useState<ExportMode>('video')
-  const busy = useExportStore((s) => isExportBusy(s.phase))
+  const exporting = useExportStore((s) => isExportBusy(s.phase))
+  const batching = useBatchStore((s) => s.phase === 'running')
+  const busy = exporting || batching
   const id = useId()
   const modes = (
     <fieldset className="field fieldset" disabled={busy}>
@@ -425,6 +723,7 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
         {(
           [
             ['video', 'Vidéo'],
+            ['batch', 'Plusieurs formats'],
             ['poster', 'Affiche'],
           ] as const
         ).map(([value, label]) => (
@@ -439,6 +738,7 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
   return (
     <>
       <VideoExportPanel onClose={onClose} modes={mode === 'video' && modes} hidden={mode !== 'video'} />
+      <BatchExportPanel onClose={onClose} modes={mode === 'batch' && modes} hidden={mode !== 'batch'} />
       <PosterPanel onClose={onClose} modes={mode === 'poster' && modes} hidden={mode !== 'poster'} />
     </>
   )

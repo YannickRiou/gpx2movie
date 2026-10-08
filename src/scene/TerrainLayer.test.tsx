@@ -3,6 +3,8 @@ import type { LonLatBounds } from '../core/types'
 import { DEFAULT_FILM } from '../film/model'
 import { DEFAULT_OVERLAY } from '../overlay/settings'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
+import { DEFAULT_GRADING } from './grading'
+import { DEFAULT_MARKER, DEFAULT_TRACK_STYLE } from './markerSettings'
 
 vi.mock('@react-three/fiber', () => ({ useFrame: vi.fn(), useThree: vi.fn() }))
 vi.mock('../terrain/engine', () => ({ createTerrainEngine: vi.fn() }))
@@ -67,6 +69,7 @@ describe('engine options from settings', () => {
     sunHour: 10,
     sunFromTrack: true,
     exposureEv: 0,
+    grading: DEFAULT_GRADING,
     trackColorBy: 'none' as const,
     camera: { style: 'chase' as const, distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
     flyoverDurationS: 60,
@@ -86,6 +89,8 @@ describe('engine options from settings', () => {
       maxDistanceM: 1500,
     },
     race: { enabled: false, sync: 'elapsed' as const },
+    trackStyle: DEFAULT_TRACK_STYLE,
+    marker: DEFAULT_MARKER,
   }
 
   it('resolves the sources from the catalogue', () => {

@@ -15,21 +15,29 @@
  * texture brightness: three.js shades a Lambert surface as albedo x irradiance / pi, so a flat tile facing
  * the sky receives (hemisphere + sun x sin(sun elevation)) / pi = (1.2 + 2.0 x 0.79) / pi = 0.88 of its
  * albedo and a slope facing the sun peaks just under 1.0 (nothing clips).
+ *
+ * The colour grading (`settings.grading`) closes the post-processing of the atmosphere; without it, `GradingComposer`
+ * grades the image over the same sky gradient, only while the grading is not « Naturel » (scene/GradingComposer.tsx).
  */
-import { useEffect, useMemo, type CSSProperties } from 'react'
+import { Suspense, lazy, useEffect, useMemo, type CSSProperties } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { useAppStore } from '../state/store'
 import { ExportController } from '../export/ExportController'
 import { createOverlayDrawer } from '../overlay/exportOverlay'
-import { AtmosphereLayer } from './AtmosphereLayer'
 import { CameraRig } from './CameraRig'
 import { FlyoverRig } from './FlyoverRig'
+import { isIdentityGrading } from './grading'
 import { Labels } from './Labels'
 import { RaceMarkers } from './RaceMarkers'
 import { TerrainLayer } from './TerrainLayer'
 import { TrackLines } from './TrackLines'
 import { WaterLayer } from './WaterLayer'
 import { TrackMenu, TrackPicker } from './TrackPicker'
+
+// sky, clouds, post-processing and the geoid grid (~550 KB): loaded with the first track, not at startup
+const AtmosphereLayer = lazy(() => import('./AtmosphereLayer').then((m) => ({ default: m.AtmosphereLayer })))
+// post-processing without the atmosphere: only once a colour grading other than « Naturel » is chosen
+const GradingComposer = lazy(() => import('./GradingComposer').then((m) => ({ default: m.GradingComposer })))
 
 export const SKY_TOP_COLOR = '#A9CCD9'
 export const SKY_HORIZON_COLOR = '#F5F2EA'
@@ -63,6 +71,7 @@ export interface FlyoverCanvasProps {
 export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
   const atmosphere = useAppStore((s) => s.settings.atmosphere)
+  const graded = useAppStore((s) => !isIdentityGrading(s.settings.grading))
   // the video export draws the film overlay through the same code as the preview
   const overlayDrawer = useMemo(createOverlayDrawer, [])
   useEffect(() => () => overlayDrawer.dispose(), [overlayDrawer])
@@ -85,7 +94,17 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
             <RaceMarkers />
             <Labels />
             <TrackPicker />
-            {atmosphere && <AtmosphereLayer />}
+            {atmosphere && (
+              // its own boundary: the rest of the scene is drawn while it loads
+              <Suspense fallback={null}>
+                <AtmosphereLayer />
+              </Suspense>
+            )}
+            {!atmosphere && graded && (
+              <Suspense fallback={null}>
+                <GradingComposer skyTop={SKY_TOP_COLOR} skyHorizon={SKY_HORIZON_COLOR} />
+              </Suspense>
+            )}
             <ExportController drawOverlay={overlayDrawer.draw} />
           </TerrainLayer>
         )}

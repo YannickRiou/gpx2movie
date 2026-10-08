@@ -1,5 +1,6 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useReducer, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
+import { useBatchStore } from './export/batch'
 import { isExportBusy, useExportStore } from './export/store'
 import { addStop, addText } from './film/timeline'
 import { getPlatform } from './platform'
@@ -10,7 +11,6 @@ import type { Settings } from './state/store'
 import { CameraPanel } from './ui/CameraPanel'
 import { ClimbList } from './ui/ClimbList'
 import { EmptyState } from './ui/EmptyState'
-import { ExportPanel } from './ui/ExportPanel'
 import { FilmInspector } from './ui/FilmInspector'
 import { HelpDialog } from './ui/HelpDialog'
 import { Icon } from './ui/icons'
@@ -21,6 +21,7 @@ import { OverlayPanel } from './ui/OverlayPanel'
 import { chooseFilesToOpen, openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
+import { useSafeZonesStore } from './ui/SafeZones'
 import { ONE_SIDE_MAX_WIDTH, SHELL_TABS, isFileDrag, nextTabIndex, parseShellPrefs, shellReducer } from './ui/shell'
 import type { ShellTab } from './ui/shell'
 import { keyFocus, matchShortcut, seekTime, withShortcut } from './ui/shortcuts'
@@ -33,6 +34,11 @@ import { TrackList } from './ui/TrackList'
 import { WeatherPanel } from './ui/WeatherPanel'
 import './ui/app.css'
 import './ui/shell.css'
+
+// Loaded right after the first paint, in their own chunks: the export drawer (video, batch, poster) and the offline
+// packs are not needed to show the first screen. They stay mounted once loaded (side effects, see the side panel).
+const ExportPanel = lazy(() => import('./ui/ExportPanel').then((m) => ({ default: m.ExportPanel })))
+const OfflinePanel = lazy(() => import('./ui/OfflinePanel').then((m) => ({ default: m.OfflinePanel })))
 
 const TAB_LABELS: Record<ShellTab, { label: string; icon: IconName }> = {
   trace: { label: 'Trace', icon: 'route' },
@@ -59,7 +65,8 @@ const isNarrow = () => window.innerWidth < ONE_SIDE_MAX_WIDTH
 /** below this width the panel is a drawer over the view (shell.css): it starts closed and closes on Escape or outside */
 const DRAWER_MAX_WIDTH = 1024
 const isDrawer = () => window.innerWidth < DRAWER_MAX_WIDTH
-const isExporting = () => isExportBusy(useExportStore.getState().phase)
+// a batch keeps the shell locked between its jobs too (the export store is idle for a moment between two)
+const isExporting = () => isExportBusy(useExportStore.getState().phase) || useBatchStore.getState().phase === 'running'
 /** a modal dialog (help, sources) is open: it takes the keyboard, Escape closes it */
 const isDialogOpen = () => document.querySelector('dialog[open]') !== null
 
@@ -126,7 +133,9 @@ function Fold({ title, keys, hidden, children }: { title: string; keys?: (keyof 
 
 export default function App() {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
-  const exporting = useExportStore((s) => isExportBusy(s.phase))
+  const exportBusy = useExportStore((s) => isExportBusy(s.phase))
+  const batchRunning = useBatchStore((s) => s.phase === 'running')
+  const exporting = exportBusy || batchRunning
   const selected = useAppStore((s) => s.filmSelection !== null && s.tracks.length > 0)
   const [shell, dispatch] = useReducer(shellReducer, undefined, () => ({
     ...loadPrefs(),
@@ -245,6 +254,8 @@ export default function App() {
       } else if (action === 'fit') {
         if (e.repeat || isExporting() || useAppStore.getState().tracks.length === 0) return
         useAppStore.getState().requestFit()
+      } else if (action === 'safe-zones') {
+        if (!e.repeat) useSafeZonesStore.getState().toggle()
       } else if (action === 'toggle-panel') {
         if (e.repeat || isExporting()) return
         dispatch({ type: 'toggle-panel', narrow: isNarrow() })
@@ -374,6 +385,11 @@ export default function App() {
               <Fold title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
                 <WeatherPanel />
               </Fold>
+              <Fold title="Hors ligne" hidden={!hasTracks}>
+                <Suspense>
+                  <OfflinePanel />
+                </Suspense>
+              </Fold>
             </>,
           )}
           {panel(
@@ -397,7 +413,9 @@ export default function App() {
         </main>
 
         <aside id="export-dock" className="dock" aria-label="Export" hidden={!shell.dockOpen}>
-          <ExportPanel onClose={exporting ? undefined : () => dispatch({ type: 'close-dock' })} />
+          <Suspense fallback={<p className="field__hint">Chargement…</p>}>
+            <ExportPanel onClose={exporting ? undefined : () => dispatch({ type: 'close-dock' })} />
+          </Suspense>
         </aside>
         {/* the export drawer goes first */}
         <aside className="dock" aria-label="Inspecteur" hidden={shell.dockOpen || !shell.inspecting}>

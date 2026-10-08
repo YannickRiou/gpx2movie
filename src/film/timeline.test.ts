@@ -4,11 +4,12 @@ import { DEFAULT_PACING } from '../flyover/pacing'
 import { buildTrack } from '../import/stats'
 import { buildFilmClock } from './clock'
 import type { FilmClockInput } from './clock'
-import { AUDIO_DEFAULTS, AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, MIN_SPEED_SPAN_M, clipTimeS, isValidFilm } from './model'
+import { AUDIO_DEFAULTS, AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, MIN_SPEED_SPAN_M, VIDEO_SOUND_DEFAULTS, clipTimeS, isValidFilm } from './model'
 import type { Film, FilmAudio, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
 import {
   NEW_MEDIA_S,
   NEW_VIDEO_MAX_S,
+  addCameraKey,
   addMedia,
   addMusic,
   addSpeed,
@@ -31,6 +32,7 @@ import {
   stopPositionAt,
   syncClip,
   syncClipPlacement,
+  updateCameraKey,
   updateShot,
   updateSpeed,
   updateStop,
@@ -55,7 +57,16 @@ const film: Film = {
 }
 
 function contextOf(f: Film, patch: Partial<DragContext> = {}, pacing = { ...DEFAULT_PACING, keepDuration: false }): DragContext {
-  const input: FilmClockInput = { opening: f.opening, closing: f.closing, stops: f.stops, lengthM: L, highlightsM: [], durationS: D, pacing }
+  const input: FilmClockInput = {
+    opening: f.opening,
+    closing: f.closing,
+    stops: f.stops,
+    cameraKeys: f.cameraKeys,
+    lengthM: L,
+    highlightsM: [],
+    durationS: D,
+    pacing,
+  }
   const clockOf = (stops: readonly FilmStop[]) => buildFilmClock({ ...input, stops })
   return { clock: clockOf(f.stops), clockOf, lengthM: L, targets: [], targetsM: [], snapS: 0, ...patch }
 }
@@ -231,13 +242,13 @@ describe('edits', () => {
     })
   })
 
-  it('adds videos at their natural length, capped, without Ken Burns, after the photos', () => {
+  it('adds videos at their natural length, capped, without Ken Burns, with their sound, after the photos', () => {
     const { film: next, ids } = addMedia(film, 10, [{ src: 'video-1', videoS: 12.345 }, { src: 'photo-2' }, { src: 'video-2', videoS: 95 }])
     expect(ids).toEqual(['media-2', 'media-3', 'media-4'])
     expect(next.media.slice(1)).toEqual([
-      { id: 'media-2', startS: 10, durationS: 12.35, kind: 'video', src: 'video-1', ...MEDIA_DEFAULTS, kenBurns: false },
+      { id: 'media-2', startS: 10, durationS: 12.35, kind: 'video', src: 'video-1', ...MEDIA_DEFAULTS, kenBurns: false, ...VIDEO_SOUND_DEFAULTS },
       { id: 'media-3', startS: 22.35, durationS: NEW_MEDIA_S, kind: 'image', src: 'photo-2', ...MEDIA_DEFAULTS },
-      { id: 'media-4', startS: 27.35, durationS: NEW_VIDEO_MAX_S, kind: 'video', src: 'video-2', ...MEDIA_DEFAULTS, kenBurns: false },
+      { id: 'media-4', startS: 27.35, durationS: NEW_VIDEO_MAX_S, kind: 'video', src: 'video-2', ...MEDIA_DEFAULTS, kenBurns: false, ...VIDEO_SOUND_DEFAULTS },
     ])
     expect(isValidFilm(next)).toBe(true)
     expect(updateMedia(next, 'media-2', { inS: -3 }).media[1].inS).toBe(0)
@@ -531,5 +542,32 @@ describe('music', () => {
     const removed = removeFilmItem(withMusic, 'music-1')
     expect(removed.audio).toEqual([])
     expect(hasFilmItem(removed, [], 'music-1')).toBe(false)
+  })
+})
+
+describe('camera keys', () => {
+  const framing = { distance: 2.345, pitchDeg: 61.27, headingOffsetDeg: 190 }
+
+  it('adds a key at the marker, rounded, valid; a second one at the same metre takes the framing', () => {
+    const { film: one, id } = addCameraKey(film, 2500.4, framing)
+    expect(id).toBe('camera-1')
+    expect(one.cameraKeys).toEqual([{ id, atM: 2500, distance: 2.35, pitchDeg: 61.3, headingOffsetDeg: -170 }])
+    expect(isValidFilm(one)).toBe(true)
+    const again = addCameraKey(one, 2500, { distance: 1, pitchDeg: 30, headingOffsetDeg: 0 })
+    expect(again.id).toBe(id)
+    expect(again.film.cameraKeys).toEqual([{ id, atM: 2500, distance: 1, pitchDeg: 30, headingOffsetDeg: 0 }])
+  })
+
+  it('updates clamp to the camera ranges; moved along the track by the pointer; removed like any block', () => {
+    const { film: keyed, id } = addCameraKey(film, 2500, framing)
+    expect(updateCameraKey(keyed, id, { distance: 9, pitchDeg: 2, atM: -4 }).cameraKeys[0]).toMatchObject({ distance: 4, pitchDeg: 5, atM: 0 })
+    const ctx = contextOf(keyed)
+    const key = ctx.clock.cameraKeys[0]
+    const moved = dragFilm(keyed, id, 'move', 5, ctx)
+    expect(moved.cameraKeys[0].atM).toBe(Math.round(ctx.clock.progressAtTime(key.timeS + 5) * L))
+    expect(moved.stops).toBe(keyed.stops)
+    expect(dragFilm(keyed, id, 'move', -1000, ctx).cameraKeys[0].atM).toBe(0)
+    expect(hasFilmItem(keyed, [], id)).toBe(true)
+    expect(removeFilmItem(keyed, id).cameraKeys).toEqual([])
   })
 })

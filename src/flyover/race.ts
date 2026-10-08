@@ -29,9 +29,9 @@
  *
  * Pure functions (no DOM, no React, no Three, no store).
  */
+import { firstIndexAtOrAbove, lastIndexAtOrBelow } from '../core/math'
 import type { Track } from '../core/types'
-import { buildTrackPath, samplePath } from './path'
-import type { TrackPath } from './path'
+import { samplePath, trackPathOf, type TrackPath } from './path'
 
 export const RACE_SYNC_MODES = ['elapsed', 'clock', 'distance'] as const
 export type RaceSync = (typeof RACE_SYNC_MODES)[number]
@@ -110,11 +110,11 @@ export function prepareRaceTrack(path: TrackPath): RaceTrack {
 
 const cache = new WeakMap<Track, RaceTrack>()
 
-/** `prepareRaceTrack(buildTrackPath(track))`, cached per track object. */
+/** `prepareRaceTrack(trackPathOf(track))`, cached per track object. */
 export function raceTrackOf(track: Track): RaceTrack {
   let prepared = cache.get(track)
   if (!prepared) {
-    prepared = prepareRaceTrack(buildTrackPath(track))
+    prepared = prepareRaceTrack(trackPathOf(track))
     cache.set(track, prepared)
   }
   return prepared
@@ -150,14 +150,7 @@ export function positionAtTime(track: RaceTrack, timeMs: number): RacePosition {
   const { path, times } = track
   if (!times || path.count === 0) throw new RangeError('positionAtTime : trace sans horodatage')
   const t = Math.min(track.endMs, Math.max(track.startMs, timeMs))
-  // last index whose time is <= t
-  let lo = 0
-  let hi = path.count - 1
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1
-    if (times[mid] <= t) lo = mid
-    else hi = mid - 1
-  }
+  const lo = Math.max(0, lastIndexAtOrBelow(times, t))
   if (lo === path.count - 1) return between(path, lo, lo, 0)
   return between(path, lo, lo + 1, (t - times[lo]) / (times[lo + 1] - times[lo]))
 }
@@ -178,14 +171,7 @@ export function arrivalTime(track: RaceTrack, distanceM: number): number {
   if (!times || path.count === 0) throw new RangeError('arrivalTime : trace sans horodatage')
   const { dist } = path
   const d = Math.min(path.lengthM, Math.max(0, distanceM))
-  // first index whose distance is >= d
-  let lo = 0
-  let hi = path.count - 1
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1
-    if (dist[mid] >= d) hi = mid
-    else lo = mid + 1
-  }
+  const lo = Math.min(path.count - 1, firstIndexAtOrAbove(dist, d))
   if (lo === 0) return times[0]
   const a = lo - 1
   return times[a] + (times[lo] - times[a]) * ((d - dist[a]) / (dist[lo] - dist[a]))

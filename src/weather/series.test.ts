@@ -6,6 +6,7 @@ import {
   describeWeatherCode,
   summarizeOuting,
   weatherAt,
+  weatherAtTimes,
   weatherWidgetData,
   windFromLabel,
   type WeatherSeries,
@@ -72,6 +73,13 @@ describe('weatherAt', () => {
     expect(weatherAt(gap, T0 + 0.5 * HOUR, 6.8, 45.9)!.temperature).toBe(12)
     expect(Number.isNaN(weatherAt(gap, T0, 6.8, 45.9)!.cloudCover)).toBe(true)
     expect(weatherAt({ time: [], stations: [] }, T0, 6.8, 45.9)).toBeUndefined()
+  })
+
+  it('weatherAtTimes gives weatherAt at each instant', () => {
+    const two = series(3, [s.stations[0], station(6.9, 45.95, 3, { temperature: [0, 5, 8], windDirection: [90, 180, 270] })])
+    const times = [T0 - HOUR, T0 + 0.3 * HOUR, T0 + 1.7 * HOUR]
+    expect(weatherAtTimes(two, times, 6.84, 45.91)).toEqual(times.map((t) => weatherAt(two, t, 6.84, 45.91)))
+    expect(weatherAtTimes({ time: [], stations: [] }, times, 6.8, 45.9)).toBeUndefined()
   })
 })
 

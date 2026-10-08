@@ -5,12 +5,12 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
 ## Branches, PR, dépôt
 
-- `master` : phases 1–2, historique réécrit sans trailers (poussé).
-- PR #1 (`phase3-atmosphere`, phases 2 à 5 + début de la phase 7) **fusionnée** dans `master` le 2026-10-07.
-- `timeline` (branche de travail courante) : timeline de montage + nouvelle interface. PR #2 → `master` :
-  https://github.com/YannickRiou/gpx2movie/pull/2 (**à fusionner par l'utilisateur**, la fusion automatique est refusée).
-- Règle demandée : une branche et une PR par fonctionnalité, description à jour + procédure de test manuel ; l'utilisateur
-  fusionne.
+- `master` : tout ce qui est fusionné (PR #1 à #5, la dernière le 2026-10-08).
+- `lot-video-sync-phase7` (branche courante) : géoïde, packs hors ligne, rendu en lot, chargement découpé, vagues 1 et 2
+  des fonctions restantes (voir « Travail en cours »). PR vers `master` ouverte puis fusionnée dès que les vérifications
+  sont vertes (fusion autorisée par l'utilisateur).
+- Méthode : une branche par lot, une PR avec procédure de test manuel, fusion (`gh pr merge N --merge`), puis nouvelle
+  branche partie de `origin/master`.
 - **Pousser** : `git push` tout simplement. Le remote `origin` est `git@github-yannickriou:YannickRiou/gpx2movie.git`,
   alias SSH défini dans `~/.ssh/config` (clé dédiée `~/.ssh/id_ed25519_yannickriou`, enregistrée sur le compte perso
   `YannickRiou`). Ne pas repasser par `git@github.com` : cette adresse authentifie le compte `yriouvortex`, sans droits
@@ -22,6 +22,11 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 - Node 24 via nvm : `source ~/.nvm/nvm.sh && nvm use 24` avant `npm …`.
 - Vérifications : `npm run typecheck`, `npm run lint` (34 avertissements préexistants dans `src/scene`, 0 erreur),
   `npx vitest run --maxWorkers=1` (63 fichiers, 844 tests au dernier commit vert), `npm run build`.
+- Tests de bout en bout : `npm run e2e` (`e2e/run.mjs`, puppeteer-core, Chromium de Playwright ou `OPENFLYOVER_CHROME`,
+  SwiftShader, serveur Vite lancé par le script sans surveillance des fichiers). 5 scénarios : accueil et exemple, onglets
+  et aide, T / Ctrl+Z / S, projet enregistré puis rouvert, export 320 × 180 + image fixe. 7 à 8 min ici (export
+  5 à 6 min, nuages coupés) ; `OPENFLYOVER_E2E_SKIP_EXPORT=1` : moins de 1 min 30. Échoue sur toute erreur de console hors bruit
+  réseau. Un seul navigateur à la fois sur cette machine.
 - Serveur de dev utilisé pour les captures : `npm run dev -- --port 5190` (à relancer).
 - Contrôle visuel sans écran : Chromium headless (`~/.cache/ms-playwright/chromium_headless_shell-1223/…`) piloté par
   puppeteer-core (`~/.npm/_npx/e0b87bb3fb84adaa/node_modules/puppeteer-core`), GPU logiciel SwiftShader : 20–40 s par
@@ -45,105 +50,64 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
   Trace · Carte · Survol · Habillage · Projet, export depuis la barre du haut.
 - README écrit simplement, phrases courtes, chaque chose dite une fois.
 
-## Fait et commité (branche `timeline`, du plus récent au plus ancien)
+## Fait et fusionné
 
-| Commit | Contenu |
-|---|---|
-| `f6e2784` + suivant | inspecteur de la timeline dans le panneau de droite, grille de position 3 × 3, barre de la timeline à icônes (■, zoom + « Ajuster », menu « Options »), arrêts marqués sur la barre du survol, raccourcis S / T, clic / clic droit sur la trace dans la vue 3D (`TrackPicker`) ; libellés de la barre masqués quand la timeline est étroite ; captures du README refaites |
-| `6ce6085` | Survol : nombre d'arrêts dans la durée du film |
-| `a215704` | messages éphémères (toasts), dépôt n'importe où, écran d'accueil, aide des raccourcis « ? », infobulles ; onglets Carte et Survol en sections, « Plus de réglages », heure du soleil (lever / coucher, boutons rapides) |
-| `46b6b39` | le tiroir d'export réduit la vue (bug : la fenêtre s'élargissait) |
-| `5e85a04` | photos dans la timeline (EXIF GPS / heure, plein écran ou carte, enregistrées dans le projet) + nouvelle interface (barre du haut, rail, cadrage au format, tiroir d'export, icônes) |
-| `9bc52e3` | README : captures (`docs/images/interface.jpg`, `habillage.jpg`) — **périmées depuis la nouvelle interface** |
-| `ca4453e` | textes de la timeline dans le film, cartons calés sur les plans, crédits des sources incrustés à l'export |
-| `69569a7`, `fac1f81` | timeline sous la vue (pistes Plans / Arrêts / Textes, glisser-déposer, inspecteur, arrêts automatiques) |
-| `1996237` | README réécrit + licence MIT |
-| `b7ffe55` | modèle du film, horloge du film, caméra des plans d'ensemble |
-| `e45ccd0` et avant | voir `git log` ; phases 2–5 et 7 sur `phase3-atmosphere` (PR #1) |
+Voir `git log` et les PR #1 à #5 ; détail technique dans `ARCHITECTURE.md`, fonctionnalités dans `README.md`.
 
-Détail technique : `ARCHITECTURE.md` (sections « Interface », « Film et timeline », « Habillage », « Export vidéo »…).
-Feuille de route et fonctionnalités : `README.md`.
+## Travail en cours (branche `lot-video-sync-phase7`)
 
-## Travail en cours
+Vérifié pour tout le lot : typecheck, lint (0 erreur), `npx vitest run --maxWorkers=1` (83 fichiers, 1 268 tests),
+`npm run build`. Vu en capture (SwiftShader, 1440 × 900) : section « Trace et marqueur », figurine, zones de sécurité en
+16:9, section « Couleurs », losange de cadrage et inspecteur « Cadrage ». Le reste est à voir ou écouter sur une machine
+avec GPU : [`docs/tests-gpu.md`](tests-gpu.md).
 
-- Branche `lot-videos-bureau-clarte` : **nuages volumétriques** (`@takram/three-clouds` 0.7.6, `src/weather/sceneClouds.ts`,
-  `src/scene/CloudsLayer.tsx`, `cloudNoise.ts`, bloc « Nuages » de l'onglet Carte ; détail dans `ARCHITECTURE.md`,
-  « Nuages volumétriques »). Vu à l'écran (aperçu, 1280 × 800) : manuel 50 % et 90 %, image fixe exportée avec nuages.
-  Non vu : mode Météo sur une sortie nuageuse (l'exemple est par ciel dégagé), vidéo exportée sur GPU réel (coût, rendu
-  identique d'un export à l'autre), dérive au vent pendant la lecture.
-- Même branche : **eau réfléchissante** (`src/osm/water.ts`, `src/scene/waterMesh.ts`, `src/scene/WaterLayer.tsx`, case
-  « Lacs et rivières reflétants » de « Fond de carte » ; `ARCHITECTURE.md`, « Eau réfléchissante »). Vu à l'écran : lac de Passy
-  de près et en rasant (eau sombre teintée de ciel, fondu sur la rive), Arve. Non vu : reflet du soleil en contre-jour, vagues en
-  lecture, export. À faire : crédit OpenStreetMap quand seule l'eau est chargée (barre d'état, export).
-- Même branche : tuiles en **réessai** (3 fois, hors cache, aussi sur 400) : la Géoplateforme IGN renvoyait par rafales des 400
-  « Layer … unknown » (les parallélogrammes gris).
-
-Avant ce lot, vu à l’écran le 2026-10-08 (1440 × 900) : inspecteur ancré, menu du clic droit sur la trace, barre
-de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'habillage.
-
-- Branche `lot-videos-bureau-clarte`, passe « clarté » de l'interface (non commitée, présentation et libellés seulement) :
-  interrupteurs pour les fonctions entières, pastilles pour les types de repères et les compteurs, Habillage en six
-  sections, météo en deux lignes + « Détails », ligne « Ajoutez une trace… » sans trace, bande d'état calme, infobulles et
-  libellés raccourcis. Détail : `ARCHITECTURE.md`, « Interface », « Clarté des panneaux ».
-- Même branche, vidéos dans la piste Médias (non commitées) : bouton « Média » (photos et vidéos, dépôt sur la timeline),
-  MP4 / WebM / MOV de 50 Mo au plus gardés tels quels dans la table des médias du projet, vignette de la première image et
-  icône de caméra sur le bloc, inspecteur (début dans la vidéo, mention « muette »), aperçu par `HTMLVideoElement`, export
-  image par image décodé par mediabunny (`src/film/video.ts`). Détail : `ARCHITECTURE.md`, « Film et timeline », « Vidéos ».
-- Même branche, phase 6, premier incrément (non commité) : couche `src/platform/` (site / bureau, testée), « Ouvrir »,
-  « Enregistrer », dépôt et résultat d'export passés par elle, projet Tauri 2 `src-tauri/` (fenêtre, droits dialog + fs
-  limités aux fichiers choisis, CSP des sources, icônes), scripts `tauri:dev` / `tauri:build`, message « pas d'encodeur »
-  dans le panneau d'export. Vérifié : tests, `vite build`, `cargo check --target x86_64-pc-windows-msvc` (avec
-  `RC_x86_64_pc_windows_msvc` pointant sur un faux `windres` qui écrit un fichier vide ; `rustup target add
-  x86_64-pc-windows-msvc`). Impossible ici sous Linux : Ubuntu 20.04 n'a pas `libwebkit2gtk-4.1` ni GLib ≥ 2.70.
-  Jamais lancé dans une vraie fenêtre. Détail : `ARCHITECTURE.md`, « Application de bureau ».
-- Même branche, phase 6, suite (non commitée) : tous les choix de fichier par `getPlatform().openFiles` (accueil, « Ajouter »
-  des traces, logo, « Média » de la timeline), préférences de l'interface, préréglages et cache météo par
-  `getPlatform().storage` (mêmes clés), « Enregistrer … » au lieu de « Télécharger … » à la fin d'un export sur le bureau.
-  Cache Overpass aussi (même lot que l'écriture directe ci-dessous) : `KeyValueStore.set` répond false quand le stockage
-  refuse, `keys(préfixe)` liste les clés ; le cache libère ses propres entrées puis réessaie, comme avant. Images GIF et
-  AVIF acceptées par « Média » (types connus de la couche plateforme).
-- Même branche, phase 5, écriture directe sur le disque (non commitée) : `Platform.createWritableFile` (site :
-  `showSaveFilePicker` ; bureau : plugin-fs `open` / `seek` / `write`, droits ajoutés dans `capabilities/default.json`),
-  `capabilities.canStreamToDisk`, `StreamTarget` de mediabunny (MP4 sans fast start, morceaux de 4 Mio), fichier supprimé
-  à l'annulation ou en cas d'erreur, « Enregistrement direct sur le disque » et alerte au-delà de 1,5 Go en mémoire dans le
-  tiroir, « Vidéo enregistrée dans <nom> ». Vérifié : tests (logique pure, session d'encodage avec faux mediabunny,
-  plateformes avec faux sélecteur et faux plugin-fs). Jamais vu : un vrai export écrit sur le disque (voir ci-dessous).
-  Détail : `ARCHITECTURE.md`, « Export vidéo ».
-
-- Même branche, phase 4, vitesse par portion (non commitée) : `film.speeds[]` `{ id, fromM, toM, factor }` (×0,25–×4,
-  sans chevauchement, hors préréglages), multiplicateur de vitesse à transitions douces dans `flightPacing`, piste
-  « Vitesse » sous « Plans » (glisser, bords, Suppr, un pas par geste), bouton « Vitesse » de la barre (×2 sur 1 km au
-  marqueur), inspecteur (pastilles, réglage fin, de / à en km), « Accélérer / ralentir ici » au clic droit sur la trace.
-  Vérifié : tests (rythme, horloge, modèle, gestes). Jamais vu à l'écran. Détail : `ARCHITECTURE.md`, « Film et timeline ».
-
-- Même branche, phase 7, affiche (non commitée) : module `src/poster/` (réglages `settings.poster`, contenu, mise en page
-  en boîtes pures, dessin, export), mode « Vidéo / Affiche » du tiroir d'export (`ExportPanel` enveloppe les deux, tous deux
-  montés), vignette 2D en direct, image fixe d'ensemble dans `ExportController` (`still.overview`, `still.compose`), le
-  préréglage ne garde que le style. Vérifié : tests (mise en page de chaque format × style, ajustement du texte, contenu,
-  dessin sur faux contexte, préréglages), typecheck, lint, build. Jamais vu à l'écran. Détail : `ARCHITECTURE.md`,
-  « Affiche ».
-
-- Même branche, phase 7, musique (non commitée) : `film.audio[]` `{ id, src, startS, durationS, inS, volume, fadeInS,
-  fadeOutS }` (hors préréglages), fichiers son de 30 Mo au plus gardés tels quels dans la table des médias avec leur forme
-  d'onde, piste « Musique » sous « Médias » (glisser, bords, Suppr, un pas par geste), « Options » › « Ajouter une
-  musique… » et dépôt de MP3 / M4A / AAC / OGG / Opus / WAV / FLAC, inspecteur (volume, fondus, début, durée, début dans
-  le fichier, « Caler la durée du film sur la musique »), aperçu par `HTMLAudioElement` et bouton haut-parleur, export
-  mixé par `OfflineAudioContext` puis encodé en AAC (repli Opus, sinon film muet avec une note). Vérifié : tests (modèle,
-  gestes, volume et fondus, plan du mixage, aperçu sur faux éléments, encodeur avec faux mediabunny, projet). Jamais vu ni
-  entendu. Détail : `ARCHITECTURE.md`, « Film et timeline », « Musique », et « Export vidéo ».
-
-- Même branche, phase 7, vidéo embarquée synchronisée (non commitée) : heure de début du tournage lue à l'ajout (date Apple
-  avec fuseau, sinon `mvhd` des MP4 / MOV, sinon date du fichier moins la longueur, « approximative »), `film.media[].sync`
-  `{ startMs, offsetS, follow }`, « Caler sur le parcours » dans le toast de l'ajout et dans l'inspecteur (bloc « Calage sur
-  le parcours » : heure, décalage de l'horloge en secondes, heures entières trouvées seules pour une caméra à l'heure
-  locale, case « Suivre la vitesse du survol » : image de l'endroit du marqueur, figée pendant un arrêt), même temps dans
-  le fichier pour le dessin et l'export, aperçu par `playbackRate` (recalage au-delà de 0,2 s). Aussi : préréglage non
-  enregistré quand le stockage est plein (toast d'erreur, préréglage gardé pour la session). Vérifié : tests (lecture
-  de l'heure sur des boîtes MP4 fabriquées, placement, temps dans le fichier, vitesse de l'aperçu sur faux élément,
-  dessin, préréglages). Jamais vu ni essayé avec de vrais fichiers. Détail : `ARCHITECTURE.md`, « Vidéo calée sur le
-  parcours ».
+- **Trace et marqueur** (onglet Survol) : `settings.trackStyle` (épaisseur, plein / tirets / points, halo, trace qui se
+  dessine) et `settings.marker` (boule, 7 figurines, image ronde, taille). `ARCHITECTURE.md`, « Trace et marqueur ».
+- **Étalonnage** (onglet Carte › Couleurs, 7 préréglages + 4 curseurs) et **zones de sécurité** (bouton sous « Recadrer »,
+  touche G). Le SMAA de la chaîne de l'atmosphère est maintenant dans sa propre passe, après le tone mapping (il lisait
+  l'image HDR brute sur les bords), l'étalonnage le suit dans la même passe.
+- **Son des vidéos** : son et volume par clip, « Baisser la musique sous les vidéos » (−10 dB, rampes 0,3 s) ; anciens
+  projets muets. Jamais écouté.
+- **Habillage** : « Couleurs et polices » par-dessus le style (`overlay.overrides`, `resolveOverlayTheme`), widget
+  « Classement » de la course fantôme (`overlay.leaderboard`).
+- **Export « Habillage seul »** : WebM VP9 transparent (alpha par mediabunny), sans rendu 3D, mêmes images que le film.
+- **Caméra par arrêt** (Comme le film / Tour lent / Vue large / Fixe ; « Fixe » tient maintenant aussi l'orbite) et
+  **cadrages clés** (`film.cameraKeys`, losanges dans « Plans », « Garder ce cadrage ici », inspecteur « Cadrage »).
+- **Chargement découpé** : premier écran ~540 kB (~177 kB gzip, three.js exclu : `flyover/cameraKeys.ts` sans three pour le panneau Caméra) ; scène, export, hors ligne, atmosphère, FIT et mediabunny
+  à part.
 
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
+
+Liste à cocher pour la machine avec GPU, regroupée par priorité : [`docs/tests-gpu.md`](tests-gpu.md). Le détail ci-dessous
+reste la source de chaque chantier.
+
+- Étalonnage : chaque préréglage avec et sans atmosphère (aucun changement visible en « Naturel » ; sans atmosphère, ciel
+  dégradé étalonné lui aussi, pas de bord ni de bande au raccord avec le relief, crénelage du SMAA comparable au MSAA),
+  Noir et blanc vraiment gris (trace et habillage compris : l'habillage 2D n'est **pas** étalonné, voulu), vignettage
+  identique en 16:9 et 9:16, image fixe et vidéo exportées identiques à l'aperçu (comparer une capture), pas d'à-coup en
+  glissant un curseur (seule la première sortie de « Naturel » compile le shader). À vérifier aussi dans la chaîne de
+  l'atmosphère : le SMAA, fusionné dans la même passe que le tone mapping, lit l'entrée de la passe (image avant
+  perspective aérienne et tone mapping) sur les bords détectés ; si des liserés clairs apparaissent sur les crêtes, le
+  sortir dans sa propre passe.
+- Zones de sécurité : bouton sous « Recadrer » (absent en « Libre »), G, étiquettes lisibles sur un aperçu étroit, bande des
+  boutons en 9:16 et 4:5, marges 93 % / 90 % en 16:9, rien dans l'export.
+
+- Rendu en lot : les trois modes du tiroir sur une ligne à 300 px (« Plusieurs formats » assez court ?), pastilles des 5
+  formats × 4 résolutions, estimation (taille après le sondage des codecs, durée seulement après un premier film), « Tout
+  exporter » dans Chrome (dossier demandé une fois, fichiers qui grossissent dans le dossier, noms, image et affiche
+  copiées à la fin, un nom déjà présent remplacé), Firefox (un téléchargement par fichier, « Enregistrer à nouveau »),
+  bureau Windows (fenêtre de dossier, fichiers écrits sous le dossier sans refus du scope fs), vue remise entre deux films,
+  « Tout annuler » et « Annuler » de la barre du haut pendant le 2ᵉ film (fichier commencé supprimé, suivants annulés),
+  format refusé par l'encodeur (9:16 4K en H.264 ?) marqué en échec sans arrêter les autres, interface pendant le court
+  intervalle entre deux tâches (onglets brièvement déverrouillés).
+
+- Packs hors ligne : section « Hors ligne » (estimation qui change avec le couloir, la source et le niveau de détail ;
+  imagerie refusée avec Esri par défaut, relief seul ; « Trop de tuiles »), préparation de l'exemple en 2 km (progression,
+  Pause / Reprendre, Annuler qui retire le pack neuf), liste (taille, « incomplet », Supprimer), espace utilisé (site),
+  puis **hors ligne** (DevTools › Network › Offline, ou Wi-Fi coupé) : rechargement, vue et export sans trou dans le
+  couloir, relief plus grossier au-delà, temps d'attente de l'export sur les tuiles absentes ; Firefox (demande de
+  stockage persistant) ; Safari (quota) ; bureau Windows : dossier `%APPDATA%\io.github.yannickriou.openflyover\tiles`
+  créé, fichiers lus au redémarrage hors ligne, Supprimer qui vide le dossier.
 
 - Vidéo calée sur le parcours, avec de vrais fichiers et une trace horodatée de la même sortie : iPhone (date Apple),
   Android, GoPro (heure locale écrite comme UTC : décalage d'heures trouvé seul ?), DJI, WebM (date du fichier) ; vérifier
@@ -224,26 +188,29 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
 
 ## Prochaines étapes proposées
 
-1. Fusion de la PR #2 par l'utilisateur ; ensuite repartir de `master` avec une branche par fonctionnalité.
-2. Contrôles visuels ci-dessus (surtout 1280 / 1000 px, glisser dans la timeline, photos, export réel).
-3. Timeline : son des vidéos (`muted` réservé), musique calée sur les temps forts (ralentis et arrêts sur les temps d'une
-   musique), photo attachée à un arrêt, défilement
-   automatique pendant un glisser au bord, textes ancrés à un arrêt, mémoriser l'état ouvert / fermé des sections.
-4. Phase 6 (bureau, Tauri) : premier lancement réel (`npm run tauri:dev`) sous Windows, puis macOS / Linux récent ;
-   encodeur natif pour Linux (plan dans `ARCHITECTURE.md`, « Export vidéo sans WebCodecs »)  ; accès disque pour les photos et vidéos derrière `readMedia` (un chemin de fichier plutôt que les octets
-   pour les grosses vidéos) ; sans WebCodecs, les vidéos sont refusées à l'ajout. Hébergement en sous-dossier : `/fonts/`, `/samples/`,
-   `/favicon.svg` sont absolus → `import.meta.env.BASE_URL` (seulement si nécessaire).
-5. Phase 3 restante : géoïde. Phase 7 : vidéo embarquée (reste : export de l'habillage seul sur fond transparent, heure GPS des GoPro dans
-   le flux GPMF, relire l'heure des vidéos ajoutées avant le calage), comparatif photos IGN anciennes, rendu en lot, calage musical ; affiche : plusieurs traces, carte à plat.
+Fonctions validées par l'utilisateur (« toutes pertinentes »), par vagues, quelques agents à la fois (mémoire) :
+
+1. Vague 3 : plan de situation (ouverture depuis la région), points d'intérêt ajoutés à la main, traces enchaînées,
+   ralentis et titres aux repères OpenStreetMap.
+2. Vague 4 : ralentis et arrêts calés sur les temps de la musique, affiche à plusieurs traces et carte à plat, un film par
+   GPX d'un dossier, projets rangés en local dans l'exe, encodeur natif sous Linux, installeurs signés (préparer la
+   chaîne ; le certificat est à fournir par l'utilisateur).
+3. Vague 5 : reconnaissance d'itinéraire (à confirmer avec l'utilisateur avant de construire).
+4. Petites suites : `THREE.Clock` → `THREE.Timer` ; e2e qui attend les morceaux chargés à part ; aide de message d'erreur
+   répétée ~12 fois ; copies de `clamp` restantes (`film/clock.ts`, `film/timeline.ts`, `film/audio.ts`,
+   `terrain/dem.ts`) → `core/math.ts` ; passe de performance de la scène (pas de rendu continu à l'arrêt, nuages moins
+   chers en aperçu).
 
 ## Limites et points ouverts
 
 - Licence du SDK Garmin FIT (non libre, redistribution « sauf cas prévus ») : à trancher avant diffusion publique ; usage
-  perso OK. Conditions Esri (sans clé) à relire. Open-Meteo et EOX non commerciaux ; OpenTopoMap CC BY-SA, à exclure des
-  futurs packs hors ligne. Catalogue d'étoiles de Yale : licence non indiquée.
+  perso OK. Conditions Esri (sans clé) à relire pour l'usage en ligne. Open-Meteo et EOX non commerciaux ; OpenTopoMap,
+  Esri et swisstopo permis dans les packs hors ligne pour un usage personnel, avec une limite par jour basse (README,
+  « Sources »). Catalogue d'étoiles de Yale : licence non indiquée.
 - Photos HEIC refusées (le navigateur ne les décode pas) ; EXIF lu seulement dans les JPEG.
-- Vidéos : muettes, 50 Mo au plus (le projet les contient : ~1,33 × leur taille dans le fichier JSON), non placées
+- Vidéos : 50 Mo au plus (le projet les contient : ~1,33 × leur taille dans le fichier JSON), non placées
   par GPS (calées seulement sur l'heure, la trace doit être horodatée) ; un ancien projet modifié à la main avec une vidéo absente de sa table la garde dans le film sans
   l'afficher (`parseProject` ne retire que les photos sans image).
 - Firefox / Safari non testés pour l'export (WebCodecs). HTTPS obligatoire hors `localhost`.
-- Aucun test de rendu de composants (pas de Testing Library) ; tout le visuel se vérifie à la main, par captures.
+- Aucun test de rendu de composants (pas de Testing Library) ; `npm run e2e` vérifie les parcours principaux dans un
+  vrai navigateur, mais l'aspect se vérifie toujours à la main, par captures.

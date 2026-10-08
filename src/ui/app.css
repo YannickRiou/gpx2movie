@@ -383,6 +383,20 @@
   flex: none;
 }
 
+/* « Hors ligne » packs: name and figures, then « Supprimer » */
+.offline__packs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.offline__packs > li > button {
+  flex: none;
+  align-self: center;
+}
+
 /* Film overlay (« habillage ») ------------------------------------------- */
 /* 2D canvas over the 3D view; never catches the pointer */
 .view__stage > .overlay-canvas {
@@ -404,6 +418,44 @@
   flex-direction: column;
   gap: var(--space-3);
   padding-left: var(--space-5);
+}
+
+/* « Couleurs et polices »: native colour picker, then round swatches */
+.color-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.color-row__input {
+  width: 40px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  cursor: pointer;
+}
+
+.color-row__swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgb(28 42 51 / 0.35);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.color-row__swatch:hover,
+.color-row__swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 4px var(--color-ink);
+}
+
+.color-row__input:focus-visible,
+.color-row__swatch:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* file input hidden inside a button-like label: show the focus on the label */
@@ -764,6 +816,30 @@
   opacity: 0.8;
 }
 
+/* camera keys: small diamonds over the flight */
+.film-tl__key {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  margin: -6px 0 0 -6px;
+  border: 1px solid var(--color-ink);
+  background: var(--color-glacier);
+  transform: rotate(45deg);
+  cursor: grab;
+}
+
+.film-tl__key:focus-visible {
+  outline: 2px solid var(--color-white);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.film-tl__key--selected {
+  background: var(--color-white);
+}
+
 .film-tl__playhead {
   position: absolute;
   top: 0;
@@ -863,6 +939,47 @@
   width: 100%;
   height: 10px;
   accent-color: var(--color-accent);
+}
+
+/* batch export: one row of resolution chips per aspect, then the list of the files */
+.batch-formats {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.batch-formats__row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.batch-formats__aspect {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.batch-results {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.batch-results__item {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.batch-results__label {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 /* Weather of the outing --------------------------------------------------- */

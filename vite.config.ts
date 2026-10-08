@@ -77,6 +77,15 @@ export default defineConfig({
   plugins: [react(), atmosphereAssets()],
   // src-tauri/target (Rust build of the desktop app) is not watched
   server: { port: 5173, proxy, watch: { ignored: ['**/src-tauri/**'] } },
+  build: {
+    // the chunks above 500 kB are loaded on demand, one library each (three.js + fiber, Takram, mediabunny)
+    chunkSizeWarningLimit: 800,
+    rolldownOptions: {
+      // React changes less often than the app: its own file stays cached across releases. The heavy features
+      // (3D scene, export drawer, FIT decoder, mediabunny) are split by their dynamic import()s, see ARCHITECTURE.md.
+      output: { codeSplitting: { groups: [{ name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ }] } },
+    },
+  },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],

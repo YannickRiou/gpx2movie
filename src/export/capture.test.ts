@@ -4,6 +4,7 @@ import {
   REPLACE_EPSILON,
   REPLACE_TOLERANCE_M,
   composeFrame,
+  composeOverlayFrame,
   renderSettledFrame,
   settle,
   wait,
@@ -114,6 +115,7 @@ describe('composeFrame', () => {
     const ctx = {
       createLinearGradient: () => ({ addColorStop: () => calls.push('stop') }),
       fillRect: (...a: number[]) => calls.push(`fill ${a.join(' ')}`),
+      clearRect: (...a: number[]) => calls.push(`clear ${a.join(' ')}`),
       drawImage: (_s: unknown, ...a: number[]) => calls.push(`draw ${a.join(' ')}`),
       save: () => calls.push('save'),
       restore: () => calls.push('restore'),
@@ -139,6 +141,15 @@ describe('composeFrame', () => {
       }),
     ).toThrow('boom')
     expect(calls.at(-1)).toBe('restore')
+  })
+
+  it('draws the overlay alone on a cleared, transparent canvas', () => {
+    const { ctx, calls } = fakeContext()
+    const overlay = vi.fn(() => calls.push('overlay'))
+    const at = { progress: 0.5, time: { timeS: 12, openingS: 6, flightS: 20, totalS: 31 } }
+    composeOverlayFrame(ctx, at, 320, 180, overlay)
+    expect(calls).toEqual(['clear 0 0 320 180', 'save', 'overlay', 'restore'])
+    expect(overlay).toHaveBeenCalledWith(ctx, at, 320, 180)
   })
 })
 

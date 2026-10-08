@@ -15,6 +15,11 @@
  * With `settings.trackColorBy` the lines take per-vertex colours (src/flyover/trackColor.ts): values are
  * computed on the recorded points, interpolated onto the densified ones, and mapped through one range
  * shared by every track. Changing the mode only rewrites the colour buffers, never the geometry.
+ *
+ * `settings.trackStyle` (see `trackLineStyle.ts`): width, dashes, a glow (a third, wider Line2 on the same
+ * geometry) and « trace qui se dessine », which draws each track only up to its marker. The cut follows the
+ * playback progress through a store subscription, so it is applied in the very frame FlyoverRig moves the marker
+ * (this component's frame callback runs before the rig's).
  */
 import { useCallback, useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -41,17 +46,32 @@ import {
   trackMetricValues,
   type TrackColorBy,
 } from '../flyover/trackColor'
+import { raceAt } from '../flyover/race'
+import type { Race } from '../flyover/race'
 import { densify } from '../import/stats'
 import { useAppStore } from '../state/store'
+import { DEFAULT_TRACK_STYLE } from './markerSettings'
+import type { TrackStyle } from './markerSettings'
 import { useTerrainContext } from './TerrainLayer'
+import {
+  applyDash,
+  createGlowMaterial,
+  cumulativeDistances,
+  cutLine,
+  lineWidthPx,
+  quantizedPixelSize,
+  viewDistance,
+  type CuttableLine,
+} from './trackLineStyle'
 import { useDebouncedCallback } from './useDebouncedCallback'
+import { useRace } from './useRace'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Line width in CSS pixels (LineMaterial with worldUnits = false). */
-export const LINE_WIDTH_PX = 4
+/** Default line width in CSS pixels (LineMaterial with worldUnits = false); `settings.trackStyle.width` sets it. */
+export const LINE_WIDTH_PX = DEFAULT_TRACK_STYLE.width
 /** Maximum spacing between consecutive points after densification (metres). */
 export const DENSIFY_STEP_M = 10
 /** Vertical lift above the (exaggerated) terrain so the line is never z-fighting with it (metres). */
@@ -208,7 +228,7 @@ export function writeLineColors(geometry: LineGeometry, colors: Float32Array): v
 // Three.js object management (no React below this line except the component; exported for unit tests)
 // ---------------------------------------------------------------------------
 
-export interface SegmentLines {
+export interface SegmentLines extends CuttableLine {
   /** index in track.segments */
   index: number
   /** densified points (the recorded ones are kept as the same objects) */
@@ -219,6 +239,8 @@ export interface SegmentLines {
   geometry: LineGeometry
   solid: Line2
   ghost: Line2
+  /** wider soft halo, shown with `trackStyle.glow` */
+  glow: Line2
 }
 
 export interface TrackLineSet {
@@ -228,8 +250,11 @@ export interface TrackLineSet {
   segments: SegmentLines[]
   solidMaterial: LineMaterial
   ghostMaterial: LineMaterial
+  glowMaterial: LineMaterial
   startMarker: Mesh | null
   endMarker: Mesh | null
+  /** distance the lines are drawn up to (Infinity = whole), NaN when it must be applied again (after a drape) */
+  drawnM: number
 }
 
 /** Resources shared by every track of one TrackLines instance. */
@@ -256,7 +281,11 @@ export function createSharedResources(): SharedResources {
   }
 }
 
-function createLineMaterials(color: string, width: number, height: number): { solid: LineMaterial; ghost: LineMaterial } {
+function createLineMaterials(
+  color: string,
+  width: number,
+  height: number,
+): { solid: LineMaterial; ghost: LineMaterial; glow: LineMaterial } {
   const solid = new LineMaterial({
     color: new Color(color),
     linewidth: LINE_WIDTH_PX,
@@ -273,7 +302,7 @@ function createLineMaterials(color: string, width: number, height: number): { so
     depthWrite: false,
   })
   ghost.resolution.set(width, height)
-  return { solid, ghost }
+  return { solid, ghost, glow: createGlowMaterial(new Color(color), width, height) }
 }
 
 export function buildTrackLineSet(
@@ -285,22 +314,29 @@ export function buildTrackLineSet(
 ): TrackLineSet {
   const object = new Group()
   object.name = `track:${track.id}`
-  const { solid: solidMaterial, ghost: ghostMaterial } = createLineMaterials(track.color, width, height)
+  const materials = createLineMaterials(track.color, width, height)
 
   const segments: SegmentLines[] = []
+  /** distance at the start of the segment, as the marker counts it */
+  let startM = 0
   for (const [index, segment] of track.segments.entries()) {
     const points = densify(segment.points, DENSIFY_STEP_M)
     if (points.length < 2) continue
+    const dist = cumulativeDistances(points, startM)
+    startM = dist[dist.length - 1]
     const buffer = buildDrapeBuffer(points, frame)
     const positions = new Float32Array(buffer.count * 3)
     const geometry = new LineGeometry()
-    const solid = new Line2(geometry, solidMaterial)
+    const solid = new Line2(geometry, materials.solid)
     solid.name = 'track-line'
-    const ghost = new Line2(geometry, ghostMaterial)
+    const ghost = new Line2(geometry, materials.ghost)
     ghost.name = 'track-line-ghost'
     ghost.renderOrder = 1
-    object.add(solid, ghost)
-    segments.push({ index, points, buffer, positions, geometry, solid, ghost })
+    const glow = new Line2(geometry, materials.glow)
+    glow.name = 'track-line-glow'
+    glow.visible = false
+    object.add(solid, ghost, glow)
+    segments.push({ index, points, buffer, positions, dist, shortened: -1, geometry, solid, ghost, glow })
   }
 
   let startMarker: Mesh | null = null
@@ -313,14 +349,28 @@ export function buildTrackLineSet(
     object.add(startMarker, endMarker)
   }
 
-  return { track, frame, object, segments, solidMaterial, ghostMaterial, startMarker, endMarker }
+  return {
+    track,
+    frame,
+    object,
+    segments,
+    solidMaterial: materials.solid,
+    ghostMaterial: materials.ghost,
+    glowMaterial: materials.glow,
+    startMarker,
+    endMarker,
+    drawnM: Number.NaN,
+  }
+}
+
+function materialsOf(set: TrackLineSet): LineMaterial[] {
+  return [set.solidMaterial, set.ghostMaterial, set.glowMaterial]
 }
 
 export function disposeTrackLineSet(set: TrackLineSet): void {
   set.object.removeFromParent()
   for (const segment of set.segments) segment.geometry.dispose()
-  set.solidMaterial.dispose()
-  set.ghostMaterial.dispose()
+  for (const material of materialsOf(set)) material.dispose()
   // marker geometry / materials are shared and disposed with the component
 }
 
@@ -328,8 +378,12 @@ export function drapeTrackLineSet(set: TrackLineSet, engine: TerrainEngine | nul
   const sampler: HeightSampler | null = engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null
   for (const segment of set.segments) {
     computeDrapedPositions(segment.buffer, sampler, exaggeration, segment.positions)
+    // rewrites every piece, the one shortened by the draw-on included
     writeLinePositions(segment.geometry, segment.positions)
+    segment.shortened = -1
+    if (segment.geometry.getAttribute('instanceDistanceStart')) segment.solid.computeLineDistances()
   }
+  set.drawnM = Number.NaN
   const first = set.segments[0]
   const last = set.segments[set.segments.length - 1]
   if (set.startMarker && first) {
@@ -351,11 +405,12 @@ export function applyExposure(sets: Iterable<TrackLineSet>, exposure: number): v
     const base = set.solidMaterial.vertexColors ? '#ffffff' : set.track.color
     set.solidMaterial.color.set(base).multiplyScalar(1 / exposure)
     set.ghostMaterial.color.copy(set.solidMaterial.color)
+    set.glowMaterial.color.copy(set.solidMaterial.color)
   }
 }
 
 function setVertexColors(set: TrackLineSet, enabled: boolean): void {
-  for (const material of [set.solidMaterial, set.ghostMaterial]) {
+  for (const material of materialsOf(set)) {
     if (material.vertexColors === enabled) continue
     material.vertexColors = enabled
     material.needsUpdate = true
@@ -400,18 +455,45 @@ export function applyTrackColors(sets: Iterable<TrackLineSet>, colorBy: TrackCol
 }
 
 function applyResolution(sets: Iterable<TrackLineSet>, width: number, height: number): void {
+  for (const set of sets) for (const material of materialsOf(set)) material.resolution.set(width, height)
+}
+
+/**
+ * Width, glow and dashes of `style`. Widths are in pixels of the canvas times the export render scale, so a 4K
+ * video looks like the 1080p one; `pixelSize` is the world length of a pixel for the dashes (`quantizedPixelSize`).
+ */
+export function applyTrackStyle(sets: Iterable<TrackLineSet>, style: TrackStyle, renderScale: number, pixelSize: number): void {
   for (const set of sets) {
-    set.solidMaterial.resolution.set(width, height)
-    set.ghostMaterial.resolution.set(width, height)
+    set.solidMaterial.linewidth = lineWidthPx(style, renderScale)
+    set.ghostMaterial.linewidth = lineWidthPx(style, renderScale)
+    set.glowMaterial.linewidth = lineWidthPx(style, renderScale, true)
+    for (const material of materialsOf(set)) applyDash(material, style, renderScale, pixelSize)
+    for (const segment of set.segments) {
+      segment.glow.visible = style.glow
+      // measured once draped (the drape keeps them up to date)
+      const { geometry } = segment
+      const measurable = geometry.getAttribute('instanceStart') && !geometry.getAttribute('instanceDistanceStart')
+      if (style.dash !== 'plein' && measurable) segment.solid.computeLineDistances()
+    }
   }
 }
 
-/** Line width in pixels of the canvas: times the export render scale, so a 4K video looks like the 1080p one. */
-function applyLineWidth(sets: Iterable<TrackLineSet>, renderScale: number): void {
-  for (const set of sets) {
-    set.solidMaterial.linewidth = LINE_WIDTH_PX * renderScale
-    set.ghostMaterial.linewidth = LINE_WIDTH_PX * renderScale
-  }
+/** Draw `set` up to `distanceM` along its track (Infinity = whole). */
+export function cutTrackLineSet(set: TrackLineSet, distanceM: number): void {
+  if (distanceM === set.drawnM) return
+  for (const segment of set.segments) cutLine(segment, distanceM)
+  set.drawnM = distanceM
+}
+
+/**
+ * Distance each track is drawn up to with « trace qui se dessine »: the first track to its marker, the others to
+ * their ghost racer when the race is on (`race` not null), else whole.
+ */
+export function drawOnDistances(tracks: readonly Track[], progress: number, race: Race | null): number[] {
+  const out = tracks.map(() => Infinity)
+  if (tracks.length > 0) out[0] = progress * tracks[0].stats.distanceM
+  if (race) for (const racer of raceAt(race, progress)) if (racer.index > 0) out[racer.index] = racer.distanceM
+  return out
 }
 
 /**
@@ -452,12 +534,26 @@ export function syncTrackLineSets(
 // Component
 // ---------------------------------------------------------------------------
 
+/** What the default controls (drei OrbitControls) expose here: the point the camera looks at. */
+interface DefaultControls {
+  target: Vector3
+}
+
+/** Style values the materials were last set for. */
+interface AppliedStyle {
+  style: TrackStyle
+  renderScale: number
+  pixelSize: number
+}
+
 export function TrackLines() {
   const tracks = useAppStore((s) => s.tracks)
   const exaggeration = useAppStore((s) => s.settings.exaggeration)
   const colorBy = useAppStore((s) => s.settings.trackColorBy)
+  const race = useRace()
   const { engine, frame } = useTerrainContext()
   const size = useThree((s) => s.size)
+  const controls = useThree((s) => s.controls) as unknown as DefaultControls | null
 
   const groupRef = useRef<Group>(null)
   const setsRef = useRef<Map<string, TrackLineSet>>(new Map())
@@ -465,8 +561,28 @@ export function TrackLines() {
   const sizeRef = useRef(size)
   /** exposure the line colours were last compensated for (NaN = after a rebuild) */
   const exposureRef = useRef(Number.NaN)
-  /** render scale the line width was last set for (NaN = after a rebuild) */
-  const lineScaleRef = useRef(Number.NaN)
+  /** style the materials were last set for (null = after a rebuild) */
+  const styleRef = useRef<AppliedStyle | null>(null)
+  const raceRef = useRef(race)
+
+  useEffect(() => {
+    raceRef.current = race
+  }, [race])
+
+  // « Trace qui se dessine »: each set cut at its marker (cutTrackLineSet does nothing when unchanged).
+  const refreshDrawOn = useCallback(() => {
+    const { tracks: current, playback, settings } = useAppStore.getState()
+    const distances = settings.trackStyle.drawOn
+      ? drawOnDistances(current, playback.progress, settings.race.enabled ? raceRef.current : null)
+      : null
+    current.forEach((track, i) => {
+      const set = setsRef.current.get(track.id)
+      if (set) cutTrackLineSet(set, distances?.[i] ?? Infinity)
+    })
+  }, [])
+
+  // the progress set by FlyoverRig during this frame, before it is rendered
+  useEffect(() => useAppStore.subscribe(refreshDrawOn), [refreshDrawOn])
 
   // Keep the material resolution in sync with the canvas size (Line2 also refreshes it before each
   // render, this covers objects that are not rendered yet).
@@ -487,7 +603,7 @@ export function TrackLines() {
     const { width, height } = sizeRef.current
     syncTrackLineSets(group, setsRef.current, tracks, frame, sharedRef.current, width, height)
     exposureRef.current = Number.NaN
-    lineScaleRef.current = Number.NaN
+    styleRef.current = null
     drapeAll(engine, exaggeration)
   }, [tracks, frame, engine, exaggeration, drapeAll])
 
@@ -497,12 +613,17 @@ export function TrackLines() {
     exposureRef.current = Number.NaN
   }, [tracks, frame, colorBy])
 
-  useFrame(({ gl }) => {
+  useFrame(({ gl, camera, size: canvas }) => {
     const { renderScale } = useExportStore.getState()
-    if (renderScale !== lineScaleRef.current) {
-      lineScaleRef.current = renderScale
-      applyLineWidth(setsRef.current.values(), renderScale)
+    const style = useAppStore.getState().settings.trackStyle
+    const pixelSize = style.dash === 'plein' ? 0 : quantizedPixelSize(viewDistance(camera, controls?.target ?? null), camera, canvas.height)
+    const applied = styleRef.current
+    if (!applied || applied.style !== style || applied.renderScale !== renderScale || applied.pixelSize !== pixelSize) {
+      styleRef.current = { style, renderScale, pixelSize }
+      applyTrackStyle(setsRef.current.values(), style, renderScale, pixelSize)
     }
+    // after a rebuild or a re-drape (the subscription covers the progress and settings)
+    refreshDrawOn()
     if (gl.toneMappingExposure === exposureRef.current) return
     exposureRef.current = gl.toneMappingExposure
     applyExposure(setsRef.current.values(), gl.toneMappingExposure)

@@ -4,8 +4,9 @@
  *
  * Pure functions (no DOM, no React, no Three).
  */
+import { lastIndexAtOrBelow } from '../core/math'
 import type { LonLat, Track } from '../core/types'
-import { haversineM } from '../geo/ellipsoid'
+import { haversineM } from '../geo/lonLat'
 
 export interface TrackPath {
   count: number
@@ -65,21 +66,24 @@ export function buildTrackPath(track: Track): TrackPath {
   return path
 }
 
+const paths = new WeakMap<Track, TrackPath>()
+
+/** `buildTrackPath`, cached per track object (tracks are immutable in the store; the path must not be mutated). */
+export function trackPathOf(track: Track): TrackPath {
+  let path = paths.get(track)
+  if (!path) {
+    path = buildTrackPath(track)
+    paths.set(track, path)
+  }
+  return path
+}
+
 /** Points a, b = a + 1 around `distanceM` (clamped) and the fraction t between them. */
 function locate(path: TrackPath, distanceM: number): { d: number; a: number; b: number; t: number } {
   const { count, dist } = path
   if (count === 0) throw new RangeError('samplePath : chemin vide')
   const d = Math.min(path.lengthM, Math.max(0, distanceM))
-
-  // last index whose distance is <= d (binary search)
-  let lo = 0
-  let hi = count - 1
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1
-    if (dist[mid] <= d) lo = mid
-    else hi = mid - 1
-  }
-  const a = lo
+  const a = Math.max(0, lastIndexAtOrBelow(dist, d))
   const b = Math.min(count - 1, a + 1)
   const span = dist[b] - dist[a]
   const t = span > 0 ? (d - dist[a]) / span : 0
