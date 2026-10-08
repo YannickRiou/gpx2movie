@@ -21,7 +21,9 @@ import { isValidVideoSettings, withVideoDefaults } from '../export/schedule'
 import { LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { isValidOverlay, withOverlayDefaults } from '../overlay/settings'
 import { isValidPoster } from '../poster/settings'
+import { isValidGrading } from '../scene/grading'
 import { TRACK_COLOR_MODES } from '../flyover/trackColor'
+import { isValidMarker, isValidTrackStyle, withMarkerDefaults, withTrackStyleDefaults } from '../scene/markerSettings'
 import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS } from '../state/store'
 import type { AppState, Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
@@ -83,7 +85,7 @@ export interface LoadedProject {
   settings: Settings
   speed: number
   tracks: Track[]
-  /** pictures of the film (empty for projects without photos) */
+  /** photos, clips and music of the film (empty when it has none) */
   media: MediaTable
   /** non-fatal problems (settings replaced by their default value), in French */
   warnings: string[]
@@ -107,6 +109,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   pacing: isValidPacing,
   film: isValidFilm,
   exposureEv: (v) => v >= -4 && v <= 4,
+  grading: isValidGrading,
   weatherScene: (v) => v.strength >= 0 && v.strength <= 1,
   clouds: isValidClouds,
   water: (v) => v.strength >= 0 && v.strength <= 1,
@@ -116,6 +119,8 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   poster: isValidPoster,
   landmarks: (v) => v.maxDistanceM >= LANDMARK_DISTANCE_RANGE.min && v.maxDistanceM <= LANDMARK_DISTANCE_RANGE.max,
   race: isValidRace,
+  trackStyle: isValidTrackStyle,
+  marker: isValidMarker,
 }
 
 /**
@@ -126,6 +131,12 @@ export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unkno
   overlay: withOverlayDefaults,
   video: withVideoDefaults,
   film: withFilmDefaults,
+  trackStyle: withTrackStyleDefaults,
+  marker: withMarkerDefaults,
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 /** True when `value` has the JSON shape of `reference` (finite numbers, same keys for objects). */
@@ -152,7 +163,7 @@ export function isValidSetting<K extends keyof Settings>(key: K, value: unknown)
  * Unknown keys are ignored; `invalid` lists the keys present in `raw` but rejected.
  */
 export function sanitizeSettings(raw: unknown, base: Settings = DEFAULT_SETTINGS): { settings: Settings; invalid: string[] } {
-  const record = raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  const record: Record<string, unknown> = isRecord(raw) ? raw : {}
   const settings = { ...base }
   const invalid: string[] = []
   for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
@@ -205,9 +216,9 @@ export function toProjectDocument(state: ProjectSource, name: string, media: Med
     settings: { ...state.settings },
     playback: { speed: state.playback.speed },
     tracks: state.tracks.map((track) => {
-      const out: ProjectTrack = { id: track.id, name: track.name, source: track.source, color: track.color, segments: [] }
+      const segments = track.segments.map(encodeSegment)
+      const out: ProjectTrack = { id: track.id, name: track.name, source: track.source, color: track.color, segments }
       if (track.activityType) out.activityType = track.activityType
-      out.segments = track.segments.map(encodeSegment)
       if (track.waypoints?.length) out.waypoints = track.waypoints.map(encodeWaypoint)
       if (track.utcOffsetMin !== undefined) out.utcOffsetMin = track.utcOffsetMin
       return out
@@ -280,10 +291,6 @@ export function migrateProject(
 // Parsing
 // ---------------------------------------------------------------------------
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
 function decodeSegment(raw: unknown, where: string): TrackSegment {
   if (!isRecord(raw)) throw new Error(`${where} : segment invalide.`)
   const { lon, lat } = raw
@@ -350,6 +357,21 @@ function decodeTrack(raw: unknown, index: number): Track {
   return track
 }
 
+/** The film without the photos, clips and music whose file is missing or unreadable; a warning for each kind dropped. */
+function dropMissingMedia(film: Settings['film'], media: MediaTable, warnings: string[]): Settings['film'] {
+  const kept = film.media.filter((m) => media[m.src])
+  const removed = film.media.length - kept.length
+  if (removed > 0) {
+    warnings.push(`${removed} média${removed > 1 ? 's' : ''} sans fichier lisible dans le projet, retiré${removed > 1 ? 's' : ''} du film.`)
+  }
+  const music = film.audio.filter((a) => media[a.src])
+  const silenced = film.audio.length - music.length
+  if (silenced > 0) {
+    warnings.push(`${silenced} musique${silenced > 1 ? 's' : ''} sans fichier lisible dans le projet, retirée${silenced > 1 ? 's' : ''} du film.`)
+  }
+  return removed > 0 || silenced > 0 ? { ...film, media: kept, audio: music } : film
+}
+
 /** Parse and validate a project file. Throws an Error with a French message when it cannot be opened. */
 export function parseProject(text: string): LoadedProject {
   let raw: unknown
@@ -376,20 +398,8 @@ export function parseProject(text: string): LoadedProject {
   if (invalid.length > 0) {
     warnings.push(`Réglages invalides remplacés par leur valeur par défaut : ${invalid.join(', ')}.`)
   }
-  // photos whose picture is missing or unreadable are left out of the film
   const media = sanitizeMediaTable(doc.media)
-  const kept = settings.film.media.filter((m) => media[m.src])
-  const removed = settings.film.media.length - kept.length
-  if (removed > 0) {
-    warnings.push(`${removed} média${removed > 1 ? 's' : ''} sans fichier lisible dans le projet, retiré${removed > 1 ? 's' : ''} du film.`)
-    settings.film = { ...settings.film, media: kept }
-  }
-  const music = settings.film.audio.filter((a) => media[a.src])
-  const silenced = settings.film.audio.length - music.length
-  if (silenced > 0) {
-    warnings.push(`${silenced} musique${silenced > 1 ? 's' : ''} sans fichier lisible dans le projet, retirée${silenced > 1 ? 's' : ''} du film.`)
-    settings.film = { ...settings.film, audio: music }
-  }
+  settings.film = dropMissingMedia(settings.film, media, warnings)
   const rawSpeed = isRecord(doc.playback) ? doc.playback.speed : undefined
   const speedValid = typeof rawSpeed === 'number' && Number.isFinite(rawSpeed) && rawSpeed > 0
   if (rawSpeed !== undefined && !speedValid) warnings.push('Vitesse de lecture invalide : vitesse ×1 utilisée.')

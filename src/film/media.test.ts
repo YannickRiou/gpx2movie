@@ -10,9 +10,9 @@ import {
   usedMedia,
 } from './media'
 import type { DecodedPicture, MediaAsset } from './media'
-import { MEDIA_DEFAULTS } from './model'
+import { MEDIA_DEFAULTS, VIDEO_SOUND_DEFAULTS } from './model'
 import type { FilmMedia } from './model'
-import { createClipReader, createExportVideos, createPreviewVideos, isMediaFile, isVideoFile } from './video'
+import { createClipReader, createExportVideos, createPreviewVideos, isMediaFile, isVideoFile, joinSoundChunks } from './video'
 import type { ClipFrame, OpenedClip, PreviewElement } from './video'
 
 const DATA = 'data:image/jpeg;base64,/9j/AAEC'
@@ -240,6 +240,8 @@ describe('video clips', () => {
       videoWidth: 1920,
       videoHeight: 1080,
       playbackRate: 1,
+      muted: true,
+      volume: 1,
       play: async () => {
         el.paused = false
       },
@@ -319,5 +321,43 @@ describe('video clips', () => {
     videos.frame(clip, 2.5, playing, 0)
     expect(el.paused).toBe(true)
     expect(el.currentTime).toBe(2.5)
+  })
+
+  it('preview: the sound of a clip is heard at ×1 only, at its volume', () => {
+    const el = fakeVideo()
+    const table: Record<string, MediaAsset> = { 'video-1': asset('v1', { data: 'data:video/mp4;base64,AAAA', durationS: 8 }) }
+    const videos = createPreviewVideos(
+      (id) => table[id],
+      () => ({ el: el as PreviewElement, snapshot: () => null, release: () => undefined }),
+    )
+    const clip: FilmMedia = { ...photo('media-1', 'video-1', 10, 5), kind: 'video', ...VIDEO_SOUND_DEFAULTS, volume: 0.6 }
+    videos.frame(clip, 2, { playing: true, speed: 1 })
+    expect(el.muted).toBe(false)
+    expect(el.volume).toBe(0.6)
+    // other speeds, scrubbing, the preview's sound cut, a muted clip, a clip following the flight: muted
+    for (const [item, playback] of [
+      [clip, { playing: true, speed: 2 }],
+      [clip, { playing: false, speed: 1 }],
+      [clip, { playing: true, speed: 1, muted: true }],
+      [{ ...clip, muted: true }, { playing: true, speed: 1 }],
+      [{ ...clip, sync: { startMs: 0, offsetS: 0, follow: true } }, { playing: true, speed: 1 }],
+    ] as const) {
+      el.muted = false
+      videos.frame(item, 2, playback)
+      expect(el.muted).toBe(true)
+    }
+  })
+})
+
+describe('sound of a clip for the export', () => {
+  it('joins the decoded chunks at their sample position, trimmed to the part played', () => {
+    const chunk = (timestamp: number, values: number[]) => ({ timestamp, channels: [Float32Array.from(values), Float32Array.from(values.map((v) => -v))] })
+    // 10 samples per second; from 1 s for 0.6 s: samples 10 to 15 of the file
+    const joined = joinSoundChunks([chunk(0.8, [1, 2, 3, 4]), chunk(1.2, [5, 6]), chunk(1.5, [8, 9, 10])], 1, 0.6, 10)
+    expect(joined).toHaveLength(2)
+    // the chunk before the start is skipped up to it; the gap at 1.4 s stays silent; past the end is left out
+    expect(Array.from(joined[0])).toEqual([3, 4, 5, 6, 0, 8])
+    expect(Array.from(joined[1])).toEqual([-3, -4, -5, -6, 0, -8])
+    expect(joinSoundChunks([], 0, 1, 10)).toEqual([])
   })
 })

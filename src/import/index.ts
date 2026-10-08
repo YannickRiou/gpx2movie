@@ -2,12 +2,7 @@
  * Import entry point: dispatches a File (GPX or FIT) to the right parser and assigns colours.
  */
 import type { Track } from '../core/types'
-import { parseFit } from './fit'
 import { parseGpx } from './gpx'
-
-export { parseGpx } from './gpx'
-export { parseFit, semicirclesToDegrees } from './fit'
-export { computeStats, computeBounds, densify } from './stats'
 
 /** Palette for track lines and UI swatches: bright enough to read over orthophotos (balise red first). */
 export const TRACK_COLORS: readonly string[] = ['#FF5A36', '#FFC53D', '#5BC0EB', '#FFFFFF', '#B79CFF', '#7AD9A0']
@@ -44,8 +39,11 @@ export async function importFile(file: File, colorIndex = 0): Promise<Track[]> {
   switch (supportedExtension(file.name)) {
     case 'gpx':
       return importText(await file.text(), file.name, colorIndex)
-    case 'fit':
+    case 'fit': {
+      // the FIT decoder (@garmin/fitsdk, ~650 KB) is loaded on the first .fit file only
+      const { parseFit } = await import('./fit')
       return assignColors(await parseFit(await file.arrayBuffer(), file.name), colorIndex)
+    }
     default: {
       const shown = /\.[^.]+$/.exec(file.name)?.[0] ?? file.name
       throw new Error(`Format non supporté : ${shown} (formats acceptés : .gpx, .fit)`)

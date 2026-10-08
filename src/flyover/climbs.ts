@@ -19,7 +19,7 @@
  * Pure functions (no DOM, no React, no Three). `climbsOf` caches the result per track object.
  */
 import type { Track } from '../core/types'
-import { buildTrackPath, samplePath, type TrackPath } from './path'
+import { samplePath, trackPathOf, type TrackPath } from './path'
 
 /** Spacing of the regular distance grid the profile is analysed on (metres). */
 export const RESAMPLE_STEP_M = 20
@@ -216,7 +216,7 @@ function maxGradientIn(ele: Float64Array, start: number, end: number, window: nu
 
 /** Climbs of a track, in order along it; empty when the track has no recorded elevation. */
 export function detectClimbs(track: Track): Climb[] {
-  const path = buildTrackPath(track)
+  const path = trackPathOf(track)
   const step = RESAMPLE_STEP_M
   const raw = resampleElevation(path, step)
   if (!raw) return []

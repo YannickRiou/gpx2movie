@@ -6,7 +6,7 @@
  * them to the linear working space.
  */
 import type { Track, TrackPoint } from '../core/types'
-import { haversineM } from '../geo/ellipsoid'
+import { haversineM } from '../geo/lonLat'
 
 export const TRACK_COLOR_MODES = [
   'none',

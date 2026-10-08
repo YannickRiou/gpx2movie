@@ -56,7 +56,8 @@ export interface SunTimes {
   polar: 'day' | 'night' | null
 }
 
-const RAD = Math.PI / 180
+/** radians per degree */
+const DEG = Math.PI / 180
 /** zenith of the sun's centre at sunrise / sunset: 90° + refraction (34′) + half the solar disc (16′) */
 const SUNRISE_ZENITH = 90.833
 
@@ -73,32 +74,32 @@ export function sunTimes(lat: number, lon: number, date: Date): SunTimes {
   const m = 357.52911 + jc * (35999.05029 - 0.0001537 * jc)
   const e = 0.016708634 - jc * (0.000042037 + 0.0000001267 * jc)
   const c =
-    Math.sin(m * RAD) * (1.914602 - jc * (0.004817 + 0.000014 * jc)) +
-    Math.sin(2 * m * RAD) * (0.019993 - 0.000101 * jc) +
-    Math.sin(3 * m * RAD) * 0.000289
+    Math.sin(m * DEG) * (1.914602 - jc * (0.004817 + 0.000014 * jc)) +
+    Math.sin(2 * m * DEG) * (0.019993 - 0.000101 * jc) +
+    Math.sin(3 * m * DEG) * 0.000289
   const omega = 125.04 - 1934.136 * jc
-  const apparentLong = l0 + c - 0.00569 - 0.00478 * Math.sin(omega * RAD)
+  const apparentLong = l0 + c - 0.00569 - 0.00478 * Math.sin(omega * DEG)
   const meanObliquity = 23 + (26 + (21.448 - jc * (46.815 + jc * (0.00059 - jc * 0.001813))) / 60) / 60
-  const obliquity = meanObliquity + 0.00256 * Math.cos(omega * RAD)
-  const declination = Math.asin(Math.sin(obliquity * RAD) * Math.sin(apparentLong * RAD))
-  const y = Math.tan((obliquity / 2) * RAD) ** 2
+  const obliquity = meanObliquity + 0.00256 * Math.cos(omega * DEG)
+  const declination = Math.asin(Math.sin(obliquity * DEG) * Math.sin(apparentLong * DEG))
+  const y = Math.tan((obliquity / 2) * DEG) ** 2
   // equation of time, minutes
   const eqTime =
-    (4 / RAD) *
-    (y * Math.sin(2 * l0 * RAD) -
-      2 * e * Math.sin(m * RAD) +
-      4 * e * y * Math.sin(m * RAD) * Math.cos(2 * l0 * RAD) -
-      0.5 * y * y * Math.sin(4 * l0 * RAD) -
-      1.25 * e * e * Math.sin(2 * m * RAD))
+    (4 / DEG) *
+    (y * Math.sin(2 * l0 * DEG) -
+      2 * e * Math.sin(m * DEG) +
+      4 * e * y * Math.sin(m * DEG) * Math.cos(2 * l0 * DEG) -
+      0.5 * y * y * Math.sin(4 * l0 * DEG) -
+      1.25 * e * e * Math.sin(2 * m * DEG))
   const noonMs = dayStart + (720 - 4 * lon - eqTime) * 60_000
   const solarNoon = new Date(noonMs)
-  const latRad = lat * RAD
+  const latRad = lat * DEG
   const cosHourAngle =
-    Math.cos(SUNRISE_ZENITH * RAD) / (Math.cos(latRad) * Math.cos(declination)) - Math.tan(latRad) * Math.tan(declination)
+    Math.cos(SUNRISE_ZENITH * DEG) / (Math.cos(latRad) * Math.cos(declination)) - Math.tan(latRad) * Math.tan(declination)
   if (!(cosHourAngle <= 1)) return { sunrise: null, sunset: null, solarNoon, polar: 'night' }
   if (cosHourAngle < -1) return { sunrise: null, sunset: null, solarNoon, polar: 'day' }
   // hour angle in degrees: 4 minutes of time per degree
-  const halfDayMs = (Math.acos(cosHourAngle) / RAD) * 4 * 60_000
+  const halfDayMs = (Math.acos(cosHourAngle) / DEG) * 4 * 60_000
   return { sunrise: new Date(noonMs - halfDayMs), sunset: new Date(noonMs + halfDayMs), solarNoon, polar: null }
 }
 

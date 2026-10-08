@@ -8,14 +8,17 @@ import {
   FLYOVER_DURATION_RANGE,
 } from '../flyover/cameraSettings'
 import type { CameraSettings, CameraStyle } from '../flyover/cameraSettings'
+import { addCameraKey } from '../film/timeline'
+import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { PACING_RANGES } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
-import { usePacing } from '../scene/usePacing'
+import { editFilm, usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
 import type { IconName } from './icons'
 import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
+import { TrackMarkerSection } from './TrackMarkerSection'
 
 /** Value of the preset select when the camera matches no preset. */
 const CUSTOM = ''
@@ -102,6 +105,12 @@ export function CameraPanel() {
   const preset = findCameraPreset(camera)
   const update = (patch: Partial<CameraSettings>) => setSetting('camera', { ...camera, ...patch })
   const updatePacing = (patch: Partial<PacingSettings>) => setSetting('pacing', { ...pacing, ...patch })
+  const lengthM = useAppStore((s) => s.tracks[0]?.stats.distanceM ?? 0)
+  /** a camera key at the marker with the framing seen there (one undo step, selected for the inspector) */
+  const keepFraming = () => {
+    const atM = useAppStore.getState().playback.progress * lengthM
+    editFilm((f) => addCameraKey(f, atM, keyedCamera(camera, film.cameraKeys, atM, cameraKeyEaseM(lengthM, durationS))))
+  }
 
   return (
     <>
@@ -199,6 +208,14 @@ export function CameraPanel() {
             )
           })}
         </MoreSettings>
+
+        <button type="button" className="btn btn--secondary" onClick={keepFraming} disabled={lengthM <= 0} aria-describedby={`${id}-key-hint`}>
+          Garder ce cadrage ici
+        </button>
+        <p id={`${id}-key-hint`} className="field__hint">
+          Pose un cadrage à la position du marqueur (losange de la piste « Plans ») : retouchez sa distance, son inclinaison et sa
+          visée dans l’inspecteur, sans changer le reste du film.
+        </p>
       </PanelSection>
 
       <PanelSection title="Durée et rythme" keys={['flyoverDurationS', 'pacing']}>
@@ -295,6 +312,8 @@ export function CameraPanel() {
           </MoreSettings>
         )}
       </PanelSection>
+
+      <TrackMarkerSection />
     </>
   )
 }

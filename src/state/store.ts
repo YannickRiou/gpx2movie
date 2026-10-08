@@ -16,8 +16,10 @@ import { DEFAULT_PACING } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
 import { DEFAULT_RACE } from '../flyover/race'
 import type { RaceSettings } from '../flyover/race'
+import { DEFAULT_MARKER, DEFAULT_TRACK_STYLE } from '../scene/markerSettings'
+import type { MarkerSettings, TrackStyle } from '../scene/markerSettings'
 import type { TrackColorBy } from '../flyover/trackColor'
-import { centroid } from '../geo/ellipsoid'
+import { centroid } from '../geo/lonLat'
 import { DEFAULT_LANDMARK_SETTINGS } from '../osm/landmarks'
 import { DEFAULT_WATER } from '../osm/water'
 import type { WaterSettings } from '../osm/water'
@@ -26,6 +28,8 @@ import { DEFAULT_OVERLAY } from '../overlay/settings'
 import type { OverlaySettings } from '../overlay/settings'
 import { DEFAULT_POSTER } from '../poster/settings'
 import type { PosterSettings } from '../poster/settings'
+import { DEFAULT_GRADING } from '../scene/grading'
+import type { GradingSettings } from '../scene/grading'
 import { IMAGERY_SOURCES, sourceCovers } from '../terrain/sources'
 import { DEFAULT_CLOUDS } from '../weather/sceneClouds'
 import type { CloudSettings } from '../weather/sceneClouds'
@@ -48,8 +52,14 @@ export interface Settings {
   sunFromTrack: boolean
   /** exposure compensation in stops, on top of the automatic exposure (atmosphere only) */
   exposureEv: number
+  /** colour grading of the final image (« Couleurs »): preset, contrast, saturation, warmth, vignette (scene/grading.ts) */
+  grading: GradingSettings
   /** colour the tracks by a recorded quantity ('none' = each track's own colour) */
   trackColorBy: TrackColorBy
+  /** width, dashes, glow and « trace qui se dessine » of every track (see scene/markerSettings.ts) */
+  trackStyle: TrackStyle
+  /** progress marker of the flyover (and of the ghost racers): ball, figurine or picture, size */
+  marker: MarkerSettings
   /** flyover camera style and parameters (replaced as a whole, e.g. by a camera preset) */
   camera: CameraSettings
   /** flyover duration at speed x1 (seconds), whatever the track length */
@@ -147,7 +157,10 @@ export const DEFAULT_SETTINGS: Settings = {
   sunHour: 10,
   sunFromTrack: true,
   exposureEv: 0,
+  grading: DEFAULT_GRADING,
   trackColorBy: 'none',
+  trackStyle: DEFAULT_TRACK_STYLE,
+  marker: DEFAULT_MARKER,
   camera: DEFAULT_CAMERA,
   flyoverDurationS: DEFAULT_FLYOVER_DURATION_S,
   pacing: DEFAULT_PACING,

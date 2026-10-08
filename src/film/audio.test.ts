@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CLIP_EDGE_FADE_S,
+  DUCK_GAIN,
+  DUCK_RAMP_S,
   MUSIC_DRIFT_S,
   audioTypeOf,
+  clipSounds,
   computePeaks,
   createMusicPreview,
+  duckEnvelope,
+  duckGainAt,
   durationForFilmEnd,
+  filmMixPlan,
   envelopeAt,
   isAudioFile,
   musicEndS,
@@ -18,10 +25,22 @@ import {
 import type { MusicElement } from './audio'
 import { MAX_PEAKS } from './media'
 import type { MediaAsset } from './media'
-import { AUDIO_DEFAULTS } from './model'
-import type { FilmAudio } from './model'
+import { AUDIO_DEFAULTS, MEDIA_DEFAULTS, VIDEO_SOUND_DEFAULTS } from './model'
+import type { FilmAudio, FilmMedia } from './model'
 
 const clip = (patch: Partial<FilmAudio> = {}): FilmAudio => ({ id: 'music-1', src: 'audio-1', startS: 10, durationS: 20, inS: 0, ...AUDIO_DEFAULTS, ...patch })
+/** a video clip with sound, from film time 5 s for 10 s */
+const video = (patch: Partial<FilmMedia> = {}): FilmMedia => ({
+  id: 'media-1',
+  startS: 5,
+  durationS: 10,
+  kind: 'video',
+  src: 'video-1',
+  ...MEDIA_DEFAULTS,
+  kenBurns: false,
+  ...VIDEO_SOUND_DEFAULTS,
+  ...patch,
+})
 
 describe('sound files', () => {
   it('recognised by their type, else their extension', () => {
@@ -113,6 +132,88 @@ describe('volume of a clip', () => {
   })
 })
 
+describe('sound of the video clips', () => {
+  const fileS = (src: string) => ({ 'video-1': 12, 'audio-1': 60 })[src]
+
+  it('heard from its start in the file while the file runs, at its volume; silent clips left out', () => {
+    expect(
+      clipSounds(
+        [
+          video({ inS: 4, volume: 0.5 }),
+          video({ id: 'media-2', startS: 30, outS: 6 }),
+          video({ id: 'media-3', muted: true }),
+          video({ id: 'media-4', sync: { startMs: 0, offsetS: 0, follow: true } }),
+          video({ id: 'media-5', src: 'missing' }),
+          video({ id: 'media-6', inS: 12 }),
+          { ...video({ id: 'media-7' }), kind: 'image' },
+        ],
+        fileS,
+      ),
+    ).toEqual([
+      // 12 s of file from 4 s: 8 s, the clip lasts 10 s (its last frame held, silent)
+      { src: 'video-1', startS: 5, fromS: 4, lengthS: 8, volume: 0.5 },
+      // trimmed at 6 s in the file
+      { src: 'video-1', startS: 30, fromS: 0, lengthS: 6, volume: 1 },
+    ])
+  })
+
+  it('music lowered under the clips with short ramps, merged when close, already low at the very start', () => {
+    const R = DUCK_RAMP_S
+    expect(duckEnvelope([])).toEqual([])
+    expect(duckEnvelope([{ startS: 5, lengthS: 10 }])).toEqual([
+      { t: 5 - R, gain: 1 },
+      { t: 5, gain: DUCK_GAIN },
+      { t: 15, gain: DUCK_GAIN },
+      { t: 15 + R, gain: 1 },
+    ])
+    // closer than two ramps: one span, no bounce; a clip at 0 starts lowered
+    const points = duckEnvelope([
+      { startS: 15 + R, lengthS: 5 },
+      { startS: 0, lengthS: 15 },
+    ])
+    expect(points).toEqual([
+      { t: 0, gain: DUCK_GAIN },
+      { t: 20 + R, gain: DUCK_GAIN },
+      { t: 20 + 2 * R, gain: 1 },
+    ])
+    expect(DUCK_GAIN).toBeCloseTo(0.316, 3)
+    expect(duckGainAt(points, -1)).toBe(DUCK_GAIN)
+    expect(duckGainAt(points, 15.1)).toBe(DUCK_GAIN)
+    expect(duckGainAt(points, 20 + 1.5 * R)).toBeCloseTo((1 + DUCK_GAIN) / 2)
+    expect(duckGainAt(points, 60)).toBe(1)
+    expect(duckGainAt([], 3)).toBe(1)
+  })
+
+  it('mix plan: the clips at film time + the held frames, with their trim and edge fades; ducking only when asked', () => {
+    const film = { audio: [clip({ startS: 0, durationS: 40 })], media: [video({ inS: 2 }), video({ id: 'media-2', startS: 50 })], duckMusic: true }
+    const plan = filmMixPlan(film, fileS, 1, 40)
+    expect(plan.music).toHaveLength(1)
+    // the clip starting at or after the end of the film is left out
+    expect(plan.clips).toEqual([
+      {
+        src: 'video-1',
+        atS: 6,
+        fromS: 2,
+        lengthS: 10,
+        points: [
+          { t: 6, gain: 0 },
+          { t: 6 + CLIP_EDGE_FADE_S, gain: 1 },
+          { t: 16 - CLIP_EDGE_FADE_S, gain: 1 },
+          { t: 16, gain: 0 },
+        ],
+      },
+    ])
+    expect(plan.duck.map((p) => p.t)).toEqual([6 - DUCK_RAMP_S, 6, 16, 16 + DUCK_RAMP_S])
+    expect(filmMixPlan({ ...film, duckMusic: false }, fileS, 1, 40).duck).toEqual([])
+    // no music: nothing to lower
+    expect(filmMixPlan({ ...film, audio: [] }, fileS, 1, 40).duck).toEqual([])
+    // a film saved before: clips silent, the music as it was
+    const before = filmMixPlan({ ...film, media: [video({ muted: true })] }, fileS, 1, 40)
+    expect(before.clips).toEqual([])
+    expect(before.duck).toEqual([])
+  })
+})
+
 describe('film fitted to the music', () => {
   it('finds the flyover duration at which the film ends with the music', () => {
     // 11 s of shots, stops adding 8 s, a flight 1.25 times longer than the duration
@@ -186,6 +287,15 @@ describe('music of the preview', () => {
     preview.update([c], at(12.5, { muted: true }))
     expect(el.muted).toBe(true)
     expect(el.plays).toBe(1)
+  })
+
+  it('lowered under the clips with sound', () => {
+    const { preview, made } = setup()
+    const duck = duckEnvelope([{ startS: 15, lengthS: 5 }])
+    preview.update([clip({ fadeInS: 0 })], at(12), duck)
+    expect(made[0].el.volume).toBe(1)
+    preview.update([clip({ fadeInS: 0 })], at(17), duck)
+    expect(made[0].el.volume).toBeCloseTo(DUCK_GAIN)
   })
 
   it('seeks again only past the drift tolerance, and not while loading', () => {

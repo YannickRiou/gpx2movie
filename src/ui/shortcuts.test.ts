@@ -29,6 +29,14 @@ describe('matchShortcut', () => {
     expect(matchShortcut(key('?', { ctrlKey: true }), 'other')).toBeNull()
   })
 
+  it('maps G to the safe zones, not with a modifier nor in a text field', () => {
+    expect(matchShortcut(key('g'), 'other')).toBe('safe-zones')
+    expect(matchShortcut(key('G'), 'arrows')).toBe('safe-zones')
+    expect(matchShortcut(key('G', { shiftKey: true }), 'other')).toBeNull()
+    expect(matchShortcut(key('g', { ctrlKey: true }), 'other')).toBeNull()
+    expect(matchShortcut(key('g'), 'text')).toBeNull()
+  })
+
   it('maps S and T to adding a stop and a text, not with a modifier', () => {
     expect(matchShortcut(key('s'), 'other')).toBe('add-stop')
     expect(matchShortcut(key('T'), 'other')).toBe('add-text')

@@ -1,8 +1,8 @@
 /**
- * Camera of the film: the flight camera (`computeCameraView`) during the flight, an overview of the whole track
- * for the opening and closing shots, an orbit around the marker during an 'orbite' stop. A pure function of the
- * film time, the progress, the settings and the terrain sampler, like the flight camera: the export renders any
- * frame alone.
+ * Camera of the film: the flight camera (`computeCameraView`) during the flight, with the framing of the camera
+ * keys (`keyedCamera`), an overview of the whole track for the opening and closing shots, the camera of each stop
+ * ('orbite', 'large', 'fixe'). A pure function of the film time, the progress, the settings and the terrain sampler,
+ * like the flight camera: the export renders any frame alone.
  *
  * Overview: target = centre of the track's box in the local frame (ground height there), distance =
  * OVERVIEW_DISTANCE_FACTOR × box diagonal (more for a frame taller than wide, so 9:16 keeps the whole track),
@@ -12,13 +12,18 @@
  * above the ground. 'descente' eases over the whole shot; 'saut' holds the overview and moves in JUMP_S.
  */
 import { Vector3 } from 'three'
+import { clamp, smootherstep } from '../core/math'
 import type { LocalFrame } from '../core/types'
-import type { FilmClock, FilmState } from '../film/clock'
+import type { ClockStop, FilmClock, FilmState } from '../film/clock'
 import type { ShotStyle } from '../film/model'
 import type { HeightSampler } from '../scene/TrackLines'
 import { MIN_GROUND_CLEARANCE_M, computeCameraView, movesWithTime, type CameraView, type CameraViewOptions } from './camera'
-import type { CameraStyle } from './cameraSettings'
+import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings, type CameraStyle } from './cameraSettings'
 import type { TrackPath } from './path'
+import { cameraKeyEaseM, keyedCamera } from './cameraKeys'
+
+export { smootherstep }
+export { CAMERA_KEY_EASE_S, cameraKeyEaseM, keyedCamera } from './cameraKeys'
 
 /** Overview distance = this × diagonal of the track's box (landscape frames), at least OVERVIEW_MIN_DISTANCE_M. */
 export const OVERVIEW_DISTANCE_FACTOR = 1.6
@@ -29,15 +34,11 @@ export const JUMP_S = 0.6
 /** 'orbite' stop: the camera turns out by STOP_ORBIT_DEG_PER_S × stop duration (at most STOP_ORBIT_MAX_DEG) and back. */
 export const STOP_ORBIT_DEG_PER_S = 6
 export const STOP_ORBIT_MAX_DEG = 120
-
+/** 'large' stop: at the middle of its window, the camera is this much farther and this much higher (degrees of pitch). */
+export const STOP_WIDE_DISTANCE_FACTOR = 2.5
+export const STOP_WIDE_PITCH_DEG = 20
 const DEG = Math.PI / 180
 const UP = new Vector3(0, 1, 0)
-
-/** 0 → 1 with zero first and second derivatives at both ends. */
-export function smootherstep(x: number): number {
-  const t = Math.min(1, Math.max(0, x))
-  return t * t * t * (t * (6 * t - 15) + 10)
-}
 
 /** Fraction (0 = first view, 1 = second) of a shot `localS` seconds into it: opening overview → flight, closing flight → overview. */
 export function shotBlend(style: ShotStyle, phase: 'opening' | 'closing', localS: number, lengthS: number): number {
@@ -47,17 +48,44 @@ export function shotBlend(style: ShotStyle, phase: 'opening' | 'closing', localS
   return smootherstep((phase === 'opening' ? localS - (lengthS - jump) : localS) / jump)
 }
 
-/** Orbit angle (radians) `localS` seconds into a stop window `lengthS` long: out and back, still at both ends. */
-export function stopOrbitRad(addedS: number, localS: number, lengthS: number): number {
+/** 0 → 1 → 0 over a stop window `lengthS` long, `localS` seconds into it (raised cosine: still at both ends). */
+export function stopBump(localS: number, lengthS: number): number {
   if (!(lengthS > 0)) return 0
-  const amplitude = Math.min(STOP_ORBIT_MAX_DEG, STOP_ORBIT_DEG_PER_S * addedS) * DEG
-  return (amplitude * (1 - Math.cos((2 * Math.PI * Math.min(1, Math.max(0, localS / lengthS)))))) / 2
+  return (1 - Math.cos(2 * Math.PI * clamp(localS / lengthS, 0, 1))) / 2
 }
 
-/** True when the view changes with the film time alone (progress unchanged): shots, orbiting stops, orbit / cinema. */
+/** Orbit angle (radians) `localS` seconds into a stop window `lengthS` long: out and back, still at both ends. */
+export function stopOrbitRad(addedS: number, localS: number, lengthS: number): number {
+  return Math.min(STOP_ORBIT_MAX_DEG, STOP_ORBIT_DEG_PER_S * addedS) * DEG * stopBump(localS, lengthS)
+}
+
+/** Camera of a 'large' stop: farther and higher by `k` (0 = the flight camera, 1 = the widest). */
+export function widenedCamera(camera: CameraSettings, k: number): CameraSettings {
+  return {
+    ...camera,
+    distance: camera.distance * (1 + (STOP_WIDE_DISTANCE_FACTOR - 1) * k),
+    pitchDeg: camera.pitchDeg + STOP_WIDE_PITCH_DEG * k,
+  }
+}
+
+/** 0 → 1 by smootherstep over `lengthS` (a step when it is 0). */
+const ramp = (s: number, lengthS: number) => (lengthS > 0 ? smootherstep(s / lengthS) : s >= 0 ? 1 : 0)
+
+/**
+ * Film time driving the time-based motions (orbit and cinema styles) at `timeS` during a 'fixe' stop: eased to the
+ * middle of the window over the ease-in, held there, eased back over the ease-out. The camera slows down, holds and
+ * moves on where it would have been, without a jump (never backwards).
+ */
+export function heldMotionTimeS(stop: Pick<ClockStop, 'startS' | 'holdStartS' | 'holdEndS' | 'endS'>, timeS: number): number {
+  const middle = (stop.startS + stop.endS) / 2
+  const weight = Math.min(ramp(timeS - stop.startS, stop.holdStartS - stop.startS), ramp(stop.endS - timeS, stop.endS - stop.holdEndS))
+  return timeS + (middle - timeS) * weight
+}
+
+/** True when the view changes with the film time alone (progress unchanged): shots, orbiting or widening stops, orbit / cinema. */
 export function filmViewMovesWithTime(state: FilmState, style: CameraStyle): boolean {
   if (state.phase === 'opening' || state.phase === 'closing') return true
-  if (state.phase === 'stop' && state.stop?.camera === 'orbite') return true
+  if (state.phase === 'stop' && (state.stop?.camera === 'orbite' || state.stop?.camera === 'large')) return true
   return movesWithTime(style)
 }
 
@@ -181,7 +209,8 @@ export interface FilmView extends CameraView {
 
 /**
  * Camera at film time `timeS` and `progress` (the store's: the export nudges it to re-place the camera). The
- * time-based flight styles follow the flight time, so they start where the opening hands over.
+ * time-based flight styles follow the flight time, so they start where the opening hands over. The camera keys
+ * set the framing along the track, a stop's camera adds its own move.
  */
 export function computeFilmView(
   path: TrackPath,
@@ -194,8 +223,13 @@ export function computeFilmView(
 ): FilmView {
   const state = clock.stateAt(timeS)
   const { aspect, ...flightOptions } = options
-  const orbitRad = state.stop?.camera === 'orbite' ? stopOrbitRad(state.stop.addedS, state.localS, state.lengthS) : 0
-  const flight = computeCameraView(path, progress, frame, sample, { ...flightOptions, timeS: state.flightTimeS, orbitRad })
+  const stop = state.stop
+  const easeM = cameraKeyEaseM(path.lengthM, options.durationS ?? DEFAULT_FLYOVER_DURATION_S)
+  const keyed = keyedCamera(options.camera ?? DEFAULT_CAMERA, clock.cameraKeys, progress * path.lengthM, easeM)
+  const camera = stop?.camera === 'large' ? widenedCamera(keyed, stopBump(state.localS, state.lengthS)) : keyed
+  const orbitRad = stop?.camera === 'orbite' ? stopOrbitRad(stop.addedS, state.localS, state.lengthS) : 0
+  const motionS = stop?.camera === 'fixe' ? heldMotionTimeS(stop, state.timeS) - clock.openingS : state.flightTimeS
+  const flight = computeCameraView(path, progress, frame, sample, { ...flightOptions, camera, timeS: motionS, orbitRad })
   if (state.phase !== 'opening' && state.phase !== 'closing') return { ...flight, marker: flight.target }
 
   const overview = overviewView(path, frame, sample, options.exaggeration, aspect, flight)

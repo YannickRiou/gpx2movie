@@ -1,6 +1,7 @@
 /**
  * Values shown by the film overlay at a flyover progress: distance covered, altitude, cumulative D+,
- * elapsed recorded time, speed, heart rate, and the whole-track figures of the closing card.
+ * elapsed recorded time, speed, heart rate, and the whole-track figures of the closing card; the lines of the
+ * ghost-race leaderboard (`leaderboardRows`).
  *
  * `prepareOverlayTrack` does the per-track work once (path, cumulative ascent, smoothed speed and heart
  * rate per point); `overlayFrameAt` is then a cheap pure function of the progress, so the export can
@@ -9,10 +10,13 @@
 import type { Track } from '../core/types'
 import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath } from '../flyover/path'
 import type { ElevationProfile, TrackPath } from '../flyover/path'
+import { rankRacers } from '../flyover/race'
+import type { Racer } from '../flyover/race'
 import { metricValues } from '../flyover/trackColor'
 import { ELEVATION_HYSTERESIS_M, smoothElevations } from '../import/stats'
 import { OSM_ATTRIBUTION } from '../osm/overpass'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
+import { formatDistanceGap, formatTimeGap } from '../ui/format'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import { summarizeOuting, weatherWidgetData } from '../weather/series'
 import type { WeatherSeries, WeatherSummary, WeatherWidgetData } from '../weather/series'
@@ -295,4 +299,41 @@ export function overlayCredits({ terrainSourceId, imagerySourceId, weather, land
     ...(weather ? [OPEN_METEO_ATTRIBUTION] : []),
     ...(landmarks ? [`Repères : ${OSM_ATTRIBUTION}`] : []),
   ]
+}
+
+/** One line of the ghost-race leaderboard. */
+export interface LeaderboardRow {
+  /** 1 for the first; racers at the same point with the same gap share a rank (1, 1, 3) */
+  rank: number
+  name: string
+  color: string
+  /** gap to the first: « +1 min 20 » (time) or « −350 m » (distance); « Tête », then « Arrivée », for the first */
+  gap: string
+}
+
+/** Racers this close in fraction stand at the same point (as `rankRacers`). */
+const SAME_FRACTION = 1e-9
+
+/**
+ * Leaderboard of the ghost race from the racers at one progress (`raceAt`): ranked by `rankRacers`, each with the
+ * colour and name of its track and its gap to the first of the board. The gaps of `raceAt` are to the lead track
+ * (the one the camera follows): the gap to the first is their difference, in time when the race has time gaps,
+ * else in distance.
+ */
+export function leaderboardRows(racers: readonly Racer[], tracks: readonly Pick<Track, 'name' | 'color'>[]): LeaderboardRow[] {
+  const ranked = rankRacers(racers)
+  const first = ranked[0]
+  if (!first) return []
+  const timed = ranked.some((r) => r.gapMs !== undefined)
+  const gapToFirst = (r: Racer) => (timed ? (r.gapMs ?? 0) - (first.gapMs ?? 0) : (r.gapM ?? 0) - (first.gapM ?? 0))
+  let rank = 0
+  return ranked.map((racer, i) => {
+    const gap = gapToFirst(racer)
+    const previous = ranked[i - 1]
+    const tied = i > 0 && Math.abs(previous.fraction - racer.fraction) <= SAME_FRACTION && gapToFirst(previous) === gap
+    if (!tied) rank = i + 1
+    const { name, color } = tracks[racer.index]
+    const gapText = timed ? formatTimeGap(gap) : formatDistanceGap(gap)
+    return { rank, name, color, gap: rank === 1 ? (racer.finished ? 'Arrivée' : 'Tête') : gapText }
+  })
 }

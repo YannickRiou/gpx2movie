@@ -1,6 +1,7 @@
 /**
  * Frame capture helpers of the video export (no React): render a progress until the terrain is complete,
- * then compose the WebGL image and the optional 2D overlay into the encoder canvas.
+ * then compose the WebGL image and the optional 2D overlay into the encoder canvas (or the overlay alone over a
+ * transparent background).
  */
 import type { OverlayTime } from '../overlay/draw'
 import { ExportCanceledError } from './encoder'
@@ -93,7 +94,22 @@ export async function renderSettledFrame(
 }
 
 /** Sky gradient behind a transparent canvas (mirrors the CSS background of FlyoverCanvas: glacier → paper). */
-export const SKY_GRADIENT: readonly [string, string] = ['#A9CCD9', '#F5F2EA']
+const SKY_GRADIENT: readonly [string, string] = ['#A9CCD9', '#F5F2EA']
+
+/** Fill a box with the sky gradient, top to bottom (behind a film frame, or the poster's placeholder view). */
+export function fillSky(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  const sky = ctx.createLinearGradient(0, y, 0, y + height)
+  sky.addColorStop(0, SKY_GRADIENT[0])
+  sky.addColorStop(1, SKY_GRADIENT[1])
+  ctx.fillStyle = sky
+  ctx.fillRect(x, y, width, height)
+}
 
 /** Encoder canvas content for one frame: sky gradient, WebGL image scaled to the video size, overlay. */
 export function composeFrame(
@@ -104,12 +120,31 @@ export function composeFrame(
   height: number,
   drawOverlay?: DrawOverlay,
 ): void {
-  const sky = ctx.createLinearGradient(0, 0, 0, height)
-  sky.addColorStop(0, SKY_GRADIENT[0])
-  sky.addColorStop(1, SKY_GRADIENT[1])
-  ctx.fillStyle = sky
-  ctx.fillRect(0, 0, width, height)
+  fillSky(ctx, 0, 0, width, height)
   ctx.drawImage(source, 0, 0, width, height)
+  drawOverlayOn(ctx, at, width, height, drawOverlay)
+}
+
+/** Encoder canvas content for one frame of the overlay alone: cleared to transparent, then the overlay. */
+export function composeOverlayFrame(
+  ctx: OffscreenCanvasRenderingContext2D,
+  at: FrameAt,
+  width: number,
+  height: number,
+  drawOverlay?: DrawOverlay,
+): void {
+  ctx.clearRect(0, 0, width, height)
+  drawOverlayOn(ctx, at, width, height, drawOverlay)
+}
+
+/** The overlay drawn without leaking its context state (transforms, styles) into the next frame. */
+function drawOverlayOn(
+  ctx: OffscreenCanvasRenderingContext2D,
+  at: FrameAt,
+  width: number,
+  height: number,
+  drawOverlay?: DrawOverlay,
+): void {
   if (!drawOverlay) return
   ctx.save()
   try {

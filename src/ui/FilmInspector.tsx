@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { fitFilmToMusic, musicLengthS } from '../film/audio'
+import { DUCK_DB, fitFilmToMusic, musicLengthS } from '../film/audio'
 import { useMediaStore } from '../film/media'
 import {
   AUDIO_DURATION_RANGE,
@@ -10,6 +10,7 @@ import {
   SHOT_DURATION_RANGE,
   SHOT_STYLES,
   STOP_CAMERAS,
+  STOP_CAMERA_LABELS,
   STOP_DURATION_RANGE,
   SYNC_OFFSET_RANGE,
 } from '../film/model'
@@ -19,6 +20,7 @@ import {
   formatFilmTime,
   formatSpeedFactor,
   removeFilmItem,
+  updateCameraKey,
   updateMedia,
   updateMusic,
   updateShot,
@@ -28,6 +30,7 @@ import {
   syncClipPlacement,
   updateText,
 } from '../film/timeline'
+import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { buildTrackPath } from '../flyover/path'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
@@ -44,7 +47,12 @@ const SHOT_HINTS: Record<ShotStyle, string> = {
   descente: "La caméra glisse entre la vue d'ensemble de la trace et le survol.",
   saut: "La vue d'ensemble est tenue, puis la caméra rejoint vite le survol.",
 }
-const CAMERA_LABELS: Record<StopCamera, string> = { orbite: 'Orbite', fixe: 'Fixe' }
+const STOP_CAMERA_HINTS: Record<StopCamera, string> = {
+  film: 'La caméra du survol continue, sans mouvement ajouté.',
+  orbite: 'La caméra tourne lentement autour du point, puis revient.',
+  large: 'La caméra recule et monte pour une vue large, puis revient.',
+  fixe: 'Le cadrage reste immobile pendant l’arrêt.',
+}
 const LAYOUT_LABELS: Record<MediaLayout, string> = { 'plein-ecran': 'Plein écran', carte: 'Carte' }
 const SIZE_RANGE = { min: WIDGET_SIZE_MIN, max: WIDGET_SIZE_MAX, step: 0.1 }
 /** Quick choices of a speed portion, and its slider in powers of two (×0,25 to ×4). */
@@ -53,7 +61,9 @@ const SPEED_SLIDER = { min: -2, max: 2, step: 0.05 }
 const km = (m: number) => Math.round(m / 10) / 100
 
 const seconds = (s: number) => `${formatNumber(s, Number.isInteger(s) ? 0 : 1)} s`
+const degrees = (deg: number) => `${deg < 0 ? '−' : ''}${formatNumber(Math.abs(deg))}°`
 const VOLUME_RANGE = { min: 0, max: 1, step: 0.01 }
+const percent = (v: number) => `${Math.round(v * 100)} %`
 const FADE_SLIDER = { min: FADE_RANGE.min, max: 10, step: FADE_RANGE.step }
 
 
@@ -100,7 +110,7 @@ function AnchorPicker({ label, value, onChange }: { label: string; value: Overla
 }
 
 /**
- * Settings of the block selected on the timeline (`filmSelection`), in the right dock: opening / closing shot, stop,
+ * Settings of the block selected on the timeline (`filmSelection`), in the right dock: opening / closing shot, stop, camera key,
  * speed portion, text, photo or video. Typing is merged into one undo step; editing a generated stop writes the stops out first.
  */
 export function FilmInspector() {
@@ -235,6 +245,7 @@ export function FilmInspector() {
     const filmText = film.texts.find((t) => t.id === item)
     const media = film.media.find((m) => m.id === item)
     const music = film.audio.find((a) => a.id === item)
+    const cameraKey = clock.cameraKeys.find((k) => k.id === item)
     if (stop) {
       isStop = true
       title = 'Arrêt'
@@ -243,17 +254,27 @@ export function FilmInspector() {
         <>
           {text('label', 'Libellé', stop.label ?? '', (label) => set({ label }))}
           {range('duration', 'Durée', stop.durationS, STOP_DURATION_RANGE, seconds, (durationS) => set({ durationS }))}
-          <fieldset className="field fieldset">
-            <legend className="field__label">Caméra</legend>
-            <div className="segmented">
+          <div className="field">
+            <label className="field__label" htmlFor={`${id}-camera`}>
+              Caméra pendant l’arrêt
+            </label>
+            <select
+              id={`${id}-camera`}
+              className="select"
+              value={stop.camera}
+              aria-describedby={`${id}-camera-hint`}
+              onChange={(e) => set({ camera: e.currentTarget.value as StopCamera })}
+            >
               {STOP_CAMERAS.map((camera) => (
-                <label key={camera} className="segmented__option">
-                  <input type="radio" name={`${id}-camera`} value={camera} checked={stop.camera === camera} onChange={() => set({ camera })} />
-                  {CAMERA_LABELS[camera]}
-                </label>
+                <option key={camera} value={camera}>
+                  {STOP_CAMERA_LABELS[camera]}
+                </option>
               ))}
-            </div>
-          </fieldset>
+            </select>
+            <p id={`${id}-camera-hint`} className="field__hint">
+              {STOP_CAMERA_HINTS[stop.camera]}
+            </p>
+          </div>
           <p className="field__hint">
             À {formatDistance(stop.atM)} sur {formatDistance(lengthM)}, de {formatFilmTime(stop.startS)} à {formatFilmTime(stop.endS)}
             {film.autoStops && ' · arrêt automatique : le retoucher fige les arrêts'}
@@ -294,6 +315,21 @@ export function FilmInspector() {
             Survol {how} de {formatDistance(speed.fromM)} à {formatDistance(speed.toM)}, de {formatFilmTime(speed.startS)} à{' '}
             {formatFilmTime(speed.endS)} dans le film. La vitesse change en douceur aux bords.
             {pacing.keepDuration ? ' La durée du survol ne change pas : le reste du parcours s’adapte.' : ' La durée du film change d’autant.'}
+          </p>
+        </>
+      )
+    } else if (cameraKey) {
+      title = 'Cadrage'
+      const set = (patch: Parameters<typeof updateCameraKey>[2]) => change((f) => updateCameraKey(f, item, patch), false)
+      body = (
+        <>
+          {range('distance', 'Distance', cameraKey.distance, CAMERA_RANGES.distance, (v) => `×${formatNumber(v, 1)}`, (distance) => set({ distance }))}
+          {range('pitch', 'Inclinaison', cameraKey.pitchDeg, CAMERA_RANGES.pitchDeg, degrees, (pitchDeg) => set({ pitchDeg }))}
+          {range('heading', 'Visée', cameraKey.headingOffsetDeg, CAMERA_RANGES.headingOffsetDeg, degrees, (headingOffsetDeg) => set({ headingOffsetDeg }))}
+          {number('at', 'À (km)', km(cameraKey.atM), 0, km(lengthM), (v) => set({ atM: Math.min(v * 1000, lengthM) }))}
+          <p className="field__hint">
+            À {formatDistance(cameraKey.atM)}, {formatFilmTime(cameraKey.timeS)} dans le film. La caméra passe en douceur d’un cadrage
+            au suivant ; avant le premier et après le dernier, elle reprend les réglages de l’onglet Survol.
           </p>
         </>
       )
@@ -369,6 +405,26 @@ export function FilmInspector() {
           </fieldset>
         )
       }
+      /** « Son de la vidéo »: heard or not, its volume; silent while following the flight */
+      const clipSound = () => {
+        const following = media.sync?.follow === true
+        const heard = media.muted === false && !following
+        return (
+          <fieldset className="field fieldset">
+            <legend className="field__label">Son</legend>
+            <label className="checkbox">
+              <input type="checkbox" checked={heard} disabled={following} onChange={(e) => set({ muted: !e.currentTarget.checked })} />
+              Son de la vidéo
+            </label>
+            {range('clip-volume', 'Volume', media.volume ?? 1, VOLUME_RANGE, percent, (volume) => set({ volume }), !heard)}
+            <p className="field__hint">
+              {following
+                ? 'Muette tant qu’elle suit la vitesse du survol : elle n’est pas lue à son rythme, le son serait déformé.'
+                : 'Entendu en lecture à ×1 et dans le film exporté, muet aux autres vitesses.'}
+            </p>
+          </fieldset>
+        )
+      }
       body = (
         <>
           {picture && <img className="film-inspector__thumb" src={picture.thumb} alt={picture.name ?? title} />}
@@ -394,11 +450,12 @@ export function FilmInspector() {
           {range('size', 'Taille', media.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
           {timing(media.startS, media.durationS, set)}
           {video && number('in', 'Début dans la vidéo (s)', media.inS ?? 0, 0, fileS, (inS) => set({ inS: Math.min(inS, fileS) }))}
+          {video && clipSound()}
           {video && picture?.recordedMs !== undefined && clipSync(picture.recordedMs, picture.recordedApprox === true, fileS)}
           <p className="field__hint">
             {card ? `La ${title.toLowerCase()} s’affiche encadrée, au style de l’habillage.` : `La ${title.toLowerCase()} couvre la vue 3D, en fondu.`}
             {video && picture?.durationS !== undefined && ` Vidéo de ${formatFilmTime(fileS)} ; au-delà de sa fin, la dernière image reste affichée.`}
-            {video && ' Le son des vidéos n’est pas repris : la vidéo est muette. Pour du son, ajoutez une musique (Options de la timeline).'}
+
           </p>
         </>
       )
@@ -411,7 +468,7 @@ export function FilmInspector() {
       body = (
         <>
           {sound?.name && <p className="field__hint">{sound.name}</p>}
-          {range('volume', 'Volume', music.volume, VOLUME_RANGE, (v) => `${Math.round(v * 100)} %`, (volume) => set({ volume }))}
+          {range('volume', 'Volume', music.volume, VOLUME_RANGE, percent, (volume) => set({ volume }))}
           {range('fade-in', 'Fondu d’entrée', Math.min(music.fadeInS, FADE_SLIDER.max), FADE_SLIDER, seconds, (fadeInS) => set({ fadeInS }))}
           {range('fade-out', 'Fondu de sortie', Math.min(music.fadeOutS, FADE_SLIDER.max), FADE_SLIDER, seconds, (fadeOutS) => set({ fadeOutS }))}
           <div className="film-inspector__row">
@@ -419,13 +476,22 @@ export function FilmInspector() {
             {number('length', 'Durée (s)', music.durationS, AUDIO_DURATION_RANGE.min, fileS ?? AUDIO_DURATION_RANGE.max, (durationS) => set({ durationS }))}
           </div>
           {number('in', 'Début dans le fichier (s)', music.inS, 0, fileS ?? AUDIO_DURATION_RANGE.max, (inS) => set({ inS }))}
+          <label className="checkbox">
+            <input type="checkbox" checked={film.duckMusic} onChange={(e) => {
+                const duckMusic = e.currentTarget.checked
+                editFilm((f) => ({ film: { ...f, duckMusic } }))
+              }}
+            />
+            Baisser la musique sous les vidéos
+          </label>
           <button type="button" className="btn btn--secondary film-inspector__remove" onClick={() => showToast(fitFilmToMusic())}>
             Caler la durée du film sur la musique
           </button>
           <p className="field__hint">
             Jouée de {formatFilmTime(music.startS)} à {formatFilmTime(music.startS + lengthS)} dans le film
             {fileS !== undefined && ` (fichier de ${formatFilmTime(fileS)})`}, pendant la lecture et dans le film exporté. Caler la durée
-            change la durée du survol pour que le film finisse avec la musique.
+            change la durée du survol pour que le film finisse avec la musique. Baisser la musique : toutes les musiques
+            baissent de {-DUCK_DB} dB pendant les vidéos avec du son.
           </p>
         </>
       )

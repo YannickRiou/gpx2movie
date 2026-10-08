@@ -29,16 +29,16 @@ export function PanelSection({ title, keys, children }: { title: string; keys?: 
 }
 
 /**
- * « Plus de réglages »: the rarely used settings of a section, folded; the summary shows « modifié » when one of
- * `paths` differs from its default.
+ * « Plus de réglages » (or `label`): the rarely used settings of a section, folded; the summary shows « modifié » when
+ * one of `paths` differs from its default.
  */
-export function MoreSettings({ paths, children }: { paths: readonly SettingPath[]; children: ReactNode }) {
+export function MoreSettings({ paths, label = 'Plus de réglages', children }: { paths: readonly SettingPath[]; label?: string; children: ReactNode }) {
   const modified = useAppStore((s) => modifiedPaths(s.settings, paths).length > 0)
   return (
     <details className="more-settings">
       <summary className="more-settings__summary">
         <Icon name="sliders-horizontal" size={16} />
-        <span className="more-settings__label">Plus de réglages</span>
+        <span className="more-settings__label">{label}</span>
         {modified && <span className="modified__badge">modifié</span>}
         <Icon name="chevron-down" size={16} />
       </summary>

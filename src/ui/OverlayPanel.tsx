@@ -9,6 +9,8 @@ import {
   END_START_MIN,
   OVERLAY_ANCHORS,
   OVERLAY_ANCHOR_LABELS,
+  OVERLAY_FONT_IDS,
+  OVERLAY_FONT_LABELS,
   OVERLAY_STYLES,
   OVERLAY_STYLE_LABELS,
   PROFILE_HEIGHT_MAX,
@@ -19,13 +21,15 @@ import {
   TITLE_END_MIN,
   WIDGET_SIZE_MAX,
   WIDGET_SIZE_MIN,
+  withOverrides,
 } from '../overlay/settings'
-import type { CounterId, CreditsPosition, OverlayAnchor, OverlaySettings } from '../overlay/settings'
+import type { CounterId, CreditsPosition, OverlayAnchor, OverlayFontId, OverlayOverrides, OverlaySettings } from '../overlay/settings'
+import { panelColorOf, resolveOverlayTheme, toHex } from '../overlay/themes'
 import { getPlatform } from '../platform'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
 import { formatNumber } from './format'
-import { InfoTip, PanelSection } from './PanelSection'
+import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
 
 const COUNTER_LABELS: Record<CounterId, string> = {
   distance: 'Distance',
@@ -36,7 +40,7 @@ const COUNTER_LABELS: Record<CounterId, string> = {
   heartRate: 'Fréquence cardiaque',
 }
 
-type WidgetKey = Exclude<keyof OverlaySettings, 'enabled' | 'style'>
+type WidgetKey = Exclude<keyof OverlaySettings, 'enabled' | 'style' | 'overrides'>
 
 const percent = (v: number) => `${formatNumber(v * 100)} %`
 
@@ -132,14 +136,116 @@ function WidgetGroup({ label, enabled, onToggle, children }: { label: string; en
   )
 }
 
+/** A few colours of the film palette offered beside the colour picker. */
+const SWATCHES: readonly { color: string; label: string }[] = [
+  { color: '#ffffff', label: 'Blanc' },
+  { color: '#f5f2ea', label: 'Papier' },
+  { color: '#1c2a33', label: 'Encre' },
+  { color: '#ff8a5c', label: 'Rouge clair' },
+  { color: '#c23b22', label: 'Rouge' },
+  { color: '#a9ccd9', label: 'Glacier' },
+  { color: '#3f6b4a', label: 'Mousse' },
+]
+
+/** Native colour picker followed by the swatches; `value` is '#rrggbb'. */
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange(v: string): void }) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label className="field__label" htmlFor={id}>
+        {label}
+      </label>
+      <div className="color-row">
+        <input id={id} className="color-row__input" type="color" value={value} onChange={(e) => onChange(e.currentTarget.value)} />
+        {SWATCHES.map((swatch) => (
+          <button
+            key={swatch.color}
+            type="button"
+            className="color-row__swatch"
+            style={{ background: swatch.color }}
+            aria-label={`${label} : ${swatch.label}`}
+            aria-pressed={value === swatch.color}
+            title={swatch.label}
+            onClick={() => onChange(swatch.color)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Font of the titles or figures: the style's own, or one of the short list. */
+function FontField({ label, value, onChange }: { label: string; value: OverlayFontId | undefined; onChange(v: OverlayFontId | undefined): void }) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label className="field__label" htmlFor={id}>
+        {label}
+      </label>
+      <select
+        id={id}
+        className="select"
+        value={value ?? ''}
+        onChange={(e) => onChange((e.currentTarget.value || undefined) as OverlayFontId | undefined)}
+      >
+        <option value="">Celle du style</option>
+        {OVERLAY_FONT_IDS.map((font) => (
+          <option key={font} value={font}>
+            {OVERLAY_FONT_LABELS[font]}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 /**
- * « Habillage » tab, in sections: Habillage (on / off, style; « modifié / Par défaut » of the whole overlay), Titres,
- * Compteurs, Profil et mini-carte, Météo, logo et texte, and Crédits des sources (burned in even without the rest).
+ * « Couleurs et polices »: accent, text, panel and fonts changed on top of the style; the pickers show the colours
+ * drawn (the style's until changed). « Revenir au style » drops every change.
+ */
+function StyleOverrides({ overlay, onChange }: { overlay: OverlaySettings; onChange(patch: OverlayOverrides | null): void }) {
+  const theme = resolveOverlayTheme(overlay.style, overlay.overrides)
+  const panel = panelColorOf(theme)
+  const overrides = overlay.overrides ?? {}
+  return (
+    <MoreSettings paths={['overlay.overrides']} label="Couleurs et polices">
+      <ColorField label="Accent" value={toHex(theme.accent)} onChange={(accent) => onChange({ accent })} />
+      <ColorField label="Texte" value={toHex(theme.text)} onChange={(text) => onChange({ text })} />
+      {panel ? (
+        <>
+          <ColorField label="Fond des encarts" value={panel.color} onChange={(color) => onChange({ panel: color })} />
+          <RangeField
+            label="Opacité du fond"
+            min={0}
+            max={1}
+            step={0.05}
+            value={panel.opacity}
+            format={percent}
+            onChange={(panelOpacity) => onChange({ panelOpacity })}
+          />
+        </>
+      ) : (
+        <p className="field__hint">Ce style pose le texte sur l'image, sans fond d'encart.</p>
+      )}
+      <FontField label="Police des titres" value={overrides.titleFont} onChange={(titleFont) => onChange({ titleFont })} />
+      <FontField label="Police des chiffres" value={overrides.numberFont} onChange={(numberFont) => onChange({ numberFont })} />
+      <button type="button" className="btn btn--secondary" disabled={!overlay.overrides} onClick={() => onChange(null)}>
+        Revenir au style
+      </button>
+    </MoreSettings>
+  )
+}
+
+/**
+ * « Habillage » tab, in sections: Habillage (on / off, style, colours and fonts; « modifié / Par défaut » of the whole
+ * overlay), Titres, Compteurs (and the ghost-race leaderboard, 2+ tracks), Profil et mini-carte, Météo, logo et texte, and Crédits des sources (burned in even without the rest).
  */
 export function OverlayPanel() {
   const overlay = useAppStore((s) => s.settings.overlay)
   const setSetting = useAppStore((s) => s.setSetting)
   const track = useAppStore((s) => s.tracks[0])
+  const severalTracks = useAppStore((s) => s.tracks.length >= 2)
+  const raceOn = useAppStore((s) => s.settings.race.enabled)
   const hasWeather = useWeatherStore((s) => s.series !== null)
   const [logoError, setLogoError] = useState<string | null>(null)
   const id = useId()
@@ -197,6 +303,7 @@ export function OverlayPanel() {
             </div>
           </fieldset>
         )}
+        {overlay.enabled && <StyleOverrides overlay={overlay} onChange={(patch) => setSetting('overlay', withOverrides(overlay, patch))} />}
       </PanelSection>
 
       {overlay.enabled && (
@@ -273,6 +380,18 @@ export function OverlayPanel() {
               <AnchorField value={overlay.counters.anchor} onChange={(anchor) => setWidget('counters', { anchor })} />
               <SizeField value={overlay.counters.size} onChange={(size) => setWidget('counters', { size })} />
             </WidgetGroup>
+
+            {severalTracks && (
+              <WidgetGroup label="Classement (course fantôme)" enabled={overlay.leaderboard.enabled} onToggle={(enabled) => setWidget('leaderboard', { enabled })}>
+                <p className="field__hint">
+                  {raceOn
+                    ? 'Rang, nom et écart au premier de chaque trace, au marqueur.'
+                    : 'Visible quand la course fantôme est activée (onglet Trace).'}
+                </p>
+                <AnchorField value={overlay.leaderboard.anchor} onChange={(anchor) => setWidget('leaderboard', { anchor })} />
+                <SizeField value={overlay.leaderboard.size} onChange={(size) => setWidget('leaderboard', { size })} />
+              </WidgetGroup>
+            )}
           </PanelSection>
 
           <PanelSection title="Profil et mini-carte">

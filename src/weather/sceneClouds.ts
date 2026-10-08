@@ -8,6 +8,7 @@
  *
  * Pure functions (no DOM, no React, no Three).
  */
+import { clamp } from '../core/math'
 import { weatherAt, type WeatherSeries } from './series'
 import type { SceneConditions } from './sceneWeather'
 
@@ -58,10 +59,6 @@ export const MIN_CLOUD_COVER = 0.02
 const MANUAL_MID = 0.6
 const MANUAL_HIGH = 0.4
 
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, v))
-}
-
 /**
  * Cover of each layer: null for 'aucun', or in 'meteo' without conditions (no weather loaded) or without any
  * cloud value. A missing layer counts as the total cover.
@@ -83,7 +80,7 @@ export function cloudCoversAt(settings: CloudSettings, conditions: SceneConditio
 
 /** One cloud layer of the scene (`CloudLayer` of three-clouds); heightM 0 = layer off. */
 export interface CloudLayerParams {
-  /** base above the ellipsoid, terrain exaggeration applied (metres) */
+  /** base above sea level, terrain exaggeration applied (metres); CloudsLayer adds the geoid undulation */
   altitudeM: number
   heightM: number
   densityScale: number
@@ -106,14 +103,13 @@ export interface CloudGeometry {
   exaggeration: number
 }
 
-/** Layer thickness and density (three-clouds defaults for cumulus, a thinner mid layer, cirrus). */
-const LOW_HEIGHT_M = 900
+/** Layer thickness and density, low / mid / high (three-clouds defaults for cumulus, a thinner mid layer, cirrus). */
+const LAYER_HEIGHTS_M = [900, 1000, 500] as const
+const DENSITY = [0.2, 0.12, 0.003] as const
+/** Mid layer base above the low one; cirrus base at max(HIGH_MIN_ALTITUDE_M, ground + HIGH_ABOVE_GROUND_M) (metres). */
 const MID_GAP_M = 2000
-const MID_HEIGHT_M = 1000
 const HIGH_MIN_ALTITUDE_M = 7000
 const HIGH_ABOVE_GROUND_M = 5500
-const HIGH_HEIGHT_M = 500
-const DENSITY = [0.2, 0.12, 0.003] as const
 const MAX_EXPONENT = 8
 /** Coverage of three-clouds above which every texel is cloudy (default coverage filter width 0.6). */
 const FULL_COVERAGE = 0.4
@@ -154,10 +150,7 @@ export function sceneCloudsFrom(covers: CloudCovers | null, geometry: CloudGeome
   const c = [covers.low, covers.mid, covers.high].map((v) => (Number.isFinite(v) ? clamp(v, 0, 1) : 0))
   if (Math.max(...c) < MIN_CLOUD_COVER) return null
   const k = Number.isFinite(geometry.exaggeration) && geometry.exaggeration > 0 ? geometry.exaggeration : 1
-  const ground = Number.isFinite(geometry.groundM) ? geometry.groundM : 0
-  const lowBase = ground + geometry.altitudeM
-  const bases = [lowBase, lowBase + MID_GAP_M, Math.max(HIGH_MIN_ALTITUDE_M, ground + HIGH_ABOVE_GROUND_M)]
-  const heights = [LOW_HEIGHT_M, MID_HEIGHT_M, HIGH_HEIGHT_M]
+  const bases = layerBasesM(geometry)
   const needed = c.map((cover, i) => (cover < MIN_CLOUD_COVER ? 0 : coverageFor(i, cover)))
   const coverage = Math.min(MAX_COVERAGE, Math.max(...needed))
   const t = 1 - coverage / FULL_COVERAGE
@@ -168,12 +161,19 @@ export function sceneCloudsFrom(covers: CloudCovers | null, geometry: CloudGeome
     const thin = t > 0 && ti > t
     return {
       altitudeM,
-      heightM: heights[i],
+      heightM: LAYER_HEIGHTS_M[i],
       densityScale: t > 0 ? DENSITY[i] : (DENSITY[i] * needed[i]) / coverage,
       weatherExponent: thin ? clamp(Math.log(t) / Math.log(ti), 1, MAX_EXPONENT) : 1,
     }
   })
   return { coverage, layers: layers as SceneClouds['layers'] }
+}
+
+/** Base of the low, mid and high layers above sea level, before the exaggeration (metres). */
+function layerBasesM(geometry: CloudGeometry): number[] {
+  const ground = Number.isFinite(geometry.groundM) ? geometry.groundM : 0
+  const lowBase = ground + geometry.altitudeM
+  return [lowBase, lowBase + MID_GAP_M, Math.max(HIGH_MIN_ALTITUDE_M, ground + HIGH_ABOVE_GROUND_M)]
 }
 
 // ---------------------------------------------------------------------------

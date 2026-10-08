@@ -65,6 +65,34 @@ export type CreditsPosition = (typeof CREDITS_POSITIONS)[number]
 /** Longest side of the logo kept in the settings (pixels). */
 export const LOGO_MAX_SIZE_PX = 512
 
+/** Fonts the user can pick for the titles or the figures: the bundled faces, then a few system families. */
+export const OVERLAY_FONT_IDS = ['fraunces', 'plex', 'plex-condensed', 'georgia', 'system', 'mono'] as const
+export type OverlayFontId = (typeof OVERLAY_FONT_IDS)[number]
+
+export const OVERLAY_FONT_LABELS: Record<OverlayFontId, string> = {
+  fraunces: 'Fraunces',
+  plex: 'IBM Plex Sans',
+  'plex-condensed': 'IBM Plex Sans Condensed',
+  georgia: 'Georgia (système)',
+  system: 'Police du système',
+  mono: 'Chasse fixe (système)',
+}
+
+/**
+ * The user's own touches on top of the chosen style; a missing field keeps the style's value.
+ * Colours are '#rrggbb' (what `<input type="color">` gives).
+ */
+export interface OverlayOverrides {
+  accent?: string
+  text?: string
+  /** panel behind the widgets (styles with a panel only) */
+  panel?: string
+  /** 0–1 */
+  panelOpacity?: number
+  titleFont?: OverlayFontId
+  numberFont?: OverlayFontId
+}
+
 interface Placed {
   enabled: boolean
   anchor: OverlayAnchor
@@ -141,7 +169,11 @@ export interface OverlaySettings {
   weather: Sized
   /** plan view of the whole track, covered part and marker */
   minimap: MiniMapSettings
+  /** ghost race: tracks ranked at the marker, with their gap to the first (2+ tracks, race on) */
+  leaderboard: Sized
   credits: CreditsSettings
+  /** colours and fonts changed on top of the style; absent = the style as designed */
+  overrides?: OverlayOverrides
 }
 
 export const DEFAULT_OVERLAY: OverlaySettings = {
@@ -160,11 +192,12 @@ export const DEFAULT_OVERLAY: OverlaySettings = {
   text: { enabled: false, anchor: 'bottom-left', size: 1, text: '' },
   weather: { enabled: false, anchor: 'top-left', size: 1 },
   minimap: { enabled: false, anchor: 'bottom-right', size: 1, northArrow: true },
+  leaderboard: { enabled: false, anchor: 'middle-right', size: 1 },
   credits: { enabled: true, position: 'bottom-right' },
 }
 
 /** Widgets added after the first saved format: missing from older projects and presets. */
-const OVERLAY_ADDED_KEYS: readonly (keyof OverlaySettings)[] = ['minimap', 'credits']
+const OVERLAY_ADDED_KEYS: readonly (keyof OverlaySettings)[] = ['minimap', 'credits', 'leaderboard']
 
 /**
  * Raw overlay settings of an older project or preset with the widgets added since filled in with their
@@ -177,13 +210,48 @@ export function withOverlayDefaults(raw: unknown): unknown {
   return missing.length === 0 ? raw : { ...Object.fromEntries(missing.map((key) => [key, DEFAULT_OVERLAY[key]])), ...raw }
 }
 
+/**
+ * Overlay settings with `patch` applied to the overrides (null: back to the style). Unset fields are dropped, and
+ * the key itself once nothing is left, so the style as designed equals the defaults again (« modifié » marker).
+ */
+export function withOverrides(overlay: OverlaySettings, patch: OverlayOverrides | null): OverlaySettings {
+  const { overrides, ...rest } = overlay
+  const merged = patch === null ? {} : { ...overrides, ...patch }
+  const kept: OverlayOverrides = Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== undefined))
+  return Object.keys(kept).length > 0 ? { ...rest, overrides: kept } : rest
+}
+
 const within = (v: number, min: number, max: number) => v >= min && v <= max
 const isAnchor = (v: string) => (OVERLAY_ANCHORS as readonly string[]).includes(v)
 const validSized = (w: Sized) => isAnchor(w.anchor) && within(w.size, WIDGET_SIZE_MIN, WIDGET_SIZE_MAX)
 
+const OVERRIDE_CHECKS: { [K in keyof OverlayOverrides]-?: (v: unknown) => boolean } = {
+  accent: isHexColor,
+  text: isHexColor,
+  panel: isHexColor,
+  panelOpacity: (v) => typeof v === 'number' && within(v, 0, 1),
+  titleFont: (v) => (OVERLAY_FONT_IDS as readonly unknown[]).includes(v),
+  numberFont: (v) => (OVERLAY_FONT_IDS as readonly unknown[]).includes(v),
+}
+
+/** '#rrggbb' (either case). */
+export function isHexColor(v: unknown): v is string {
+  return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)
+}
+
+/**
+ * Overrides read from a project: absent, or an object of known fields with valid values. Not covered by the
+ * shape check of the project document (the key is optional), so everything is checked here.
+ */
+export function isValidOverrides(o: unknown): boolean {
+  if (o === undefined) return true
+  if (o === null || typeof o !== 'object' || Array.isArray(o)) return false
+  return Object.entries(o).every(([key, value]) => Object.hasOwn(OVERRIDE_CHECKS, key) && OVERRIDE_CHECKS[key as keyof OverlayOverrides](value))
+}
+
 /**
  * Value checks of overlay settings whose JSON shape is already known to match `DEFAULT_OVERLAY`
- * (see `SETTING_CHECKS` in the project document): enumerations, ranges, logo format.
+ * (see `SETTING_CHECKS` in the project document): enumerations, ranges, logo format, colour and font overrides.
  */
 export function isValidOverlay(o: OverlaySettings): boolean {
   return (
@@ -201,6 +269,8 @@ export function isValidOverlay(o: OverlaySettings): boolean {
     validSized(o.text) &&
     validSized(o.weather) &&
     validSized(o.minimap) &&
-    (CREDITS_POSITIONS as readonly string[]).includes(o.credits.position)
+    validSized(o.leaderboard) &&
+    (CREDITS_POSITIONS as readonly string[]).includes(o.credits.position) &&
+    isValidOverrides(o.overrides)
   )
 }

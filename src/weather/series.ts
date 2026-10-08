@@ -6,7 +6,7 @@
  */
 import type { LonLat } from '../core/types'
 import { recordedTimeAt, samplePath, type TrackPath } from '../flyover/path'
-import { haversineM } from '../geo/ellipsoid'
+import { haversineM } from '../geo/lonLat'
 
 export const WEATHER_VARIABLES = [
   'temperature',
@@ -25,28 +25,14 @@ export const WEATHER_VARIABLES = [
 ] as const
 export type WeatherVariable = (typeof WEATHER_VARIABLES)[number]
 
-/** Units of the values (precipitation, snowfall and gusts are totals / maxima over the preceding hour). */
-export const WEATHER_UNITS: Record<WeatherVariable, string> = {
-  temperature: '°C',
-  apparentTemperature: '°C',
-  precipitation: 'mm',
-  rain: 'mm',
-  snowfall: 'cm',
-  cloudCover: '%',
-  cloudCoverLow: '%',
-  cloudCoverMid: '%',
-  cloudCoverHigh: '%',
-  windSpeed: 'km/h',
-  windDirection: '°',
-  windGusts: 'km/h',
-  weatherCode: 'WMO',
-}
-
 /** One sampled place along the track. */
 export interface WeatherStation extends LonLat {
   /** elevation the values were downscaled to (metres); undefined = the provider's own terrain model */
   ele?: number
-  /** one value per hour of `WeatherSeries.time`, NaN where missing */
+  /**
+   * one value per hour of `WeatherSeries.time`, NaN where missing (°C, mm, cm of snow, %, km/h, degrees the wind
+   * blows from, WMO code); precipitation, snowfall and gusts are totals / maxima over the preceding hour
+   */
   values: Record<WeatherVariable, number[]>
 }
 
@@ -66,7 +52,8 @@ const MIN_STATION_DISTANCE_M = 100
 /** Values summed or maxed over the preceding hour: taken from the hour that ends at or after the instant. */
 const PERIOD_VARIABLES: ReadonlySet<WeatherVariable> = new Set(['precipitation', 'rain', 'snowfall', 'windGusts', 'weatherCode'])
 
-function lerpNaNSafe(a: number, b: number, t: number): number {
+/** Linear interpolation that falls back on the known end when the other one is NaN. */
+export function lerpNaNSafe(a: number, b: number, t: number): number {
   if (Number.isNaN(a)) return b
   if (Number.isNaN(b)) return a
   return a + (b - a) * t
@@ -105,16 +92,30 @@ function normalizeDeg(deg: number): number {
  * series is empty.
  */
 export function weatherAt(series: WeatherSeries, timeMs: number, lon: number, lat: number): WeatherSample | undefined {
+  return weatherAtTimes(series, [timeMs], lon, lat)?.[0]
+}
+
+/** `weatherAt` for several instants at one place (the station weights are computed once). */
+export function weatherAtTimes(
+  series: WeatherSeries,
+  timesMs: readonly number[],
+  lon: number,
+  lat: number,
+): WeatherSample[] | undefined {
   const { stations } = series
   if (stations.length === 0 || series.time.length === 0) return undefined
-  const samples = stations.map((s) => stationAt(series, s, timeMs))
   const weights = stations.map((s) => {
     const d = Math.max(MIN_STATION_DISTANCE_M, haversineM({ lon, lat }, s))
     return 1 / (d * d)
   })
   let nearest = 0
   for (let k = 1; k < weights.length; k++) if (weights[k] > weights[nearest]) nearest = k
+  return timesMs.map((timeMs) => blendStations(series, timeMs, weights, nearest))
+}
 
+/** Stations at `timeMs` blended by `weights`, the weather code of the `nearest` one. */
+function blendStations(series: WeatherSeries, timeMs: number, weights: readonly number[], nearest: number): WeatherSample {
+  const samples = series.stations.map((s) => stationAt(series, s, timeMs))
   const out = {} as WeatherSample
   for (const key of WEATHER_VARIABLES) {
     let sum = 0
