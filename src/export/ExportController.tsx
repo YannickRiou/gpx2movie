@@ -7,15 +7,19 @@
  * pointer events off, render scale of the pixel-sized scene elements set for the video size. Each scheduled
  * progress is rendered until the view has its tiles (see capture.ts), composed with the optional overlay (its
  * web fonts loaded first) into an OffscreenCanvas and encoded; meanwhile the tiles of the upcoming frames are
- * prefetched. A still image request renders its single progress the same way and keeps the composed canvas as
- * PNG / JPEG instead. Everything is restored afterwards, on success, error or cancel.
+ * prefetched. The music of the film is mixed beforehand over the exact length of the film (held frames included)
+ * and encoded along the frames (silent, with a note, when the browser cannot encode sound). A still image request renders its single progress the same way and keeps the composed canvas as
+ * PNG / JPEG instead; an overview still (poster) shows the whole track from the south and hands the image to its
+ * `compose` function. Everything is restored afterwards, on success, error or cancel.
  */
 import { useEffect, useRef } from 'react'
 import { useThree, type RootState } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
 import type { LocalFrame, TerrainEngine } from '../core/types'
+import { mixFilmAudio } from '../film/audio'
 import type { FilmClock } from '../film/clock'
-import { computeFilmView, filmViewMovesWithTime, type FilmView } from '../flyover/filmCamera'
+import { useMediaStore } from '../film/media'
+import { computeFilmView, filmViewMovesWithTime, overviewView, type FilmView } from '../flyover/filmCamera'
 import { buildTrackPath, type TrackPath } from '../flyover/path'
 import { loadOverlayFonts } from '../overlay/assets'
 import { overlayTime, overlayTimedState } from '../overlay/draw'
@@ -47,6 +51,10 @@ const PREFETCH_AHEAD = [5, 10, 15, 20, 30, 40] as const
 const PREFETCH_EVERY = 5
 /** JPEG quality of still images (PNG is lossless) */
 const STILL_JPEG_QUALITY = 0.92
+/** Overview still (poster): the whole track seen from the south, north up like a map. */
+const FROM_SOUTH = { target: new Vector3(0, 0, 0), position: new Vector3(0, 0, 1) }
+/** Layer no camera renders: hides the progress marker on an overview still. */
+const HIDDEN_LAYER = 31
 
 interface RunDeps {
   get: () => RootState
@@ -122,6 +130,27 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
   const timings: ExportTimings = { ...EMPTY_TIMINGS }
   const startedAt = performance.now()
 
+  // Overview still (poster): the progress, hence the rig, stays put; the camera is placed here before every render
+  // and put back afterwards, the progress marker hidden meanwhile.
+  const overview = request.still?.overview === true
+  const controlsTarget = () => (deps.get().controls as unknown as { target?: Vector3 } | null)?.target
+  const savedView = overview
+    ? { position: three.camera.position.clone(), quaternion: three.camera.quaternion.clone(), target: controlsTarget()?.clone() }
+    : null
+  const marker = overview ? three.scene.getObjectByName('flyover-marker') : undefined
+  const markerLayers = marker?.layers.mask
+  const placeOverview = () => {
+    const frame = deps.frame()
+    const engine = deps.engine()
+    if (!path || path.count === 0 || !frame) return
+    const sampler: HeightSampler | null = engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null
+    const view = overviewView(path, frame, sampler, useAppStore.getState().settings.exaggeration, width / height, FROM_SOUTH)
+    const { camera } = deps.get()
+    camera.position.copy(view.position)
+    camera.lookAt(view.target)
+    controlsTarget()?.copy(view.target)
+  }
+
   // Video size, re-applied before every render: a window resize or a re-render of <Canvas> resets them.
   const applyVideoSize = () => {
     const state = deps.get()
@@ -141,6 +170,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     if (app.playback.playing) app.setPlaying(false)
     applyVideoSize()
     clock += 1 / fps
+    if (overview) placeOverview()
     deps.get().advance(clock)
     timings.renderMs += performance.now() - t0
   }
@@ -153,6 +183,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
 
   // Distance between the camera in use and the placement the rig would compute with the terrain loaded now.
   const cameraDrift = () => {
+    // the overview is placed again before every render
+    if (overview) return 0
     const frame = deps.frame()
     if (!path || path.count === 0 || !frame) return 0
     const camera = deps.get().camera
@@ -189,6 +221,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     canvas.style.pointerEvents = 'none'
     exportStore().setRenderScale(exportRenderScale(width, height))
     applyVideoSize()
+    marker?.layers.set(HIDDEN_LAYER)
 
     const compositor = new OffscreenCanvas(width, height)
     const ctx = compositor.getContext('2d', { alpha: false })
@@ -208,20 +241,24 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       now: () => performance.now(),
       wait: timedWait,
       isCanceled,
-      setProgress: (p: number) => useAppStore.getState().setProgress(p, frameTimeS),
+      setProgress: (p: number) => {
+        if (!overview) useAppStore.getState().setProgress(p, frameTimeS)
+      },
       cameraDrift,
     }
 
     if (request.still) {
-      const { progress } = request.still
+      const { progress, compose } = request.still
       const time = overlayTime(filmClock, progress, saved.timeS)
       // pictures and video frames decoded before the render: composing must follow it in the same task
-      await loadFrameMedia(time.timeS)
+      if (!compose) await loadFrameMedia(time.timeS, progress)
       const complete = await renderSettledFrame(schedule[0], frameDeps)
-      composeFrame(ctx, canvas, { progress, time }, width, height, deps.overlay())
+      // a composed still (poster) draws its own text instead of the film overlay
+      composeFrame(ctx, canvas, { progress, time }, width, height, compose ? undefined : deps.overlay())
       exportStore().reportFrame(1, performance.now())
       exportStore().finalizing()
-      const blob = await compositor.convertToBlob({ type: request.still.type, quality: STILL_JPEG_QUALITY })
+      const output = compose ? await compose(compositor) : compositor
+      const blob = await output.convertToBlob({ type: request.still.type, quality: STILL_JPEG_QUALITY })
       // a browser without a JPEG encoder answers PNG
       const jpeg = blob.type === 'image/jpeg'
       exportStore().complete({
@@ -235,8 +272,14 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       return
     }
 
-    session = await createVideoEncoder(compositor, request)
     const settings = useAppStore.getState().settings
+    // the music from the first frame: film time 0 comes after the frames held at the start
+    const audio = await mixFilmAudio(settings.film.audio, (id) => useMediaStore.getState().table[id], {
+      offsetS: Math.round(request.holdStartS * fps) / fps,
+      lengthS: schedule.length / fps,
+    })
+    if (isCanceled()) throw new ExportCanceledError()
+    session = await createVideoEncoder(compositor, { ...request, audio })
     /** opacities of the timed overlay (cards, timeline texts, photos and clips) at a frame, '' without overlay */
     const overlayKey = (progress: number, timeS: number) =>
       deps.overlay()
@@ -257,7 +300,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
         previousTimed = timed
         previousOverlay = overlayNow
         // pictures and video frames decoded before the render: composing must follow it in the same task
-        await loadFrameMedia(frameTimeS)
+        await loadFrameMedia(frameTimeS, progress)
         const complete = await renderSettledFrame(progress, frameDeps)
         // same task as the last render: the drawing buffer still holds the frame
         const t0 = performance.now()
@@ -291,6 +334,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       sizeBytes,
       codec: `${container}/${codec}`,
       incompleteFrames: timings.timeouts,
+      note: audio ? (session.audioCodec ? `avec la musique (${session.audioCodec === 'aac' ? 'AAC' : 'Opus'})` : 'sans la musique : ce navigateur ne sait pas encoder le son') : undefined,
     })
   } catch (error) {
     await session?.cancel().catch(() => undefined)
@@ -314,6 +358,12 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     canvas.style.pointerEvents = saved.pointerEvents
     state.setFrameloop(saved.frameloop)
     useAppStore.getState().setProgress(saved.progress, saved.timeS)
+    if (marker && markerLayers !== undefined) marker.layers.mask = markerLayers
+    if (savedView) {
+      state.camera.position.copy(savedView.position)
+      state.camera.quaternion.copy(savedView.quaternion)
+      if (savedView.target) controlsTarget()?.copy(savedView.target)
+    }
   }
 }
 

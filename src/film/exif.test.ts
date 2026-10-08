@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseExif, photoTimeMs } from './exif'
+import { mp4CreationTimeMs, parseExif, photoTimeMs, quickTimeDateMs } from './exif'
 
 type Tag = { tag: number; ascii?: string; long?: number; rationals?: [number, number][] }
 
@@ -116,5 +116,90 @@ describe('parseExif', () => {
     expect(parseExif(jpeg({}))).toEqual({})
     // cut inside the GPS values
     expect(parseExif(jpeg({ gps: GPS }).slice(0, 2 + 18 + 10 + 330))).toEqual({})
+  })
+})
+
+/** An MP4 box: 32-bit size, type, content. */
+function box(type: string, ...content: Uint8Array[]): Uint8Array {
+  const size = 8 + content.reduce((n, c) => n + c.length, 0)
+  const out = new Uint8Array(size)
+  new DataView(out.buffer).setUint32(0, size)
+  for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i)
+  let at = 8
+  for (const c of content) {
+    out.set(c, at)
+    at += c.length
+  }
+  return out
+}
+
+/** Movie header content: version, flags, creation time (32 or 64 bits), then filler. */
+function mvhd(seconds: number, version = 0): Uint8Array {
+  const out = new Uint8Array(version === 1 ? 108 : 96)
+  const v = new DataView(out.buffer)
+  out[0] = version
+  if (version === 1) {
+    v.setUint32(4, Math.floor(seconds / 2 ** 32))
+    v.setUint32(8, seconds % 2 ** 32)
+  } else {
+    v.setUint32(4, seconds)
+  }
+  return out
+}
+
+const reader = (file: Uint8Array) => {
+  const reads: number[] = []
+  const read = async (offset: number, length: number) => {
+    reads.push(length)
+    return file.slice(offset, offset + length)
+  }
+  return { read, reads }
+}
+
+const MP4_EPOCH_S = 2_082_844_800
+const RECORDED = Date.UTC(2024, 5, 12, 8, 15, 30)
+
+describe('mp4CreationTimeMs', () => {
+  it('reads the creation time of the movie header, moov at the start or after the media data', async () => {
+    const seconds = RECORDED / 1000 + MP4_EPOCH_S
+    const moov = box('moov', box('mvhd', mvhd(seconds)), box('trak', new Uint8Array(40)))
+    const atStart = new Uint8Array([...box('ftyp', new Uint8Array(12)), ...moov, ...box('mdat', new Uint8Array(5000))])
+    expect(await mp4CreationTimeMs(reader(atStart).read, atStart.length)).toBe(RECORDED)
+    const atEnd = new Uint8Array([...box('ftyp', new Uint8Array(12)), ...box('mdat', new Uint8Array(5000)), ...moov])
+    const { read, reads } = reader(atEnd)
+    expect(await mp4CreationTimeMs(read, atEnd.length)).toBe(RECORDED)
+    // box headers only: the media data is skipped
+    expect(Math.max(...reads)).toBeLessThanOrEqual(16)
+    const v1 = box('moov', box('mvhd', mvhd(seconds, 1)))
+    expect(await mp4CreationTimeMs(reader(v1).read, v1.length)).toBe(RECORDED)
+  })
+
+  it('reads seconds since 1970 written by mistake, ignores unset clocks and other files', async () => {
+    const unix = box('moov', box('mvhd', mvhd(RECORDED / 1000)))
+    expect(await mp4CreationTimeMs(reader(unix).read, unix.length)).toBe(RECORDED)
+    for (const seconds of [0, 86_400, MP4_EPOCH_S]) {
+      const file = box('moov', box('mvhd', mvhd(seconds)))
+      expect(await mp4CreationTimeMs(reader(file).read, file.length)).toBeUndefined()
+    }
+    const noMoov = box('ftyp', new Uint8Array(12))
+    expect(await mp4CreationTimeMs(reader(noMoov).read, noMoov.length)).toBeUndefined()
+    const webm = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0, 0, 0, 0, 0])
+    expect(await mp4CreationTimeMs(reader(webm).read, webm.length)).toBeUndefined()
+    expect(await mp4CreationTimeMs(() => Promise.reject(new Error('lecture')), 100)).toBeUndefined()
+  })
+})
+
+describe('quickTimeDateMs', () => {
+  it('reads the local date and its offset written by Apple devices', () => {
+    expect(quickTimeDateMs('2024-06-12T10:15:30+0200')).toBe(RECORDED)
+    expect(quickTimeDateMs('2024-06-12T10:15:30+02:00')).toBe(RECORDED)
+    expect(quickTimeDateMs('2024-06-12T08:15:30Z')).toBe(RECORDED)
+    expect(quickTimeDateMs('2024-06-12T03:15:30.250-0500')).toBe(RECORDED)
+  })
+
+  it('ignores a date without time or time zone', () => {
+    expect(quickTimeDateMs('2024')).toBeUndefined()
+    expect(quickTimeDateMs('2024-06-12T10:15:30')).toBeUndefined()
+    expect(quickTimeDateMs('')).toBeUndefined()
   })
 })

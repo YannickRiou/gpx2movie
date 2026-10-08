@@ -70,7 +70,13 @@ Feuille de route et fonctionnalités : `README.md`.
   `src/scene/CloudsLayer.tsx`, `cloudNoise.ts`, bloc « Nuages » de l'onglet Carte ; détail dans `ARCHITECTURE.md`,
   « Nuages volumétriques »). Vu à l'écran (aperçu, 1280 × 800) : manuel 50 % et 90 %, image fixe exportée avec nuages.
   Non vu : mode Météo sur une sortie nuageuse (l'exemple est par ciel dégagé), vidéo exportée sur GPU réel (coût, rendu
-  identique d'un export à l'autre), dérive au vent pendant la lecture. Ensuite : eau réfléchissante (masque OSM).
+  identique d'un export à l'autre), dérive au vent pendant la lecture.
+- Même branche : **eau réfléchissante** (`src/osm/water.ts`, `src/scene/waterMesh.ts`, `src/scene/WaterLayer.tsx`, case
+  « Lacs et rivières reflétants » de « Fond de carte » ; `ARCHITECTURE.md`, « Eau réfléchissante »). Vu à l'écran : lac de Passy
+  de près et en rasant (eau sombre teintée de ciel, fondu sur la rive), Arve. Non vu : reflet du soleil en contre-jour, vagues en
+  lecture, export. À faire : crédit OpenStreetMap quand seule l'eau est chargée (barre d'état, export).
+- Même branche : tuiles en **réessai** (3 fois, hors cache, aussi sur 400) : la Géoplateforme IGN renvoyait par rafales des 400
+  « Layer … unknown » (les parallélogrammes gris).
 
 Avant ce lot, vu à l’écran le 2026-10-08 (1440 × 900) : inspecteur ancré, menu du clic droit sur la trace, barre
 de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'habillage.
@@ -110,7 +116,57 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
   marqueur), inspecteur (pastilles, réglage fin, de / à en km), « Accélérer / ralentir ici » au clic droit sur la trace.
   Vérifié : tests (rythme, horloge, modèle, gestes). Jamais vu à l'écran. Détail : `ARCHITECTURE.md`, « Film et timeline ».
 
+- Même branche, phase 7, affiche (non commitée) : module `src/poster/` (réglages `settings.poster`, contenu, mise en page
+  en boîtes pures, dessin, export), mode « Vidéo / Affiche » du tiroir d'export (`ExportPanel` enveloppe les deux, tous deux
+  montés), vignette 2D en direct, image fixe d'ensemble dans `ExportController` (`still.overview`, `still.compose`), le
+  préréglage ne garde que le style. Vérifié : tests (mise en page de chaque format × style, ajustement du texte, contenu,
+  dessin sur faux contexte, préréglages), typecheck, lint, build. Jamais vu à l'écran. Détail : `ARCHITECTURE.md`,
+  « Affiche ».
+
+- Même branche, phase 7, musique (non commitée) : `film.audio[]` `{ id, src, startS, durationS, inS, volume, fadeInS,
+  fadeOutS }` (hors préréglages), fichiers son de 30 Mo au plus gardés tels quels dans la table des médias avec leur forme
+  d'onde, piste « Musique » sous « Médias » (glisser, bords, Suppr, un pas par geste), « Options » › « Ajouter une
+  musique… » et dépôt de MP3 / M4A / AAC / OGG / Opus / WAV / FLAC, inspecteur (volume, fondus, début, durée, début dans
+  le fichier, « Caler la durée du film sur la musique »), aperçu par `HTMLAudioElement` et bouton haut-parleur, export
+  mixé par `OfflineAudioContext` puis encodé en AAC (repli Opus, sinon film muet avec une note). Vérifié : tests (modèle,
+  gestes, volume et fondus, plan du mixage, aperçu sur faux éléments, encodeur avec faux mediabunny, projet). Jamais vu ni
+  entendu. Détail : `ARCHITECTURE.md`, « Film et timeline », « Musique », et « Export vidéo ».
+
+- Même branche, phase 7, vidéo embarquée synchronisée (non commitée) : heure de début du tournage lue à l'ajout (date Apple
+  avec fuseau, sinon `mvhd` des MP4 / MOV, sinon date du fichier moins la longueur, « approximative »), `film.media[].sync`
+  `{ startMs, offsetS, follow }`, « Caler sur le parcours » dans le toast de l'ajout et dans l'inspecteur (bloc « Calage sur
+  le parcours » : heure, décalage de l'horloge en secondes, heures entières trouvées seules pour une caméra à l'heure
+  locale, case « Suivre la vitesse du survol » : image de l'endroit du marqueur, figée pendant un arrêt), même temps dans
+  le fichier pour le dessin et l'export, aperçu par `playbackRate` (recalage au-delà de 0,2 s). Aussi : préréglage non
+  enregistré quand le stockage est plein (toast d'erreur, préréglage gardé pour la session). Vérifié : tests (lecture
+  de l'heure sur des boîtes MP4 fabriquées, placement, temps dans le fichier, vitesse de l'aperçu sur faux élément,
+  dessin, préréglages). Jamais vu ni essayé avec de vrais fichiers. Détail : `ARCHITECTURE.md`, « Vidéo calée sur le
+  parcours ».
+
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
+
+- Vidéo calée sur le parcours, avec de vrais fichiers et une trace horodatée de la même sortie : iPhone (date Apple),
+  Android, GoPro (heure locale écrite comme UTC : décalage d'heures trouvé seul ?), DJI, WebM (date du fichier) ; vérifier
+  sur chacun si l'heure lue est le **début** du tournage (certains appareils écrivent peut-être la fin dans `mvhd`) ;
+  toast « Caler sur le parcours » (seul ou avec des photos), inspecteur (heure, mention approximative, Recaler, décalage
+  au clavier, case « Suivre »), lecture à ×1 / ×2 / ×4 avec « Suivre » (image qui suit le marqueur sans saccade, figée
+  pendant un arrêt, plus rapide dans une portion ×2), export avec une vidéo qui suit (mêmes images que l'aperçu), Ctrl+Z,
+  projet enregistré puis rouvert (calage gardé). Préréglage avec un stockage plein (remplir `localStorage` à la main) :
+  toast d'erreur, préréglage utilisable jusqu'au rechargement.
+
+- Musique (à écouter sur une vraie machine, avec des haut-parleurs) : ajout par « Options » et par dépôt (MP3, M4A, OGG,
+  WAV, FLAC ; refus au-delà de 30 Mo et d'un format non lu, message), forme d'onde du bloc, lecture synchronisée à ×1 / ×2
+  / ×0,5, pause et reprise au milieu, déplacement de la tête de lecture pendant la lecture, fondus audibles, haut-parleur,
+  « Caler la durée du film » (toast puis inspecteur, Ctrl+Z), glisser / couper les bords (le bord droit s'arrête à la fin du
+  fichier), deux musiques qui se chevauchent, enregistrer / rouvrir un projet avec musique ; export MP4 (AAC sous Windows
+  / macOS, Opus sous Linux) et WebM (Opus) en mémoire et sur le disque : son calé sur l'image du début à la fin, fondus,
+  lu par VLC, le lecteur du système et un logiciel de montage (Opus en MP4 n'est pas lu partout) ; navigateur sans
+  encodeur son : vidéo muette et note ; Safari : `play()` hors geste peut être refusé ; bureau Windows (WebView2).
+
+- Affiche : vignette dans les 5 formats × 3 styles (titre long, sans heure, sans altitude), « Créer l'affiche » sur
+  l'exemple en A4 portrait puis A3 paysage (cadrage de toute la trace, nord en haut, marqueur absent, étiquettes et trace à
+  l'échelle, crédits lisibles à l'impression), vue remise comme avant après l'export, vignette qui reprend la vue rendue,
+  annulation pendant le rendu, préréglage appliqué (style seul), « Par défaut », Ctrl+Z sur le titre.
 
 - Vitesse par portion : bouton « Vitesse » (bloc ×2 sous « Plans », inspecteur ouvert), barre de la timeline encore sur
   une ligne à 1440 / 1280 px avec ce bouton de plus, glisser / étirer un bloc (il suit le pointeur, s'arrête contre ses
@@ -170,13 +226,15 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
 
 1. Fusion de la PR #2 par l'utilisateur ; ensuite repartir de `master` avec une branche par fonctionnalité.
 2. Contrôles visuels ci-dessus (surtout 1280 / 1000 px, glisser dans la timeline, photos, export réel).
-3. Timeline : son des vidéos (`muted` réservé), photo attachée à un arrêt, défilement
+3. Timeline : son des vidéos (`muted` réservé), musique calée sur les temps forts (ralentis et arrêts sur les temps d'une
+   musique), photo attachée à un arrêt, défilement
    automatique pendant un glisser au bord, textes ancrés à un arrêt, mémoriser l'état ouvert / fermé des sections.
 4. Phase 6 (bureau, Tauri) : premier lancement réel (`npm run tauri:dev`) sous Windows, puis macOS / Linux récent ;
    encodeur natif pour Linux (plan dans `ARCHITECTURE.md`, « Export vidéo sans WebCodecs »)  ; accès disque pour les photos et vidéos derrière `readMedia` (un chemin de fichier plutôt que les octets
    pour les grosses vidéos) ; sans WebCodecs, les vidéos sont refusées à l'ajout. Hébergement en sous-dossier : `/fonts/`, `/samples/`,
    `/favicon.svg` sont absolus → `import.meta.env.BASE_URL` (seulement si nécessaire).
-5. Phase 3 restante : eau réfléchissante, géoïde. Phase 7 : vidéo embarquée, comparatif photos IGN anciennes, rendu en lot, affiche, calage musical.
+5. Phase 3 restante : géoïde. Phase 7 : vidéo embarquée (reste : export de l'habillage seul sur fond transparent, heure GPS des GoPro dans
+   le flux GPMF, relire l'heure des vidéos ajoutées avant le calage), comparatif photos IGN anciennes, rendu en lot, calage musical ; affiche : plusieurs traces, carte à plat.
 
 ## Limites et points ouverts
 
@@ -185,7 +243,7 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
   futurs packs hors ligne. Catalogue d'étoiles de Yale : licence non indiquée.
 - Photos HEIC refusées (le navigateur ne les décode pas) ; EXIF lu seulement dans les JPEG.
 - Vidéos : muettes, 50 Mo au plus (le projet les contient : ~1,33 × leur taille dans le fichier JSON), non placées
-  par GPS / heure ; un ancien projet modifié à la main avec une vidéo absente de sa table la garde dans le film sans
+  par GPS (calées seulement sur l'heure, la trace doit être horodatée) ; un ancien projet modifié à la main avec une vidéo absente de sa table la garde dans le film sans
   l'afficher (`parseProject` ne retire que les photos sans image).
 - Firefox / Safari non testés pour l'export (WebCodecs). HTTPS obligatoire hors `localhost`.
 - Aucun test de rendu de composants (pas de Testing Library) ; tout le visuel se vérifie à la main, par captures.

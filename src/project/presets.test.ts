@@ -25,7 +25,7 @@ describe('createPresetStore', () => {
   it('saves, lists (sorted), replaces and deletes presets, persisted in storage', () => {
     const storage = memoryStorage()
     const store = createPresetStore(storage)
-    store.save('  Vue   aérienne ', { ...DEFAULT_SETTINGS, exaggeration: 2 })
+    expect(store.save('  Vue   aérienne ', { ...DEFAULT_SETTINGS, exaggeration: 2 })).toBe(true)
     store.save('Atmosphère', DEFAULT_SETTINGS)
     store.save('Vue aérienne', { ...DEFAULT_SETTINGS, exaggeration: 3 })
     expect(store.list().map((p) => p.name)).toEqual(['Atmosphère', 'Vue aérienne'])
@@ -38,11 +38,12 @@ describe('createPresetStore', () => {
     expect(() => store.save('   ', DEFAULT_SETTINGS)).toThrow('Donnez un nom au préréglage.')
   })
 
-  it('works from memory without storage or when storage throws', () => {
-    for (const storage of [null, throwing]) {
+  it('works from memory without storage or when storage throws or refuses, and says it was not stored', () => {
+    const refusing = { getItem: () => null, setItem: () => false }
+    for (const storage of [null, throwing, refusing]) {
       const store = createPresetStore(storage)
       expect(store.list()).toEqual([])
-      store.save('A', DEFAULT_SETTINGS)
+      expect(store.save('A', DEFAULT_SETTINGS)).toBe(false)
       expect(store.list().map((p) => p.name)).toEqual(['A'])
       store.remove('A')
       expect(store.list()).toEqual([])
@@ -77,7 +78,8 @@ describe('presetSettings', () => {
   it('keeps the shots of the film only: the stops, texts and media of the current project stay', () => {
     const stop = { id: 'stop-1', atM: 500, durationS: 3, camera: 'fixe' as const }
     const text = { id: 'text-1', startS: 1, durationS: 2, text: 'Départ', anchor: 'center' as const, size: 1 }
-    const saved = { ...DEFAULT_SETTINGS.film, opening: { style: 'saut' as const, durationS: 3 }, autoStops: false, stops: [stop] }
+    const music = { id: 'music-1', src: 'audio-1', startS: 0, durationS: 30, inS: 0, volume: 1, fadeInS: 0, fadeOutS: 0 }
+    const saved = { ...DEFAULT_SETTINGS.film, opening: { style: 'saut' as const, durationS: 3 }, autoStops: false, stops: [stop], audio: [music] }
     const store = createPresetStore(memoryStorage())
     store.save('Plans', { ...DEFAULT_SETTINGS, film: saved })
     expect(store.list()[0].settings.film).toEqual({ opening: saved.opening, closing: saved.closing })
@@ -86,5 +88,15 @@ describe('presetSettings', () => {
     expect(presetSettings(store.list()[0], base).film).toEqual({ ...base.film, opening: saved.opening })
     // a preset saved with the whole film (before the timeline): same result
     expect(presetSettings({ name: 'old', settings: { film: saved } as never }, base).film).toEqual({ ...base.film, opening: saved.opening })
+  })
+
+  it('keeps the style of the poster only: its format, title and figures stay those of the current project', () => {
+    const store = createPresetStore(memoryStorage())
+    store.save('Affiche', { ...DEFAULT_SETTINGS, poster: { ...DEFAULT_SETTINGS.poster, style: 'broadcast', title: 'Autre sortie', format: 'square' } })
+    expect(store.list()[0].settings.poster).toEqual({ style: 'broadcast' })
+
+    const base = { ...DEFAULT_SETTINGS, poster: { ...DEFAULT_SETTINGS.poster, title: 'Ce projet' } }
+    expect(presetSettings(store.list()[0], base).poster).toEqual({ ...base.poster, style: 'broadcast' })
+    expect(presetSettings({ name: 'bad', settings: { poster: { style: 'neon' } } as never }, base).poster).toBe(base.poster)
   })
 })

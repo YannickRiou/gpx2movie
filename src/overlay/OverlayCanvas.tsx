@@ -3,6 +3,7 @@ import type { Track } from '../core/types'
 import { isExportBusy, useExportStore } from '../export/store'
 import { getMediaBitmaps, mediaToLoad } from '../film/media'
 import type { FilmMedia } from '../film/model'
+import { clipRateAt } from '../film/timeline'
 import { getPreviewVideos } from '../film/video'
 import { useLandmarkStore } from '../osm/store'
 import { useFilmClock } from '../scene/usePacing'
@@ -104,7 +105,7 @@ function OverlayPreview() {
       for (const id of mediaToLoad(settings.film.media, time.timeS, PHOTO_AHEAD_S)) bitmaps.get(id)
       const video = isExportBusy(useExportStore.getState().phase)
         ? undefined
-        : (item: FilmMedia, clipS: number) => videos.frame(item, clipS, playback)
+        : (item: FilmMedia, clipS: number) => videos.frame(item, clipS, playback, data ? clipRateAt(item, data.path, clockRef.current, time.timeS) : 1)
       drawOverlay(ctx, frame, overlay, { width, height }, { ...assets, ...photoAssets(), video }, overlayExtras(time))
       // clips not drawn by this frame are paused
       videos.settle()

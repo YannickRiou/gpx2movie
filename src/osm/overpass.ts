@@ -313,12 +313,13 @@ function retryAfterMs(response: Response): number {
  * after the Retry-After delay (else `BUSY_RETRY_DELAY_MS`), then the next endpoint is tried; a network error
  * moves to the next endpoint at once. Other HTTP errors are final.
  */
-export async function runOverpassQuery(
+export async function runOverpassQuery<T = OsmFeature[]>(
   query: string,
   signal?: AbortSignal,
   deps: OverpassDeps = defaultDeps(),
   endpoints: readonly string[] = OVERPASS_ENDPOINTS,
-): Promise<OsmFeature[]> {
+  parse: (json: unknown) => T = parseOverpass as unknown as (json: unknown) => T,
+): Promise<T> {
   let lastError: unknown = new OverpassError('aucun serveur Overpass', 0)
   for (const endpoint of endpoints) {
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -331,7 +332,7 @@ export async function runOverpassQuery(
         lastError = e
         break
       }
-      if (response.ok) return parseOverpass(await response.json())
+      if (response.ok) return parse(await response.json())
       lastError = new OverpassError(`HTTP ${response.status}`, response.status)
       if (response.status !== 429 && response.status !== 504) throw lastError
       if (attempt === 0) await deps.sleep(retryAfterMs(response), signal)
@@ -342,13 +343,13 @@ export async function runOverpassQuery(
 
 /** One request at a time for the whole application (usage policy: no parallel queries). */
 let queue: Promise<unknown> = Promise.resolve()
-const memoryCache = new Map<string, Promise<OsmFeature[]>>()
+const memoryCache = new Map<string, Promise<unknown[]>>()
 
-function readCache(storage: OverpassDeps['storage'], key: string, now: number): OsmFeature[] | null {
+function readCache<T>(storage: OverpassDeps['storage'], key: string, now: number): T[] | null {
   try {
     const raw = storage?.get(CACHE_PREFIX + key)
     if (!raw) return null
-    const entry = JSON.parse(raw) as { t: number; features: OsmFeature[] }
+    const entry = JSON.parse(raw) as { t: number; features: T[] }
     if (!Array.isArray(entry.features) || !(now - entry.t < CACHE_TTL_MS)) return null
     return entry.features
   } catch {
@@ -356,7 +357,7 @@ function readCache(storage: OverpassDeps['storage'], key: string, now: number): 
   }
 }
 
-function writeCache(storage: OverpassDeps['storage'], key: string, features: OsmFeature[], now: number): void {
+function writeCache(storage: OverpassDeps['storage'], key: string, features: readonly unknown[], now: number): void {
   if (!storage) return
   const value = JSON.stringify({ t: now, features })
   if (storage.set(CACHE_PREFIX + key, value)) return
@@ -371,11 +372,24 @@ function writeCache(storage: OverpassDeps['storage'], key: string, features: Osm
  * persistent cache or one queued Overpass query. A failed or aborted query is not cached.
  */
 export function fetchTrackFeatures(track: Track, signal?: AbortSignal, deps: OverpassDeps = defaultDeps()): Promise<OsmFeature[]> {
-  const query = trackQuery(track)
+  return cachedOverpassQuery(trackQuery(track), parseOverpass, signal, deps)
+}
+
+/**
+ * Result of `query` parsed by `parse` (a JSON-serialisable list), from the memory cache, the persistent cache or
+ * one queued Overpass query (shared by the landmarks and the water, `water.ts`). A failed or aborted query is not
+ * cached.
+ */
+export function cachedOverpassQuery<T>(
+  query: string,
+  parse: (json: unknown) => T[],
+  signal?: AbortSignal,
+  deps: OverpassDeps = defaultDeps(),
+): Promise<T[]> {
   const key = hashQuery(query)
-  const cached = memoryCache.get(key)
+  const cached = memoryCache.get(key) as Promise<T[]> | undefined
   if (cached) return cached
-  const stored = readCache(deps.storage, key, deps.now())
+  const stored = readCache<T>(deps.storage, key, deps.now())
   if (stored) {
     const promise = Promise.resolve(stored)
     memoryCache.set(key, promise)
@@ -383,7 +397,7 @@ export function fetchTrackFeatures(track: Track, signal?: AbortSignal, deps: Ove
   }
   const promise = queue
     .catch(() => undefined)
-    .then(() => runOverpassQuery(query, signal, deps))
+    .then(() => runOverpassQuery(query, signal, deps, OVERPASS_ENDPOINTS, parse))
     .then((features) => {
       writeCache(deps.storage, key, features, deps.now())
       return features

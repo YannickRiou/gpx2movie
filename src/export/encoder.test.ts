@@ -11,6 +11,10 @@ const fake = vi.hoisted(() => ({
   streams: [] as { options: unknown }[],
   sources: [] as { config: { codec: string; quality: { options: { bitrate: number } } }; added: [number, number][]; closed: boolean }[],
   buffer: new ArrayBuffer(8) as ArrayBuffer | null,
+  /** audio sources and what they received: [timestamp, frames, first value of each channel] */
+  sounds: [] as { config: { codec: string }; added: [number, number, number[]][]; closed: boolean }[],
+  /** order of the calls reaching the tracks: 'v' (a frame), 'a' (a sound sample) */
+  calls: [] as string[],
 }))
 
 vi.mock('mediabunny', () => {
@@ -54,6 +58,35 @@ vi.mock('mediabunny', () => {
     }
     async add(timestamp: number, duration: number) {
       this.added.push([timestamp, duration])
+      fake.calls.push('v')
+    }
+    close() {
+      this.closed = true
+    }
+  }
+  class AudioSample {
+    init: { data: Float32Array; numberOfChannels: number; sampleRate: number; timestamp: number }
+    closed = false
+    constructor(init: AudioSample['init']) {
+      this.init = init
+    }
+    close() {
+      this.closed = true
+    }
+  }
+  class AudioSampleSource {
+    config: unknown
+    added: [number, number, number[]][] = []
+    closed = false
+    constructor(config: unknown) {
+      this.config = config
+      fake.sounds.push(this as never)
+    }
+    async add(sample: AudioSample) {
+      const { data, numberOfChannels, timestamp } = sample.init
+      const frames = data.length / numberOfChannels
+      this.added.push([timestamp, frames, Array.from({ length: numberOfChannels }, (_, c) => data[c * frames])])
+      fake.calls.push('a')
     }
     close() {
       this.closed = true
@@ -69,6 +102,10 @@ vi.mock('mediabunny', () => {
       fake.outputs.push(this as never)
     }
     addVideoTrack() {}
+    audioTracks = 0
+    addAudioTrack() {
+      this.audioTracks++
+    }
     async start() {
       this.state = 'started'
       if (this.target instanceof StreamTarget) this.target.writer = this.target.writable.getWriter()
@@ -87,10 +124,23 @@ vi.mock('mediabunny', () => {
       if (this.target instanceof StreamTarget) await this.target.writer?.close()
     }
   }
-  return { Quality, BufferTarget, StreamTarget, Mp4OutputFormat, WebMOutputFormat, CanvasSource, Output, canEncodeVideo: vi.fn() }
+  return {
+    Quality,
+    BufferTarget,
+    StreamTarget,
+    Mp4OutputFormat,
+    WebMOutputFormat,
+    CanvasSource,
+    AudioSample,
+    AudioSampleSource,
+    Output,
+    canEncodeVideo: vi.fn(),
+    canEncodeAudio: vi.fn(async () => false),
+  }
 })
 
 import {
+  AUDIO_LEAD_S,
   CODEC_CANDIDATES,
   ExportCanceledError,
   MAX_BITRATE,
@@ -98,9 +148,11 @@ import {
   STREAM_CHUNK_BYTES,
   candidatesFor,
   createVideoEncoder,
+  pickAudioCodec,
   pickCodec,
   videoBitrate,
   type CanEncode,
+  type CanEncodeAudio,
 } from './encoder'
 
 const OPTIONS = { width: 1920, height: 1080, fps: 30, quality: 'high' as const }
@@ -116,6 +168,8 @@ beforeEach(() => {
   fake.streams.length = 0
   fake.sources.length = 0
   fake.buffer = new ArrayBuffer(8)
+  fake.sounds.length = 0
+  fake.calls.length = 0
 })
 
 describe('videoBitrate', () => {
@@ -284,5 +338,60 @@ describe('createVideoEncoder on disk', () => {
     expect(candidatesFor('Tour.MP4').map((c) => c.container)).toEqual(['mp4', 'mp4'])
     expect(candidatesFor('Tour')).toBe(CODEC_CANDIDATES)
     expect(candidatesFor(undefined)).toBe(CODEC_CANDIDATES)
+  })
+})
+
+/** Soundtrack of `seconds` at a tiny rate: channel c holds c + sample index / 1000. */
+function soundtrack(seconds: number, sampleRate = 10, channels = 2) {
+  return {
+    sampleRate,
+    channels: Array.from({ length: channels }, (_, c) => Float32Array.from({ length: seconds * sampleRate }, (_, i) => c + i / 1000)),
+  }
+}
+
+describe('soundtrack', () => {
+  it('prefers AAC in MP4, else Opus; only Opus in WebM', async () => {
+    const audio = soundtrack(1)
+    expect(await pickAudioCodec('mp4', audio, supporting('aac', 'opus') as unknown as CanEncodeAudio)).toBe('aac')
+    expect(await pickAudioCodec('mp4', audio, supporting('opus') as unknown as CanEncodeAudio)).toBe('opus')
+    expect(await pickAudioCodec('webm', audio, supporting('aac') as unknown as CanEncodeAudio)).toBeNull()
+    const canEncode = supporting('opus') as unknown as CanEncodeAudio & ReturnType<typeof vi.fn>
+    await pickAudioCodec('webm', audio, canEncode)
+    expect(canEncode.mock.calls[0][1]).toMatchObject({ numberOfChannels: 2, sampleRate: 10 })
+  })
+
+  it('hands the sound over along the frames, about a second ahead, then the rest at the end', async () => {
+    // 3 s of sound for a 2 fps film of 6 frames
+    const session = await createVideoEncoder(canvas, { ...OPTIONS, fps: 2, audio: soundtrack(3) }, supporting('avc'), supporting('aac') as never)
+    expect(session.audioCodec).toBe('aac')
+    expect(fake.outputs[0]).toMatchObject({ audioTracks: 1 })
+    expect(fake.sounds[0].config).toMatchObject({ codec: 'aac' })
+    await session.addFrame(0)
+    // frame 0 lasts until 0.5 s: sound up to 0.5 + AUDIO_LEAD_S before it
+    expect(fake.sounds[0].added.reduce((n, [, frames]) => n + frames, 0)).toBe((0.5 + AUDIO_LEAD_S) * 10)
+    expect(fake.calls).toEqual(['a', 'a', 'v'])
+    for (let i = 1; i < 6; i++) await session.addFrame(i)
+    await session.finish()
+    const added = fake.sounds[0].added
+    // contiguous samples of at most a second, planar channels kept apart
+    expect(added.map(([t]) => t)).toEqual([0, 1, 1.5, 2, 2.5])
+    expect(added.map(([, n]) => n)).toEqual([10, 5, 5, 5, 5])
+    expect(added[1][2]).toEqual([Math.fround(0.01), Math.fround(1.01)])
+    expect(fake.sounds[0].closed).toBe(true)
+  })
+
+  it('encodes a silent film when no audio codec is available', async () => {
+    const session = await createVideoEncoder(canvas, { ...OPTIONS, audio: soundtrack(1) }, supporting('avc'), supporting() as never)
+    expect(session.audioCodec).toBeNull()
+    expect(fake.outputs[0]).toMatchObject({ audioTracks: 0 })
+    await session.addFrame(0)
+    await session.finish()
+    expect(fake.sounds).toHaveLength(0)
+  })
+
+  it('has no audio track without music', async () => {
+    const session = await createVideoEncoder(canvas, OPTIONS, supporting('avc'), supporting('aac') as never)
+    expect(session.audioCodec).toBeNull()
+    expect(fake.outputs[0]).toMatchObject({ audioTracks: 0 })
   })
 })

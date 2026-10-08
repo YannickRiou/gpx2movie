@@ -241,6 +241,16 @@ function lerpKnown(values: Float64Array, a: number, b: number, t: number): numbe
 }
 
 /** Overlay values at `progress` (clamped to [0, 1]) of the flyover, which runs at constant ground speed. */
+/**
+ * Recorded instant under the marker at `progress` (ms since epoch), at the distance `overlayFrameAt` gives it;
+ * undefined for an untimed track. What a video clip following the flight shows (`clipTimeS`), the same for the
+ * drawing and for the frames decoded by the export.
+ */
+export function recordedAtProgress(path: TrackPath, progress: number): number | undefined {
+  if (path.count === 0) return undefined
+  return recordedTimeAt(path, Math.min(1, Math.max(0, Number.isFinite(progress) ? progress : 0)) * path.lengthM)
+}
+
 export function overlayFrameAt(data: OverlayTrack, progress: number): OverlayFrame {
   const p = Math.min(1, Math.max(0, Number.isFinite(progress) ? progress : 0))
   const { path } = data

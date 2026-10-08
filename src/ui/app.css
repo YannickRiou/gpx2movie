@@ -672,6 +672,44 @@
   pointer-events: none;
 }
 
+/* music: moss block, waveform in glacier behind the icon and the file name */
+.film-tl__block--music {
+  gap: 4px;
+  background: rgb(63 107 74 / 0.6);
+  color: var(--color-white);
+}
+
+.film-tl__block--music .film-tl__icon {
+  position: relative;
+}
+
+.film-tl__wave {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.film-tl__wave path {
+  fill: var(--color-glacier);
+  opacity: 0.55;
+}
+
+/* empty music lane: where to drop a file */
+.film-tl__empty {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  color: var(--color-glacier);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .film-tl__label {
   position: relative;
   min-width: 0;

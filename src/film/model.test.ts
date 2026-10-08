@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { isValidSetting, parseProject, sanitizeSettings } from '../project/document'
 import { DEFAULT_SETTINGS } from '../state/store'
-import { DEFAULT_FILM, MEDIA_DEFAULTS, clipTimeS, isValidFilm, nextFilmId, shotDurationS } from './model'
-import type { Film, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
+import { AUDIO_DEFAULTS, DEFAULT_FILM, MEDIA_DEFAULTS, clipTimeS, isValidFilm, nextFilmId, shotDurationS } from './model'
+import type { Film, FilmAudio, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
 
 const stop = (id: string, patch: Partial<FilmStop> = {}): FilmStop => ({ id, atM: 1000, durationS: 3, camera: 'orbite', ...patch })
 const text = (id: string, patch: Partial<FilmText> = {}): FilmText => ({
@@ -25,6 +25,8 @@ const media = (id: string, patch: Partial<FilmMedia> = {}): FilmMedia => ({
 })
 const speed = (id: string, fromM: number, toM: number, factor = 2): FilmSpeed => ({ id, fromM, toM, factor })
 const film = (patch: Partial<Film>): Film => ({ ...DEFAULT_FILM, ...patch })
+
+const music = (id: string, patch: Partial<FilmAudio> = {}): FilmAudio => ({ id, src: 'audio-1', startS: 0, durationS: 30, inS: 0, ...AUDIO_DEFAULTS, ...patch })
 
 describe('film model', () => {
   it('defaults: overview opening and closing, generated stops, empty lanes, valid project setting', () => {
@@ -74,6 +76,26 @@ describe('film model', () => {
     const { speeds: _, ...saved } = film({ texts: [text('text-1')] })
     expect(sanitizeSettings({ film: saved }).settings.film).toEqual(film({ texts: [text('text-1')] }))
     expect(nextFilmId(good, 'speed')).toBe('speed-3')
+  })
+
+  it('music clips: volume 0–1, fades 0–30 s, start in the file, unique ids; none in a film saved before', () => {
+    expect(DEFAULT_FILM.audio).toEqual([])
+    const good = film({ audio: [music('music-1'), music('music-2', { startS: 20, inS: 12.5, volume: 0, fadeInS: 0, fadeOutS: 30 })] })
+    expect(isValidFilm(good)).toBe(true)
+    expect(isValidSetting('film', good)).toBe(true)
+    const bad: Film[] = [
+      film({ audio: [music('music-1', { volume: 1.2 })] }),
+      film({ audio: [music('music-1', { fadeInS: -1 })] }),
+      film({ audio: [music('music-1', { fadeOutS: 31 })] }),
+      film({ audio: [music('music-1', { durationS: 0.2 })] }),
+      film({ audio: [music('music-1', { inS: -1 })] }),
+      film({ audio: [music('music-1', { src: '' })] }),
+      film({ audio: [music('a')], texts: [text('a')] }),
+    ]
+    for (const f of bad) expect(isValidFilm(f)).toBe(false)
+    const { audio: _, ...saved } = film({ texts: [text('text-1')] })
+    expect(sanitizeSettings({ film: saved }).settings.film).toEqual(film({ texts: [text('text-1')] }))
+    expect(nextFilmId(good, 'music')).toBe('music-3')
   })
 
   it('rejects bad shots, items and duplicate ids', () => {
@@ -140,6 +162,32 @@ describe('film model', () => {
     expect(clipTimeS(clip, 8)).toBe(2)
     expect(clipTimeS({ ...clip, outS: 4 }, 13.5)).toBe(4)
     expect(clipTimeS(media('media-2', { startS: 10 }), 11)).toBe(1)
+  })
+
+  it('time in the file of a synced clip following the flight: what it recorded at the instant under the marker', () => {
+    const T = Date.UTC(2024, 5, 12, 8, 0, 0)
+    const sync = { startMs: T, offsetS: 0, follow: true }
+    const clip = media('media-1', { kind: 'video', startS: 10, sync })
+    // whatever the film time: the recorded instant decides
+    expect(clipTimeS(clip, 10, T + 7_000)).toBe(7)
+    expect(clipTimeS(clip, 99, T + 7_000)).toBe(7)
+    // held at its start before the recording, at its end in the file after
+    expect(clipTimeS(clip, 10, T - 5_000)).toBe(0)
+    expect(clipTimeS({ ...clip, inS: 3 }, 10, T + 1_000)).toBe(3)
+    expect(clipTimeS({ ...clip, outS: 4 }, 10, T + 7_000)).toBe(4)
+    // camera clock correction: recorded 2 s later than its file says
+    expect(clipTimeS({ ...clip, sync: { ...sync, offsetS: 2 } }, 10, T + 7_000)).toBe(5)
+    // not following, or no recorded time (untimed track): played at ×1 from its start
+    expect(clipTimeS({ ...clip, sync: { ...sync, follow: false } }, 13, T + 7_000)).toBe(3)
+    expect(clipTimeS(clip, 13)).toBe(3)
+  })
+
+  it('checks the sync of a clip', () => {
+    const clip = (sync: unknown) => film({ media: [media('media-1', { kind: 'video', sync: sync as FilmMedia['sync'] })] })
+    expect(isValidFilm(clip({ startMs: 1_718_179_200_000, offsetS: -3600, follow: true }))).toBe(true)
+    for (const bad of [null, {}, { startMs: Number.NaN, offsetS: 0, follow: false }, { startMs: 0, offsetS: 1e6, follow: false }, { startMs: 0, offsetS: 0 }]) {
+      expect(isValidFilm(clip(bad))).toBe(false)
+    }
   })
 
   it('next id: one more than the highest number of the kind', () => {

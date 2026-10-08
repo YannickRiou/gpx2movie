@@ -34,7 +34,14 @@ export interface ExportRequest {
   /** file name without extension */
   baseName: string
   /** a still image of this progress instead of the film (the timing fields are then unused) */
-  still?: { progress: number; type: StillType }
+  still?: {
+    progress: number
+    type: StillType
+    /** the whole track from the south (overview shot framing) instead of the view at `progress`, no marker */
+    overview?: boolean
+    /** draws the rendered image into the final picture (the poster), in place of the film overlay */
+    compose?: (view: OffscreenCanvas) => Promise<OffscreenCanvas>
+  }
   /** film written to this file while encoding (removed if the export does not finish) */
   destination?: WritableFile
 }
@@ -49,6 +56,8 @@ export interface ExportResult {
   codec: string
   /** frames captured before their terrain had finished loading (per-frame timeout) */
   incompleteFrames: number
+  /** about the soundtrack, shown with the result ('avec la musique (AAC)', 'sans la musique : …') */
+  note?: string
 }
 
 /** Where the export time goes, accumulated over the frames rendered so far (milliseconds). */
