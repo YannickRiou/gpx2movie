@@ -5,26 +5,46 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
 /**
- * Takram's precomputed atmosphere textures (EXR, ~9.5 MB) and star catalogue live in the package: serve them at /atmosphere/
- * in dev and copy them into the build, so nothing is downloaded from a third party nor committed here.
+ * Takram's precomputed atmosphere textures (EXR, ~9.5 MB), star catalogue and cloud textures (weather, shapes,
+ * turbulence, ~2.8 MB) live in the packages: serve them at /atmosphere/ and /clouds/ in dev and copy them into the
+ * build, so nothing is downloaded from a third party nor committed here.
  */
-const ATMOSPHERE_ASSETS = new URL('./node_modules/@takram/three-atmosphere/assets/', import.meta.url)
+const PACKAGE_ASSETS = [
+  {
+    prefix: 'atmosphere',
+    dir: new URL('./node_modules/@takram/three-atmosphere/assets/', import.meta.url),
+    keep: (name: string) => name.endsWith('.exr') || name === 'stars.bin',
+  },
+  {
+    prefix: 'clouds',
+    dir: new URL('./node_modules/@takram/three-clouds/assets/', import.meta.url),
+    keep: (name: string) => name.endsWith('.png') || name.endsWith('.bin'),
+  },
+]
+
+const ASSET_TYPES: Record<string, string> = { exr: 'image/x-exr', png: 'image/png' }
 
 function atmosphereAssets(): Plugin {
-  const names = () => readdirSync(ATMOSPHERE_ASSETS).filter((name) => name.endsWith('.exr') || name === 'stars.bin')
-  const read = (name: string) => readFileSync(fileURLToPath(new URL(name, ATMOSPHERE_ASSETS)))
+  const names = (dir: URL, keep: (name: string) => boolean) => readdirSync(dir).filter(keep)
+  const read = (dir: URL, name: string) => readFileSync(fileURLToPath(new URL(name, dir)))
   return {
     name: 'openflyover-atmosphere-assets',
     configureServer(server) {
-      server.middlewares.use('/atmosphere', (req, res, next) => {
-        const name = (req.url ?? '').split('?')[0].replace(/^\//, '')
-        if (!names().includes(name)) return next()
-        res.setHeader('Content-Type', name.endsWith('.exr') ? 'image/x-exr' : 'application/octet-stream')
-        res.end(read(name))
-      })
+      for (const { prefix, dir, keep } of PACKAGE_ASSETS) {
+        server.middlewares.use(`/${prefix}`, (req, res, next) => {
+          const name = (req.url ?? '').split('?')[0].replace(/^\//, '')
+          if (!names(dir, keep).includes(name)) return next()
+          res.setHeader('Content-Type', ASSET_TYPES[name.split('.').pop() ?? ''] ?? 'application/octet-stream')
+          res.end(read(dir, name))
+        })
+      }
     },
     generateBundle() {
-      for (const name of names()) this.emitFile({ type: 'asset', fileName: `atmosphere/${name}`, source: read(name) })
+      for (const { prefix, dir, keep } of PACKAGE_ASSETS) {
+        for (const name of names(dir, keep)) {
+          this.emitFile({ type: 'asset', fileName: `${prefix}/${name}`, source: read(dir, name) })
+        }
+      }
     },
   }
 }
@@ -55,7 +75,8 @@ const proxy = Object.fromEntries(
 
 export default defineConfig({
   plugins: [react(), atmosphereAssets()],
-  server: { port: 5173, proxy },
+  // src-tauri/target (Rust build of the desktop app) is not watched
+  server: { port: 5173, proxy, watch: { ignored: ['**/src-tauri/**'] } },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],

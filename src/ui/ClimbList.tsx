@@ -23,7 +23,7 @@ export function ClimbList() {
       </h2>
       {climbs.length === 0 ? (
         <p className="tracks__empty">
-          {hasElevation ? 'Aucune montée détectée sur la première trace.' : "La première trace n'a pas d'altitude enregistrée."}
+          {hasElevation ? 'Aucune montée sur la première trace.' : "La première trace n'a pas d'altitude : pas de montées."}
         </p>
       ) : (
         <ul className="climbs">
@@ -32,14 +32,14 @@ export function ClimbList() {
               <button
                 type="button"
                 className="climb"
-                title="Aller au pied de la montée"
+                title="Aller au pied de cette montée"
                 onClick={() => setProgress(lengthM > 0 ? climb.startDistM / lengthM : 0)}
               >
                 <span className={climb.category === 'HC' ? 'climb__badge climb__badge--hc' : 'climb__badge'}>
                   {climb.category === null ? '–' : climb.category === 'HC' ? 'HC' : `cat. ${climb.category}`}
                 </span>
                 <span className="climb__name">
-                  Montée {i + 1} · {formatNumber(climb.topEleM)} m
+                  Montée {i + 1} · sommet {formatNumber(climb.topEleM)} m
                 </span>
                 <span className="climb__meta">
                   {formatDistance(climb.lengthM)} · D+ {formatAscent(climb.gainM)} · {formatNumber(climb.avgGradient * 100, 1)} %
@@ -49,14 +49,15 @@ export function ClimbList() {
           ))}
         </ul>
       )}
-      <div className="climbs__labels">
+      <fieldset className="field fieldset climbs__labels">
+        <legend className="field__label">Étiquettes dans la vue</legend>
         <label className="checkbox">
           <input
             type="checkbox"
             checked={labels.climbs}
             onChange={(e) => setSetting('labels', { ...labels, climbs: e.currentTarget.checked })}
           />
-          Étiquettes des sommets de montée
+          Sommets des montées
         </label>
         <label className="checkbox">
           <input
@@ -64,9 +65,9 @@ export function ClimbList() {
             checked={labels.waypoints}
             onChange={(e) => setSetting('labels', { ...labels, waypoints: e.currentTarget.checked })}
           />
-          Étiquettes des points du fichier GPX
+          Points nommés du fichier GPX
         </label>
-      </div>
+      </fieldset>
     </section>
   )
 }

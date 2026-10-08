@@ -31,7 +31,7 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 - **Ne plus mesurer la vitesse de l'export sur cette machine** (décision de l'utilisateur, GPU logiciel) : il la mesure
   sur une machine avec GPU. La console affiche en fin d'export `[export] N images … rendu … attente … encodage …`.
 - Sous-agents : interdiction totale de git (deux ont fait `git stash` / `pop` malgré la consigne, sans perte constatée).
-- Aucune mention d'outil d'IA nulle part (code, doc, commits : pas de trailer). Charte « Carte alpine » (`src/ui/theme.css`),
+- Messages de commit neutres, sans trailer ni signature ; rien dans le code ou la doc sur les outils de développement. Charte « Carte alpine » (`src/ui/theme.css`),
   pas la charte Vortex. Licence du code : MIT (`LICENSE`).
 
 ## Décisions prises par l'utilisateur (ne pas redemander)
@@ -66,14 +66,48 @@ Feuille de route et fonctionnalités : `README.md`.
 
 ## Travail en cours
 
-Rien de non commité. Vu à l'écran le 2026-10-08 (1440 × 900) : inspecteur ancré, menu du clic droit sur la trace, barre
+- Branche `lot-videos-bureau-clarte` : **nuages volumétriques** (`@takram/three-clouds` 0.7.6, `src/weather/sceneClouds.ts`,
+  `src/scene/CloudsLayer.tsx`, `cloudNoise.ts`, bloc « Nuages » de l'onglet Carte ; détail dans `ARCHITECTURE.md`,
+  « Nuages volumétriques »). Vu à l'écran (aperçu, 1280 × 800) : manuel 50 % et 90 %, image fixe exportée avec nuages.
+  Non vu : mode Météo sur une sortie nuageuse (l'exemple est par ciel dégagé), vidéo exportée sur GPU réel (coût, rendu
+  identique d'un export à l'autre), dérive au vent pendant la lecture. Ensuite : eau réfléchissante (masque OSM).
+
+Avant ce lot, vu à l’écran le 2026-10-08 (1440 × 900) : inspecteur ancré, menu du clic droit sur la trace, barre
 de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'habillage.
+
+- Branche `lot-videos-bureau-clarte`, passe « clarté » de l'interface (non commitée, présentation et libellés seulement) :
+  interrupteurs pour les fonctions entières, pastilles pour les types de repères et les compteurs, Habillage en six
+  sections, météo en deux lignes + « Détails », ligne « Ajoutez une trace… » sans trace, bande d'état calme, infobulles et
+  libellés raccourcis. Détail : `ARCHITECTURE.md`, « Interface », « Clarté des panneaux ».
+- Même branche, vidéos dans la piste Médias (non commitées) : bouton « Média » (photos et vidéos, dépôt sur la timeline),
+  MP4 / WebM / MOV de 50 Mo au plus gardés tels quels dans la table des médias du projet, vignette de la première image et
+  icône de caméra sur le bloc, inspecteur (début dans la vidéo, mention « muette »), aperçu par `HTMLVideoElement`, export
+  image par image décodé par mediabunny (`src/film/video.ts`). Détail : `ARCHITECTURE.md`, « Film et timeline », « Vidéos ».
+- Même branche, phase 6, premier incrément (non commité) : couche `src/platform/` (site / bureau, testée), « Ouvrir »,
+  « Enregistrer », dépôt et résultat d'export passés par elle, projet Tauri 2 `src-tauri/` (fenêtre, droits dialog + fs
+  limités aux fichiers choisis, CSP des sources, icônes), scripts `tauri:dev` / `tauri:build`, message « pas d'encodeur »
+  dans le panneau d'export. Vérifié : tests, `vite build`, `cargo check --target x86_64-pc-windows-msvc` (avec
+  `RC_x86_64_pc_windows_msvc` pointant sur un faux `windres` qui écrit un fichier vide ; `rustup target add
+  x86_64-pc-windows-msvc`). Impossible ici sous Linux : Ubuntu 20.04 n'a pas `libwebkit2gtk-4.1` ni GLib ≥ 2.70.
+  Jamais lancé dans une vraie fenêtre. Détail : `ARCHITECTURE.md`, « Application de bureau ».
 
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
 
+- Passe clarté : interrupteurs (état, focus, désactivé), pastilles (coche, pointillés « absent de cette trace »), sections
+  de l'Habillage (en-têtes collants, filet des options sous chaque interrupteur), météo sur deux lignes à 280 px, onglets
+  sans trace, onglet Projet sans préréglage, bande d'état avant / pendant / après le chargement, résumé de l'export.
+
+- Couche plateforme, sur le site : « Ouvrir » et Ctrl+O (champ créé à la volée : traces, projet, plusieurs fichiers,
+  Annuler), « Enregistrer » (téléchargement, toast), dépôt sur la fenêtre, téléchargement automatique d'un export, sous
+  Chrome et Firefox. Sur le bureau : les mêmes avec les fenêtres natives (Annuler n'enregistre rien et ne marque pas le
+  projet enregistré), tuiles / météo / Overpass sous la CSP, message « pas d'encodeur » sous Linux.
 - Timeline : glisser un arrêt (aimantation, Alt), étirer un texte des deux bords, bord de l'ouverture, Ctrl+Z par geste,
   Ctrl+molette, un film long (défilement).
 - Photos : ajout, miniatures, plein écran avec zoom lent, carte dans les 3 styles, placement GPS, export avec photo.
+- Vidéos : ajout d'un MP4, d'un WebM et d'un MOV (bouton « Média » et dépôt), refus d'un fichier de plus de 50 Mo et d'un
+  format non lu (message), vignette et icône du bloc, lecture synchronisée (×0,5 à ×4), déplacement sur la règle en
+  pause (l'image suit, sans clignoter), bord gauche (début dans la vidéo), plein écran et carte, vidéo pendant un arrêt,
+  export (images exactes, vidéo qui avance pendant un arrêt), enregistrer / rouvrir un projet avec vidéo, Ctrl+Z.
 - Habillage : textes à plusieurs positions, cartons d'ouverture / clôture calés sur les plans, crédits dans les 4 coins,
   en 9:16 et 720p.
 - Interface : 1280 et 1000 px de large (panneau en tiroir), tiroir d'export pendant un vrai export (« 42 % · Annuler »,
@@ -103,12 +137,14 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
 
 1. Fusion de la PR #2 par l'utilisateur ; ensuite repartir de `master` avec une branche par fonctionnalité.
 2. Contrôles visuels ci-dessus (surtout 1280 / 1000 px, glisser dans la timeline, photos, export réel).
-3. Timeline : vidéos dans la piste Médias (modèle déjà prêt, `kind: 'video'`), photo attachée à un arrêt, défilement
+3. Timeline : son des vidéos (`muted` réservé), photo attachée à un arrêt, défilement
    automatique pendant un glisser au bord, textes ancrés à un arrêt, mémoriser l'état ouvert / fermé des sections.
-4. Phase 6 (bureau, Tauri) : WebCodecs absent sous Linux (WebKitGTK) → encodeur natif ; `dragDropEnabled` intercepte les
-   dépôts HTML5 ; accès disque pour les photos derrière `readPhoto`. Hébergement en sous-dossier : `/fonts/`, `/samples/`,
+4. Phase 6 (bureau, Tauri) : premier lancement réel (`npm run tauri:dev`) sous Windows, puis macOS / Linux récent ;
+   encodeur natif pour Linux (plan dans `ARCHITECTURE.md`, « Export vidéo sans WebCodecs ») ; brancher sur
+   `getPlatform()` les champs de fichier restants (accueil, liste des traces, logo, médias) et le stockage ; accès disque pour les photos et vidéos derrière `readMedia` (un chemin de fichier plutôt que les octets
+   pour les grosses vidéos) ; sans WebCodecs, les vidéos sont refusées à l'ajout. Hébergement en sous-dossier : `/fonts/`, `/samples/`,
    `/favicon.svg` sont absolus → `import.meta.env.BASE_URL` (seulement si nécessaire).
-5. Phase 3 restante : eau réfléchissante, géoïde, nuages volumétriques. Phase 5 : écriture directe sur disque pour les films
+5. Phase 3 restante : eau réfléchissante, géoïde. Phase 5 : écriture directe sur disque pour les films
    longs. Phase 7 : vidéo embarquée, comparatif photos IGN anciennes, rendu en lot, affiche, calage musical.
 
 ## Limites et points ouverts
@@ -117,5 +153,8 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
   perso OK. Conditions Esri (sans clé) à relire. Open-Meteo et EOX non commerciaux ; OpenTopoMap CC BY-SA, à exclure des
   futurs packs hors ligne. Catalogue d'étoiles de Yale : licence non indiquée.
 - Photos HEIC refusées (le navigateur ne les décode pas) ; EXIF lu seulement dans les JPEG.
+- Vidéos : muettes, 50 Mo au plus (le projet les contient : ~1,33 × leur taille dans le fichier JSON), non placées
+  par GPS / heure ; un ancien projet modifié à la main avec une vidéo absente de sa table la garde dans le film sans
+  l'afficher (`parseProject` ne retire que les photos sans image).
 - Firefox / Safari non testés pour l'export (WebCodecs). HTTPS obligatoire hors `localhost`.
 - Aucun test de rendu de composants (pas de Testing Library) ; tout le visuel se vérifie à la main, par captures.

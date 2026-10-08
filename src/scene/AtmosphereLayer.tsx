@@ -12,6 +12,8 @@
  * The weather of the outing under the marker at that date (weather/sceneWeather.ts, `settings.weatherScene`)
  * then dims the sun and sky lights, fades the shadows, adds exposure, and drives the weather post-effect
  * (extra haze near the ground, veiled sky, desaturation: scene/weatherEffect.ts).
+ * Volumetric clouds (`settings.clouds`, scene/CloudsLayer.tsx) are composited by the aerial perspective; while they
+ * are shown, the veil over the sky pixels is lighter (the clouds themselves cover it).
  * The precomputed scattering textures ship with the package and are served locally at /atmosphere/ (see
  * vite.config.ts): generating them at start-up runs in idle callbacks, which never fire while a heavy scene
  * keeps the main thread busy, and the lights would stay black.
@@ -29,6 +31,8 @@ import { useAppStore } from '../state/store'
 import { CLEAR_SCENE_WEATHER, hazeExtinction, sceneWeatherAt } from '../weather/sceneWeather'
 import type { SceneWeather } from '../weather/sceneWeather'
 import { useWeatherStore } from '../weather/store'
+import { createCloudNoiseTexture } from './cloudNoise'
+import { CloudsLayer } from './CloudsLayer'
 import { DEFAULT_GROUND_HEIGHT_M } from './CameraRig'
 import { nightFillIntensity, sceneExposure, sunElevation } from './exposure'
 import { useTerrainContext } from './TerrainLayer'
@@ -43,6 +47,8 @@ const NIGHT_SKY_COLOR = '#A9CCD9'
 const NIGHT_GROUND_COLOR = '#1C2A33'
 /** Reflectance of the haze droplets lit by the sun and the sky (a white diffuser would be 1). */
 const HAZE_ALBEDO = 0.8
+/** Part of the weather veil kept over the sky pixels while volumetric clouds are shown. */
+const CLOUDS_SKY_VEIL = 0.3
 const WORLD_UP = new Vector3(0, 1, 0)
 const _marker = new Vector3()
 const _irradiance = new Vector3()
@@ -67,6 +73,13 @@ export function AtmosphereLayer() {
   useEffect(() => () => weatherEffect.dispose(), [weatherEffect])
   /** weather applied to the current frame, kept for the haze colour (after the lights are updated) */
   const weatherRef = useRef<SceneWeather>(CLEAR_SCENE_WEATHER)
+  /** sun date of the current frame, read by the clouds */
+  const dateRef = useRef<Date | null>(null)
+  const cloudMode = useAppStore((s) => s.settings.clouds.mode)
+  const weatherLoaded = useWeatherStore((s) => s.series !== null && s.trackId !== null && s.trackId === track?.id)
+  const cloudsOn = cloudMode === 'manuel' || (cloudMode === 'meteo' && weatherLoaded)
+  const noise = useMemo(() => createCloudNoiseTexture(), [])
+  useEffect(() => () => noise.dispose(), [noise])
   /** local vertical in ECEF, for the sun elevation */
   const up = useMemo(() => (frame ? new Vector3().setFromMatrixColumn(frame.localToEcef, 1).normalize() : null), [frame])
 
@@ -92,6 +105,7 @@ export function AtmosphereLayer() {
       dayMs: track?.stats.startTime ?? today,
     })
     atmosphere.updateByDate(date)
+    dateRef.current = date
     const elevation = sunElevation(atmosphere.sunDirection, up)
 
     // weather under the marker at the sun date; the haze starts from the ground there
@@ -117,7 +131,7 @@ export function AtmosphereLayer() {
       hazeExtinction: hazeExtinction(weather.hazeScale),
       hazeBaseY,
       hazeHeight: weather.hazeHeightM * settings.exaggeration,
-      skyVeil: weather.skyVeil,
+      skyVeil: weather.skyVeil * (cloudsOn ? CLOUDS_SKY_VEIL : 1),
       desaturation: weather.desaturation,
     })
   }, -1)
@@ -193,7 +207,8 @@ export function AtmosphereLayer() {
         <SunLight ref={setSun} />
       </group>
       <EffectComposer multisampling={0}>
-        <AerialPerspective ref={aerialRef} />
+        {cloudsOn && <CloudsLayer date={dateRef} path={path} noise={noise} />}
+        <AerialPerspective ref={aerialRef} stbnTexture={noise} />
         <primitive object={weatherEffect} mainCamera={camera} />
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />
         <SMAA />

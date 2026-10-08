@@ -200,7 +200,7 @@ export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: num
   }
 
   const lane = film.texts.some((t) => t.id === item) ? 'texts' : 'media'
-  const timed: Timed | undefined = film[lane].find((t) => t.id === item)
+  const timed: FilmText | FilmMedia | undefined = film[lane].find((t) => t.id === item)
   if (!timed) return film
   const start = timed.startS
   const end = timed.startS + timed.durationS
@@ -210,8 +210,12 @@ export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: num
     const shift = snappedStart !== start + deltaS ? snappedStart - start : snap(end + deltaS) - end
     next = { startS: roundS(Math.max(0, start + shift)), durationS: timed.durationS }
   } else if (grip === 'start') {
-    const s = clamp(snap(start + deltaS), Math.max(0, end - ITEM_DURATION_RANGE.max), end - ITEM_DURATION_RANGE.min)
+    // a video keeps its frames in place: its start in the file follows the edge (not before the start of the file)
+    const inS = 'kind' in timed && timed.kind === 'video' ? (timed.inS ?? 0) : undefined
+    const min = Math.max(0, end - ITEM_DURATION_RANGE.max, inS === undefined ? 0 : start - inS)
+    const s = clamp(snap(start + deltaS), min, end - ITEM_DURATION_RANGE.min)
     next = { startS: roundS(s), durationS: itemDuration(end - s) }
+    if (inS !== undefined) next.inS = roundS(Math.max(0, inS + s - start))
   } else {
     next = { startS: start, durationS: itemDuration(snap(end + deltaS) - start) }
   }
@@ -220,8 +224,8 @@ export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: num
     : { ...film, media: film.media.map((m) => (m.id === item ? { ...m, ...next } : m)) }
 }
 
-/** What a gesture changes on a text or a medium. */
-type Timed = Pick<FilmText, 'startS' | 'durationS'>
+/** What a gesture changes on a text or a medium (and the start in the file of a video). */
+type Timed = Pick<FilmMedia, 'startS' | 'durationS' | 'inS'>
 
 // ---------------------------------------------------------------------------
 // Edits
@@ -247,21 +251,28 @@ export function addText(film: Film, startS: number): { film: Film; id: string } 
 
 /** Length of a photo added on the timeline (seconds). */
 export const NEW_MEDIA_S = 5
+/** Longest a video is when added (seconds; its natural length below that, stretched or trimmed afterwards). */
+export const NEW_VIDEO_MAX_S = 30
 
 /**
- * Photos added one after the other from film time `startS` (`NEW_MEDIA_S` each, `MEDIA_DEFAULTS` placement), one
- * per picture id of the media table; with their new ids.
+ * Media added one after the other from film time `startS`, one per entry of the media table (`src`): a photo
+ * `NEW_MEDIA_S` long, a video (`videoS`: its length in the file) its natural length up to `NEW_VIDEO_MAX_S`, without
+ * Ken Burns; `MEDIA_DEFAULTS` placement otherwise. With their new ids.
  */
-export function addPhotos(film: Film, startS: number, srcs: readonly string[]): { film: Film; ids: string[] } {
+export function addMedia(film: Film, startS: number, sources: readonly { src: string; videoS?: number }[]): { film: Film; ids: string[] } {
   let next = film
   const ids: string[] = []
-  srcs.forEach((src, k) => {
+  let at = Math.max(0, startS)
+  for (const { src, videoS } of sources) {
     const id = nextFilmId(next, 'media')
-    const startAt = roundS(Math.max(0, startS) + k * NEW_MEDIA_S)
-    const media: FilmMedia = { id, startS: startAt, durationS: NEW_MEDIA_S, kind: 'image', src, ...MEDIA_DEFAULTS }
+    const video = videoS !== undefined
+    const durationS = video ? itemDuration(Math.min(videoS, NEW_VIDEO_MAX_S)) : NEW_MEDIA_S
+    const media: FilmMedia = { id, startS: roundS(at), durationS, kind: video ? 'video' : 'image', src, ...MEDIA_DEFAULTS }
+    if (video) media.kenBurns = false
     next = { ...next, media: [...next.media, media] }
     ids.push(id)
-  })
+    at += durationS
+  }
   return { film: next, ids }
 }
 
@@ -328,14 +339,15 @@ export function updateText(film: Film, id: string, patch: Partial<Omit<FilmText,
   }
 }
 
-/** Medium `id` with `patch`, start and duration clamped to their ranges. */
+/** Medium `id` with `patch`, start, duration and start in the file (video) clamped to their ranges. */
 export function updateMedia(film: Film, id: string, patch: Partial<Omit<FilmMedia, 'id'>>): Film {
   return {
     ...film,
     media: film.media.map((m) => {
       if (m.id !== id) return m
       const next = { ...m, ...patch }
-      return { ...next, startS: roundS(Math.max(0, next.startS)), durationS: itemDuration(next.durationS) }
+      const inS = next.inS === undefined ? {} : { inS: roundS(Math.max(0, next.inS)) }
+      return { ...next, startS: roundS(Math.max(0, next.startS)), durationS: itemDuration(next.durationS), ...inS }
     }),
   }
 }

@@ -11,7 +11,7 @@ function plural(count: number, singular: string, pluralForm: string): string {
 }
 
 /**
- * Status strip under the timeline: tile counters, import spinner and the mandatory source attributions on one line;
+ * Status strip under the timeline: tile count (« Chargement de la carte » / « Carte chargée »), import spinner and the mandatory source attributions on one line;
  * the ⓘ button opens the full « Sources et licences » text.
  * Only the import status is a live region: the tile counters change several times a second
  * and must not be announced by screen readers.
@@ -29,11 +29,15 @@ export function StatusBar() {
 
   return (
     <footer className="status">
-      <p className="status__tiles">
-        Tuiles : {stats.loadedTiles} {plural(stats.loadedTiles, 'chargée', 'chargées')} · {stats.pendingTiles} en
-        attente
-        {stats.failedTiles > 0 && ` · ${stats.failedTiles} en erreur`}
-      </p>
+      {/* calm: nothing before the first tile, a short count after */}
+      {(stats.loadedTiles > 0 || stats.pendingTiles > 0 || stats.failedTiles > 0) && (
+        <p className="status__tiles" title="Tuiles de relief et d'imagerie">
+          {stats.pendingTiles > 0
+            ? `Chargement de la carte · ${stats.pendingTiles} ${plural(stats.pendingTiles, 'tuile', 'tuiles')}`
+            : `Carte chargée · ${stats.loadedTiles} ${plural(stats.loadedTiles, 'tuile', 'tuiles')}`}
+          {stats.failedTiles > 0 && <span className="status__failed"> · {stats.failedTiles} en erreur</span>}
+        </p>
+      )}
       {/* always mounted so that assistive tech sees the text change */}
       <p className="status__line" role="status" aria-live="polite" hidden={!loading}>
         <span className="status__spinner" aria-hidden="true" />

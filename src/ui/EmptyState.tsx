@@ -25,7 +25,7 @@ export function EmptyState() {
       <h2 id="empty-title" className="empty__title">
         Glissez vos traces GPX ou FIT ici
       </h2>
-      <p className="empty__hint">ou n'importe où dans la fenêtre. Plusieurs fichiers à la fois, c'est possible.</p>
+      <p className="empty__hint">Ou n'importe où dans la fenêtre, un ou plusieurs à la fois.</p>
       <div className="empty__actions">
         <button type="button" className="btn btn--primary" onClick={() => pick(TRACK_ACCEPT)} disabled={loading}>
           {loading ? 'Import en cours…' : 'Choisir un fichier'}

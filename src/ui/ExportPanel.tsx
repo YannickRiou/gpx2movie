@@ -12,10 +12,12 @@ import {
   type VideoSettings,
 } from '../export/schedule'
 import { isExportBusy, stillBaseName, useExportStore, type StillType } from '../export/store'
+import { getPlatform, videoEncoderMissingHint } from '../platform'
 import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { ModifiedMarker } from './ModifiedMarker'
 import { formatNumber } from './format'
+import { saveExportedFile } from './projectActions'
 import { AspectIcon, Icon } from './icons'
 import { withShortcut } from './shortcuts'
 import { showToast } from './toast'
@@ -54,6 +56,7 @@ function formatMegabytes(bytes: number): string {
 
 /** Start a download of an object URL. */
 function download(url: string, fileName: string): void {
+  if (getPlatform().capabilities.isDesktop) return void saveExportedFile(url, fileName)
   const link = document.createElement('a')
   link.href = url
   link.download = fileName
@@ -71,7 +74,7 @@ interface CodecProbe {
 /**
  * "Exporter" drawer: aspect (tiles), resolution, codec and estimated size, start / cancel, progress and download;
  * also a still image of the current progress at the same size; frame rate, quality and image type under
- * « Plus d'options ».
+ * « Plus de réglages ».
  */
 export function ExportPanel({ onClose }: { onClose?: () => void }) {
   const video = useAppStore((s) => s.settings.video)
@@ -226,19 +229,18 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
           ))}
         </select>
         <p id={`${id}-size`} className="field__hint">
-          {formatNumber(width)} × {formatNumber(height)} pixels
+          {formatNumber(width)} × {formatNumber(height)} px
         </p>
       </div>
 
-      <p className="field__hint">
-        {formatClock(totalFrames / video.fps)} · {formatNumber(totalFrames)} images, rendues une à une après le
-        chargement complet du relief.
-        {codec && ` ${CODEC_LABELS[`${codec.container}/${codec.codec}`]}, environ ${formatMegabytes(estimatedBytes)}.`}
+      <p className="export__summary" title="Chaque image est rendue une fois le relief visible chargé.">
+        {formatClock(totalFrames / video.fps)} · {formatNumber(totalFrames)} images
+        {codec && ` · ${CODEC_LABELS[`${codec.container}/${codec.codec}`]} · ≈ ${formatMegabytes(estimatedBytes)}`}
       </p>
       {codec === null && (
         <p className="field__hint" role="alert">
           Ce navigateur ne sait pas encoder une vidéo de {formatNumber(width)} × {formatNumber(height)} pixels :
-          choisissez une résolution plus petite.
+          {videoEncoderMissingHint() ?? 'choisissez une résolution plus petite.'}
         </p>
       )}
 
@@ -253,7 +255,7 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
             className="btn btn--secondary"
             onClick={startStill}
             disabled={!trackName}
-            title="Image de la position actuelle de la lecture"
+            title="Image à la position de lecture, à la taille de la vidéo"
           >
             <Icon name="image" size={18} />
             Image fixe
@@ -302,7 +304,7 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
 
       <details className="export__more">
         <summary className="export__more-summary">
-          Plus d'options
+          Plus de réglages
           <Icon name="chevron-down" size={16} />
         </summary>
         <div className="export__more-body">

@@ -64,7 +64,7 @@ function RacePanel({ tracks }: { tracks: readonly Track[] }) {
       <h3 id={`${id}-title`} className="field__label">
         Course fantôme
       </h3>
-      <label className="checkbox" htmlFor={`${id}-enabled`}>
+      <label className="checkbox checkbox--switch" htmlFor={`${id}-enabled`}>
         <input
           id={`${id}-enabled`}
           type="checkbox"
@@ -74,7 +74,7 @@ function RacePanel({ tracks }: { tracks: readonly Track[] }) {
         Rejouer toutes les traces avec la première
       </label>
 
-      <div className="field">
+      <div className="field" hidden={!settings.enabled}>
         <label className="field__label" htmlFor={`${id}-sync`}>
           Synchronisation
         </label>
@@ -94,17 +94,14 @@ function RacePanel({ tracks }: { tracks: readonly Track[] }) {
         <p id={`${id}-sync-hint`} className="field__hint">
           {race.timed
             ? SYNC_HINTS[race.sync]
-            : 'Une trace n’est pas horodatée : seule la synchronisation à même distance est possible.'}
+            : 'Une trace n’est pas horodatée : seule « même distance » est possible.'}
         </p>
       </div>
 
       {settings.enabled && (
         <>
           <RaceBoard race={race} tracks={tracks} />
-          <p className="field__hint">
-            Écart avec la première trace, au même pourcentage de chaque trace : fiable quand elles suivent le même
-            parcours.
-          </p>
+          <p className="field__hint">Écart avec la première trace, au même pourcentage du parcours.</p>
         </>
       )}
     </div>
@@ -122,7 +119,7 @@ function AddTracksButton() {
         className="btn btn--secondary btn--small"
         onClick={() => input.current?.click()}
         disabled={loading}
-        data-tip="Ajouter des traces GPX ou FIT"
+        data-tip="Ajouter des traces GPX ou FIT (plusieurs à la fois)"
         data-tip-align="end"
       >
         <Icon name="plus" size={16} />
@@ -159,7 +156,7 @@ export function TrackList() {
         <AddTracksButton />
       </div>
       {tracks.length === 0 ? (
-        <p className="tracks__empty">Aucune trace pour l'instant. Glissez un fichier GPX ou FIT dans la fenêtre, ou ajoutez-le ici.</p>
+        <p className="tracks__empty">Aucune trace. Glissez un fichier GPX ou FIT dans la fenêtre, ou cliquez sur « Ajouter ».</p>
       ) : (
         <ul className="tracks">
           {tracks.map((track) => (
@@ -172,11 +169,11 @@ export function TrackList() {
                 type="button"
                 className="track__delete"
                 aria-label={`Supprimer la trace ${track.name}`}
-                data-tip="Supprimer la trace"
+                data-tip="Supprimer"
                 data-tip-side="left"
                 onClick={() => removeTrack(track.id)}
               >
-                ×
+                <Icon name="x" size={16} />
               </button>
               <span className="track__meta">{formatTrackSummary(track.stats)}</span>
             </li>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isValidSetting, parseProject, sanitizeSettings } from '../project/document'
 import { DEFAULT_SETTINGS } from '../state/store'
-import { DEFAULT_FILM, MEDIA_DEFAULTS, isValidFilm, nextFilmId, shotDurationS } from './model'
+import { DEFAULT_FILM, MEDIA_DEFAULTS, clipTimeS, isValidFilm, nextFilmId, shotDurationS } from './model'
 import type { Film, FilmMedia, FilmStop, FilmText } from './model'
 
 const stop = (id: string, patch: Partial<FilmStop> = {}): FilmStop => ({ id, atM: 1000, durationS: 3, camera: 'orbite', ...patch })
@@ -44,7 +44,11 @@ describe('film model', () => {
       autoStops: false,
       stops: [stop('stop-1', { label: 'Sommet', source: { kind: 'landmark', ref: 'node/1' } }), stop('auto-4520', { camera: 'fixe' })],
       texts: [text('text-1', { subtitle: '1 653 m' })],
-      media: [media('media-1'), media('media-2', { layout: 'carte', anchor: 'top-right', size: 1.5, kenBurns: false, caption: 'Lac Blanc' })],
+      media: [
+        media('media-1'),
+        media('media-2', { layout: 'carte', anchor: 'top-right', size: 1.5, kenBurns: false, caption: 'Lac Blanc' }),
+        media('media-3', { kind: 'video', src: 'video-1', inS: 2.5, outS: 9, muted: true }),
+      ],
     })
     expect(isValidFilm(full)).toBe(true)
     expect(isValidSetting('film', full)).toBe(true)
@@ -67,6 +71,9 @@ describe('film model', () => {
       film({ media: [media('media-1', { layout: 'mosaique' as 'carte' })] }),
       film({ media: [media('media-1', { size: 3 })] }),
       film({ media: [media('media-1', { anchor: 'nowhere' as 'center' })] }),
+      film({ media: [media('media-1', { kind: 'video', inS: -1 })] }),
+      film({ media: [media('media-1', { kind: 'video', inS: 4, outS: 4 })] }),
+      film({ media: [media('media-1', { kind: 'video', muted: 'oui' as unknown as boolean })] }),
       film({ stops: [stop('a')], texts: [text('a')] }),
     ]
     for (const f of bad) expect(isValidFilm(f)).toBe(false)
@@ -102,6 +109,15 @@ describe('film model', () => {
     // a v1 project saved before the film existed: default shots, stops of its pacing
     const { film: _, ...before } = doc.settings
     expect(parseProject(JSON.stringify({ ...doc, settings: before })).settings.film).toEqual(film({ autoMode: 'rythme' }))
+  })
+
+  it('time in the file of a video: from its start in the file, held at its end', () => {
+    const clip = media('media-1', { kind: 'video', startS: 10, inS: 2 })
+    expect(clipTimeS(clip, 10)).toBe(2)
+    expect(clipTimeS(clip, 13.5)).toBe(5.5)
+    expect(clipTimeS(clip, 8)).toBe(2)
+    expect(clipTimeS({ ...clip, outS: 4 }, 13.5)).toBe(4)
+    expect(clipTimeS(media('media-2', { startS: 10 }), 11)).toBe(1)
   })
 
   it('next id: one more than the highest number of the kind', () => {

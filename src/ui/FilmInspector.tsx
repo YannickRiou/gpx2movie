@@ -68,7 +68,7 @@ function AnchorPicker({ label, value, onChange }: { label: string; value: Overla
 
 /**
  * Settings of the block selected on the timeline (`filmSelection`), in the right dock: opening / closing shot, stop,
- * text or photo. Typing is merged into one undo step; editing a generated stop writes the stops out first.
+ * text, photo or video. Typing is merged into one undo step; editing a generated stop writes the stops out first.
  */
 export function FilmInspector() {
   const id = useId()
@@ -238,13 +238,15 @@ export function FilmInspector() {
         </>
       )
     } else if (media) {
-      title = 'Photo'
+      const video = media.kind === 'video'
+      title = video ? 'Vidéo' : 'Photo'
       const set = (patch: Parameters<typeof updateMedia>[2]) => change((f) => updateMedia(f, item, patch), false)
       const picture = pictures[media.src]
       const card = media.layout === 'carte'
+      const fileS = picture?.durationS ?? ITEM_DURATION_RANGE.max
       body = (
         <>
-          {picture && <img className="film-inspector__thumb" src={picture.thumb} alt={picture.name ?? 'Photo'} />}
+          {picture && <img className="film-inspector__thumb" src={picture.thumb} alt={picture.name ?? title} />}
           <fieldset className="field fieldset">
             <legend className="field__label">Affichage</legend>
             <div className="segmented">
@@ -256,16 +258,21 @@ export function FilmInspector() {
               ))}
             </div>
           </fieldset>
-          <label className="checkbox">
-            <input type="checkbox" checked={media.kenBurns} disabled={card} onChange={(e) => set({ kenBurns: e.currentTarget.checked })} />
-            Mouvement lent (Ken Burns)
-          </label>
+          {!video && (
+            <label className="checkbox">
+              <input type="checkbox" checked={media.kenBurns} disabled={card} onChange={(e) => set({ kenBurns: e.currentTarget.checked })} />
+              Mouvement lent (Ken Burns)
+            </label>
+          )}
           {text('caption', 'Légende', media.caption ?? '', (caption) => set({ caption: caption || undefined }))}
           {anchorSelect(card ? 'Position' : 'Position de la légende', media.anchor, (anchor) => set({ anchor }))}
           {range('size', 'Taille', media.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
           {timing(media.startS, media.durationS, set)}
+          {video && number('in', 'Début dans la vidéo (s)', media.inS ?? 0, 0, fileS, (inS) => set({ inS: Math.min(inS, fileS) }))}
           <p className="field__hint">
-            {card ? 'La photo s’affiche encadrée, au style de l’habillage.' : 'La photo couvre la vue 3D, en fondu.'}
+            {card ? `La ${title.toLowerCase()} s’affiche encadrée, au style de l’habillage.` : `La ${title.toLowerCase()} couvre la vue 3D, en fondu.`}
+            {video && picture?.durationS !== undefined && ` Vidéo de ${formatFilmTime(fileS)} ; au-delà de sa fin, la dernière image reste affichée.`}
+            {video && ' Le son n’est pas encore pris en charge : la vidéo est muette.'}
           </p>
         </>
       )

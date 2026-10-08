@@ -38,14 +38,16 @@ type NumericKey = keyof typeof CAMERA_RANGES
 interface Slider {
   key: NumericKey
   label: string
+  /** ⓘ next to the label */
+  tip: string
   format(value: number): string
 }
 
 const SLIDERS: Slider[] = [
-  { key: 'distance', label: 'Distance (× automatique)', format: (v) => `×${formatNumber(v, 1)}` },
-  { key: 'pitchDeg', label: 'Inclinaison au-dessus de l’horizon', format: formatDegrees },
-  { key: 'headingOffsetDeg', label: 'Direction de visée (par rapport au trajet)', format: formatDegrees },
-  { key: 'smoothing', label: 'Lissage du cap', format: (v) => `×${formatNumber(v, 2)}` },
+  { key: 'distance', label: 'Distance', tip: 'Multiple de la distance automatique, choisie selon la longueur de la trace.', format: (v) => `×${formatNumber(v, 1)}` },
+  { key: 'pitchDeg', label: 'Inclinaison', tip: 'Angle de la caméra au-dessus de l’horizon.', format: formatDegrees },
+  { key: 'headingOffsetDeg', label: 'Visée', tip: 'Direction de la caméra par rapport au trajet ; positive = vers la droite.', format: formatDegrees },
+  { key: 'smoothing', label: 'Lissage des virages', tip: 'Plus haut : la caméra tourne plus calmement dans les virages.', format: (v) => `×${formatNumber(v, 2)}` },
 ]
 
 interface PacingSlider {
@@ -57,14 +59,14 @@ interface PacingSlider {
 }
 
 const PACING_SLIDERS: PacingSlider[] = [
-  { key: 'slowFactor', label: 'Vitesse au temps fort', format: (v) => `${formatNumber(v * 100)} %` },
+  { key: 'slowFactor', label: 'Vitesse aux temps forts', format: (v) => `${formatNumber(v * 100)} %` },
   {
     key: 'windowM',
-    label: 'Étendue du ralenti',
+    label: 'Longueur du ralenti',
     format: (v) => `±${formatDistance(v)}`,
     spoken: (v) => `${formatDistance(v)} de chaque côté`,
   },
-  { key: 'pauseS', label: 'Pause', format: (v) => (v === 0 ? 'Aucune' : `${formatNumber(v, 1)} s`) },
+  { key: 'pauseS', label: 'Pause aux temps forts', format: (v) => (v === 0 ? 'Aucune' : `${formatNumber(v, 1)} s`) },
 ]
 
 /** Style tiles: short label and icon. */
@@ -166,14 +168,17 @@ export function CameraPanel() {
         )}
 
         <MoreSettings paths={['camera.distance', 'camera.pitchDeg', 'camera.headingOffsetDeg', 'camera.smoothing']}>
-          {SLIDERS.map(({ key, label, format }) => {
+          {SLIDERS.map(({ key, label, tip, format }) => {
             const range = CAMERA_RANGES[key]
             const inputId = `${id}-${key}`
             return (
               <div key={key} className="field">
-                <label className="field__label" htmlFor={inputId}>
-                  {label}
-                </label>
+                <div className="field__label-row">
+                  <label className="field__label" htmlFor={inputId}>
+                    {label}
+                  </label>
+                  <InfoTip text={tip} />
+                </div>
                 <div className="range-row">
                   <input
                     id={inputId}
@@ -198,9 +203,12 @@ export function CameraPanel() {
 
       <PanelSection title="Durée et rythme" keys={['flyoverDurationS', 'pacing']}>
         <div className="field">
-          <label className="field__label" htmlFor={`${id}-duration`}>
-            Durée du survol (à ×1)
-          </label>
+          <div className="field__label-row">
+            <label className="field__label" htmlFor={`${id}-duration`}>
+              Durée du survol
+            </label>
+            <InfoTip text="Durée du trajet à la vitesse ×1, sans les arrêts de la timeline." />
+          </div>
           <div className="range-row">
             <input
               id={`${id}-duration`}
@@ -218,13 +226,13 @@ export function CameraPanel() {
             </output>
           </div>
           <p className="field__hint">
-            Durée du film : {formatSeconds(Math.round(film.totalTime()))} ·{' '}
+            Film : {formatSeconds(Math.round(film.totalTime()))} ·{' '}
             {stopCount === 0 ? 'aucun arrêt' : `${stopCount} arrêt${stopCount > 1 ? 's' : ''}`}
           </p>
         </div>
 
         <div className="field__label-row">
-          <label className="checkbox">
+          <label className="checkbox checkbox--switch">
             <input type="checkbox" checked={pacing.enabled} onChange={(e) => updatePacing({ enabled: e.currentTarget.checked })} />
             Ralentir aux temps forts
           </label>
@@ -236,7 +244,7 @@ export function CameraPanel() {
             paths={['pacing.climbs', 'pacing.landmarks', 'pacing.slowFactor', 'pacing.windowM', 'pacing.pauseS', 'pacing.keepDuration']}
           >
             <fieldset className="field fieldset">
-              <legend className="field__label">Temps forts</legend>
+              <legend className="field__label">Ralentir sur</legend>
               <label className="checkbox">
                 <input type="checkbox" checked={pacing.climbs} onChange={(e) => updatePacing({ climbs: e.currentTarget.checked })} />
                 Sommets des montées
@@ -283,6 +291,7 @@ export function CameraPanel() {
               />
               Garder la durée du survol
             </label>
+            <p className="field__hint">Le reste du trajet accélère pour compenser ralentis et pauses.</p>
           </MoreSettings>
         )}
       </PanelSection>
