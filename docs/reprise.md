@@ -16,6 +16,18 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
   ici, et le push HTTPS avec le jeton `gh` renvoyait « Internal Server Error ». `~/.gitconfig` contient encore un jeton
   d'accès personnel en clair du compte `yriouvortex` (règle `url.*.insteadOf`) : à révoquer et supprimer par l'utilisateur.
 
+## Session cloud (branche `ai-dev/confident-darwin-83rxik`)
+
+- Hook de démarrage `.claude/hooks/session-start.sh` (déclaré dans `.claude/settings.json`, sessions cloud seulement) :
+  Node v24.21.0 (somme SHA-256 vérifiée) dans `/opt/node-v24.21.0` et mis en tête du PATH, `npm install` (le npm de
+  Node 24 laisse `package-lock.json` intact ; celui de Node 22 le réécrit), `OPENFLYOVER_CHROME` sur le headless shell
+  de `/opt/pw-browsers`, bibliothèques Tauri Linux par `apt-get` (WebKitGTK 4.1…). ~25 s la première fois, < 1 s ensuite.
+- Ici, `cargo test` tourne dans `src-tauri/` (Ubuntu 24.04, 2 min la première compilation) : 5 tests verts.
+- Réseau : la politique de l'environnement refuse les hôtes de tuiles (`tiles.mapterhorn.com`, `tile.openstreetmap.org`…,
+  403 du proxy). `npm run e2e` avec `OPENFLYOVER_E2E_SKIP_EXPORT=1` : 4/5, « Projet enregistré puis rouvert » échoue
+  (« Enregistré » affiché mais aucun `.json` dans le dossier de téléchargement en 60 s) ; cause non établie (headless
+  shell 1194 ici, 1223 sous WSL), sans lien avec les changements de cette branche.
+
 ## Environnement et méthode (WSL)
 
 - Node 24 via nvm : `source ~/.nvm/nvm.sh && nvm use 24` avant `npm …`.
@@ -205,11 +217,11 @@ reste la source de chaque chantier.
 1. L'utilisateur : tests sur la machine avec GPU (`docs/tests-gpu.md`), premier lancement des workflows GitHub, certificat
    de signature s'il en veut un.
 2. Reconnaissance d'itinéraire (vague 5) : à confirmer avec l'utilisateur avant de construire.
-3. Petites suites : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version) ;
-   e2e qui attend les morceaux chargés à part ; aide de message d'erreur répétée ~12 fois ; copies de `clamp` restantes
-   (`film/clock.ts`, `film/timeline.ts`, `film/audio.ts`, `terrain/dem.ts`) → `core/math.ts` ; passe de performance de la
-   scène (pas de rendu continu à l'arrêt, nuages moins chers en aperçu) ; un export « .webm » demandé sur le bureau Linux
-   sort en MP4.
+3. Petites suites (fait sur `ai-dev/confident-darwin-83rxik` : copies de `clamp` → `core/math.ts` ; bureau Linux, nom
+   en « .webm » → WebM VP9 + Opus par ffmpeg, vérifié par `cargo test` et un vrai ffmpeg) : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version) ;
+   e2e qui attend les morceaux chargés à part ; aide de message d'erreur répétée ~16 fois (`err instanceof Error ?
+   err.message : String(err)`, version la plus soignée : `errorMessage` de `ui/importFlow.ts`) → un seul module partagé ;
+   passe de performance de la scène (pas de rendu continu à l'arrêt, nuages moins chers en aperçu).
 
 ## Limites et points ouverts
 
