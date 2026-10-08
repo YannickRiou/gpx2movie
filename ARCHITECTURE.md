@@ -1177,6 +1177,15 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   « Encodage » inclut la copie de l'image WebGL, qui attend la fin du rendu GPU.
 - Limites : sans écriture directe (Firefox, Safari), fichier gardé en mémoire (~2× sa taille) ; onglet à garder ouvert, vitesse liée au GPU (mesure à faire sur une
   machine avec GPU, voir `docs/reprise.md`).
+- **En ligne de commande** (bureau, `src-tauri/src/cli.rs` + `src/export/cliRender.ts`) : `openflyover --rendu <dossier>
+  [--sortie <dossier>] [--prereglage <nom>] [--formats 16:9@1080p,…]`. Rust lit les arguments au démarrage (`parse_cli`,
+  testé ; option inconnue, valeur manquante, options sans `--rendu` : message et code 2), rend les chemins absolus
+  (`prepare` : dossier des traces existant, sortie créée), ajoute ces deux dossiers, et eux seuls, à la portée fs, et
+  garde la demande. L'application la demande une fois au démarrage (`cli_render`, qui la consomme : un rechargement ne
+  relance rien), applique le préréglage nommé (`presetSettings`), vérifie les formats (`cliFormats` ; défaut : celui de
+  « Vidéo »), lit les traces du dossier (`readableFolderAt`), lance le même `runTracks` que le tiroir avec
+  `writableFolderAt(sortie)`, écrit `rendu-en-lot.txt` (`cliReport` : une ligne par trace) et quitte par `cli_exit`
+  (0 : tous les films faits ; 1 : un échec ; 2 : demande impossible). La fenêtre s'ouvre (WebGL en a besoin).
 
 ## Affiche (phase 7)
 

@@ -154,6 +154,11 @@ export default function App() {
   const collapsedRef = useRef(shell.collapsed)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
+  // desktop: a batch asked on the command line runs once the app is up, then the app quits (export/cliRender.ts)
+  useEffect(() => {
+    if (getPlatform().capabilities.isDesktop) void import('./export/cliRender').then((m) => m.runCliRenderIfAsked())
+  }, [])
+
   // remember the tab and the folded panel chosen by the user (not a fold caused by the export drawer)
   const keptCollapsed = shell.collapsed && !shell.collapsedByDock
   useEffect(() => {

@@ -153,6 +153,9 @@ Sous Linux (Ubuntu 22.04 ou plus, WebKitGTK sans WebCodecs : export par le `ffmp
 - [ ] `sudo apt install ffmpeg`, relancer : MP4 (H.264) annoncé ; export 1080p 30 i/s d'un film avec musique, fichier lu
       par VLC et le lecteur du système, son présent et calé, couleurs identiques à l'aperçu.
 - [ ] Qualité standard / maximale : tailles différentes, aucune image manquante (nombre d'images = celui du tiroir).
+- [ ] Ligne de commande : `openflyover --rendu <dossier> --sortie <dossier> --formats 16:9@720p` (puis avec
+      `--prereglage`) : un film par trace, `rendu-en-lot.txt`, fenêtre fermée, code de sortie 0 (`echo $?`) ; option
+      inconnue ou dossier vide : message et code 2. Sous Windows aussi (`openflyover.exe` du dossier d'installation).
 - [ ] Annuler pendant l'export : fichier supprimé, plus de processus `ffmpeg`, rien de `openflyover-*.wav` dans `/tmp`.
 - [ ] Rendu en lot dans un dossier (plusieurs formats, dont 9:16) ; 4K si la machine le permet.
 - [ ] Échec simulé (`pkill ffmpeg` pendant l'export) : l'export s'arrête avec un message sur ffmpeg, pas de fichier
