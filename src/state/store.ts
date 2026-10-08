@@ -99,8 +99,6 @@ export interface AppState {
   /** incremented to ask the camera to fit the current tracks */
   fitRequest: number
   requestFit(): void
-  importError: string | null
-  setImportError(msg: string | null): void
   loading: boolean
   setLoading(v: boolean): void
   playback: Playback
@@ -215,7 +213,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
   settings: { ...DEFAULT_SETTINGS },
   terrainStats: { ...EMPTY_STATS },
   fitRequest: 0,
-  importError: null,
   loading: false,
   playback: { ...DEFAULT_PLAYBACK },
 
@@ -234,7 +231,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       }
     }
 
-    set({ tracks, bounds, frameOrigin, settings, fitRequest: state.fitRequest + 1, importError: null })
+    set({ tracks, bounds, frameOrigin, settings, fitRequest: state.fitRequest + 1 })
   },
 
   removeTrack(id) {
@@ -266,10 +263,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
   requestFit() {
     const state = get()
     set({ fitRequest: state.fitRequest + 1, playback: { ...state.playback, playing: false } })
-  },
-
-  setImportError(msg) {
-    set({ importError: msg })
   },
 
   setLoading(v) {
@@ -325,8 +318,7 @@ export function resetAppStore(): void {
     settings: { ...DEFAULT_SETTINGS },
     terrainStats: { ...EMPTY_STATS },
     fitRequest: 0,
-    importError: null,
-    loading: false,
+      loading: false,
     playback: { ...DEFAULT_PLAYBACK },
     projectName: '',
     freeFraming: false,
