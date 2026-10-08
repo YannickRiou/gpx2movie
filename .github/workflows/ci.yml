@@ -1,6 +1,6 @@
 # Checks on every push and pull request: types, lint, unit tests, production build, and the Rust tests of the desktop
 # app (src-tauri, built against the dist/ just made). No end-to-end tests.
-name: Vérifications
+name: CI
 
 on:
   push:
