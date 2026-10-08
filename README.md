@@ -426,6 +426,24 @@ npm run tauri:build   # construit dist/ puis l'application et ses installeurs
 `.rpm` et `.AppImage` sous Linux. Chaque système construit ses propres installeurs. Ils ne sont pas signés : Windows et
 macOS affichent un avertissement au premier lancement.
 
+### Rendu en lot en ligne de commande
+
+L'application de bureau peut faire un film par trace d'un dossier, sans clic :
+
+```bash
+openflyover --rendu ~/Traces/2026 --sortie ~/Films --prereglage "Montagne" --formats 16:9@1080p,9:16@1080p
+```
+
+- `--rendu` : dossier des traces GPX et FIT (seuls les fichiers directement dedans sont lus).
+- `--sortie` : dossier des films, créé s'il manque ; par défaut, celui des traces.
+- `--prereglage` : un préréglage enregistré dans l'application ; sans lui, les réglages gardés par l'application.
+- `--formats` : format@résolution, séparés par des virgules (`16:9`, `9:16`, `1:1`, `4:5`, `21:9` ; `720p` à `4K`) ;
+  sans lui, le format de « Vidéo ».
+
+La fenêtre s'ouvre, rend chaque trace, écrit `rendu-en-lot.txt` à côté des films, puis se ferme. Code de sortie : 0
+quand tous les films sont faits, 1 si l'un a échoué, 2 si la commande ne peut pas tourner (option inconnue, préréglage
+ou format inconnu, aucune trace).
+
 GitHub construit aussi les installeurs des trois systèmes (*Actions* › « Installeurs » › *Run workflow*, ou une étiquette
 `v0.x.y` qui prépare une version brouillon), signés dès que les certificats sont ajoutés aux secrets du dépôt : voir
 [`docs/installeurs.md`](docs/installeurs.md).
@@ -655,7 +673,7 @@ Ce qui distingue OpenFlyover : tout reste local, et les données de la sortie (h
 | Course fantôme | plusieurs traces rejouées ensemble sur leur temps réel : comparer des amis, ou ses sorties successives sur un même parcours | marqueurs synchronisés (temps écoulé, heure réelle, même distance), classement en direct et dans l'habillage du film : fait |
 | Vidéo embarquée synchronisée | incrustation d'une vidéo GoPro / Insta360 calée sur l'horodatage ; export de l'habillage seul sur fond transparent pour le montage | vidéo calée sur l'heure de la trace (heure lue dans le fichier, décalage réglable, défilement au rythme du survol) et export de l'habillage seul sur fond transparent : fait |
 | Repères automatiques | sommets, cols, refuges et lacs tirés d'OpenStreetMap avec leur altitude ; montées détectées et catégorisées, qui déclenchent ralentis et titres | montées (cat. 4 à HC), waypoints GPX et repères OpenStreetMap (sommets, cols, refuges, lacs… à 0,1–3 km, une requête Overpass par trace en cache) étiquetés en 3D, ralentis et titres aux cols, sommets et refuges : fait |
-| Rendu en lot | le même film en plusieurs formats d'un coup ; un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface | plusieurs formats (format × résolution, image fixe, affiche) en une fois, dans un dossier choisi : fait ; une vidéo par trace d'un dossier, depuis l'interface : fait ; en ligne de commande à faire |
+| Rendu en lot | le même film en plusieurs formats d'un coup ; un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface | plusieurs formats (format × résolution, image fixe, affiche) en une fois, dans un dossier choisi : fait ; une vidéo par trace d'un dossier, depuis l'interface ou en ligne de commande (application de bureau) : fait |
 | Affiche imprimable | la trace sur le relief en très haute résolution, avec titre et chiffres, pour un tirage | A4 / A3 à 300 dpi (portrait, paysage) et carré, vue d'ensemble 3D, titre, date, chiffres clés, profil, météo, crédits, trois styles, plusieurs traces, carte à plat : fait |
 | Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale | piste « Musique » (volume, fondus, forme d'onde), jouée dans l'aperçu, mixée à l'export, durée du film calée sur la musique, arrêts, titres et portions de vitesse (ralentis) calés sur le rythme : fait |
 | Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller | points posés sur le relief, sans trace ; itinéraire calculé dans le navigateur sur les chemins OSM, altitudes du relief : fait ; profils (vélo, VTT) à faire |

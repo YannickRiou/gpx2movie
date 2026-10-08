@@ -1,6 +1,8 @@
 //! Desktop shell of OpenFlyover: the web app (../dist) in a native window, with the dialog and fs plugins used by
-//! src/platform/desktop.ts, and the native video encoder (system ffmpeg) for webviews without WebCodecs (video.rs).
+//! src/platform/desktop.ts, the native video encoder (system ffmpeg) for webviews without WebCodecs (video.rs), and
+//! batch rendering from the command line (cli.rs).
 
+mod cli;
 mod video;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -9,7 +11,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(video::VideoState::default())
+        .manage(cli::CliState::default())
+        .setup(|app| {
+            cli::setup(app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
+            cli::cli_render,
+            cli::cli_exit,
             video::video_available,
             video::video_sound,
             video::video_open,
