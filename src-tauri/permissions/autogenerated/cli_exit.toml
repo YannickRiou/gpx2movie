@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cli-exit"
+description = "Enables the cli_exit command without any pre-configured scope."
+commands.allow = ["cli_exit"]
+
+[[permission]]
+identifier = "deny-cli-exit"
+description = "Denies the cli_exit command without any pre-configured scope."
+commands.deny = ["cli_exit"]

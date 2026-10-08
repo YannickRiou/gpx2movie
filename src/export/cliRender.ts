@@ -37,6 +37,7 @@ const KNOWN_FORMATS = new Set(VIDEO_ASPECTS.flatMap((a) => VIDEO_RESOLUTIONS.map
 
 /** The formats to render: those asked, each known, else `fallback`; throws on an unknown one. */
 export function cliFormats(asked: readonly string[], fallback: string): string[] {
+  asked = asked.map((f) => f.toLowerCase())
   for (const f of asked) if (!KNOWN_FORMATS.has(f)) throw new Error(`Format inconnu : ${f} (exemples : ${[...KNOWN_FORMATS].slice(0, 3).join(', ')}).`)
   return asked.length > 0 ? [...new Set(asked)] : [fallback]
 }
@@ -57,7 +58,14 @@ export function cliReport(tracks: readonly TrackRunState[], output: string): { c
 /** Run the batch asked on the command line, if any; the app quits at the end. Desktop only. */
 export async function runCliRenderIfAsked(invoke: Invoke = tauriInvoke): Promise<void> {
   if (!getPlatform().capabilities.isDesktop) return
-  const request = (await invoke('cli_render')) as CliRenderRequest | null
+  let request: CliRenderRequest | null
+  try {
+    request = (await invoke('cli_render')) as CliRenderRequest | null
+  } catch (error) {
+    // an app built without the command: no batch, the app opens as usual
+    console.warn('[rendu en lot] demande illisible :', errorMessage(error))
+    return
+  }
   if (!request) return
   const exit = (code: number, message: string) => invoke('cli_exit', { code, message })
   try {

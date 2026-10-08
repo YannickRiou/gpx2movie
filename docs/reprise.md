@@ -23,15 +23,15 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
   Node 24 laisse `package-lock.json` intact ; celui de Node 22 le réécrit), `OPENFLYOVER_CHROME` sur le headless shell
   de `/opt/pw-browsers`, `LANG=C.UTF-8` (sans locale UTF-8, Chromium nomme « download » un téléchargement au nom
   accentué), bibliothèques Tauri Linux par `apt-get` (WebKitGTK 4.1…). ~25 s la première fois, < 1 s ensuite.
-- Ici, `cargo test` tourne dans `src-tauri/` (Ubuntu 24.04, 2 min la première compilation) : 5 tests verts.
+- Ici, `cargo test` tourne dans `src-tauri/` (Ubuntu 24.04, 2 min la première compilation) : 9 tests verts.
 - Réseau : la politique de l'environnement refuse les hôtes de tuiles (`tiles.mapterhorn.com`, `tile.openstreetmap.org`…,
   403 du proxy). `npm run e2e` avec `OPENFLYOVER_E2E_SKIP_EXPORT=1` : 5/5 en ~20 s.
 
 ## Environnement et méthode (WSL)
 
 - Node 24 via nvm : `source ~/.nvm/nvm.sh && nvm use 24` avant `npm …`.
-- Vérifications : `npm run typecheck`, `npm run lint` (34 avertissements préexistants dans `src/scene`, 0 erreur),
-  `npx vitest run --maxWorkers=1` (63 fichiers, 844 tests au dernier commit vert), `npm run build`.
+- Vérifications : `npm run typecheck`, `npm run lint` (0 erreur ; une quarantaine d'avertissements React préexistants, surtout dans `src/scene`),
+  `npx vitest run --maxWorkers=1` (chiffres à jour : « Travail en cours »), `npm run build`.
 - Tests de bout en bout : `npm run e2e` (`e2e/run.mjs`, puppeteer-core, Chromium de Playwright ou `OPENFLYOVER_CHROME`,
   SwiftShader, serveur Vite lancé par le script sans surveillance des fichiers). 6 scénarios : accueil et exemple, onglets
   et aide, T / Ctrl+Z / S, projet enregistré puis rouvert, export 320 × 180 + image fixe, reconnaissance (Overpass simulé). 7 à 8 min ici (export
@@ -74,7 +74,7 @@ Mes projets, encodeur natif Linux, installeurs) ; détail technique dans `ARCHIT
 ## Travail en cours (branche `ai-dev/confident-darwin-83rxik`, PR #8)
 
 Vérifié : typecheck, lint (0 erreur), `npx vitest run --maxWorkers=1` (90 fichiers, 1 439 tests), `npm run build`
-(premier écran sans three.js), `cargo test` (5), `npm run e2e` (6 scénarios ; ici la reconnaissance passe avec la source
+(premier écran sans three.js), `cargo test` (9), `npm run e2e` (6 scénarios ; ici la reconnaissance passe avec la source
 de relief AWS, Mapterhorn étant bloqué par le réseau de la session). Le reste : [`docs/tests-gpu.md`](tests-gpu.md).
 
 - **Petites suites** : copies de `clamp` → `core/math.ts` ; `errorMessage` partagé (`core/errors.ts`, 16 copies
@@ -124,7 +124,7 @@ reste la source de chaque chantier.
   intervalle entre deux tâches (onglets brièvement déverrouillés).
 
 - Packs hors ligne : section « Hors ligne » (estimation qui change avec le couloir, la source et le niveau de détail ;
-  imagerie refusée avec Esri par défaut, relief seul ; « Trop de tuiles »), préparation de l'exemple en 2 km (progression,
+  Esri permis en usage personnel avec mise en garde et 10 000 tuiles par jour ; « Trop de tuiles »), préparation de l'exemple en 2 km (progression,
   Pause / Reprendre, Annuler qui retire le pack neuf), liste (taille, « incomplet », Supprimer), espace utilisé (site),
   puis **hors ligne** (DevTools › Network › Offline, ou Wi-Fi coupé) : rechargement, vue et export sans trou dans le
   couloir, relief plus grossier au-delà, temps d'attente de l'export sur les tuiles absentes ; Firefox (demande de
