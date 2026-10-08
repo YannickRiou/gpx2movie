@@ -31,6 +31,11 @@ fi
 # npm install (not ci): reuses node_modules cached with the container
 npm install --no-audit --no-fund
 
+# UTF-8 locale: without one, Chromium names a download with accents « download » (e2e « Projet enregistré »)
+if [ -n "${CLAUDE_ENV_FILE:-}" ] && locale -a 2>/dev/null | grep -qix 'c.utf-\?8'; then
+  echo 'export LANG=C.UTF-8' >> "$CLAUDE_ENV_FILE"
+fi
+
 # e2e: Playwright's headless shell preinstalled in the image
 shell=$(ls -d /opt/pw-browsers/chromium_headless_shell-*/chrome-linux/headless_shell 2>/dev/null | head -n 1 || true)
 if [ -n "$shell" ] && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
