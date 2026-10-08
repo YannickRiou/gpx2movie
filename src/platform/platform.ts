@@ -1,6 +1,7 @@
 /**
  * Contract of the platform layer (see index.ts) and its pure helpers, shared by the web and desktop implementations.
  */
+import { cyrb53 } from '../core/math'
 
 /** One line of a file dialog's type list: extensions without the dot. */
 export interface FileFilter {
@@ -259,18 +260,7 @@ export function keyValueStore(
  * synchronous; ~10⁻¹⁵ chance of a clash between two tiles of a 100 000-tile pack.
  */
 export function tileFileName(url: string): string {
-  const hash = (seed: number) => {
-    let h1 = 0xdeadbeef ^ seed
-    let h2 = 0x41c6ce57 ^ seed
-    for (let i = 0; i < url.length; i++) {
-      const c = url.charCodeAt(i)
-      h1 = Math.imul(h1 ^ c, 2654435761)
-      h2 = Math.imul(h2 ^ c, 1597334677)
-    }
-    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
-    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
-    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0')
-  }
+  const hash = (seed: number) => cyrb53(url, seed).toString(16).padStart(14, '0')
   return `${hash(0)}${hash(0x9e3779b9)}`
 }
 

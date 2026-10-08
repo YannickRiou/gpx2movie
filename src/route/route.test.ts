@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { findPlace, parseCoordinates } from '../osm/geocode'
+import { TileFetchError } from '../terrain/fetch'
+import { fetchHeights } from '../terrain/heightAt'
+import { getTerrainSource } from '../terrain/sources'
 import { pathsQuery, parsePaths, snapBounds } from '../osm/paths'
 import { RouteError, buildGraph, nearestNode, routeThrough, shortestPath } from './graph'
 import { computeRouteTrack, useRouteStore } from './planner'
@@ -143,5 +146,29 @@ describe('place search', () => {
     expect(calls).toHaveLength(2)
     expect(calls[0]).toContain('q=Chamonix')
     expect(slept).toEqual([1000])
+  })
+})
+
+describe('fetchHeights', () => {
+  const source = getTerrainSource('mapterhorn')
+  const grid = { width: 2, height: 2, data: new Float32Array([1234, 1234, 1234, 1234]) }
+
+  it('reads each point on its tile, and on a coarser one where the source has no data', async () => {
+    const urls: string[] = []
+    const fetcher = {
+      fetchBitmap: async (url: string) => {
+        urls.push(url)
+        if (url.includes('/13/')) throw new TileFetchError(url, 404)
+        return {} as ImageBitmap
+      },
+    }
+    const heights = await fetchHeights([{ lon: 86.92, lat: 27.98 }], source, undefined, { fetcher, decode: () => grid })
+    expect(heights).toEqual([1234])
+    expect(urls.map((u) => u.match(/\/(\d+)\/\d+\/\d+/)?.[1])).toEqual(['13', '12'])
+  })
+
+  it('leaves a point without height when its tile fails for another reason', async () => {
+    const fetcher = { fetchBitmap: async () => Promise.reject(new TypeError('Failed to fetch')) }
+    expect(await fetchHeights([{ lon: 6.86, lat: 45.92 }], source, undefined, { fetcher, decode: () => grid })).toEqual([undefined])
   })
 })

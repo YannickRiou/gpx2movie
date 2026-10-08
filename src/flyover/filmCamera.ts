@@ -335,7 +335,10 @@ export function computeFilmView(
   const shot = state.phase === 'opening' ? clock.opening : clock.closing
   const wideView = shot.style === 'situation' ? regionView : overviewView
   const overview = wideView(path, frame, sample, options.exaggeration, aspect, flight)
-  const wide = shot.style === 'balayage' ? turnedView(overview, sweepRad(state.phase, state.localS, state.lengthS)) : overview
+  const turned = shot.style === 'balayage' ? turnedView(overview, sweepRad(state.phase, state.localS, state.lengthS)) : overview
+  // turned, the overview may look from behind a slope: kept above the ground like the others
+  const wide =
+    turned === overview ? overview : { target: turned.target, position: keepAboveGround(turned.position, frame, sample, options.exaggeration) }
   const k = shotBlend(shot.style, state.phase, state.localS, state.lengthS)
   const view =
     state.phase === 'opening'

@@ -1,4 +1,4 @@
-# OpenFlyover — architecture (phase 1 : visionneuse)
+# OpenFlyover — architecture
 
 Objectif phase 1 : importer un GPX / FIT, afficher le relief 3D (élévation Mapterhorn ou AWS Terrarium)
 habillé d'orthophotos, la trace plaquée sur le relief, et une caméra orbitale. 100 % local, aucune clé d'API.
@@ -74,7 +74,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/platform/*` | site / bureau (voir « Application de bureau ») | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint` ; purs, testés : `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf` ; `tileCache.ts` : `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache` ; `projectLibrary.ts` : `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry` ; `folder.ts` : `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath` |
 | `src/offline/*` | packs de tuiles hors ligne (voir « Packs hors ligne ») | purs, testés : `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`) ; `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`) ; `startPackDownload`, `createDailyQuota` (`download.ts`) ; `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefix` (`packs.ts`) ; non purs : `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
-| `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `shellShortcut`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `loadSample`, `chainLoadedTracks`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
+| `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `loadSample`, `chainLoadedTracks`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
 
 ### Règles de développement
 
@@ -113,7 +113,8 @@ changement des stores lus par la scène (application hors `terrainStats` et `loa
 un drapé (trace, eau, étiquettes), le chargement de la police des étiquettes ou de l'image du marqueur, et pour chaque
 texture des chargeurs de three (ciel, nuages) : le temps que le suréchantillonnage temporel des nuages converge
 (~16 images). OrbitControls (drei) demande lui-même ses images, amortissement compris. Le pas de temps d'une image est
-borné à `MAX_FRAME_DELTA_S` = 0,25 s (`frameDelta`) : la lecture et le recadrage ne sautent pas après une pause.
+borné à `MAX_FRAME_DELTA_S` = 0,25 s (`frameDelta`), et `wakeScene` remet l'horloge à zéro quand la scène dormait
+(`clock.getDelta()`) : la lecture et le recadrage ne sautent pas après une pause.
 L'export garde `frameloop 'never'` et dessine lui-même ses images. Mesuré en rendu logiciel : plus aucune demande d'image
 une fois la marge écoulée (~30 s là-bas, une image par seconde ; ~0,5 s sur une vraie carte graphique). Les délais du
 moteur comptés en images (nouvel essai d'une tuile en échec, déchargement) attendent la prochaine image.
@@ -128,8 +129,8 @@ Aperçu des nuages : préréglage « bas » allégé (`PREVIEW_MARCH` : 120 pas 
    Imagerie : IGN BD ORTHO (Géoplateforme WMTS, PM), EOX Sentinel-2 cloudless, ArcGIS World Imagery, swisstopo SWISSIMAGE.
    Le catalogue contient aussi des fonds non photographiques et datés, jamais choisis automatiquement (`AUTO_IMAGERY_IDS` =
    `ign-ortho`, `swisstopo`) : cartes topographiques `ign-plan` (Plan IGN, France, z19), `swisstopo-carte` (carte nationale
-   suisse, z19 ; blanche hors Suisse au-delà de z15) et `opentopomap` (mondial, z17, CC BY-SA, serveur bénévole : pas de
-   téléchargement massif, donc exclu des futurs packs hors ligne) ; orthophotos IGN datées :
+   suisse, z19 ; blanche hors Suisse au-delà de z15) et `opentopomap` (mondial, z17, CC BY-SA, serveur bénévole : packs hors
+   ligne permis en usage personnel seulement, plafonnés à 2 000 tuiles par jour, voir « Packs hors ligne ») ; orthophotos IGN datées :
    `ign-ortho-1950-1965` (France complète, niveaux de gris), `ign-ortho-1965-1980` (partiel, style `BDORTHOHISTORIQUE`, z3–18)
    et `ign-ortho-2000-2005` (z6–18), sur la boîte `FRANCE_BOX` (sur-approximation). Sources écartées (clé requise : Stadia,
    Thunderforest, SCAN 25) : `docs/sources.md`.
@@ -179,7 +180,7 @@ Aperçu des nuages : préréglage « bas » allégé (`PREVIEW_MARCH` : 120 pas 
      Deuxième passe `depthTest: false`, opacité 0.25 pour laisser deviner les portions cachées par le relief.
      Sphères de départ (mousse `#3F6B4A`) et d'arrivée (encre `#1C2A33`).
    - `CameraRig` : `OrbitControls` (drei) avec amortissement, `maxPolarAngle = 85°`, `minDistance = 30`, `maxDistance = 400 km` ;
-     `fitToBounds(bounds)` : cible = centre, caméra au sud-est, pitch 40°, distance = 1.4 × diagonale de la boîte (min 2 km).
+     `computeFitView(bounds, frame, groundHeightM)` (`scene/CameraRig.tsx`) : cible = centre, caméra au sud-est, pitch 40°, distance = 1.4 × diagonale de la boîte (min 2 km).
 8. **État** (`store.ts`) : `tracks: Track[]`, `addTracks`, `removeTrack`, `clearTracks`, `settings { terrainSourceId, imagerySourceId,
    imageryZoomOffset, exaggeration, wireframe }`, `setSetting`, `terrainStats`, `bounds` (union des traces) et `frameOrigin` (centroïde du
    premier lot arrondi à 0,01°, fixe tant qu'il reste une trace) ; l'`area` du moteur est dérivée dans la scène (`TerrainLayer`).
@@ -361,7 +362,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   timeline s'y ajoute. Onglet « Survol » (`src/ui/CameraPanel.tsx`, sections « Caméra » et « Durée et rythme »). En pause, un changement de réglage caméra replace la caméra.
   « Cadrer la caméra pendant cet élément » (inspecteur d'un texte ou d'un média) : `addItemCamera` pose un cadrage là où
   est le marqueur au début de l'élément (sélectionné, à régler) et, si le marqueur avance pendant l'élément, un second à
-  sa fin qui garde le cadrage qui y était : le reste du film ne change pas.
+  sa fin qui garde le cadrage qui y était : les cadrages voisins gardent leurs valeurs (entre la fin de l'élément et le
+  cadrage suivant, la transition est recalculée sur le nouvel intervalle).
   « Garder ce cadrage ici » (section « Caméra ») pose un cadrage du film au marqueur (`addCameraKey`, avec le cadrage vu
   là : `keyedCamera` ; un cadrage déjà à ce mètre le reprend), un pas d'annulation, sélectionné pour l'inspecteur (voir
   « Film et timeline », « Caméra »).
@@ -1407,16 +1409,18 @@ diffère passe par `src/platform/`.
   par un adaptateur `getItem` / `setItem` vers le `KeyValueStore`, et cache Overpass (`overpass.ts`,
   `openflyover.osm.v1.<empreinte>`) : quand `set` répond false, il supprime ses propres entrées (`keys(CACHE_PREFIX)`,
   jamais les autres clés) et réessaie une fois ; sinon le cache mémoire évite les requêtes répétées dans la session.
-- **Tauri** (`src-tauri/`) : `lib.rs` enregistre les extensions dialog et fs et les six commandes de l'encodeur natif
-  (`video.rs`, déclarées dans `build.rs`, `AppManifest::commands`). Fenêtre `main`
+- **Tauri** (`src-tauri/`) : `lib.rs` enregistre les extensions dialog et fs, les six commandes de l'encodeur natif
+  (`video.rs`) et les deux de la ligne de commande (`cli.rs`), toutes déclarées dans `build.rs` (`AppManifest::commands`) :
+  une commande absente de cette liste ou de `capabilities/default.json` est refusée. Fenêtre `main`
   1440 × 900 (au moins 1024 × 700). `dragDropEnabled: false` : sinon Tauri intercepte les dépôts et le HTML ne reçoit plus
   `drop`. Droits (`capabilities/default.json`) : `dialog:allow-open`, `dialog:allow-save`, `fs:allow-read-file`,
   `fs:allow-write-file`, `fs:allow-open`, `fs:allow-seek`, `fs:allow-write`, `fs:allow-remove` (film écrit au fil de
   l'eau), `fs:allow-mkdir`, `fs:allow-read-dir`, `fs:allow-exists` (packs hors ligne, « Mes projets »), `allow-video-available`, `allow-video-sound`, `allow-video-open`,
-  `allow-video-frame`, `allow-video-finish`, `allow-video-cancel` (encodeur natif) ; deux portées
+  `allow-video-frame`, `allow-video-finish`, `allow-video-cancel` (encodeur natif), `allow-cli-render`, `allow-cli-exit`
+  (ligne de commande) ; deux portées
   fixes, `$APPDATA/tiles` et `$APPDATA/projects` avec ce qu'ils contiennent (`fs:scope`), en plus des chemins que l'extension dialog ajoute pour chaque
-  fichier choisi : rien d'autre n'est lisible. CSP : `connect-src` / `img-src` listent les hôtes de tuiles (`src/terrain/sources.ts`), Open-Meteo et les deux
-  serveurs Overpass, plus `ipc:` et `blob:` ; `style-src 'unsafe-inline'` avec `dangerousDisableAssetCspModification:
+  fichier choisi et des deux dossiers d'un rendu en ligne de commande : rien d'autre n'est lisible. CSP : `connect-src` /
+  `img-src` listent les hôtes de tuiles (`src/terrain/sources.ts`), Open-Meteo, les deux serveurs Overpass et Nominatim, plus `ipc:` et `blob:` ; `style-src 'unsafe-inline'` avec `dangerousDisableAssetCspModification:
   ["style-src"]` (Tauri ajouterait sinon un nonce qui annule `unsafe-inline`). **Toute nouvelle source doit aussi entrer
   dans la CSP de `tauri.conf.json`.**
 - **Vérifié** : `cargo check --target x86_64-pc-windows-msvc` passe (configuration, droits, icônes, `generate_context!`),

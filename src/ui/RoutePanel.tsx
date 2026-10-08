@@ -61,7 +61,6 @@ export function RoutePanel() {
   const points = useRouteStore((s) => s.points)
   const status = useRouteStore((s) => s.status)
   const trackId = useRouteStore((s) => s.trackId)
-  const hasArea = useAppStore((s) => s.bounds !== null)
   const tracks = useAppStore((s) => s.tracks)
   const routes = tracks.filter(isRouteTrack)
   const abortRef = useRef<AbortController | null>(null)
@@ -103,7 +102,7 @@ export function RoutePanel() {
         Survolez une sortie avant d'y aller : clic droit sur le relief › « Point de passage ici », dans l'ordre, puis
         calculez. L'itinéraire suit les chemins d'OpenStreetMap.
       </p>
-      {!hasArea && <PlaceForm compact />}
+      {tracks.length === 0 && <PlaceForm compact />}
       {points.length > 0 && (
         <ol className="route-points">
           {points.map((p, i) => (

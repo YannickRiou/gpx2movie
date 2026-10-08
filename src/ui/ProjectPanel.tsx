@@ -198,7 +198,9 @@ function PresetSection() {
         Préréglages
       </h2>
 
-      <p className="field__hint">Tous les réglages, sans traces, arrêts, textes ni photos. Gardés dans ce navigateur.</p>
+      <p className="field__hint">
+        Tous les réglages, sans traces, arrêts, textes ni photos. Gardés {getPlatform().capabilities.isDesktop ? 'sur cet ordinateur' : 'dans ce navigateur'}.
+      </p>
 
       {presets.length === 0 ? (
         <p className="tracks__empty">Aucun préréglage. Donnez un nom ci-dessous pour garder les réglages actuels.</p>

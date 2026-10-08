@@ -55,7 +55,7 @@ import { getPlatform } from '../platform'
 import { modifiedSettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
 import { editFilm, getFilmSource, useFilmClock, useFilmSource } from '../scene/usePacing'
-import { useAppStore } from '../state/store'
+import { PLAYBACK_SPEEDS, useAppStore } from '../state/store'
 import { formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
 import type { IconName } from './icons'
@@ -63,7 +63,7 @@ import { ModifiedMarker } from './ModifiedMarker'
 import { withShortcut } from './shortcuts'
 import { showToast } from './toast'
 
-const SPEEDS = [0.5, 1, 2, 4]
+const SPEEDS = PLAYBACK_SPEEDS
 /** « Média » picker: pictures and videos recognised on both targets (the desktop types a file by `mimeTypeOf`). */
 const MEDIA_FILTERS = [{ name: 'Photos et vidéos', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'mp4', 'm4v', 'mov', 'webm'] }]
 const MUSIC_FILTERS = [{ name: 'Musique', extensions: AUDIO_FILE_EXTENSIONS }]

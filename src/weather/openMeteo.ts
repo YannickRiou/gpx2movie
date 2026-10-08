@@ -261,6 +261,7 @@ export function createWeatherCache(storage: CacheStorage | null = platformStorag
     }
   }
 
+  let savePending = false
   return {
     get(key) {
       const hit = memory.get(key)
@@ -274,7 +275,13 @@ export function createWeatherCache(storage: CacheStorage | null = platformStorag
       memory.set(key, day)
       if (!persist) return
       load()[key] = { at: Date.now(), day }
-      save()
+      // the days of one request are written together, once (the table can weigh ~450 KB)
+      if (savePending) return
+      savePending = true
+      queueMicrotask(() => {
+        savePending = false
+        save()
+      })
     },
   }
 }

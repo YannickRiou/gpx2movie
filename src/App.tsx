@@ -188,7 +188,8 @@ export default function App() {
     return () => document.removeEventListener('pointerdown', onPointerDown, true)
   }, [shell.collapsed])
 
-  useEffect(() => installHistoryShortcuts(getSettingsHistory()), [])
+  // no undo during an export: the film being rendered would change under it
+  useEffect(() => installHistoryShortcuts(getSettingsHistory(), window, () => !isExporting()), [])
   useEffect(() => installSliderGestures(getSettingsHistory()), [])
   useEffect(() => installLibraryAutosave(() => !isExporting()), [])
 
@@ -256,7 +257,9 @@ export default function App() {
         e.stopPropagation()
       } else if (action === 'help') {
         helpDialog.current?.showModal()
-      } else if (action === 'save') saveProject()
+      } else if (action === 'save') {
+        if (!isExporting()) saveProject()
+      }
       else if (action === 'open') {
         if (!isExporting()) void chooseFilesToOpen()
       } else if (action === 'export') {

@@ -38,7 +38,7 @@ import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MI
 import type { OverlayAnchor } from '../overlay/settings'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
-import { formatDistance, formatNumber } from './format'
+import { formatDegrees, formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
 import { nextGridIndex } from './shell'
 import { showToast } from './toast'
@@ -71,7 +71,6 @@ const SPEED_SLIDER = { min: -2, max: 2, step: 0.05 }
 const km = (m: number) => Math.round(m / 10) / 100
 
 const seconds = (s: number) => `${formatNumber(s, Number.isInteger(s) ? 0 : 1)} s`
-const degrees = (deg: number) => `${deg < 0 ? '−' : ''}${formatNumber(Math.abs(deg))}°`
 const VOLUME_RANGE = { min: 0, max: 1, step: 0.01 }
 const percent = (v: number) => `${Math.round(v * 100)} %`
 const FADE_SLIDER = { min: FADE_RANGE.min, max: 10, step: FADE_RANGE.step }
@@ -220,7 +219,8 @@ export function FilmInspector() {
             startS,
             startS + durationS,
             (t) => clock.progressAtTime(t) * lengthM,
-            (atM) => keyedCamera(camera, f.cameraKeys, atM, easeM),
+            // keyedCamera reads the keys in order along the track; the film keeps them in any order
+            (atM) => keyedCamera(camera, [...f.cameraKeys].sort((a, b) => a.atM - b.atM), atM, easeM),
           ),
         )
       }}
@@ -359,8 +359,8 @@ export function FilmInspector() {
       body = (
         <>
           {range('distance', 'Distance', cameraKey.distance, CAMERA_RANGES.distance, (v) => `×${formatNumber(v, 1)}`, (distance) => set({ distance }))}
-          {range('pitch', 'Inclinaison', cameraKey.pitchDeg, CAMERA_RANGES.pitchDeg, degrees, (pitchDeg) => set({ pitchDeg }))}
-          {range('heading', 'Visée', cameraKey.headingOffsetDeg, CAMERA_RANGES.headingOffsetDeg, degrees, (headingOffsetDeg) => set({ headingOffsetDeg }))}
+          {range('pitch', 'Inclinaison', cameraKey.pitchDeg, CAMERA_RANGES.pitchDeg, formatDegrees, (pitchDeg) => set({ pitchDeg }))}
+          {range('heading', 'Visée', cameraKey.headingOffsetDeg, CAMERA_RANGES.headingOffsetDeg, formatDegrees, (headingOffsetDeg) => set({ headingOffsetDeg }))}
           {number('at', 'À (km)', km(cameraKey.atM), 0, km(lengthM), (v) => set({ atM: Math.min(v * 1000, lengthM) }))}
           <p className="field__hint">
             À {formatDistance(cameraKey.atM)}, {formatFilmTime(cameraKey.timeS)} dans le film. La caméra passe en douceur d’un cadrage
