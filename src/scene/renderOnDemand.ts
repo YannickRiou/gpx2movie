@@ -47,6 +47,11 @@ export function frameDelta(delta: number): number {
 /** Keys of the app store whose change does not touch the scene (`terrainStats` is written by the scene itself). */
 const QUIET_KEYS = new Set(['terrainStats', 'loading'])
 
+/** True when a change of the app store from `previous` to `state` may change the scene (any key but the quiet ones). */
+export function sceneChanged<T extends object>(state: T, previous: T): boolean {
+  return (Object.keys(state) as (keyof T)[]).some((key) => !QUIET_KEYS.has(key as string) && state[key] !== previous[key])
+}
+
 /** Mounted once inside the terrain layer: keeps frames coming while needed (see above). */
 export function useRenderOnDemand(): void {
   const { engine } = useTerrainContext()
@@ -69,8 +74,7 @@ export function useRenderOnDemand(): void {
     const wake = () => wakeScene()
     const unsubscribe = [
       useAppStore.subscribe((state, previous) => {
-        const keys = Object.keys(state) as (keyof typeof state)[]
-        if (keys.some((key) => !QUIET_KEYS.has(key) && state[key] !== previous[key])) wake()
+        if (sceneChanged(state, previous)) wake()
       }),
       useWeatherStore.subscribe(wake),
       useLabelSources.subscribe(wake),

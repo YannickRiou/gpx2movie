@@ -22,7 +22,7 @@ import type {
   TileFetcher,
   TileKey,
 } from '../core/types'
-import { boundsIntersect, tileGroundSizeM, tileKeyString } from '../geo/mercator'
+import { boundsIntersect, tileGroundSizeM } from '../geo/mercator'
 import { decodeDem as defaultDecodeDem } from './dem'
 import { createTileFetcher, isNoDataError } from './fetch'
 import { HeightField } from './heightField'
@@ -45,19 +45,15 @@ import { buildTileUrl } from './sources'
 // Dependencies and tuning
 // ---------------------------------------------------------------------------
 
-/**
- * The subset of `HeightField` the engine relies on. Without `prune` the engine keeps its own
- * insertion-order LRU and evicts through `delete`; without `clear` it deletes the keys it set.
- * A field that prunes itself must also clear itself (the engine cannot enumerate its entries).
- */
+/** The subset of `HeightField` the engine relies on: the field keeps its own LRU (`prune`). */
 export interface HeightFieldLike {
   set(key: TileKey, grid: HeightGrid): void
   delete(key: TileKey): boolean | void
   has(key: TileKey): boolean
   sampleHeight(lon: number, lat: number): number | undefined
   /** evict least recently used grids down to `maxEntries`; returns the number evicted */
-  prune?(maxEntries: number): number
-  clear?(): void
+  prune(maxEntries: number): number
+  clear(): void
 }
 
 export interface EngineDeps {
@@ -186,12 +182,6 @@ export function createTerrainEngine(
   const rendered: TileNode[] = []
   /** ready nodes outside the view frustum, kept visible for the shadow pass only */
   const casters: TileNode[] = []
-  /**
-   * Keys pushed into the height field, insertion order: the engine-side LRU for a field that
-   * cannot prune itself. Not maintained otherwise (it would grow with every tile ever loaded).
-   */
-  const trackGridKeys = io.heightField.prune === undefined
-  const gridKeys = new Map<string, TileKey>()
 
   let ctx: QuadtreeContext = { frame: opts.frame, segments: opts.segments, exaggeration: opts.exaggeration }
   let roots: TileNode[] = []
@@ -241,32 +231,12 @@ export function createTerrainEngine(
   }
 
   function rememberGrid(key: TileKey, grid: HeightGrid): void {
-    const field = io.heightField
-    field.set(key, grid)
-    const limit = heightCacheLimit()
-    if (field.prune) {
-      field.prune(limit)
-      return
-    }
-    const id = tileKeyString(key)
-    gridKeys.delete(id)
-    gridKeys.set(id, key)
-    while (gridKeys.size > limit) {
-      const oldest = gridKeys.entries().next().value
-      if (!oldest) break
-      gridKeys.delete(oldest[0])
-      field.delete(oldest[1])
-    }
+    io.heightField.set(key, grid)
+    io.heightField.prune(heightCacheLimit())
   }
 
   function clearHeightField(): void {
-    const field = io.heightField
-    if (field.clear) {
-      field.clear()
-    } else if (trackGridKeys) {
-      for (const key of gridKeys.values()) field.delete(key)
-    }
-    gridKeys.clear()
+    io.heightField.clear()
   }
 
   // --- loading ------------------------------------------------------------------

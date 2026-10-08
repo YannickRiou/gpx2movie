@@ -1,4 +1,5 @@
-# Checks on every push and pull request: types, lint, unit tests, production build (no end-to-end tests).
+# Checks on every push and pull request: types, lint, unit tests, production build, and the Rust tests of the desktop
+# app (src-tauri, built against the dist/ just made). No end-to-end tests.
 name: Vérifications
 
 on:
@@ -23,3 +24,9 @@ jobs:
       - run: npm run lint
       - run: npx vitest run --maxWorkers=2
       - run: npm run build
+      # the desktop app's own code (native encoder arguments, command line): Linux libraries of Tauri, then its tests
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev build-essential file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - run: cargo test --locked
+        working-directory: src-tauri
