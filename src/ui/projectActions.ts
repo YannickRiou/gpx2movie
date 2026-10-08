@@ -3,6 +3,7 @@
  * file, import GPX / FIT tracks and the sample, chain tracks into one, save an export on the desktop (src/platform).
  * Outcomes are shown as toasts.
  */
+import { errorText } from '../core/errors'
 import type { Track } from '../core/types'
 import { useMediaStore } from '../film/media'
 import { importFile, importText } from '../import'
@@ -34,7 +35,7 @@ export async function saveProject(): Promise<void> {
     state.markProjectSaved()
     showToast({ kind: 'success', text: `Projet enregistré : ${outcome.fileName}` })
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err)
+    const reason = errorText(err)
     showToast({ kind: 'error', text: `Impossible d'enregistrer le projet : ${reason}` })
   }
 }
@@ -45,7 +46,7 @@ export async function saveExportedFile(url: string, fileName: string): Promise<v
     const outcome = await getPlatform().saveUrl(url, { fileName })
     if (outcome.saved) showToast({ kind: 'success', text: `Enregistré : ${outcome.fileName}` })
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err)
+    const reason = errorText(err)
     showToast({ kind: 'error', text: `Impossible d'enregistrer « ${fileName} » : ${reason}` })
   }
 }
@@ -70,7 +71,7 @@ export async function openProject(file: File, entry: ProjectEntry | null = null)
     if (project.warnings.length > 0) showToast({ kind: 'info', text: `${opened}.\n${project.warnings.join('\n')}` })
     else showToast({ kind: 'success', text: opened })
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err)
+    const reason = errorText(err)
     showToast({ kind: 'error', text: `Impossible d'ouvrir « ${file.name} » : ${reason}` })
   }
 }

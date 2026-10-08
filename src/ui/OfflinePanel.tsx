@@ -1,3 +1,4 @@
+import { errorText } from '../core/errors'
 import { useId, useMemo, useState } from 'react'
 import { buildTrackPath } from '../flyover/path'
 import { autoDistanceM } from '../flyover/camera'
@@ -67,7 +68,7 @@ export function OfflinePanel() {
         showToast({ kind: 'error', text: `Préparation arrêtée. ${result.error ?? ''}` })
       }
     } catch (err) {
-      showToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) })
+      showToast({ kind: 'error', text: errorText(err) })
     }
   }
 

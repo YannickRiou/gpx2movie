@@ -14,6 +14,7 @@
  */
 import type { Track } from '../core/types'
 import { flightPacing, pacingHighlights } from '../flyover/pacing'
+import { clamp } from '../core/math'
 import type { Pacing, PacingPosition, PacingSettings } from '../flyover/pacing'
 import type { Landmark } from '../osm/landmarks'
 import { filmStops } from './assemble'
@@ -92,7 +93,6 @@ export interface FilmClock {
   stateAt(tS: number): FilmState
 }
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 export interface FilmClockInput {
   opening: FilmShot

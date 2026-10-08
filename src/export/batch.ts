@@ -13,6 +13,7 @@
  * (sequencing with an injected runner). `exportJob` drives the real export store; the batch store keeps the
  * selection and the last run.
  */
+import { errorText } from '../core/errors'
 import { create } from 'zustand'
 import { supportedExtension } from '../import'
 import type { FolderFile, WritableFolder } from '../platform/folder'
@@ -159,10 +160,6 @@ export interface BatchRunner {
   report(jobs: readonly BatchJobState[]): void
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 /**
  * Run the jobs one after the other. A failed job does not stop the others; a canceled one (or a cancel asked
  * between two jobs) cancels it and every job left.
@@ -183,7 +180,7 @@ export async function runBatch(jobs: readonly BatchJob[], runner: BatchRunner): 
     try {
       outcome = await runner.run(jobs[i])
     } catch (error) {
-      outcome = { status: 'error', error: errorMessage(error) }
+      outcome = { status: 'error', error: errorText(error) }
     }
     update(i, i + 1, outcome)
     if (outcome.status === 'canceled') {
@@ -285,7 +282,7 @@ export async function runTrackFilms(
       try {
         await runner.show(files[i])
       } catch (error) {
-        update(i, i + 1, { status: 'error', error: errorMessage(error) })
+        update(i, i + 1, { status: 'error', error: errorText(error) })
         continue
       }
       const name = trackFilmName(files[i].name, files.map((f) => f.name))

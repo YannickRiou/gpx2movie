@@ -9,6 +9,7 @@
  *
  * `planImagerySubtiles` is pure (and tested); `loadImageryTexture` does the fetching and drawing.
  */
+import { errorText } from '../core/errors'
 import { CanvasTexture, ClampToEdgeWrapping, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace } from 'three'
 import type { Texture } from 'three'
 import type { ImagerySource, LoadImageryOptions, LoadImageryTexture, TileFetcher, TileKey } from '../core/types'
@@ -180,7 +181,7 @@ export const loadImageryTexture: LoadImageryTexture = async (
   if (plan.tiles.length > 0 && drawn === 0) {
     // Every sub-tile was cancelled by the fetcher itself (clear() on dispose): report it as an abort, not a failure.
     if (failure === undefined) throw createAbortError()
-    const cause = failure instanceof Error ? failure.message : String(failure)
+    const cause = errorText(failure)
     throw new Error(`No imagery could be loaded for tile ${tileKeyString(key)} (${source.id}): ${cause}`, {
       cause: failure,
     })

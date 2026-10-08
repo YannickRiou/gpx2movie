@@ -1,3 +1,4 @@
+import { errorText } from '../core/errors'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -605,13 +606,12 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
     })
   }
 
-  const reason = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
   const chooseTrackFolder = () => {
     // called from the click: the browser's folder picker needs it
     void pickReadableFolder(capabilities).then(
       (folder) => folder && setTrackFolder(folder),
-      (error: unknown) => showToast({ kind: 'error', text: `Impossible de lire ce dossier : ${reason(error)}` }),
+      (error: unknown) => showToast({ kind: 'error', text: `Impossible de lire ce dossier : ${errorText(error)}` }),
     )
   }
 
@@ -624,7 +624,7 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         const tracks = await useBatchStore.getState().runTracks(sources, jobs, { ...shared(), folder })
         announceTrackFilms(tracks, folder.name)
       },
-      (error: unknown) => showToast({ kind: 'error', text: `Impossible d'écrire dans ce dossier : ${reason(error)}` }),
+      (error: unknown) => showToast({ kind: 'error', text: `Impossible d'écrire dans ce dossier : ${errorText(error)}` }),
     )
   }
 

@@ -16,6 +16,7 @@
  * The overlay alone (`overlayOnly`) skips the scene: the same frames, each overlay drawn on a cleared canvas and encoded
  * with its transparency, so the file lines up frame for frame with the film.
  */
+import { errorText } from '../core/errors'
 import { useEffect, useRef } from 'react'
 import { useThree, type RootState } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
@@ -71,10 +72,6 @@ interface RunDeps {
   signal: AbortSignal
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 /** Camera placement of FlyoverRig at `progress` and film time `timeS` with the terrain loaded now (same inputs as the rig). */
 function viewAt(
   path: TrackPath,
@@ -105,7 +102,7 @@ async function abandon(error: unknown, request: ExportRequest, session: VideoEnc
   // also when failing before the encoder existed
   await request.destination?.discard().catch(() => undefined)
   if (error instanceof ExportCanceledError || canceled) useExportStore.getState().canceled()
-  else useExportStore.getState().fail(errorMessage(error))
+  else useExportStore.getState().fail(errorText(error))
 }
 
 type Still = NonNullable<ExportRequest['still']>
@@ -205,7 +202,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       still === undefined ? buildFrameSchedule(request) : [still < 1 ? still + REPLACE_EPSILON : still - REPLACE_EPSILON]
   } catch (error) {
     await request.destination?.discard().catch(() => undefined)
-    if (exportStore().begin(request.id, 0, performance.now())) exportStore().fail(errorMessage(error))
+    if (exportStore().begin(request.id, 0, performance.now())) exportStore().fail(errorText(error))
     return
   }
   if (!exportStore().begin(request.id, schedule.length, performance.now())) return

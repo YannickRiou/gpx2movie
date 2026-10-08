@@ -2,6 +2,7 @@
  * GPX 1.0 / 1.1 parser built on DOMParser. Namespace-agnostic: elements are matched on
  * `localName`, so Garmin (gpxtpx), Cluetrust and other extension vocabularies all work.
  */
+import { errorText } from '../core/errors'
 import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'
 import { buildTrack, isUtcOffsetMin, stripExtension } from './stats'
 
@@ -30,7 +31,7 @@ function parseXml(text: string): Document {
   try {
     doc = new DOMParser().parseFromString(source, 'application/xml')
   } catch (error) {
-    throw invalid(`XML mal formé (${error instanceof Error ? error.message : String(error)})`)
+    throw invalid(`XML mal formé (${errorText(error)})`)
   }
   const parserError = doc.getElementsByTagName('parsererror')[0]
   if (parserError) {

@@ -3,6 +3,7 @@
  * a daily limit per provider, tiles the pack already holds skipped (preparing a pack again resumes it). Its
  * dependencies are arguments (tests).
  */
+import { errorText } from '../core/errors'
 import type { KeyValueStore, TileCache } from '../platform/platform'
 import { TileFetchError, downloadTile } from '../terrain/fetch'
 import type { PlannedTile } from './plan'
@@ -124,7 +125,7 @@ export function startPackDownload(pack: string, tiles: readonly PlannedTile[], d
     try {
       await deps.cache.put(pack, tile.url, blob)
     } catch (error) {
-      stop('failed', { error: `Tuiles non enregistrées : ${error instanceof Error ? error.message : String(error)}` })
+      stop('failed', { error: `Tuiles non enregistrées : ${errorText(error)}` })
       return false
     }
     progress.bytes += blob.size

@@ -16,6 +16,7 @@
  * A gesture is previewed on the timeline only and committed on release as one undo step. Edits are the pure
  * functions of `film/timeline.ts`; editing a stop writes the generated stops out first (`materializeStops`).
  */
+import { errorText } from '../core/errors'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
 import { freezeLandmarkTitles, materializeStops, stopCandidates } from '../film/assemble'
@@ -415,7 +416,7 @@ export function Timeline() {
       try {
         read.push(await readMedia(file, file.name))
       } catch (err) {
-        failed.push(`« ${file.name} » : ${err instanceof Error ? err.message : String(err)}`)
+        failed.push(`« ${file.name} » : ${errorText(err)}`)
       }
     }
     setReading(false)
@@ -481,7 +482,7 @@ export function Timeline() {
       try {
         read.push(await readAudio(file, file.name))
       } catch (err) {
-        failed.push(`« ${file.name} » : ${err instanceof Error ? err.message : String(err)}`)
+        failed.push(`« ${file.name} » : ${errorText(err)}`)
       }
     }
     setReading(false)
