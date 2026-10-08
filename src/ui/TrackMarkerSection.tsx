@@ -16,7 +16,7 @@ import {
 import type { MarkerFigure, MarkerSettings, TrackStyle } from '../scene/markerSettings'
 import { useAppStore } from '../state/store'
 import { formatNumber } from './format'
-import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
+import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
 
 /** 4 -> "4", 4.5 -> "4,5", 1.25 -> "1,25" */
 function formatShort(value: number): string {
@@ -114,46 +114,6 @@ function MarkerImageField({ marker, update }: { marker: MarkerSettings; update(p
   )
 }
 
-/** A slider of the section: label, range and displayed value. */
-function SliderField({
-  label,
-  range,
-  value,
-  format,
-  onChange,
-}: {
-  label: string
-  range: { min: number; max: number; step: number }
-  value: number
-  format(value: number): string
-  onChange(value: number): void
-}) {
-  const id = useId()
-  return (
-    <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
-      <div className="range-row">
-        <input
-          id={id}
-          className="range"
-          type="range"
-          min={range.min}
-          max={range.max}
-          step={range.step}
-          value={value}
-          onChange={(e) => onChange(Number(e.currentTarget.value))}
-          aria-valuetext={format(value)}
-        />
-        <output className="range-row__value range-row__value--wide" htmlFor={id}>
-          {format(value)}
-        </output>
-      </div>
-    </div>
-  )
-}
-
 /**
  * « Trace et marqueur » section of the Survol tab: the marker (ball, figurine, picture), the draw-on and the glow
  * first; line width, dashes and marker size under « Plus de réglages ».
@@ -202,9 +162,9 @@ export function TrackMarkerSection() {
       </label>
 
       <MoreSettings paths={['trackStyle.width', 'trackStyle.dash', 'marker.size']}>
-        <SliderField
+        <RangeField
           label="Épaisseur de la trace"
-          range={TRACK_WIDTH_RANGE}
+          {...TRACK_WIDTH_RANGE}
           value={style.width}
           format={(v) => `${formatShort(v)} px`}
           onChange={(width) => updateStyle({ width })}
@@ -217,9 +177,9 @@ export function TrackMarkerSection() {
           labels={TRACK_DASH_LABELS}
           onChange={(dash) => updateStyle({ dash })}
         />
-        <SliderField
+        <RangeField
           label="Taille du marqueur"
-          range={MARKER_SIZE_RANGE}
+          {...MARKER_SIZE_RANGE}
           value={marker.size}
           format={(v) => `×${formatShort(v)}`}
           onChange={(size) => updateMarker({ size })}

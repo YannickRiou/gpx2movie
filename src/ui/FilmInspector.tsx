@@ -40,6 +40,7 @@ import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
+import { RangeField } from './PanelSection'
 import { nextGridIndex } from './shell'
 import { showToast } from './toast'
 
@@ -141,30 +142,7 @@ export function FilmInspector() {
     format: (v: number) => string,
     set: (v: number) => void,
     disabled = false,
-  ) => (
-    <div className="field">
-      <label className="field__label" htmlFor={`${id}-${key}`}>
-        {label}
-      </label>
-      <div className="range-row">
-        <input
-          id={`${id}-${key}`}
-          className="range"
-          type="range"
-          min={r.min}
-          max={r.max}
-          step={r.step}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => set(Number(e.currentTarget.value))}
-          aria-valuetext={format(value)}
-        />
-        <output className="range-row__value" htmlFor={`${id}-${key}`}>
-          {format(value)}
-        </output>
-      </div>
-    </div>
-  )
+  ) => <RangeField key={key} label={label} {...r} value={value} format={format} onChange={set} disabled={disabled} wide={false} />
   const text = (key: string, label: string, value: string, set: (v: string) => void) => (
     <div className="field">
       <label className="field__label" htmlFor={`${id}-${key}`}>
