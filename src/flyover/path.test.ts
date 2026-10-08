@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TrackPoint } from '../core/types'
 import { haversineM } from '../geo/ellipsoid'
 import { buildTrack } from '../import/stats'
-import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath } from './path'
+import { buildTrackPath, distanceAtTime, elevationProfile, nearestOnPath, pickProjectedPath, recordedTimeAt, samplePath } from './path'
 
 const A: TrackPoint = { lon: 6.8, lat: 45.9, ele: 1000 }
 const B: TrackPoint = { lon: 6.81, lat: 45.9, ele: 1100 }
@@ -120,5 +120,70 @@ describe('recorded time', () => {
     expect(recordedTimeAt(tailPath, 0)).toBe(T0)
     expect(recordedTimeAt(tailPath, tailPath.lengthM)).toBe(T0)
     expect(recordedTimeAt(buildTrackPath(track), 100)).toBeUndefined()
+  })
+})
+
+describe('photos along the path', () => {
+  const T0 = Date.UTC(2026, 6, 14, 4, 30)
+  const MIN = 60_000
+  // A, B, C timed every 10 min, C held 10 min (pause), back to B
+  const outAndBack = buildTrack({
+    name: 'p',
+    source: 'gpx',
+    segments: [
+      {
+        points: [
+          { ...A, time: T0 },
+          { ...B, time: T0 + 10 * MIN },
+          { ...C, time: T0 + 20 * MIN },
+          { ...C, time: T0 + 30 * MIN },
+          { ...B, time: T0 + 40 * MIN },
+        ],
+      },
+    ],
+  })
+  const path = buildTrackPath(outAndBack)
+
+  it('nearest point, on the pass recorded closest to the instant', () => {
+    const near = nearestOnPath(path, { lon: 6.8101, lat: 45.9 })!
+    expect(near.distanceM).toBe(path.dist[1])
+    expect(near.offM).toBeCloseTo(haversineM(B, { lon: 6.8101, lat: 45.9 }), 6)
+    expect(nearestOnPath(path, B, T0 + 38 * MIN)!.distanceM).toBe(path.dist[4])
+    expect(nearestOnPath({ ...path, count: 0 }, A)).toBeUndefined()
+  })
+
+  it('distance at a recorded instant, ends within the tolerance', () => {
+    expect(distanceAtTime(path, T0 + 5 * MIN)).toBeCloseTo(path.dist[1] / 2, 6)
+    expect(distanceAtTime(path, T0 + 25 * MIN)).toBe(path.dist[2])
+    expect(distanceAtTime(path, T0)).toBe(0)
+    expect(distanceAtTime(path, T0 - MIN)).toBeUndefined()
+    expect(distanceAtTime(path, T0 - MIN, 2 * MIN)).toBe(0)
+    expect(distanceAtTime(path, T0 + 41 * MIN, 2 * MIN)).toBe(path.lengthM)
+    expect(distanceAtTime(path, T0 + 50 * MIN, 2 * MIN)).toBeUndefined()
+    expect(distanceAtTime(buildTrackPath(track), T0)).toBeUndefined()
+  })
+})
+
+describe('picking the track on screen', () => {
+  // samples at 0, 100, 200 m drawn from (0, 0) to (200, 0) px, then back above it to (0, 40) at 400 m
+  const screen = [0, 0, 100, 0, 200, 0, 200, 40, 0, 40]
+  const distM = [0, 100, 200, 240, 440]
+
+  it('gives the distance of the nearest point within the radius, between two samples too', () => {
+    expect(pickProjectedPath(screen, distM, 50, 5, 12)).toBeCloseTo(50, 6)
+    expect(pickProjectedPath(screen, distM, 150, -3, 12)).toBeCloseTo(150, 6)
+    // the pass back, nearer to the pointer than the way out
+    expect(pickProjectedPath(screen, distM, 50, 30, 12)).toBeCloseTo(390, 6)
+  })
+
+  it('gives nothing beyond the radius', () => {
+    expect(pickProjectedPath(screen, distM, 50, 20, 12)).toBeUndefined()
+    expect(pickProjectedPath([], [], 0, 0, 12)).toBeUndefined()
+  })
+
+  it('skips the samples behind the camera and the segments that touch them', () => {
+    const hidden = [0, 0, Number.NaN, Number.NaN, 200, 0]
+    expect(pickProjectedPath(hidden, [0, 100, 200], 100, 0, 12)).toBeUndefined()
+    expect(pickProjectedPath(hidden, [0, 100, 200], 195, 2, 12)).toBe(200)
   })
 })

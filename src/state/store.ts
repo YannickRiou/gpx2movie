@@ -10,6 +10,8 @@ import { DEFAULT_VIDEO_SETTINGS } from '../export/schedule'
 import type { VideoSettings } from '../export/schedule'
 import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S } from '../flyover/cameraSettings'
 import type { CameraSettings } from '../flyover/cameraSettings'
+import { DEFAULT_FILM } from '../film/model'
+import type { Film } from '../film/model'
 import { DEFAULT_PACING } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
 import { DEFAULT_RACE } from '../flyover/race'
@@ -48,6 +50,8 @@ export interface Settings {
   flyoverDurationS: number
   /** variable pacing of the flyover: slow-downs and pauses at the highlights of the first track */
   pacing: PacingSettings
+  /** the film arranged on the timeline: opening and closing shots, stops, texts, media (see film/model.ts) */
+  film: Film
   /** 3D labels on the relief: tops of the detected climbs of the first track, GPX waypoints */
   labels: { climbs: boolean; waypoints: boolean }
   /** historical weather of the first timed track (Open-Meteo archive, network) */
@@ -70,8 +74,9 @@ export interface Playback {
   /** 0 = start of the track, 1 = end */
   progress: number
   /**
-   * film time of the progress (seconds at x1, pacing included) when the playback clock or the export set it;
-   * null when the progress was set from outside (scrub, rewind): the pacing then gives it
+   * film time of the progress (seconds at x1 from the first frame: opening, pacing and stops included) when the
+   * playback clock or the export set it; null when the progress was set from outside (scrub): the film clock
+   * then gives it
    */
   timeS: number | null
   /** playback speed multiplier, on top of settings.flyoverDurationS */
@@ -99,7 +104,7 @@ export interface AppState {
   loading: boolean
   setLoading(v: boolean): void
   playback: Playback
-  /** starting from the end (progress 1 without film time) rewinds to the start */
+  /** starting from the start or the end without film time plays the film from its first frame (opening included) */
   setPlaying(v: boolean): void
   /**
    * clamped to [0, 1]; reaching 1 stops the playback unless a film time is given (the playback clock plays the
@@ -107,6 +112,18 @@ export interface AppState {
    */
   setProgress(progress: number, timeS?: number | null): void
   setSpeed(speed: number): void
+  /** name typed by the user ('' = the first track's name, see effectiveProjectName) */
+  projectName: string
+  setProjectName(name: string): void
+  /** preview only (neither saved nor undoable): the 3D view fills the stage instead of the export format */
+  freeFraming: boolean
+  setFreeFraming(v: boolean): void
+  /** settings, tracks and name at the last save or open (compared by reference: « Modifié » / « Enregistré ») */
+  savedProject: { settings: Settings; tracks: Track[]; name: string }
+  markProjectSaved(): void
+  /** block selected on the timeline ('opening', 'closing' or a stop, text or medium id), shown by the inspector of the right dock */
+  filmSelection: string | null
+  setFilmSelection(id: string | null): void
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -124,6 +141,7 @@ export const DEFAULT_SETTINGS: Settings = {
   camera: DEFAULT_CAMERA,
   flyoverDurationS: DEFAULT_FLYOVER_DURATION_S,
   pacing: DEFAULT_PACING,
+  film: DEFAULT_FILM,
   labels: { climbs: true, waypoints: true },
   weather: { enabled: true },
   weatherScene: DEFAULT_WEATHER_SCENE,
@@ -261,7 +279,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   setPlaying(v) {
     const playback = get().playback
     if (playback.playing === v) return
-    if (v && playback.progress >= 1 && playback.timeS === null) set({ playback: { ...playback, playing: v, progress: 0 } })
+    const atAnEnd = playback.progress <= 0 || playback.progress >= 1
+    if (v && atAnEnd && playback.timeS === null) set({ playback: { ...playback, playing: v, progress: 0, timeS: 0 } })
     else set({ playback: { ...playback, playing: v } })
   },
 
@@ -275,6 +294,24 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   setSpeed(speed) {
     set({ playback: { ...get().playback, speed } })
+  },
+
+  projectName: '',
+  setProjectName(name) {
+    set({ projectName: name })
+  },
+  freeFraming: false,
+  setFreeFraming(v) {
+    set({ freeFraming: v })
+  },
+  savedProject: { settings: DEFAULT_SETTINGS, tracks: [], name: '' },
+  markProjectSaved() {
+    const { settings, tracks, projectName } = get()
+    set({ savedProject: { settings, tracks, name: projectName } })
+  },
+  filmSelection: null,
+  setFilmSelection(id) {
+    if (get().filmSelection !== id) set({ filmSelection: id })
   },
 }))
 
@@ -291,5 +328,9 @@ export function resetAppStore(): void {
     importError: null,
     loading: false,
     playback: { ...DEFAULT_PLAYBACK },
+    projectName: '',
+    freeFraming: false,
+    savedProject: { settings: DEFAULT_SETTINGS, tracks: [], name: '' },
+    filmSelection: null,
   })
 }

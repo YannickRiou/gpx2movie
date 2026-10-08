@@ -3,17 +3,24 @@
  *
  * Every storage access is wrapped in try/catch: without storage (private browsing, blocked site data,
  * quota) the presets still work for the session, from memory.
+ *
+ * A preset keeps the opening and closing shots of the film, not its stops, texts and media: they belong to the
+ * track of the project it was saved from.
  */
+import type { Film } from '../film/model'
 import type { Settings } from '../state/store'
 import { sanitizeSettings } from './document'
 
 export const PRESETS_STORAGE_KEY = 'openflyover.presets.v1'
 export const PRESET_NAME_MAX = 60
 
+/** Settings saved in a preset: the film reduced to its shots. */
+export type PresetSettings = Omit<Partial<Settings>, 'film'> & { film?: Pick<Film, 'opening' | 'closing'> }
+
 export interface Preset {
   name: string
   /** as saved; may miss keys added since, or hold values that are no longer valid */
-  settings: Partial<Settings>
+  settings: PresetSettings
 }
 
 export interface PresetStore {
@@ -35,7 +42,11 @@ export function normalizePresetName(name: string): string {
  * since it was saved) or invalid keep their value from `base` (the current settings).
  */
 export function presetSettings(preset: Preset, base: Settings): Settings {
-  return sanitizeSettings(preset.settings, base).settings
+  const film: unknown = preset.settings.film
+  if (film === null || typeof film !== 'object') return sanitizeSettings(preset.settings, base).settings
+  // only the shots (presets saved with a whole film included): the stops, texts and media stay those of `base`
+  const { opening, closing } = film as Partial<Film>
+  return sanitizeSettings({ ...preset.settings, film: { ...base.film, opening, closing } }, base).settings
 }
 
 function readPresets(storage: StorageLike | null): Preset[] {
@@ -65,7 +76,8 @@ export function createPresetStore(storage: StorageLike | null): PresetStore {
     save(name, settings) {
       const clean = normalizePresetName(name)
       if (!clean) throw new Error('Donnez un nom au préréglage.')
-      presets = [...presets.filter((p) => p.name !== clean), { name: clean, settings: { ...settings } }]
+      const film = { opening: settings.film.opening, closing: settings.film.closing }
+      presets = [...presets.filter((p) => p.name !== clean), { name: clean, settings: { ...settings, film } }]
       write()
     },
     remove(name) {

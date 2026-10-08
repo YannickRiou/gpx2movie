@@ -7,8 +7,8 @@
  * ink panel with white text, a stem and an anchor dot in the accent of its kind. Sprites skip the depth
  * test; instead, every frame, a label fades out when its line of sight passes under the relief or when it
  * is far away, and colliding labels are dropped by priority; they also fade out while an opening or closing
- * card of the film overlay is shown. Opacity is a pure function of the view, the progress and the overlay
- * settings (no temporal smoothing) so any frame renders the same in isolation.
+ * card of the film overlay is shown. Opacity is a pure function of the view, the progress, the film time and
+ * the overlay settings (no temporal smoothing) so any frame renders the same in isolation.
  *
  * Anchors are draped like the track (terrain height, else the recorded elevation, × exaggeration) and
  * re-draped (debounced) whenever the terrain engine reports new tiles. Must be rendered inside TerrainLayer.
@@ -19,7 +19,7 @@ import { CanvasTexture, Group, type Camera, LinearFilter, SRGBColorSpace, Sprite
 import type { LocalFrame, TerrainEngine } from '../core/types'
 import { registerDrapeFlush, useExportStore } from '../export/store'
 import { climbsOf } from '../flyover/climbs'
-import { cardOpacityAt } from '../overlay/draw'
+import { cardOpacityAt, overlayTime } from '../overlay/draw'
 import { useAppStore } from '../state/store'
 import {
   LABEL_KIND_ACCENTS,
@@ -38,6 +38,7 @@ import {
   type ScreenRect,
 } from './labelModel'
 import { externalLabels, useLabelSources } from './labelSources'
+import { useFilmClock } from './usePacing'
 import { useTerrainContext } from './TerrainLayer'
 import {
   REDRAPE_DEBOUNCE_MS,
@@ -349,10 +350,17 @@ export function Labels() {
     [],
   )
 
+  // the overlay cards are timed in film time
+  const clock = useFilmClock()
+  const clockRef = useRef(clock)
+  useEffect(() => {
+    clockRef.current = clock
+  })
+
   useFrame(({ camera, gl, size }) => {
     if (!setRef.current) return
     const { playback, settings } = useAppStore.getState()
-    const card = cardOpacityAt(playback.progress, settings.overlay)
+    const card = cardOpacityAt(overlayTime(clockRef.current, playback.progress, playback.timeS), settings.overlay)
     const { renderScale } = useExportStore.getState()
     updateLabelSet(setRef.current, camera, size, gl.toneMappingExposure, engine, frame, exaggeration, card, renderScale)
   })

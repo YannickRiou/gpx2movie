@@ -153,6 +153,15 @@ describe('settings and misc', () => {
       camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
       flyoverDurationS: 60,
       pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true },
+      film: {
+        opening: { style: 'descente', durationS: 6 },
+        closing: { style: 'descente', durationS: 5 },
+        autoStops: true,
+        autoMode: 'temps-forts',
+        stops: [],
+        texts: [],
+        media: [],
+      },
       labels: { climbs: true, waypoints: true },
       weather: { enabled: true },
       weatherScene: { enabled: true, strength: 1 },
@@ -195,13 +204,23 @@ describe('playback', () => {
     expect(useAppStore.getState().playback.progress).toBe(0)
   })
 
-  it('stops at the end and rewinds when played again', () => {
+  it('stops at the end and rewinds to the first frame of the film when played again', () => {
     const s = useAppStore.getState()
     s.setPlaying(true)
     s.setProgress(1)
     expect(useAppStore.getState().playback).toMatchObject({ playing: false, progress: 1 })
     s.setPlaying(true)
-    expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 0 })
+    expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 0, timeS: 0 })
+  })
+
+  it('plays from the first frame (opening) when started at the start, from the scrubbed progress elsewhere', () => {
+    const s = useAppStore.getState()
+    s.setPlaying(true)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 0, timeS: 0 })
+    s.setPlaying(false)
+    s.setProgress(0.3)
+    s.setPlaying(true)
+    expect(useAppStore.getState().playback).toMatchObject({ playing: true, progress: 0.3, timeS: null })
   })
 
   it('keeps playing at the end while a film time is given (final pause), forgets it when set from outside', () => {

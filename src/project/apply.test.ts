@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Track } from '../core/types'
 import { buildTrack } from '../import/stats'
 import { DEFAULT_SETTINGS, resetAppStore, useAppStore } from '../state/store'
-import { applyProject, applySettings, modifiedSettings, sameValue } from './apply'
+import { useMediaStore } from '../film/media'
+import { applyProject, applySettings, modifiedPaths, modifiedSettings, sameValue } from './apply'
 import type { LoadedProject } from './document'
 
 /** A short track in the Chamonix valley (inside the IGN coverage). */
@@ -18,7 +19,7 @@ function chamonix(id: string): Track {
 }
 
 function project(patch: Partial<LoadedProject> = {}): LoadedProject {
-  return { name: 'p', settings: { ...DEFAULT_SETTINGS }, speed: 2, tracks: [chamonix('new')], warnings: [], ...patch }
+  return { name: 'p', settings: { ...DEFAULT_SETTINGS }, speed: 2, tracks: [chamonix('new')], media: {}, warnings: [], ...patch }
 }
 
 beforeEach(() => resetAppStore())
@@ -43,6 +44,27 @@ describe('sameValue', () => {
     expect(sameValue([1], { 0: 1 })).toBe(false)
     expect(sameValue(null, {})).toBe(false)
     expect(sameValue(0, '0')).toBe(false)
+  })
+})
+
+describe('modifiedPaths', () => {
+  it('compares whole settings and single fields of object settings with their defaults', () => {
+    const paths = ['exposureEv', 'weatherScene.strength', 'camera.distance', 'pacing'] as const
+    expect(modifiedPaths(DEFAULT_SETTINGS, paths)).toEqual([])
+    // a field shown elsewhere (weatherScene.enabled, camera.style) does not count
+    const visibleOnly = {
+      ...DEFAULT_SETTINGS,
+      weatherScene: { ...DEFAULT_SETTINGS.weatherScene, enabled: !DEFAULT_SETTINGS.weatherScene.enabled },
+      camera: { ...DEFAULT_SETTINGS.camera, style: 'orbit' as const },
+    }
+    expect(modifiedPaths(visibleOnly, paths)).toEqual([])
+    const hidden = {
+      ...visibleOnly,
+      exposureEv: 1,
+      camera: { ...visibleOnly.camera, distance: 2 },
+      pacing: { ...DEFAULT_SETTINGS.pacing },
+    }
+    expect(modifiedPaths(hidden, paths)).toEqual(['exposureEv', 'camera.distance'])
   })
 })
 
@@ -75,6 +97,14 @@ describe('applyProject', () => {
     expect(state.fitRequest).toBeGreaterThan(fit)
     expect(state.frameOrigin).toEqual({ lon: 6.87, lat: 45.93 })
     expect(state.importError).toBeNull()
+  })
+
+  it('replaces the pictures of the film', () => {
+    const data = 'data:image/jpeg;base64,/9j/AAEC'
+    useMediaStore.getState().add([{ data, thumb: data, width: 1, height: 1, name: 'ancienne.jpg' }])
+    const media = { 'photo-1': { data, thumb: data, width: 4, height: 3, name: 'lac.jpg' } }
+    applyProject(project({ media }))
+    expect(useMediaStore.getState().table).toEqual(media)
   })
 
   it("keeps the project's imagery even where a regional source would be picked automatically", () => {

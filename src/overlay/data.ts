@@ -11,6 +11,9 @@ import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath } from '..
 import type { ElevationProfile, TrackPath } from '../flyover/path'
 import { metricValues } from '../flyover/trackColor'
 import { ELEVATION_HYSTERESIS_M, smoothElevations } from '../import/stats'
+import { OSM_ATTRIBUTION } from '../osm/overpass'
+import { getImagerySource, getTerrainSource } from '../terrain/sources'
+import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import { summarizeOuting, weatherWidgetData } from '../weather/series'
 import type { WeatherSeries, WeatherSummary, WeatherWidgetData } from '../weather/series'
 
@@ -260,4 +263,26 @@ export function overlayFrameAt(data: OverlayTrack, progress: number): OverlayFra
   }
   if (data.weatherSeries) frame.weather = weatherWidgetData(data.weatherSeries, path, p)
   return frame
+}
+
+export interface CreditSources {
+  terrainSourceId: string
+  imagerySourceId: string
+  /** the weather of the outing is loaded (Open-Meteo) */
+  weather: boolean
+  /** OpenStreetMap landmarks are loaded */
+  landmarks: boolean
+}
+
+/**
+ * Credits of the sources in the film, the same strings as the status bar: relief and imagery always, Open-Meteo
+ * and OpenStreetMap when their data is loaded.
+ */
+export function overlayCredits({ terrainSourceId, imagerySourceId, weather, landmarks }: CreditSources): string[] {
+  return [
+    `Relief : ${getTerrainSource(terrainSourceId).attribution}`,
+    `Imagerie : ${getImagerySource(imagerySourceId).attribution}`,
+    ...(weather ? [OPEN_METEO_ATTRIBUTION] : []),
+    ...(landmarks ? [`Repères : ${OSM_ATTRIBUTION}`] : []),
+  ]
 }

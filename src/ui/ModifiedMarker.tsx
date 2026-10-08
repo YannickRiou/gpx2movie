@@ -2,6 +2,7 @@ import { modifiedSettings } from '../project/apply'
 import { resetSettings } from '../project/history'
 import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
+import { dismissToast, showToast } from './toast'
 
 interface Props {
   /** the settings keys of the group */
@@ -9,6 +10,21 @@ interface Props {
   /** name of the group, for the button's accessible label */
   label: string
   disabled?: boolean
+}
+
+/**
+ * Reset `keys` and say so, with « Annuler »; the message goes away at the next change of the settings (or an undo),
+ * so that its « Annuler » never undoes a later step.
+ */
+function resetWithUndo(keys: readonly (keyof Settings)[]): void {
+  const undo = resetSettings(keys)
+  const settings = useAppStore.getState().settings
+  const id = showToast({ kind: 'success', text: 'Réglages remis par défaut', action: { label: 'Annuler', run: undo } })
+  const stop = useAppStore.subscribe((state) => {
+    if (state.settings === settings) return
+    stop()
+    dismissToast(id)
+  })
 }
 
 /**
@@ -27,7 +43,7 @@ export function ModifiedMarker({ keys, label, disabled = false }: Props) {
         aria-label={`Rétablir les réglages par défaut : ${label}`}
         title="Revenir aux réglages par défaut (Ctrl+Z pour annuler)"
         disabled={disabled}
-        onClick={() => resetSettings(keys)}
+        onClick={() => resetWithUndo(keys)}
       >
         Par défaut
       </button>

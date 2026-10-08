@@ -125,15 +125,16 @@ describe('composeFrame', () => {
   it('paints the sky, scales the WebGL image to the video size and draws the overlay on top', () => {
     const { ctx, calls } = fakeContext()
     const overlay = vi.fn(() => calls.push('overlay'))
-    composeFrame(ctx, {} as CanvasImageSource, 0.5, 320, 180, overlay)
+    const at = { progress: 0.5, time: { timeS: 12, openingS: 6, flightS: 20, totalS: 31 } }
+    composeFrame(ctx, {} as CanvasImageSource, at, 320, 180, overlay)
     expect(calls).toEqual(['stop', 'stop', 'fill 0 0 320 180', 'draw 0 0 320 180', 'save', 'overlay', 'restore'])
-    expect(overlay).toHaveBeenCalledWith(ctx, 0.5, 320, 180)
+    expect(overlay).toHaveBeenCalledWith(ctx, at, 320, 180)
   })
 
   it('restores the context when the overlay throws', () => {
     const { ctx, calls } = fakeContext()
     expect(() =>
-      composeFrame(ctx, {} as CanvasImageSource, 0, 10, 10, () => {
+      composeFrame(ctx, {} as CanvasImageSource, { progress: 0, time: { timeS: 0, openingS: 0, flightS: 1, totalS: 1 } }, 10, 10, () => {
         throw new Error('boom')
       }),
     ).toThrow('boom')

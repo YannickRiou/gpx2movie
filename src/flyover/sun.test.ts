@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildTrack } from '../import/stats'
 import { buildTrackPath } from './path'
-import { solarHourToDate, sunDateAt } from './sun'
+import { SUN_CHIPS, solarDay, solarHourOf, solarHourToDate, sunChipHour, sunDateAt, sunTimes } from './sun'
+import type { SolarDay } from './sun'
 
 describe('solarHourToDate', () => {
   const day = Date.UTC(2026, 6, 14, 17, 42) // any time of the day
@@ -54,5 +55,85 @@ describe('sunDateAt', () => {
     expect(sunDateAt(timed, 0.5, { ...opts, sunFromTrack: false }).getTime()).toBe(fixed)
     expect(sunDateAt(untimed, 0.5, opts).getTime()).toBe(fixed)
     expect(sunDateAt(null, 0.5, opts).getTime()).toBe(fixed)
+  })
+})
+
+describe('sunTimes', () => {
+  const MIN = 60_000
+  /** |a − b| in minutes */
+  const minutesApart = (a: Date | null, iso: string) => Math.abs((a?.getTime() ?? Number.NaN) - Date.parse(iso)) / MIN
+
+  it('matches published sunrise, noon and sunset times (within 2 min)', () => {
+    // Paris, summer solstice: 05:47 / 13:52 / 21:58 CEST
+    const paris = sunTimes(48.8566, 2.3522, new Date(Date.UTC(2024, 5, 21, 15)))
+    expect(minutesApart(paris.sunrise, '2024-06-21T03:47Z')).toBeLessThan(2)
+    expect(minutesApart(paris.solarNoon, '2024-06-21T11:52Z')).toBeLessThan(2)
+    expect(minutesApart(paris.sunset, '2024-06-21T19:58Z')).toBeLessThan(2)
+    expect(paris.polar).toBeNull()
+    // New York, winter solstice: 07:16 / 16:32 EST
+    const ny = sunTimes(40.7128, -74.006, new Date(Date.UTC(2024, 11, 21, 3)))
+    expect(minutesApart(ny.sunrise, '2024-12-21T12:16Z')).toBeLessThan(2)
+    expect(minutesApart(ny.sunset, '2024-12-21T21:32Z')).toBeLessThan(2)
+    // Sydney, southern summer: 05:41 / 20:05 AEDT (sunrise on the previous UTC day)
+    const sydney = sunTimes(-33.8688, 151.2093, new Date(Date.UTC(2024, 11, 21)))
+    expect(minutesApart(sydney.sunrise, '2024-12-20T18:41Z')).toBeLessThan(2)
+    expect(minutesApart(sydney.sunset, '2024-12-21T09:05Z')).toBeLessThan(2)
+  })
+
+  it('follows the equation of time: Greenwich solar noon about 16 min early in early November', () => {
+    const greenwich = sunTimes(51.4769, 0, new Date(Date.UTC(2024, 10, 3)))
+    expect(minutesApart(greenwich.solarNoon, '2024-11-03T11:43:35Z')).toBeLessThan(1)
+  })
+
+  it('handles the polar day and night', () => {
+    const june = sunTimes(69.6492, 18.9553, new Date(Date.UTC(2024, 5, 21)))
+    expect(june).toMatchObject({ sunrise: null, sunset: null, polar: 'day' })
+    const december = sunTimes(69.6492, 18.9553, new Date(Date.UTC(2024, 11, 21)))
+    expect(december).toMatchObject({ sunrise: null, sunset: null, polar: 'night' })
+    expect(december.solarNoon.getUTCHours()).toBe(10)
+  })
+})
+
+describe('solarHourOf', () => {
+  it('inverts solarHourToDate', () => {
+    const day = Date.UTC(2026, 6, 14, 17)
+    for (const lon of [-120, 0, 6.87, 151.2]) {
+      expect(solarHourOf(day, lon, solarHourToDate(day, lon, 7.25))).toBeCloseTo(7.25, 9)
+    }
+  })
+
+  it('gives sun events near the local clock of the sun whatever the longitude', () => {
+    const chamonix = solarDay(45.92, 6.87, Date.UTC(2026, 6, 14, 5))
+    expect(chamonix.noon).toBeCloseTo(12.1, 1) // equation of time −6 min in mid-July
+    expect(chamonix.sunrise).toBeGreaterThan(4.2)
+    expect(chamonix.sunrise).toBeLessThan(4.6)
+    expect(chamonix.sunset).toBeGreaterThan(19.6)
+    expect(chamonix.sunset).toBeLessThan(20)
+  })
+})
+
+describe('sunChipHour', () => {
+  const day: SolarDay = { sunrise: 4.39, sunset: 19.8, noon: 12.1, polar: null }
+
+  it('maps each chip to a quarter hour of the day', () => {
+    expect(Object.fromEntries(SUN_CHIPS.map((chip) => [chip, sunChipHour(chip, day)]))).toEqual({
+      lever: 4.5, // first quarter after sunrise
+      matin: 8.25, // halfway to noon
+      midi: 12,
+      'heure-doree': 18.75, // one hour before sunset
+      coucher: 19.75, // last quarter before sunset
+      nuit: 0,
+    })
+  })
+
+  it('leaves out the moments that do not exist in a polar day or night', () => {
+    const polarDay: SolarDay = { sunrise: null, sunset: null, noon: 11.8, polar: 'day' }
+    expect(SUN_CHIPS.map((chip) => sunChipHour(chip, polarDay))).toEqual([null, 9, 11.75, null, null, null])
+    const polarNight: SolarDay = { sunrise: null, sunset: null, noon: 11.8, polar: 'night' }
+    expect(SUN_CHIPS.map((chip) => sunChipHour(chip, polarNight))).toEqual([null, null, 11.75, null, null, 0])
+  })
+
+  it('stays inside the slider range', () => {
+    expect(sunChipHour('coucher', { sunrise: 0.1, sunset: 23.95, noon: 12, polar: null })).toBe(23.75)
   })
 })

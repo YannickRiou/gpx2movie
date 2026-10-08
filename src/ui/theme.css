@@ -23,9 +23,28 @@
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 24px;
+  --space-6: 32px;
 
-  --sidebar-width: 340px;
+  /* semantic surfaces, mapped to the palette above (a dark variant would only remap these) */
+  --surface-chrome: var(--color-ink);
+  --surface-panel: var(--color-paper);
+  --surface-card: var(--color-card);
+  --text-1: var(--color-ink);
+  --text-2: var(--color-ink-soft);
+  --line: var(--color-line);
+
+  /* shell layout and density */
+  --topbar-h: 48px;
+  --rail-w: 56px;
+  --panel-w: 320px;
+  --dock-w: 300px;
+  --statusbar-h: 24px;
+  --control-h: 32px;
+  --shadow-pop: 0 8px 24px rgb(28 42 51 / 0.28);
+
   --focus-ring: 2px solid var(--color-accent);
+  /* on the ink chrome: 6.3:1 against --color-ink */
+  --focus-ring-on-dark: 2px solid var(--color-accent-light);
 }
 
 h1,

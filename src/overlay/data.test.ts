@@ -4,7 +4,10 @@ import type { TrackPoint } from '../core/types'
 import { parseGpx } from '../import/gpx'
 import { buildTrack } from '../import/stats'
 import { buildTrackPath } from '../flyover/path'
-import { cumulativeAscent, miniMapOutline, overlayFrameAt, prepareOverlayTrack } from './data'
+import { OSM_ATTRIBUTION } from '../osm/overpass'
+import { getImagerySource, getTerrainSource } from '../terrain/sources'
+import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
+import { cumulativeAscent, miniMapOutline, overlayCredits, overlayFrameAt, prepareOverlayTrack } from './data'
 
 /** metres per degree of latitude on the haversine sphere */
 const M_PER_DEG = (6371008.8 * Math.PI) / 180
@@ -139,5 +142,18 @@ describe('mini-map outline', () => {
     expect(frame.track.outline).toMatchObject({ width: 0, height: 0 })
     expect(frame.mapPoint).toEqual({ x: 0, y: 0 })
     expect(miniMapOutline({ ...buildTrackPath(still), count: 0 })).toBeUndefined()
+  })
+})
+
+describe('overlayCredits', () => {
+  it('credits relief and imagery always, the weather and the landmarks once loaded, as the status bar', () => {
+    const sources = { terrainSourceId: 'mapterhorn', imagerySourceId: 'opentopomap', weather: false, landmarks: false }
+    expect(overlayCredits(sources)).toEqual([
+      `Relief : ${getTerrainSource('mapterhorn').attribution}`,
+      `Imagerie : ${getImagerySource('opentopomap').attribution}`,
+    ])
+    expect(overlayCredits({ ...sources, weather: true, landmarks: true }).slice(2)).toEqual([OPEN_METEO_ATTRIBUTION, `Repères : ${OSM_ATTRIBUTION}`])
+    // unknown ids fall back to the default sources, like the scene
+    expect(overlayCredits({ ...sources, imagerySourceId: 'nope' })[1]).toBe(`Imagerie : ${getImagerySource('nope').attribution}`)
   })
 })

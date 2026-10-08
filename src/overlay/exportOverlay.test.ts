@@ -18,6 +18,7 @@ const points: TrackPoint[] = [
 ]
 const track = buildTrack({ name: 't', source: 'gpx', segments: [{ points }] })
 const ctx = {} as OffscreenCanvasRenderingContext2D
+const at = (progress: number) => ({ progress, time: { timeS: progress * 10, openingS: 0, flightS: 10, totalS: 10 } })
 
 describe('createOverlayDrawer', () => {
   beforeEach(() => {
@@ -27,7 +28,7 @@ describe('createOverlayDrawer', () => {
 
   it('draws nothing without a track', () => {
     const drawer = createOverlayDrawer()
-    drawer.draw(ctx, 0.5, 1920, 1080)
+    drawer.draw(ctx, at(0.5), 1920, 1080)
     expect(drawOverlay).not.toHaveBeenCalled()
     drawer.dispose()
   })
@@ -35,14 +36,19 @@ describe('createOverlayDrawer', () => {
   it('draws the first track with the overlay settings at the export size', () => {
     useAppStore.getState().addTracks([track])
     const drawer = createOverlayDrawer()
-    drawer.draw(ctx, 0.5, 1920, 1080)
-    drawer.draw(ctx, 0.75, 1920, 1080)
+    drawer.draw(ctx, at(0.5), 1920, 1080)
+    drawer.draw(ctx, at(0.75), 1920, 1080)
     expect(drawOverlay).toHaveBeenCalledTimes(2)
-    const [calledCtx, frame, settings, size] = vi.mocked(drawOverlay).mock.calls[1]
+    const [calledCtx, frame, settings, size, , extras] = vi.mocked(drawOverlay).mock.calls[1]
     expect(calledCtx).toBe(ctx)
-    expect(frame).toBeTruthy()
+    expect(frame.progress).toBe(0.75)
     expect(settings).toBe(useAppStore.getState().settings.overlay)
     expect(size).toEqual({ width: 1920, height: 1080 })
+    // film time of the frame, timeline texts, credits of the sources in use
+    expect(extras?.time).toEqual(at(0.75).time)
+    expect(extras?.texts).toBe(useAppStore.getState().settings.film.texts)
+    expect(extras?.credits?.[0]).toMatch(/^Relief : /)
+    expect(extras?.credits?.[1]).toMatch(/^Imagerie : /)
     drawer.dispose()
   })
 

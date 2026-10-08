@@ -1,26 +1,43 @@
 import { useEffect, useRef } from 'react'
 import type { Track } from '../core/types'
+import { getMediaBitmaps, mediaToLoad } from '../film/media'
+import { useLandmarkStore } from '../osm/store'
+import { useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
 import type { WeatherSeries } from '../weather/series'
 import { loadLogo, loadOverlayFonts } from './assets'
 import { overlayFrameAt, prepareOverlayTrack } from './data'
 import type { OverlayTrack } from './data'
-import { drawOverlay } from './draw'
+import { drawOverlay, overlayTime } from './draw'
 import type { OverlayAssets } from './draw'
+import { overlayExtras, photoAssets } from './exportOverlay'
 
 /**
  * Preview of the film overlay: a 2D canvas stacked over the 3D view, redrawn by `drawOverlay` on the next
- * animation frame after the progress, the overlay settings, the first track, its weather or the view size
- * change (store subscriptions, no React render per frame). Rendered only while the overlay is enabled.
+ * animation frame after the progress or film time, the settings, the film clock, the first track, its weather,
+ * the landmarks, a decoded photo or the view size change (store subscriptions, no React render per frame).
+ * Rendered while the overlay or the source credits are enabled, or the film has photos.
  */
 export function OverlayCanvas() {
-  const enabled = useAppStore((s) => s.settings.overlay.enabled && s.tracks.length > 0)
+  const enabled = useAppStore(
+    (s) => (s.settings.overlay.enabled || s.settings.overlay.credits.enabled || s.settings.film.media.length > 0) && s.tracks.length > 0,
+  )
   return enabled ? <OverlayPreview /> : null
 }
 
+/** Photos decoded this long before they appear (seconds of film time). */
+const PHOTO_AHEAD_S = 2
+
 function OverlayPreview() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const clock = useFilmClock()
+  const clockRef = useRef(clock)
+  const scheduleRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    clockRef.current = clock
+    scheduleRef.current()
+  }, [clock])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -34,6 +51,7 @@ function OverlayPreview() {
     let data: OverlayTrack | null = null
     let logoSource = ''
     let assets: OverlayAssets = {}
+    const bitmaps = getMediaBitmaps()
 
     const draw = () => {
       raf = 0
@@ -75,24 +93,34 @@ function OverlayPreview() {
           })
       }
       ctx.setTransform(pixelW / width, 0, 0, pixelH / height, 0, 0)
-      drawOverlay(ctx, frame, overlay, { width, height }, assets)
+      const time = overlayTime(clockRef.current, playback.progress, playback.timeS)
+      // decode the photos coming up before they fade in
+      for (const id of mediaToLoad(settings.film.media, time.timeS, PHOTO_AHEAD_S)) bitmaps.get(id)
+      drawOverlay(ctx, frame, overlay, { width, height }, { ...assets, ...photoAssets() }, overlayExtras(time))
     }
     const schedule = () => {
       if (!raf && !disposed) raf = requestAnimationFrame(draw)
     }
 
+    scheduleRef.current = schedule
+
     const unsubscribe = useAppStore.subscribe((state, prev) => {
       if (
         state.playback.progress !== prev.playback.progress ||
-        state.settings.overlay !== prev.settings.overlay ||
+        state.playback.timeS !== prev.playback.timeS ||
+        state.settings !== prev.settings ||
         state.tracks !== prev.tracks
       ) {
         schedule()
       }
     })
     const unsubscribeWeather = useWeatherStore.subscribe((state, prev) => {
-      if (state.series !== prev.series) schedule()
+      if (state.series !== prev.series || state.status !== prev.status) schedule()
     })
+    const unsubscribeLandmarks = useLandmarkStore.subscribe((state, prev) => {
+      if (state.landmarks !== prev.landmarks) schedule()
+    })
+    const unsubscribePhotos = bitmaps.subscribe(schedule)
     // size changes, including a devicePixelRatio change (browser zoom, moving to another screen)
     const observer = new ResizeObserver(schedule)
     observer.observe(canvas)
@@ -106,8 +134,11 @@ function OverlayPreview() {
     return () => {
       disposed = true
       cancelAnimationFrame(raf)
+      scheduleRef.current = () => {}
       unsubscribe()
       unsubscribeWeather()
+      unsubscribeLandmarks()
+      unsubscribePhotos()
       observer.disconnect()
       window.removeEventListener('resize', schedule)
     }

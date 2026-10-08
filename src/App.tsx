@@ -1,65 +1,409 @@
-import { OverlayCanvas } from './overlay/OverlayCanvas'
-import { FlyoverCanvas } from './scene/FlyoverCanvas'
+import { useEffect, useReducer, useRef, useState } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
+import { isExportBusy, useExportStore } from './export/store'
+import { addStop, addText } from './film/timeline'
+import { getSettingsHistory, installHistoryShortcuts } from './project/history'
+import { editFilm, useFilmClock } from './scene/usePacing'
 import { useAppStore } from './state/store'
+import type { Settings } from './state/store'
 import { CameraPanel } from './ui/CameraPanel'
 import { ClimbList } from './ui/ClimbList'
+import { EmptyState } from './ui/EmptyState'
 import { ExportPanel } from './ui/ExportPanel'
-import { ImportPanel } from './ui/ImportPanel'
+import { FilmInspector } from './ui/FilmInspector'
+import { HelpDialog } from './ui/HelpDialog'
+import { Icon } from './ui/icons'
+import type { IconName } from './ui/icons'
 import { LandmarkPanel } from './ui/LandmarkPanel'
+import { ModifiedMarker } from './ui/ModifiedMarker'
 import { OverlayPanel } from './ui/OverlayPanel'
+import { openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
+import { ONE_SIDE_MAX_WIDTH, SHELL_TABS, isFileDrag, nextTabIndex, parseShellPrefs, shellReducer } from './ui/shell'
+import type { ShellTab } from './ui/shell'
+import { keyFocus, matchShortcut, seekTime, withShortcut } from './ui/shortcuts'
+import { Stage } from './ui/Stage'
 import { StatusBar } from './ui/StatusBar'
 import { Timeline } from './ui/Timeline'
-import { TrackLegend } from './ui/TrackLegend'
+import { Toaster } from './ui/Toaster'
+import { TopBar } from './ui/TopBar'
 import { TrackList } from './ui/TrackList'
 import { WeatherPanel } from './ui/WeatherPanel'
 import './ui/app.css'
+import './ui/shell.css'
+
+const TAB_LABELS: Record<ShellTab, { label: string; icon: IconName }> = {
+  trace: { label: 'Trace', icon: 'route' },
+  carte: { label: 'Carte', icon: 'map' },
+  survol: { label: 'Survol', icon: 'video' },
+  habillage: { label: 'Habillage', icon: 'layers' },
+  projet: { label: 'Projet', icon: 'folder' },
+}
+
+const PREFS_KEY = 'openflyover.shell.v1'
+
+function loadPrefs() {
+  try {
+    return parseShellPrefs(localStorage.getItem(PREFS_KEY))
+  } catch {
+    return parseShellPrefs(null)
+  }
+}
+
+const isNarrow = () => window.innerWidth < ONE_SIDE_MAX_WIDTH
+const isExporting = () => isExportBusy(useExportStore.getState().phase)
+/** a modal dialog (help, sources) is open: it takes the keyboard, Escape closes it */
+const isDialogOpen = () => document.querySelector('dialog[open]') !== null
+
+/** Escape is left to an open menu inside this element (it closes itself first). */
+const handlesOwnEscape = (target: EventTarget | null) => target instanceof Element && target.closest('[data-local-escape]') !== null
+
+/**
+ * ← / → (Shift: 5 s), Home and End move the playhead in film time; S / T add a stop at the marker / a text at the
+ * playhead. Its own component: the film clock changes with the settings and must not re-render the shell. Listens in
+ * the bubble phase, after a timeline block that moves with the arrows (it prevents the default).
+ */
+function SeekShortcuts() {
+  const clock = useFilmClock()
+  const clockRef = useRef(clock)
+  useEffect(() => {
+    clockRef.current = clock
+  }, [clock])
+
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.isComposing || e.defaultPrevented || isDialogOpen()) return
+      const action = matchShortcut(e, keyFocus(e.target))
+      const store = useAppStore.getState()
+      if (!action || store.tracks.length === 0 || isExporting()) return
+      const c = clockRef.current
+      const total = c.totalTime()
+      const playhead = Math.min(store.playback.timeS ?? c.timeAtProgress(store.playback.progress), total)
+      if (action === 'add-stop' || action === 'add-text') {
+        e.preventDefault()
+        if (e.repeat) return
+        if (action === 'add-stop') editFilm((f) => addStop(f, Math.round(store.playback.progress * store.tracks[0].stats.distanceM)), { stops: true })
+        else editFilm((f) => addText(f, playhead))
+        return
+      }
+      const t = seekTime(action, playhead, total)
+      if (t === null) return
+      e.preventDefault()
+      store.setProgress(c.progressAtTime(t), t < total ? t : null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+  return null
+}
+
+/** Foldable section of a tab (still mounted when folded: the weather panel syncs the weather store). */
+function Fold({ title, keys, hidden, children }: { title: string; keys?: (keyof Settings)[]; hidden: boolean; children: ReactNode }) {
+  return (
+    <details className="fold" open hidden={hidden}>
+      <summary className="fold__summary">
+        <h2 className="section-title fold__title">{title}</h2>
+        {/* the marker's button must not fold the section */}
+        {keys && (
+          <span className="fold__marker" onClick={(e) => e.preventDefault()}>
+            <ModifiedMarker keys={keys} label={title} />
+          </span>
+        )}
+        <Icon name="chevron-down" size={16} />
+      </summary>
+      {children}
+    </details>
+  )
+}
 
 export default function App() {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
-  const requestFit = useAppStore((s) => s.requestFit)
-  const trackColored = useAppStore((s) => s.settings.trackColorBy !== 'none')
+  const exporting = useExportStore((s) => isExportBusy(s.phase))
+  const selected = useAppStore((s) => s.filmSelection !== null && s.tracks.length > 0)
+  const [shell, dispatch] = useReducer(shellReducer, undefined, () => ({
+    ...loadPrefs(),
+    dockOpen: false,
+    collapsedByDock: false,
+    inspecting: false,
+  }))
+  const [dragging, setDragging] = useState(false)
+  const openInput = useRef<HTMLInputElement>(null)
+  const helpDialog = useRef<HTMLDialogElement>(null)
+  const dockOpen = useRef(shell.dockOpen)
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  // remember the tab and the folded panel chosen by the user (not a fold caused by the export drawer)
+  const keptCollapsed = shell.collapsed && !shell.collapsedByDock
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ tab: shell.tab, collapsed: keptCollapsed }))
+    } catch {
+      // storage unavailable: the choice lasts for the session
+    }
+  }, [shell.tab, keptCollapsed])
+
+  useEffect(() => {
+    dockOpen.current = shell.dockOpen
+  }, [shell.dockOpen])
+
+  useEffect(() => installHistoryShortcuts(getSettingsHistory()), [])
+
+  /** a pointer button is down */
+  const pressed = useRef(false)
+  useEffect(() => {
+    const down = () => {
+      pressed.current = true
+    }
+    const up = () => {
+      pressed.current = false
+    }
+    // a release outside the window is not seen: the next move tells
+    const move = (e: PointerEvent) => {
+      pressed.current = e.buttons !== 0
+    }
+    window.addEventListener('pointerdown', down, true)
+    window.addEventListener('pointerup', up, true)
+    window.addEventListener('pointercancel', up, true)
+    window.addEventListener('pointermove', move, true)
+    return () => {
+      window.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('pointerup', up, true)
+      window.removeEventListener('pointercancel', up, true)
+      window.removeEventListener('pointermove', move, true)
+    }
+  }, [])
+
+  // a timeline block selected: its inspector in the dock, after the release of a press (the timeline must not change
+  // scale under a drag); the dock given back to the panel (narrow window): deselected
+  useEffect(() => {
+    const show = () => {
+      window.removeEventListener('pointerup', show)
+      window.removeEventListener('pointercancel', show)
+      dispatch({ type: 'inspect', open: selected, narrow: isNarrow() })
+    }
+    if (!selected || !pressed.current) {
+      show()
+      return
+    }
+    window.addEventListener('pointerup', show)
+    window.addEventListener('pointercancel', show)
+    return () => {
+      window.removeEventListener('pointerup', show)
+      window.removeEventListener('pointercancel', show)
+    }
+  }, [selected])
+  useEffect(() => {
+    if (!shell.inspecting) useAppStore.getState().setFilmSelection(null)
+  }, [shell.inspecting])
+
+  useEffect(() => {
+    // capture phase: Escape closes the export drawer, else deselects the timeline block (the dialogs close themselves)
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.isComposing || isDialogOpen()) return
+      const action = matchShortcut(e, keyFocus(e.target))
+      if (!action || action.startsWith('seek') || action.startsWith('add-')) return
+      if (action === 'close') {
+        if (handlesOwnEscape(e.target)) return
+        const store = useAppStore.getState()
+        if (dockOpen.current && !isExporting()) dispatch({ type: 'close-dock' })
+        else if (store.filmSelection !== null) store.setFilmSelection(null)
+        else return
+        e.stopPropagation()
+      } else if (action === 'help') {
+        helpDialog.current?.showModal()
+      } else if (action === 'save') saveProject()
+      else if (action === 'open') {
+        if (!isExporting()) openInput.current?.click()
+      } else if (action === 'export') {
+        if (!isExporting()) dispatch({ type: 'toggle-dock', narrow: isNarrow() })
+      } else if (action === 'fit') {
+        if (e.repeat || isExporting() || useAppStore.getState().tracks.length === 0) return
+        useAppStore.getState().requestFit()
+      } else if (action === 'toggle-panel') {
+        if (e.repeat || isExporting()) return
+        dispatch({ type: 'toggle-panel', narrow: isNarrow() })
+      }
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [])
+
+  // files dropped anywhere: tracks imported, a project opened; the timeline keeps its own drop (photos)
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => {
+      if (!isFileDrag(e.dataTransfer?.types)) return
+      if (e.defaultPrevented) {
+        setDragging(false)
+        return
+      }
+      // without this, the browser would open the dropped file in place of the app
+      e.preventDefault()
+      const accepted = !isExporting()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = accepted ? 'copy' : 'none'
+      setDragging(accepted)
+    }
+    const onDragLeave = (e: DragEvent) => {
+      // the pointer left the window
+      if (!e.relatedTarget) setDragging(false)
+    }
+    const onDrop = (e: DragEvent) => {
+      setDragging(false)
+      if (e.defaultPrevented || !isFileDrag(e.dataTransfer?.types)) return
+      e.preventDefault()
+      const files = Array.from(e.dataTransfer?.files ?? [])
+      if (files.length > 0 && !isExporting()) void openFiles(files)
+    }
+    const stop = () => setDragging(false)
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('dragleave', onDragLeave)
+    window.addEventListener('drop', onDrop)
+    window.addEventListener('dragend', stop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('dragleave', onDragLeave)
+      window.removeEventListener('drop', onDrop)
+      window.removeEventListener('dragend', stop)
+    }
+  }, [])
+
+  const onTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const next = nextTabIndex(index, e.key, SHELL_TABS.length)
+    if (next === null) return
+    e.preventDefault()
+    dispatch({ type: 'select-tab', tab: SHELL_TABS[next], narrow: isNarrow() })
+    tabRefs.current[next]?.focus()
+  }
+
+  const panel = (tab: ShellTab, children: ReactNode) => (
+    <div key={tab} id={`tab-panel-${tab}`} className="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} hidden={shell.tab !== tab}>
+      {children}
+    </div>
+  )
 
   return (
-    <div className="app">
-      <aside className="sidebar" aria-label="Panneau de contrôle">
-        {/* scrollable body; the status bar (attributions) stays pinned below it */}
-        <div className="sidebar__body">
-          <header className="header">
-            <img className="header__logo" src="/favicon.svg" alt="" width={40} height={40} />
-            <div>
-              <h1 className="header__title">OpenFlyover</h1>
-              <p className="header__tagline">Vos traces en relief</p>
-            </div>
-          </header>
+    <div className="shell">
+      <TopBar
+        onOpen={() => openInput.current?.click()}
+        exportOpen={shell.dockOpen}
+        onToggleExport={() => dispatch({ type: 'toggle-dock', narrow: isNarrow() })}
+        onHelp={() => helpDialog.current?.showModal()}
+      />
+      <input
+        ref={openInput}
+        className="visually-hidden"
+        type="file"
+        multiple
+        accept=".gpx,.fit,.json,application/json"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={(e) => {
+          void openFiles(Array.from(e.currentTarget.files ?? []))
+          e.currentTarget.value = ''
+        }}
+      />
 
-          <ImportPanel />
-          <TrackList />
-          <WeatherPanel />
-          <LandmarkPanel />
-          <ClimbList />
-          <SettingsPanel />
-          <CameraPanel />
-          <OverlayPanel />
-
-          <button type="button" className="btn btn--primary btn--block" onClick={requestFit} disabled={!hasTracks}>
-            Recadrer la vue
+      <div className={shell.collapsed ? 'shell__body shell__body--collapsed' : 'shell__body'}>
+        <nav className="rail" aria-label="Panneaux">
+          <div className="rail__tabs" role="tablist" aria-label="Panneaux de réglages" aria-orientation="vertical">
+            {SHELL_TABS.map((tab, i) => {
+              const selected = shell.tab === tab
+              return (
+                <button
+                  key={tab}
+                  ref={(el) => {
+                    tabRefs.current[i] = el
+                  }}
+                  id={`tab-${tab}`}
+                  type="button"
+                  role="tab"
+                  className="rail__tab"
+                  aria-selected={selected}
+                  aria-controls={`tab-panel-${tab}`}
+                  tabIndex={selected ? 0 : -1}
+                  disabled={exporting}
+                  data-tip={TAB_LABELS[tab].label}
+                  data-tip-side="right"
+                  onClick={() => dispatch({ type: 'click-tab', tab, narrow: isNarrow() })}
+                  onKeyDown={(e) => onTabKeyDown(e, i)}
+                >
+                  <Icon name={TAB_LABELS[tab].icon} size={22} />
+                  <span className="rail__label">{TAB_LABELS[tab].label}</span>
+                </button>
+              )
+            })}
+          </div>
+          <button
+            type="button"
+            className="rail__toggle"
+            onClick={() => dispatch({ type: 'toggle-panel', narrow: isNarrow() })}
+            disabled={exporting}
+            aria-expanded={!shell.collapsed}
+            aria-controls="side-panel"
+            aria-label={shell.collapsed ? 'Déplier le panneau' : 'Replier le panneau'}
+            data-tip={withShortcut(shell.collapsed ? 'Déplier le panneau' : 'Replier le panneau', 'toggle-panel')}
+            data-tip-side="right"
+          >
+            <Icon name={shell.collapsed ? 'panel-left-open' : 'panel-left-close'} />
           </button>
+        </nav>
 
-          <ProjectPanel />
-          <ExportPanel />
+        {/* every tab stays mounted: weather, landmarks and export have side effects */}
+        <aside id="side-panel" className="panel" aria-label="Réglages" hidden={shell.collapsed}>
+          {panel(
+            'trace',
+            <>
+              <TrackList />
+              <Fold title="Montées" hidden={!hasTracks}>
+                <ClimbList />
+              </Fold>
+              <Fold title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
+                <WeatherPanel />
+              </Fold>
+            </>,
+          )}
+          {panel(
+            'carte',
+            <>
+              <SettingsPanel />
+              <LandmarkPanel />
+            </>,
+          )}
+          {panel('survol', <CameraPanel />)}
+          {panel('habillage', <OverlayPanel />)}
+          {panel('projet', <ProjectPanel />)}
+        </aside>
+
+        <main className="view">
+          <Stage>
+            {!hasTracks && <EmptyState />}
+            <Toaster />
+          </Stage>
+          <Timeline />
+        </main>
+
+        <aside id="export-dock" className="dock" aria-label="Export" hidden={!shell.dockOpen}>
+          <ExportPanel onClose={exporting ? undefined : () => dispatch({ type: 'close-dock' })} />
+        </aside>
+        {/* the export drawer goes first */}
+        <aside className="dock" aria-label="Inspecteur" hidden={shell.dockOpen || !shell.inspecting}>
+          {shell.inspecting && !shell.dockOpen && <FilmInspector />}
+        </aside>
+      </div>
+
+      <StatusBar />
+      <HelpDialog dialogRef={helpDialog} />
+      <SeekShortcuts />
+      {dragging && (
+        <div className="drop-veil" aria-hidden="true">
+          <div className="drop-veil__box">
+            <Icon name="upload" size={32} />
+            <p className="drop-veil__title">Déposez vos traces GPX ou FIT</p>
+            <p className="drop-veil__hint">ou un projet .json</p>
+          </div>
         </div>
-
-        <StatusBar />
-      </aside>
-
-      <main className="view" aria-label="Vue 3D">
-        <FlyoverCanvas />
-        <OverlayCanvas />
-        <Timeline />
-        {trackColored && <TrackLegend />}
-      </main>
+      )}
     </div>
   )
 }

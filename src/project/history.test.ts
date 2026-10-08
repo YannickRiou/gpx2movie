@@ -176,6 +176,30 @@ describe('getSettingsHistory (app store)', () => {
     getSettingsHistory().redo()
     expect(useAppStore.getState().settings).toEqual({ ...DEFAULT_SETTINGS, wireframe: true })
   })
+  it('undoes a reset from its message only while it is still the last change', () => {
+    const { setSetting } = useAppStore.getState()
+    setSetting('flyoverDurationS', 120)
+    const undoReset = resetSettings(['flyoverDurationS'])
+    expect(undoReset()).toBe(true)
+    expect(useAppStore.getState().settings.flyoverDurationS).toBe(120)
+    // a later step: the message's « Annuler » must not undo it
+    const undoAgain = resetSettings(['flyoverDurationS'])
+    setSetting('wireframe', true)
+    expect(undoAgain()).toBe(false)
+    expect(useAppStore.getState().settings).toEqual({ ...DEFAULT_SETTINGS, wireframe: true })
+    // undone with Ctrl+Z already: nothing more to undo
+    getSettingsHistory().undo()
+    getSettingsHistory().undo()
+    expect(undoAgain()).toBe(false)
+    expect(useAppStore.getState().settings.flyoverDurationS).toBe(120)
+  })
+
+  it('does not undo an earlier step when the reset changed nothing', () => {
+    useAppStore.getState().setSetting('wireframe', true)
+    const undoReset = resetSettings(['flyoverDurationS'])
+    expect(undoReset()).toBe(false)
+    expect(useAppStore.getState().settings.wireframe).toBe(true)
+  })
 })
 
 describe('installHistoryShortcuts', () => {
