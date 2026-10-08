@@ -34,6 +34,8 @@ interface TextCall {
   x: number
   y: number
   alpha: number
+  /** font set when the text was drawn */
+  font: string
 }
 
 interface PointCall {
@@ -62,7 +64,7 @@ function fakeContext() {
     measureText: (text: string) => ({ width: text.length * fontPx() * 0.5 }),
     fillText: (text: string, x: number, y: number) => {
       order.push('text')
-      texts.push({ text, x, y, alpha: state.globalAlpha })
+      texts.push({ text, x, y, alpha: state.globalAlpha, font: state.font })
     },
     drawImage: (_image: unknown, ...args: number[]) => {
       order.push('image')
@@ -670,5 +672,16 @@ describe('timeline photos', () => {
     const still = kenBurnsCrop(2000, 3000, 1920, 1080, 0.9, 3, false)
     expect(still.sx).toBeCloseTo(0, 6)
     expect(still.sy).toBeCloseTo((3000 - still.sh) / 2, 6)
+  })
+})
+
+describe('colours and fonts of one widget', () => {
+  it('draw that widget with its own font, the others with the overlay\'s', () => {
+    const settings = enabled({ title: { ...DEFAULT_OVERLAY.title, enabled: false }, counters: { ...DEFAULT_OVERLAY.counters, overrides: { numberFont: 'mono' } } })
+    const { texts } = draw(0.5, settings)
+    const value = texts.find((t) => /km/.test(t.text) || /^\d/.test(t.text))
+    expect(value?.font).toContain('monospace')
+    const plain = draw(0.5, enabled({ title: { ...DEFAULT_OVERLAY.title, enabled: false } })).texts
+    expect(plain.some((t) => t.font.includes('monospace'))).toBe(false)
   })
 })

@@ -96,6 +96,8 @@ export interface OverlayOverrides {
 interface Placed {
   enabled: boolean
   anchor: OverlayAnchor
+  /** this widget's own colours and fonts, on top of the overlay's (`OverlaySettings.overrides`); absent = the same */
+  overrides?: OverlayOverrides
 }
 
 interface Sized extends Placed {
@@ -221,6 +223,24 @@ export function withOverrides(overlay: OverlaySettings, patch: OverlayOverrides 
   return Object.keys(kept).length > 0 ? { ...rest, overrides: kept } : rest
 }
 
+/** Widgets whose colours and fonts can differ from the rest of the overlay (the logo is an image). */
+export const STYLED_WIDGETS = ['title', 'end', 'counters', 'profile', 'weather', 'minimap', 'leaderboard', 'text'] as const
+export type StyledWidget = (typeof STYLED_WIDGETS)[number]
+
+/** `overlay` with the overrides of widget `key` patched like `withOverrides` (null: back to the overlay's). */
+export function withWidgetOverrides(overlay: OverlaySettings, key: StyledWidget, patch: OverlayOverrides | null): OverlaySettings {
+  const { overrides, ...rest } = overlay[key]
+  const merged = patch === null ? {} : { ...overrides, ...patch }
+  const kept: OverlayOverrides = Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== undefined))
+  return { ...overlay, [key]: Object.keys(kept).length > 0 ? { ...rest, overrides: kept } : rest }
+}
+
+/** Overrides drawn for widget `key`: the overlay's, then the widget's own; undefined when neither has any. */
+export function widgetOverrides(overlay: OverlaySettings, key: StyledWidget): OverlayOverrides | undefined {
+  const own = overlay[key].overrides
+  return own ? { ...overlay.overrides, ...own } : overlay.overrides
+}
+
 const within = (v: number, min: number, max: number) => v >= min && v <= max
 const isAnchor = (v: string) => (OVERLAY_ANCHORS as readonly string[]).includes(v)
 const validSized = (w: Sized) => isAnchor(w.anchor) && within(w.size, WIDGET_SIZE_MIN, WIDGET_SIZE_MAX)
@@ -271,6 +291,7 @@ export function isValidOverlay(o: OverlaySettings): boolean {
     validSized(o.minimap) &&
     validSized(o.leaderboard) &&
     (CREDITS_POSITIONS as readonly string[]).includes(o.credits.position) &&
-    isValidOverrides(o.overrides)
+    isValidOverrides(o.overrides) &&
+    STYLED_WIDGETS.every((key) => isValidOverrides(o[key].overrides))
   )
 }
