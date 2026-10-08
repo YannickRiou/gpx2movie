@@ -94,6 +94,11 @@ export interface Track {
   color: string
   /** named points of the file (GPX <wpt>), attached to the first track of the file; absent when none */
   waypoints?: Waypoint[]
+  /**
+   * minutes the local clock of the recording was ahead of UTC (FIT activity local timestamp, GPX times written with
+   * an offset); absent when the file does not say
+   */
+  utcOffsetMin?: number
 }
 
 /** A named point stored with a track (GPX <wpt>), not part of the path. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import routeOnlyGpx from './__fixtures__/route-only.gpx?raw'
 import twoSegmentsGpx from './__fixtures__/two-segments.gpx?raw'
-import { parseGpx } from './gpx'
+import { gpxUtcOffset, parseGpx } from './gpx'
 
 /** 0.001° of latitude on the haversine sphere (R = 6371008.8 m). */
 const M_PER_MILLIDEG_LAT = (6371008.8 * Math.PI) / 180 / 1000
@@ -135,5 +135,25 @@ describe('parseGpx', () => {
     expect(second.waypoints).toBeUndefined()
     expect(parseGpx(routeOnlyGpx, 'route.gpx')[0].waypoints).toEqual([{ lon: 6.7986, lat: 45.8911, name: 'Les Houches' }])
     expect(parseGpx(twoSegmentsGpx, 'two.gpx')[0].waypoints).toBeUndefined()
+  })
+})
+
+describe('gpxUtcOffset', () => {
+  it('reads an explicit offset, not UTC nor +00:00', () => {
+    expect(gpxUtcOffset('2025-07-12T09:00:00+02:00')).toBe(120)
+    expect(gpxUtcOffset(' 2025-01-12T07:00:00.250-0530 ')).toBe(-330)
+    expect(gpxUtcOffset('2025-07-12T07:00:00Z')).toBeUndefined()
+    expect(gpxUtcOffset('2025-07-12T07:00:00')).toBeUndefined()
+    expect(gpxUtcOffset('2025-07-12T07:00:00+00:00')).toBeUndefined()
+    expect(gpxUtcOffset('2025-07-12T07:00:00+15:00')).toBeUndefined()
+  })
+
+  it('gives every track of the file the offset of its first time', () => {
+    const gpx = (time: string) => `<gpx xmlns="http://www.topografix.com/GPX/1/1">
+      <trk><trkseg><trkpt lat="45.86" lon="6.78"><time>${time}</time></trkpt></trkseg></trk>
+      <trk><trkseg><trkpt lat="45.87" lon="6.79"/></trkseg></trk>
+    </gpx>`
+    expect(parseGpx(gpx('2025-07-12T09:00:00+02:00'), 'a.gpx').map((t) => t.utcOffsetMin)).toEqual([120, 120])
+    expect(parseGpx(gpx('2025-07-12T07:00:00Z'), 'a.gpx')[0]).not.toHaveProperty('utcOffsetMin')
   })
 })

@@ -125,6 +125,7 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
 
   useEffect(() => {
     if (phase === 'error' && error) showToast({ kind: 'error', text: `Échec de l'export : ${error}` })
+    else if (phase === 'canceled') showToast({ kind: 'info', text: 'Export annulé' })
   }, [phase, error])
 
   const update = (patch: Partial<VideoSettings>) => setSetting('video', { ...video, ...patch })
@@ -160,9 +161,7 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
       ? 'Export en cours…'
       : phase === 'finalizing'
         ? 'Finalisation du fichier…'
-        : phase === 'canceled'
-            ? 'Export annulé.'
-            : ''
+        : ''
 
   return (
     <section className="settings export" aria-labelledby={`${id}-title`} aria-busy={busy}>

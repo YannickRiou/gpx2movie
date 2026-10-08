@@ -1,7 +1,7 @@
-import { Encoder, Profile } from '@garmin/fitsdk'
+import { Encoder, Profile, Utils } from '@garmin/fitsdk'
 import { describe, expect, it } from 'vitest'
 import { buildFitActivity, toArrayBuffer, toSemicircles, writeMesg } from './__fixtures__/fit-activity'
-import { parseFit, recordToPoint, semicirclesToDegrees } from './fit'
+import { parseFit, readUtcOffset, recordToPoint, semicirclesToDegrees } from './fit'
 
 describe('semicirclesToDegrees', () => {
   it('maps the semicircle range onto degrees', () => {
@@ -38,6 +38,21 @@ describe('recordToPoint', () => {
   })
 })
 
+describe('readUtcOffset', () => {
+  const at = Date.parse('2025-01-10T12:00:00Z')
+  const local = (offsetMin: number) => (at + offsetMin * 60_000 - Utils.FIT_EPOCH_MS) / 1000
+  it('reads the local clock offset of the activity, to the quarter hour', () => {
+    expect(readUtcOffset({ activityMesgs: [{ timestamp: new Date(at), localTimestamp: local(-300) }] })).toBe(-300)
+    expect(readUtcOffset({ activityMesgs: [{ timestamp: new Date(at), localTimestamp: local(345) + 2 }] })).toBe(345)
+  })
+
+  it('is undefined without an activity, a local timestamp, or with an implausible offset', () => {
+    expect(readUtcOffset({})).toBeUndefined()
+    expect(readUtcOffset({ activityMesgs: [{ timestamp: new Date(at) }] })).toBeUndefined()
+    expect(readUtcOffset({ activityMesgs: [{ timestamp: new Date(at), localTimestamp: local(20 * 60) }] })).toBeUndefined()
+  })
+})
+
 describe('parseFit', () => {
   it('decodes an activity encoded with the SDK', async () => {
     const tracks = await parseFit(buildFitActivity(), 'Rando matin.FIT')
@@ -46,6 +61,7 @@ describe('parseFit', () => {
     expect(track.name).toBe('Rando matin')
     expect(track.source).toBe('fit')
     expect(track.activityType).toBe('hiking')
+    expect(track.utcOffsetMin).toBe(120)
     expect(track.color).toBe('')
     expect(track.segments).toHaveLength(1)
     expect(track.stats.pointCount).toBe(3)

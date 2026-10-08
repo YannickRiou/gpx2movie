@@ -2,7 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { isExportBusy, useExportStore } from './export/store'
 import { addStop, addText } from './film/timeline'
-import { getSettingsHistory, installHistoryShortcuts } from './project/history'
+import { getSettingsHistory, installHistoryShortcuts, installSliderGestures } from './project/history'
 import { editFilm, useFilmClock } from './scene/usePacing'
 import { useAppStore } from './state/store'
 import type { Settings } from './state/store'
@@ -168,6 +168,7 @@ export default function App() {
   }, [shell.collapsed])
 
   useEffect(() => installHistoryShortcuts(getSettingsHistory()), [])
+  useEffect(() => installSliderGestures(getSettingsHistory()), [])
 
   /** a pointer button is down */
   const pressed = useRef(false)

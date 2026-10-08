@@ -3,7 +3,7 @@
  * `localName`, so Garmin (gpxtpx), Cluetrust and other extension vocabularies all work.
  */
 import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'
-import { buildTrack, stripExtension } from './stats'
+import { buildTrack, isUtcOffsetMin, stripExtension } from './stats'
 
 type ExtensionField = 'hr' | 'cad' | 'power' | 'temp'
 
@@ -106,6 +106,17 @@ export function parseGpxPoint(element: Element): TrackPoint | undefined {
   return point
 }
 
+/**
+ * UTC offset (minutes) of a GPX time written with one ("2025-07-12T09:00:00+02:00"); undefined for UTC ("Z"), no
+ * offset, or "+00:00" (often a UTC time written by a tool that ignores the local clock).
+ */
+export function gpxUtcOffset(text: string): number | undefined {
+  const match = /([+-])(\d{2}):?(\d{2})$/.exec(text.trim())
+  if (!match) return undefined
+  const offset = (match[1] === '-' ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]))
+  return offset !== 0 && isUtcOffsetMin(offset) ? offset : undefined
+}
+
 function parsePoints(elements: Element[]): TrackPoint[] {
   const points: TrackPoint[] = []
   for (const element of elements) {
@@ -165,11 +176,15 @@ export function parseGpx(text: string, fileName: string): Track[] {
   if (candidates.length === 0) throw invalid('aucun point trouvé')
 
   const waypoints = parseWaypoints(childrenNamed(root, 'wpt'))
+  // the first time of the file (metadata or point) tells the local clock when it carries an offset
+  const firstTime = root.getElementsByTagNameNS('*', 'time')[0]
+  const utcOffsetMin = firstTime ? gpxUtcOffset(textOf(firstTime)) : undefined
   return candidates.map((candidate, index) => {
     let name = candidate.name
     if (name === '') name = candidates.length > 1 ? `${fallbackName} (${index + 1})` : fallbackName
     const track = buildTrack({ name, source: 'gpx', segments: candidate.segments, activityType: candidate.activityType })
     if (index === 0 && waypoints.length > 0) track.waypoints = waypoints
+    if (utcOffsetMin !== undefined) track.utcOffsetMin = utcOffsetMin
     return track
   })
 }

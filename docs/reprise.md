@@ -79,6 +79,9 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
 - Interface : 1280 et 1000 px de large (panneau en tiroir), tiroir d'export pendant un vrai export (« 42 % · Annuler »,
   interface verrouillée), toasts (empilement, « Annuler » après « Par défaut »), dépôt d'un fichier (voile), onglet Projet,
   heure du soleil : curseur aligné sur les repères lever / coucher, boutons sur deux lignes à 280 px.
+- Restes d'interface : toasts « Préréglage appliqué : … » et « Export annulé », section « Repères (OpenStreetMap) »
+  repliable (en-tête collant, « modifié »), glisser lent d'un curseur = un seul Ctrl+Z, lever / coucher à l'heure locale
+  avec un FIT (ou un GPX à décalage) et « en heure solaire » avec l'exemple.
 - Dernier chantier (inspecteur à droite, barre de la timeline, clic sur la trace) :
   - inspecteur : à 1440 px panneau + vue + inspecteur côte à côte ; à 1280 px le panneau se replie à la sélection et revient
     à la désélection ; tiroir d'export par-dessus puis inspecteur revenu à sa fermeture ; en-tête collant ; grille 3 × 3
@@ -102,13 +105,10 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
 2. Contrôles visuels ci-dessus (surtout 1280 / 1000 px, glisser dans la timeline, photos, export réel).
 3. Timeline : vidéos dans la piste Médias (modèle déjà prêt, `kind: 'video'`), photo attachée à un arrêt, défilement
    automatique pendant un glisser au bord, textes ancrés à un arrêt, mémoriser l'état ouvert / fermé des sections.
-4. Restes d'interface : `importError` encore dans le store (plus affiché) ;
-   toast « Préréglage appliqué » / « Export annulé » ; section « Repères » repliable ; glisser lent de curseur = plusieurs
-   pas d'annulation (> 400 ms) ; lever / coucher affichés en heure solaire, pas en heure légale.
-5. Phase 6 (bureau, Tauri) : WebCodecs absent sous Linux (WebKitGTK) → encodeur natif ; `dragDropEnabled` intercepte les
+4. Phase 6 (bureau, Tauri) : WebCodecs absent sous Linux (WebKitGTK) → encodeur natif ; `dragDropEnabled` intercepte les
    dépôts HTML5 ; accès disque pour les photos derrière `readPhoto`. Hébergement en sous-dossier : `/fonts/`, `/samples/`,
    `/favicon.svg` sont absolus → `import.meta.env.BASE_URL` (seulement si nécessaire).
-6. Phase 3 restante : eau réfléchissante, géoïde, nuages volumétriques. Phase 5 : écriture directe sur disque pour les films
+5. Phase 3 restante : eau réfléchissante, géoïde, nuages volumétriques. Phase 5 : écriture directe sur disque pour les films
    longs. Phase 7 : vidéo embarquée, comparatif photos IGN anciennes, rendu en lot, affiche, calage musical.
 
 ## Limites et points ouverts
