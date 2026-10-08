@@ -20,6 +20,7 @@ import { installLibraryAutosave } from './ui/library'
 import { ModifiedMarker } from './ui/ModifiedMarker'
 import { OverlayPanel } from './ui/OverlayPanel'
 import { PoiPanel } from './ui/PoiPanel'
+import { RoutePanel } from './ui/RoutePanel'
 import { chooseFilesToOpen, openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
@@ -135,6 +136,7 @@ function Fold({ title, keys, hidden, children }: { title: string; keys?: (keyof 
 
 export default function App() {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
+  const planning = useAppStore((s) => s.planArea !== null)
   const exportBusy = useExportStore((s) => isExportBusy(s.phase))
   const batchRunning = useBatchStore((s) => s.phase === 'running')
   const exporting = exportBusy || batchRunning
@@ -151,6 +153,11 @@ export default function App() {
   const dockOpen = useRef(shell.dockOpen)
   const collapsedRef = useRef(shell.collapsed)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  // desktop: a batch asked on the command line runs once the app is up, then the app quits (export/cliRender.ts)
+  useEffect(() => {
+    if (getPlatform().capabilities.isDesktop) void import('./export/cliRender').then((m) => m.runCliRenderIfAsked())
+  }, [])
 
   // remember the tab and the folded panel chosen by the user (not a fold caused by the export drawer)
   const keptCollapsed = shell.collapsed && !shell.collapsedByDock
@@ -382,6 +389,7 @@ export default function App() {
             'trace',
             <>
               <TrackList />
+              <RoutePanel />
               <Fold title="Montées" hidden={!hasTracks}>
                 <ClimbList />
               </Fold>
@@ -410,7 +418,7 @@ export default function App() {
 
         <main className="view">
           <Stage>
-            {!hasTracks && <EmptyState />}
+            {!hasTracks && !planning && <EmptyState />}
             <Toaster />
           </Stage>
           <Timeline />

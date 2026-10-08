@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenFlyover, sous le capot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a topographic field guide, a sticky contents rail on the left (wide screens), one reading column of ~70ch. */
+:root {
+  /* « Carte alpine », the project's own palette (src/ui/theme.css) */
+  --paper: #f5f2ea;
+  --card: #eae4d6;
+  --ink: #1c2a33;
+  --ink-soft: #55626b;
+  --line: #d6cdbb;
+  --accent: #c23b22;
+  --glacier: #a9ccd9;
+  --moss: #3f6b4a;
+  --code-bg: #ece6d8;
+  --contour: rgb(28 42 51 / 0.07);
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --step--1: 0.84rem;
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.55rem;
+  --step-3: 2.2rem;
+  --measure: 70ch;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #141d23;
+    --card: #1e2a32;
+    --ink: #ece6d8;
+    --ink-soft: #a6b1b8;
+    --line: #34434d;
+    --accent: #ff8a5c;
+    --glacier: #6f9fb2;
+    --moss: #7fb08b;
+    --code-bg: #1b252c;
+    --contour: rgb(236 230 216 / 0.05);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #141d23;
+  --card: #1e2a32;
+  --ink: #ece6d8;
+  --ink-soft: #a6b1b8;
+  --line: #34434d;
+  --accent: #ff8a5c;
+  --glacier: #6f9fb2;
+  --moss: #7fb08b;
+  --code-bg: #1b252c;
+  --contour: rgb(236 230 216 / 0.05);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  padding-inline: 16px;
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+code, kbd {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--code-bg);
+  padding: 0.08em 0.35em;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+h1, h2, h3 { font-family: var(--font-display); font-weight: 650; line-height: 1.2; text-wrap: balance; margin: 0; }
+h2 { font-size: var(--step-2); }
+h3 { font-size: var(--step-1); font-weight: 500; }
+p { margin: 0; }
+ul, ol { margin: 0; padding-left: 1.25em; display: grid; gap: 0.35em; }
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 32px;
+}
+@media (min-width: 980px) {
+  .page { grid-template-columns: 230px minmax(0, 1fr); gap: 48px; }
+}
+
+/* masthead: contour lines drawn as repeating rings, like a topographic map */
+.masthead {
+  grid-column: 1 / -1;
+  position: relative;
+  padding-block: 56px 32px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 16px;
+  overflow: hidden;
+}
+.masthead::before {
+  content: "";
+  position: absolute;
+  inset: -40% -10% -40% 35%;
+  background: repeating-radial-gradient(ellipse at 60% 55%, transparent 0 22px, var(--contour) 22px 23px);
+  pointer-events: none;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.masthead h1 { font-size: var(--step-3); max-width: 18ch; position: relative; }
+.masthead h1 em { font-style: normal; color: var(--accent); }
+.lede { max-width: var(--measure); font-size: var(--step-1); color: var(--ink-soft); position: relative; }
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  position: relative;
+}
+.facts span b { color: var(--ink); font-weight: 500; }
+
+/* contents rail */
+.toc { font-size: 0.92rem; }
+.toc h2 { font-family: var(--font-mono); font-size: var(--step--1); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
+.toc ol { list-style: none; padding: 0; gap: 2px; }
+.toc a { display: block; padding: 3px 0 3px 10px; border-left: 2px solid var(--line); color: var(--ink); text-decoration: none; }
+.toc a:hover { border-left-color: var(--accent); color: var(--accent); }
+@media (min-width: 980px) {
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; max-height: calc(100vh - 48px); overflow-y: auto; }
+}
+
+main { min-width: 0; display: grid; gap: 56px; }
+section { display: grid; gap: 18px; scroll-margin-top: 24px; }
+section > p, section > ul, section > ol, .prose { max-width: var(--measure); }
+.sec-head { display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.sec-head .alt { font-family: var(--font-mono); font-size: var(--step--1); color: var(--accent); white-space: nowrap; }
+
+/* a figure that may be wider than the column */
+.figure { display: grid; gap: 8px; }
+.figure .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 12px; }
+.figure svg { display: block; min-width: 640px; width: 100%; height: auto; }
+.figure figcaption { font-size: var(--step--1); color: var(--ink-soft); max-width: var(--measure); }
+
+/* diagram parts, coloured from the tokens so both themes read */
+.d-box { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+.d-box-key { fill: var(--paper); stroke: var(--accent); stroke-width: 1.8; }
+.d-band { fill: var(--code-bg); stroke: none; }
+.d-title { fill: var(--ink); font-family: var(--font-body); font-size: 13px; font-weight: 600; }
+.d-text { fill: var(--ink-soft); font-family: var(--font-mono); font-size: 10.5px; }
+.d-label { fill: var(--ink-soft); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+.d-arrow { stroke: var(--ink-soft); stroke-width: 1.4; fill: none; }
+.d-arrow-key { stroke: var(--accent); stroke-width: 1.8; fill: none; }
+.d-head { fill: var(--ink-soft); }
+.d-head-key { fill: var(--accent); }
+
+/* tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--font-mono); font-size: var(--step--1); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); background: var(--card); }
+td:first-child { white-space: nowrap; }
+td code { white-space: nowrap; }
+
+/* ordered pipelines: the order is the information */
+.steps { list-style: none; padding: 0; counter-reset: step; display: grid; gap: 10px; max-width: var(--measure); }
+.steps > li { counter-increment: step; display: grid; grid-template-columns: 2.1em minmax(0, 1fr); gap: 10px; }
+.steps > li::before {
+  content: counter(step);
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  width: 1.9em; height: 1.9em;
+  display: grid; place-items: center;
+  margin-top: 0.1em;
+}
+
+/* foldable pipeline details */
+details.pipe { border: 1px solid var(--line); border-radius: 10px; background: var(--card); max-width: 100%; }
+details.pipe > summary { cursor: pointer; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; list-style: none; }
+details.pipe > summary::-webkit-details-marker { display: none; }
+details.pipe > summary::before { content: "+"; font-family: var(--font-mono); color: var(--accent); width: 1ch; }
+details.pipe[open] > summary::before { content: "−"; }
+details.pipe > summary h3 { font-size: var(--step-1); }
+details.pipe > summary .where { font-family: var(--font-mono); font-size: var(--step--1); color: var(--ink-soft); }
+details.pipe > .body { padding: 0 16px 16px; display: grid; gap: 12px; }
+.pipes { display: grid; gap: 10px; }
+
+.note {
+  max-width: var(--measure);
+  border-left: 3px solid var(--glacier);
+  padding: 4px 0 4px 14px;
+  color: var(--ink-soft);
+}
+.tag { font-family: var(--font-mono); font-size: 0.78rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-soft); white-space: nowrap; }
+.tag.ok { border-color: var(--moss); color: var(--moss); }
+.tag.warn { border-color: var(--accent); color: var(--accent); }
+
+.cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+.cols > div { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.cols h3 { font-size: var(--step-0); font-family: var(--font-body); font-weight: 600; }
+
+footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16px; font-size: var(--step--1); color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="masthead">
+  <p class="eyebrow">Documentation technique · état du 8 octobre 2026</p>
+  <h1>OpenFlyover, <em>sous le capot</em></h1>
+  <p class="lede">Comment une trace GPX devient un film de survol en 3D, sans serveur ni clé d'API : les modules, le chemin d'une image, et les règles qui tiennent l'ensemble.</p>
+  <div class="facts">
+    <span><b>2</b> cibles : site statique, bureau Tauri 2</span>
+    <span><b>91</b> fichiers de tests, <b>1 449</b> tests</span>
+    <span><b>6</b> scénarios de bout en bout</span>
+    <span>relief jusqu'au zoom <b>17</b></span>
+    <span>export jusqu'en <b>4K · 60 i/s</b></span>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sommaire">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#ensemble">Vue d'ensemble</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#dossiers">Les dossiers de src/</a></li>
+    <li><a href="#reperes">Coordonnées et repères</a></li>
+    <li><a href="#image">Le trajet d'une image</a></li>
+    <li><a href="#chaines">Les chaînes, une par une</a></li>
+    <li><a href="#etat">État et stores</a></li>
+    <li><a href="#tests">Tests et qualité</a></li>
+    <li><a href="#sources">Sources de données</a></li>
+    <li><a href="#regles">Règles du projet</a></li>
+    <li><a href="#limites">Limites connues</a></li>
+    <li><a href="#lire">Par où lire le code</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="ensemble">
+  <div class="sec-head"><h2>Vue d'ensemble</h2></div>
+  <p>OpenFlyover importe des traces GPX ou FIT, les pose sur un relief réel couvert de photos aériennes, et fait voler une caméra au-dessus. On monte un film sur une timeline (plans d'ouverture et de clôture, arrêts, textes, photos, vidéos, musique), puis on l'exporte en MP4 ou WebM, en image fixe ou en affiche. Tout se calcule dans le navigateur : pas de compte, pas de serveur applicatif, pas de clé d'API.</p>
+  <div class="cols">
+    <div>
+      <h3>Une base de code, deux cibles</h3>
+      <p><code>npm run build</code> produit <code>dist/</code> (≈ 13 Mo), un site statique servi en HTTPS : WebCodecs et <code>crypto.randomUUID</code> l'exigent. L'application de bureau Tauri 2 (<code>src-tauri/</code>) charge exactement le même <code>dist/</code>. Ce qui diffère (fichiers, stockage, encodeur) passe par une seule interface, <code>src/platform/</code>.</p>
+    </div>
+    <div>
+      <h3>Un principe central : aperçu = export</h3>
+      <p>La caméra, l'habillage, les nuages, l'eau et la météo sont des fonctions pures de deux nombres : la progression le long de la trace et le temps du film. L'aperçu les appelle à chaque image affichée, l'export à chaque image du fichier. Ce qu'on voit est donc ce qui sera rendu, et l'export peut calculer n'importe quelle image seule.</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Brique</th><th>Version</th><th>Rôle</th></tr></thead>
+      <tbody>
+        <tr><td>React</td><td>19.3.0</td><td>interface (panneaux, timeline, inspecteur)</td></tr>
+        <tr><td>three</td><td>0.186.1</td><td>moteur 3D WebGL</td></tr>
+        <tr><td>@react-three/fiber · drei</td><td>9.8.1 · 10.7.9</td><td>three.js piloté par React ; contrôles de caméra orbitaux</td></tr>
+        <tr><td>@takram/three-atmosphere · three-clouds</td><td>0.19.1 · 0.7.6</td><td>ciel physique, perspective aérienne, nuages volumétriques</td></tr>
+        <tr><td>postprocessing</td><td>6.39.5</td><td>chaîne d'effets (tone mapping, SMAA, étalonnage)</td></tr>
+        <tr><td>zustand</td><td>5.0.15</td><td>stores d'état</td></tr>
+        <tr><td>mediabunny</td><td>1.61.3</td><td>mise en MP4 / WebM, lecture image par image des vidéos</td></tr>
+        <tr><td>@garmin/fitsdk</td><td>21.217.0</td><td>lecture des fichiers FIT</td></tr>
+        <tr><td>Vite · Vitest · TypeScript · oxlint</td><td>8.3.2 · 5.0.3 · 6.0.3 · 1.87.0</td><td>construction, tests, types stricts, analyse</td></tr>
+        <tr><td>Tauri (Rust)</td><td>2</td><td>application de bureau, dialogues natifs, fichiers, ffmpeg sous Linux</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">Le premier écran ne charge que React et l'interface : ≈ 510 kB (≈ 170 kB gzip) au lieu de 3,1 Mo en un seul fichier. La scène 3D, le tiroir d'export et le panneau hors ligne arrivent juste après (<code>React.lazy</code>), l'atmosphère avec la première trace, le décodeur FIT et mediabunny à la demande.</p>
+</section>
+
+<section id="architecture">
+  <div class="sec-head"><h2>Architecture</h2></div>
+  <p>Le code est rangé en couches. Au centre, des modules purs (sans React ni three.js quand c'est possible) qui calculent : la trace, l'horloge du film, la caméra, l'habillage. Autour, des stores zustand qui gardent l'état. Au-dessus, l'interface React et la scène three.js lisent les stores et appellent les modules purs. En bas, la couche plateforme isole le navigateur et Tauri.</p>
+  <figure class="figure">
+    <div class="scroll">
+      <svg viewBox="0 0 900 520" role="img" aria-labelledby="arch-title">
+        <title id="arch-title">Couches de l'application : interface et scène au-dessus, stores, modules purs, plateforme et sources externes</title>
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-head"/></marker>
+          <marker id="ahk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-head-key"/></marker>
+        </defs>
+        <!-- layer bands -->
+        <rect class="d-band" x="10" y="10" width="880" height="110" rx="8"/>
+        <rect class="d-band" x="10" y="140" width="880" height="70" rx="8"/>
+        <rect class="d-band" x="10" y="230" width="880" height="130" rx="8"/>
+        <rect class="d-band" x="10" y="380" width="880" height="130" rx="8"/>
+        <text class="d-label" x="22" y="28">Affichage</text>
+        <text class="d-label" x="22" y="158">État</text>
+        <text class="d-label" x="22" y="248">Calcul pur</text>
+        <text class="d-label" x="22" y="398">Accès au monde</text>
+
+        <!-- display -->
+        <rect class="d-box" x="30" y="38" width="250" height="70" rx="6"/>
+        <text class="d-title" x="44" y="60">Interface React</text>
+        <text class="d-text" x="44" y="78">ui/ : panneaux, Timeline,</text>
+        <text class="d-text" x="44" y="94">FilmInspector, ExportPanel</text>
+
+        <rect class="d-box-key" x="300" y="38" width="300" height="70" rx="6"/>
+        <text class="d-title" x="314" y="60">Scène 3D (react-three-fiber)</text>
+        <text class="d-text" x="314" y="78">scene/ : TerrainLayer, TrackLines,</text>
+        <text class="d-text" x="314" y="94">FlyoverRig, Atmosphere, Clouds</text>
+
+        <rect class="d-box" x="620" y="38" width="250" height="70" rx="6"/>
+        <text class="d-title" x="634" y="60">Habillage 2D</text>
+        <text class="d-text" x="634" y="78">overlay/ : drawOverlay()</text>
+        <text class="d-text" x="634" y="94">sur un canvas, par-dessus</text>
+
+        <!-- state -->
+        <rect class="d-box" x="30" y="152" width="840" height="46" rx="6"/>
+        <text class="d-title" x="44" y="180">Stores zustand</text>
+        <text class="d-text" x="170" y="180">useAppStore (traces, réglages, film, lecture) · useExportStore · useMediaStore · météo · repères · …</text>
+
+        <!-- pure -->
+        <rect class="d-box" x="30" y="260" width="190" height="86" rx="6"/>
+        <text class="d-title" x="44" y="282">Import</text>
+        <text class="d-text" x="44" y="300">import/ : GPX, FIT</text>
+        <text class="d-text" x="44" y="316">→ Track, stats</text>
+        <text class="d-text" x="44" y="332">geo/ : repères</text>
+
+        <rect class="d-box-key" x="235" y="260" width="200" height="86" rx="6"/>
+        <text class="d-title" x="249" y="282">Film</text>
+        <text class="d-text" x="249" y="300">film/ : modèle, horloge,</text>
+        <text class="d-text" x="249" y="316">timeline, musique</text>
+
+        <rect class="d-box-key" x="450" y="260" width="200" height="86" rx="6"/>
+        <text class="d-title" x="464" y="282">Survol</text>
+        <text class="d-text" x="464" y="300">flyover/ : chemin, rythme,</text>
+        <text class="d-text" x="464" y="316">computeFilmView()</text>
+
+        <rect class="d-box" x="665" y="260" width="205" height="86" rx="6"/>
+        <text class="d-title" x="679" y="282">Terrain</text>
+        <text class="d-text" x="679" y="300">terrain/ : tuiles, LOD,</text>
+        <text class="d-text" x="679" y="316">relief, imagerie</text>
+
+        <!-- world -->
+        <rect class="d-box" x="30" y="410" width="260" height="86" rx="6"/>
+        <text class="d-title" x="44" y="432">Plateforme</text>
+        <text class="d-text" x="44" y="450">platform/ : web.ts | desktop.ts</text>
+        <text class="d-text" x="44" y="466">fichiers, stockage, cache</text>
+
+        <rect class="d-box" x="305" y="410" width="260" height="86" rx="6"/>
+        <text class="d-title" x="319" y="432">Export</text>
+        <text class="d-text" x="319" y="450">export/ : WebCodecs + mediabunny</text>
+        <text class="d-text" x="319" y="466">ou ffmpeg (bureau Linux)</text>
+
+        <rect class="d-box" x="580" y="410" width="290" height="86" rx="6"/>
+        <text class="d-title" x="594" y="432">Sources ouvertes</text>
+        <text class="d-text" x="594" y="450">tuiles relief et imagerie, Open-Meteo,</text>
+        <text class="d-text" x="594" y="466">OpenStreetMap (Overpass, Nominatim)</text>
+
+        <!-- arrows -->
+        <path class="d-arrow" d="M155 108 V150" marker-end="url(#ah)"/>
+        <path class="d-arrow-key" d="M450 150 V110" marker-end="url(#ahk)"/>
+        <path class="d-arrow" d="M745 150 V110" marker-end="url(#ah)"/>
+        <path class="d-arrow-key" d="M450 258 V200" marker-end="url(#ahk)"/>
+        <path class="d-arrow" d="M767 258 V200" marker-end="url(#ah)"/>
+        <path class="d-arrow" d="M125 258 V200" marker-end="url(#ah)"/>
+        <path class="d-arrow" d="M767 408 V348" marker-end="url(#ah)"/>
+        <path class="d-arrow" d="M160 408 V348" marker-end="url(#ah)"/>
+        <path class="d-arrow-key" d="M435 408 V348" marker-end="url(#ahk)"/>
+      </svg>
+    </div>
+    <figcaption>Les flèches suivent les données. En rouge, le cœur du rendu : le film et la caméra (calcul pur) alimentent la scène, que l'export capture image par image.</figcaption>
+  </figure>
+</section>
+
+<section id="dossiers">
+  <div class="sec-head"><h2>Les dossiers de <code>src/</code></h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Dossier</th><th>Ce qu'il fait</th><th>Fichiers clés</th></tr></thead>
+      <tbody>
+        <tr><td><code>core/</code></td><td>contrats partagés, petits outils</td><td><code>types.ts</code> (Track, LocalFrame, TileKey…), <code>math.ts</code>, <code>errors.ts</code></td></tr>
+        <tr><td><code>geo/</code></td><td>ellipsoïde, repère local, tuiles, géoïde</td><td><code>ellipsoid.ts</code>, <code>lonLat.ts</code>, <code>mercator.ts</code>, <code>geoid.ts</code></td></tr>
+        <tr><td><code>import/</code></td><td>GPX et FIT → Track, statistiques, enchaînement</td><td><code>gpx.ts</code>, <code>fit.ts</code>, <code>stats.ts</code>, <code>chain.ts</code></td></tr>
+        <tr><td><code>terrain/</code></td><td>tuiles, décodage du relief, imagerie, maillage, LOD</td><td><code>sources.ts</code>, <code>fetch.ts</code>, <code>dem.ts</code>, <code>quadtree.ts</code>, <code>engine.ts</code></td></tr>
+        <tr><td><code>flyover/</code></td><td>chemin de survol, rythme, caméra, montées, soleil</td><td><code>path.ts</code>, <code>pacing.ts</code>, <code>camera.ts</code>, <code>filmCamera.ts</code></td></tr>
+        <tr><td><code>film/</code></td><td>le film monté : modèle, horloge, timeline, son</td><td><code>model.ts</code>, <code>clock.ts</code>, <code>assemble.ts</code>, <code>timeline.ts</code>, <code>beats.ts</code></td></tr>
+        <tr><td><code>overlay/</code></td><td>habillage 2D (titres, compteurs, profil, mini-carte)</td><td><code>draw.ts</code>, <code>data.ts</code>, <code>themes.ts</code></td></tr>
+        <tr><td><code>scene/</code></td><td>composants three.js de la vue</td><td><code>FlyoverCanvas.tsx</code>, <code>TerrainLayer.tsx</code>, <code>FlyoverRig.tsx</code>, <code>renderOnDemand.ts</code></td></tr>
+        <tr><td><code>export/</code></td><td>vidéo, image fixe, rendu en lot</td><td><code>ExportController.tsx</code>, <code>capture.ts</code>, <code>encoder.ts</code>, <code>nativeEncoder.ts</code>, <code>batch.ts</code></td></tr>
+        <tr><td><code>poster/</code></td><td>affiche imprimable (A4, A3, carré)</td><td><code>layout.ts</code>, <code>draw.ts</code>, <code>export.ts</code></td></tr>
+        <tr><td><code>project/</code></td><td>fichier de projet, annuler / rétablir, préréglages</td><td><code>document.ts</code>, <code>history.ts</code>, <code>presets.ts</code></td></tr>
+        <tr><td><code>platform/</code></td><td>site ou bureau derrière une seule interface</td><td><code>platform.ts</code>, <code>web.ts</code>, <code>desktop.ts</code>, <code>tileCache.ts</code></td></tr>
+        <tr><td><code>offline/</code></td><td>packs de tuiles pour partir sans réseau</td><td><code>plan.ts</code>, <code>policy.ts</code>, <code>download.ts</code></td></tr>
+        <tr><td><code>weather/</code></td><td>météo historique et son effet dans la scène</td><td><code>openMeteo.ts</code>, <code>series.ts</code>, <code>sceneWeather.ts</code></td></tr>
+        <tr><td><code>osm/</code></td><td>OpenStreetMap : repères, eau, chemins, lieux</td><td><code>overpass.ts</code>, <code>landmarks.ts</code>, <code>water.ts</code>, <code>paths.ts</code>, <code>geocode.ts</code></td></tr>
+        <tr><td><code>route/</code></td><td>reconnaissance : itinéraire sur les chemins</td><td><code>graph.ts</code> (A*), <code>planner.ts</code></td></tr>
+        <tr><td><code>state/</code></td><td>store principal</td><td><code>store.ts</code> (<code>useAppStore</code>, Settings, Playback)</td></tr>
+        <tr><td><code>ui/</code></td><td>interface et logique d'interface testée</td><td><code>App.tsx</code> (racine), <code>Timeline.tsx</code>, <code>shell.ts</code>, <code>projectActions.ts</code>, <code>theme.css</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="reperes">
+  <div class="sec-head"><h2>Coordonnées et repères</h2></div>
+  <ul>
+    <li><strong>Entrée en lon / lat WGS84</strong>, en degrés. Les tuiles suivent Web Mercator (schéma XYZ, y = 0 au nord), calculées dans <code>geo/mercator.ts</code>.</li>
+    <li><strong>Repère local tangent</strong> centré sur <code>frameOrigin</code> : le centre du premier lot de traces, arrondi à 0,01°, fixe tant qu'une trace reste. Axes three.js : +X vers l'est, +Y vers le haut, +Z vers le sud.</li>
+    <li><strong>Précision</strong> : les conversions ECEF → local se font en nombres doubles côté JavaScript, jamais dans le shader. Les coordonnées envoyées au GPU restent petites, donc précises au millimètre.</li>
+    <li><strong>Hauteurs</strong> au-dessus du niveau de la mer (tuiles, GPX, FIT). Seuls l'atmosphère et les nuages, qui raisonnent en vrai ECEF, ajoutent l'ondulation du géoïde EGM96 (+51 m à Chamonix), lue dans une grille de 1° générée par <code>scripts/gen-geoid.mjs</code>.</li>
+    <li><strong>Exagération</strong> du relief : un facteur appliqué au maillage, à la trace (+3 m), à l'eau (+2 m), aux étiquettes et aux nuages.</li>
+  </ul>
+</section>
+
+<section id="image">
+  <div class="sec-head"><h2>Le trajet d'une image</h2><span class="alt">aperçu et export</span></div>
+  <p>Chaque image, à l'écran comme dans la vidéo, suit le même chemin. La seule différence : l'aperçu dessine quand quelque chose bouge, l'export dessine lui-même chaque image du calendrier et attend que les tuiles visibles soient là.</p>
+  <figure class="figure">
+    <div class="scroll">
+      <svg viewBox="0 0 900 250" role="img" aria-labelledby="frame-title">
+        <title id="frame-title">Chaîne d'une image : temps du film, horloge, caméra, scène, composition, encodeur</title>
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-head-key"/></marker>
+        </defs>
+        <rect class="d-box" x="10" y="20" width="130" height="80" rx="6"/>
+        <text class="d-title" x="22" y="44">Temps du film</text>
+        <text class="d-text" x="22" y="62">t = 12,4 s</text>
+        <text class="d-text" x="22" y="78">lecture ou export</text>
+
+        <rect class="d-box-key" x="160" y="20" width="140" height="80" rx="6"/>
+        <text class="d-title" x="172" y="44">Horloge</text>
+        <text class="d-text" x="172" y="62">clock.stateAt(t)</text>
+        <text class="d-text" x="172" y="78">phase, progression</text>
+
+        <rect class="d-box-key" x="320" y="20" width="150" height="80" rx="6"/>
+        <text class="d-title" x="332" y="44">Caméra</text>
+        <text class="d-text" x="332" y="62">computeFilmView()</text>
+        <text class="d-text" x="332" y="78">position, cible</text>
+
+        <rect class="d-box" x="490" y="20" width="150" height="80" rx="6"/>
+        <text class="d-title" x="502" y="44">Scène WebGL</text>
+        <text class="d-text" x="502" y="62">relief, trace, ciel,</text>
+        <text class="d-text" x="502" y="78">nuages, eau</text>
+
+        <rect class="d-box" x="660" y="20" width="110" height="80" rx="6"/>
+        <text class="d-title" x="672" y="44">Composition</text>
+        <text class="d-text" x="672" y="62">+ habillage</text>
+        <text class="d-text" x="672" y="78">drawOverlay()</text>
+
+        <rect class="d-box" x="790" y="20" width="100" height="80" rx="6"/>
+        <text class="d-title" x="802" y="44">Sortie</text>
+        <text class="d-text" x="802" y="62">écran, ou</text>
+        <text class="d-text" x="802" y="78">encodeur</text>
+
+        <path class="d-arrow-key" d="M140 60 H158" marker-end="url(#ah2)"/>
+        <path class="d-arrow-key" d="M300 60 H318" marker-end="url(#ah2)"/>
+        <path class="d-arrow-key" d="M470 60 H488" marker-end="url(#ah2)"/>
+        <path class="d-arrow-key" d="M640 60 H658" marker-end="url(#ah2)"/>
+        <path class="d-arrow-key" d="M770 60 H788" marker-end="url(#ah2)"/>
+
+        <text class="d-label" x="10" y="140">Export seulement</text>
+        <rect class="d-box" x="10" y="152" width="290" height="80" rx="6"/>
+        <text class="d-title" x="22" y="176">Calendrier</text>
+        <text class="d-text" x="22" y="194">buildFrameSchedule : une image tous</text>
+        <text class="d-text" x="22" y="210">les 1/fps, +1 s au début, +2 s à la fin</text>
+        <rect class="d-box" x="320" y="152" width="320" height="80" rx="6"/>
+        <text class="d-title" x="332" y="176">Image « posée »</text>
+        <text class="d-text" x="332" y="194">renderSettledFrame : tuiles visibles prêtes</text>
+        <text class="d-text" x="332" y="210">(5 s au plus), trace replaquée, rendu</text>
+        <rect class="d-box" x="660" y="152" width="230" height="80" rx="6"/>
+        <text class="d-title" x="672" y="176">Encodage</text>
+        <text class="d-text" x="672" y="194">WebCodecs → mediabunny,</text>
+        <text class="d-text" x="672" y="210">écrit au fil de l'eau sur disque</text>
+      </svg>
+    </div>
+    <figcaption>La progression et le temps du film suffisent à recalculer toute l'image. C'est ce qui permet d'exporter une image isolée ou de reprendre n'importe où.</figcaption>
+  </figure>
+</section>
+
+<section id="chaines">
+  <div class="sec-head"><h2>Les chaînes, une par une</h2></div>
+  <p>Chaque bloc se déplie. Les étapes sont dans l'ordre où le programme les exécute.</p>
+  <div class="pipes">
+
+    <details class="pipe" open>
+      <summary><h3>Import d'une trace</h3><span class="where">src/import/</span></summary>
+      <div class="body">
+        <ol class="steps">
+          <li><span><code>importFile(file, colorIndex)</code> aiguille vers <code>parseGpx</code> ou <code>parseFit</code>. Le SDK FIT de Garmin n'est chargé qu'au premier fichier .fit.</span></li>
+          <li><span>Les parseurs produisent des segments de points (<code>lon</code>, <code>lat</code>, <code>ele</code>, <code>time</code>, fréquence cardiaque, cadence, puissance, température), les waypoints et le décalage horaire local.</span></li>
+          <li><span><code>buildTrack</code> calcule l'identifiant, l'emprise et les statistiques : altitudes lissées sur 5 points, seuil de 3 m pour le D+ et le D−.</span></li>
+          <li><span>Une couleur est attribuée (<code>assignColors</code>), choisie pour se lire sur des photos aériennes.</span></li>
+          <li><span>L'imagerie passe seule à l'IGN ou à swisstopo si la trace est entièrement en France ou en Suisse.</span></li>
+          <li><span>Des traces qui se suivent (moins de 24 h d'écart, sans chevauchement) peuvent être enchaînées en un parcours (<code>chainTracks</code>).</span></li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="pipe">
+      <summary><h3>Terrain : tuiles et niveaux de détail</h3><span class="where">src/terrain/</span></summary>
+      <div class="body">
+        <ol class="steps">
+          <li><span><strong>Catalogue</strong> (<code>sources.ts</code>) : relief Mapterhorn (défaut) ou AWS Terrarium ; imagerie Esri (défaut), IGN, swisstopo, Sentinel-2, cartes topographiques, photos IGN anciennes.</span></li>
+          <li><span><strong>Téléchargement</strong> (<code>createTileFetcher</code>) : 12 requêtes à la fois, doublons fusionnés, cache LRU d'environ 600 images, 3 nouveaux essais (250 ms, 1 s, 4 s). Un pack hors ligne est lu avant le réseau.</span></li>
+          <li><span><strong>Relief</strong> : chaque pixel code une hauteur. En Terrarium, <code>h = R·256 + G + B/256 − 32768</code> mètres.</span></li>
+          <li><span><strong>Imagerie</strong> : pour une tuile de relief au zoom z, les sous-tuiles d'imagerie au zoom z+1 sont assemblées en une texture.</span></li>
+          <li><span><strong>Maillage</strong> : une grille de 65 × 65 sommets par tuile, chaque sommet converti lon/lat → hauteur → ECEF → repère local, avec une « jupe » sur les bords pour cacher les fentes entre niveaux.</span></li>
+          <li><span><strong>Quadtree</strong> (<code>engine.ts</code>) : une tuile se divise quand une maille dépasse 3 px à l'écran. Le parent reste affiché tant que ses quatre enfants ne sont pas prêts : jamais de trou. 24 chargements simultanés au plus, 400 grilles de hauteurs gardées (≈ 100 Mo).</span></li>
+          <li><span><strong>Zone chargée</strong> : l'emprise des traces élargie de 25 km, 40 km de côté au moins, couverte par 16 tuiles racines au plus.</span></li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="pipe">
+      <summary><h3>Survol, rythme et horloge du film</h3><span class="where">src/flyover/ · src/film/clock.ts</span></summary>
+      <div class="body">
+        <ol class="steps">
+          <li><span><code>buildTrackPath</code> transforme la première trace en chemin échantillonnable (distances cumulées, temps).</span></li>
+          <li><span>Le <strong>rythme</strong> (<code>pacing.ts</code>) ralentit aux temps forts : sommets des montées, cols franchis, sommets proches. Les portions de vitesse choisies à la main (×0,25 à ×4) s'y ajoutent.</span></li>
+          <li><span>L'<strong>horloge du film</strong> (<code>buildFilmClock</code>) assemble ouverture, vol, arrêts et clôture. <code>stateAt(t)</code> dit à tout instant dans quelle phase on est et où en est le marqueur.</span></li>
+          <li><span>La <strong>caméra</strong> (<code>computeCameraView</code>, puis <code>computeFilmView</code>) est une fonction sans état : cinq styles (poursuite, balancement, orbite, dessus, cinéma), au moins 80 m au-dessus du sol, la vue sur le marqueur dégagée. Les plans d'ouverture et de clôture (descente, saut, depuis la région, balayage) fondent la vue d'ensemble dans le vol.</span></li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="pipe">
+      <summary><h3>Film et timeline</h3><span class="where">src/film/ · ui/Timeline.tsx</span></summary>
+      <div class="body">
+        <ul>
+          <li><strong>Le modèle</strong> (<code>settings.film</code>) : plans d'ouverture et de clôture, arrêts (caméra « comme le film », tour lent, vue large ou fixe), cadrages le long de la trace, portions de vitesse, textes, médias (photo ou vidéo), musiques, points d'intérêt.</li>
+          <li><strong>Montage automatique</strong> (<code>assemble.ts</code>) : au chargement, un arrêt de 4 s en orbite à chaque temps fort, et, aux cols, sommets et refuges, un titre de 4 s et un ralenti ×0,5 sur 400 m.</li>
+          <li><strong>La timeline</strong> transforme les gestes (glisser, étirer, couper) en appels purs de <code>film/timeline.ts</code>. Chaque geste est un pas d'annulation.</li>
+          <li><strong>Médias</strong> : photos placées par leur GPS ou leur heure (EXIF des JPEG), vidéos jusqu'à 50 Mo calées sur l'heure de tournage, musiques avec forme d'onde. Le tempo est détecté (60–180 BPM) pour « Caler sur le rythme » : titres, arrêts et débuts de ralentis se posent sur les temps.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="pipe">
+      <summary><h3>Habillage</h3><span class="where">src/overlay/</span></summary>
+      <div class="body">
+        <p class="prose">L'habillage n'est pas du HTML : c'est un dessin sur un canvas 2D, fait par une seule fonction pure, <code>drawOverlay(ctx, frame, settings, size, assets)</code>. L'aperçu l'appelle sur un canvas posé au-dessus de la vue 3D ; l'export l'appelle sur l'image de la vidéo. L'unité est 1 % du petit côté, avec 5 % de marge de sécurité et 9 positions où les éléments s'empilent. Trois styles (éditorial, diffusion, application), couleurs et polices modifiables par-dessus.</p>
+      </div>
+    </details>
+
+    <details class="pipe">
+      <summary><h3>Lumière, atmosphère, nuages, eau, météo</h3><span class="where">src/scene/ · src/weather/</span></summary>
+      <div class="body">
+        <ul>
+          <li><strong>Atmosphère</strong> (bibliothèques Takram) : ciel physique, perspective aérienne, puis tone mapping, lissage des bords (SMAA) et étalonnage.</li>
+          <li><strong>Soleil</strong> à l'heure enregistrée sous le marqueur, ou à une heure choisie ; lever et coucher par les équations de la NOAA ; ombres du relief dans une carte de 4096².</li>
+          <li><strong>Nuages</strong> en volume, trois couches tirées de la nébulosité réelle (Open-Meteo) ou réglées à la main, poussés par le vent. L'aperçu les calcule plus grossièrement ; l'export les affine sur 2 à 6 passes par image.</li>
+          <li><strong>Eau</strong> : lacs et rivières d'OpenStreetMap à 8 km autour de la trace, avec reflets et vaguelettes.</li>
+          <li><strong>Météo historique</strong> du jour de la sortie, en 2 à 12 points le long de la trace : voile sur le soleil, brume, ombres adoucies.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="pipe">
+      <summary><h3>Export vidéo</h3><span class="where">src/export/</span></summary>
+      <div class="body">
+        <ol class="steps">
+          <li><span>Le tiroir d'export dépose une demande dans <code>useExportStore</code>.</span></li>
+          <li><span><code>ExportController</code> met la lecture en pause, coupe la boucle de rendu (<code>frameloop 'never'</code>) et rend à la taille de la vidéo.</span></li>
+          <li><span>Pour chaque image du calendrier, <code>renderSettledFrame</code> attend les tuiles visibles (5 s au plus), replaque la trace, rend, et précharge les tuiles des 40 images suivantes.</span></li>
+          <li><span>L'image est composée sur un canvas hors écran : dégradé de ciel, image 3D, habillage.</span></li>
+          <li><span>L'encodeur prend le premier codec accepté : H.264 en MP4, sinon HEVC, VP9 ou VP8 en WebM. Débit entre 1 et 80 Mbit/s, une image-clé toutes les 2 s.</span></li>
+          <li><span>Le fichier s'écrit sur le disque au fil de l'encodage (Chrome, Edge, bureau) par morceaux de 4 Mio ; sinon il reste en mémoire.</span></li>
+          <li><span>Le son est mixé à part (<code>OfflineAudioContext</code>, 48 kHz) et encodé en AAC ou Opus.</span></li>
+          <li><span>Sous Linux, l'application de bureau n'a pas WebCodecs : les images partent vers le ffmpeg du système, piloté en Rust (<code>src-tauri/src/video.rs</code>).</span></li>
+        </ol>
+        <p class="prose">Variantes : image fixe PNG ou JPEG, habillage seul sur fond transparent, plusieurs formats d'un coup, un film par trace d'un dossier, affiche A4, A3 ou carrée à 300 dpi. Sur le bureau, le film par trace se lance aussi en ligne de commande : <code>openflyover --rendu &lt;dossier&gt; --sortie &lt;dossier&gt; --formats 16:9@1080p</code> (<code>src-tauri/src/cli.rs</code>, <code>src/export/cliRender.ts</code>), avec un compte rendu et un code de sortie.</p>
+      </div>
+    </details>
+
+    <details class="pipe">
+      <summary><h3>Projet, annuler et préréglages</h3><span class="where">src/project/</span></summary>
+      <div class="body">
+        <ul>
+          <li>Un projet est un seul fichier <code>.openflyover.json</code> : nom, réglages, film, traces embarquées, médias. Version 2, avec des migrations pour les anciens fichiers.</li>
+          <li>À l'ouverture, chaque réglage est comparé à sa valeur par défaut : un type faux ou une valeur hors limites reprend le défaut. Un vieux projet s'ouvre toujours.</li>
+          <li>L'historique d'annulation garde seulement les clés modifiées ; deux changements à moins de 400 ms n'en font qu'un, un glissé de curseur aussi.</li>
+          <li>« Mes projets » enregistre automatiquement 3 s après le dernier changement (dossier de l'application sur le bureau, Cache Storage sur le site).</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="pipe">
+      <summary><h3>Site ou bureau : la couche plateforme</h3><span class="where">src/platform/ · src-tauri/</span></summary>
+      <div class="body">
+        <p class="prose"><code>getPlatform()</code> renvoie l'implémentation du site ou du bureau. Le reste du code ne touche jamais directement à <code>&lt;input type="file"&gt;</code>, à <code>localStorage</code> ni à Tauri : il demande à la plateforme d'ouvrir, d'enregistrer, d'écrire un fichier en continu, de garder des tuiles ou des projets. Sur le bureau, les dialogues sont natifs et la politique de sécurité (CSP) liste chaque serveur autorisé : toute nouvelle source doit y être ajoutée.</p>
+      </div>
+    </details>
+
+    <details class="pipe">
+      <summary><h3>OpenStreetMap et reconnaissance</h3><span class="where">src/osm/ · src/route/</span></summary>
+      <div class="body">
+        <ul>
+          <li><strong>Overpass</strong> : une requête par trace pour les repères (sommets, cols, refuges, lacs) et l'eau, une seule à la fois pour toute l'application, gardée 30 jours.</li>
+          <li><strong>Reconnaissance</strong> : les chemins d'une zone sont transformés en graphe, puis un A* cherche l'itinéraire en préférant les sentiers aux routes. Les altitudes viennent des tuiles de relief. Le résultat est une trace sans heures.</li>
+          <li><strong>Nominatim</strong> transforme un nom de lieu en coordonnées, seulement quand on valide.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="pipe">
+      <summary><h3>Rendu à la demande</h3><span class="where">src/scene/renderOnDemand.ts</span></summary>
+      <div class="body">
+        <p class="prose">La vue 3D ne se redessine que si quelque chose change. Elle dessine en continu pendant la lecture, pendant le chargement des tuiles et pendant un recadrage ; puis 30 images après chaque changement de réglage, le temps que les nuages se stabilisent. Le pas de temps d'une image est limité à 0,25 s, pour que la lecture ne saute pas après une pause. L'export n'est pas concerné : il dessine lui-même chaque image.</p>
+      </div>
+    </details>
+
+  </div>
+</section>
+
+<section id="etat">
+  <div class="sec-head"><h2>État et stores</h2></div>
+  <p>L'état vit dans des stores zustand, lus par React et par la scène. Le principal porte presque tout ; les autres isolent ce qui change souvent ou ne doit pas aller dans le projet.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Store</th><th>Contenu</th></tr></thead>
+      <tbody>
+        <tr><td><code>useAppStore</code></td><td>traces, emprise, repère local, réglages (sources, caméra, rythme, film, habillage, vidéo, affiche…), lecture, nom du projet</td></tr>
+        <tr><td><code>useExportStore</code></td><td>demande d'export, avancement, résultat</td></tr>
+        <tr><td><code>useBatchStore</code></td><td>rendu de plusieurs films</td></tr>
+        <tr><td><code>useMediaStore</code></td><td>photos, vidéos et musiques du projet</td></tr>
+        <tr><td><code>useWeatherStore</code></td><td>série météo de la sortie</td></tr>
+        <tr><td><code>useLandmarkStore</code> · <code>useWaterStore</code></td><td>repères et plans d'eau d'OpenStreetMap</td></tr>
+        <tr><td><code>useLabelSources</code></td><td>étiquettes 3D, par source</td></tr>
+        <tr><td><code>useOfflineStore</code> · <code>useLibraryStore</code></td><td>packs hors ligne · Mes projets</td></tr>
+        <tr><td><code>useRouteStore</code></td><td>points posés pour une reconnaissance</td></tr>
+        <tr><td><code>useToastStore</code> · <code>useSafeZonesStore</code></td><td>messages · zones de sécurité affichées</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="tests">
+  <div class="sec-head"><h2>Tests et qualité</h2></div>
+  <div class="cols">
+    <div>
+      <h3>Tests unitaires</h3>
+      <p>Vitest, dans un DOM simulé (jsdom). Chaque fichier <code>*.test.ts</code> est à côté de son module : 91 fichiers, 1 449 tests. Le réseau et l'encodeur sont simulés. Commande : <code>npx vitest run --maxWorkers=1</code>.</p>
+    </div>
+    <div>
+      <h3>Rust</h3>
+      <p><code>cargo test</code> dans <code>src-tauri/</code> : 9 tests, sur les arguments passés à ffmpeg (qualité, MP4 ou WebM, son) et sur la ligne de commande du rendu en lot.</p>
+    </div>
+    <div>
+      <h3>Intégration continue</h3>
+      <p><code>ci.yml</code> à chaque envoi : types, analyse, tests, construction. <code>desktop.yml</code> à la demande : installeurs Windows, macOS et Linux.</p>
+    </div>
+  </div>
+  <h3>Les tests de bout en bout (<code>npm run e2e</code>)</h3>
+  <p>Le script <code>e2e/run.mjs</code> lance son propre serveur Vite, ouvre l'application dans un Chromium sans fenêtre avec un GPU logiciel (SwiftShader), et la pilote comme un utilisateur avec puppeteer-core. Toute erreur dans la console fait échouer le scénario, sauf le bruit réseau des tuiles, de la météo et d'OpenStreetMap.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Scénario</th><th>Ce qu'il vérifie</th></tr></thead>
+      <tbody>
+        <tr><td><code>accueil</code></td><td>l'accueil vide, puis l'exemple chargé : plans Ouverture, Survol et Clôture présents, scène 3D affichée</td></tr>
+        <tr><td><code>onglets</code></td><td>chaque onglet s'ouvre ; l'aide des raccourcis s'ouvre au bouton et à la touche « ? », se ferme à Échap</td></tr>
+        <tr><td><code>timeline</code></td><td>T ajoute un texte, Ctrl+Z le retire, S ajoute un arrêt</td></tr>
+        <tr><td><code>projet</code></td><td>le projet est enregistré (fichier .json téléchargé), puis rouvert dans une page neuve avec les mêmes arrêts et textes</td></tr>
+        <tr><td><code>export</code></td><td>un vrai export : une vidéo de 320 × 180, 2 s à 10 images/s, nuages coupés. Le fichier doit être un MP4 ou un WebM, non vide, de la taille annoncée. Puis une image fixe depuis le tiroir d'export : un PNG valide</td></tr>
+        <tr><td><code>reconnaissance</code></td><td>coordonnées tapées, relief sans trace, deux points posés au clic droit, itinéraire calculé (réponse d'OpenStreetMap simulée), film monté</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">Sans carte graphique, l'export prend 5 à 6 minutes sur les 7 à 8 de la suite : <code>OPENFLYOVER_E2E_SKIP_EXPORT=1</code> le saute. Ce qui se voit, s'entend ou se mesure sur une vraie carte graphique est listé à part, dans <code>docs/tests-gpu.md</code>.</p>
+</section>
+
+<section id="sources">
+  <div class="sec-head"><h2>Sources de données</h2></div>
+  <p>Toutes ouvertes et sans clé. La trace elle-même n'est jamais envoyée : seules des positions approchées partent vers les serveurs. Les attributions sont affichées et incrustées dans les vidéos, images et affiches.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Source</th><th>Sert à</th><th>Conditions</th></tr></thead>
+      <tbody>
+        <tr><td>Mapterhorn</td><td>relief (défaut)</td><td>données ouvertes</td></tr>
+        <tr><td>AWS Terrain Tiles</td><td>relief</td><td>AWS Open Data</td></tr>
+        <tr><td>IGN Géoplateforme</td><td>photos aériennes, Plan IGN, photos 1950–2005</td><td>Licence Ouverte Etalab 2.0</td></tr>
+        <tr><td>swisstopo</td><td>SWISSIMAGE, carte nationale</td><td>OGD</td></tr>
+        <tr><td>Esri World Imagery</td><td>photos du monde (défaut)</td><td>conditions Esri, à relire pour un usage commercial</td></tr>
+        <tr><td>EOX Sentinel-2</td><td>satellite 10 m</td><td>CC BY-NC-SA 4.0, non commercial</td></tr>
+        <tr><td>OpenTopoMap</td><td>carte topographique</td><td>CC BY-SA, serveur bénévole</td></tr>
+        <tr><td>Open-Meteo</td><td>météo historique</td><td>CC BY 4.0, non commercial</td></tr>
+        <tr><td>OpenStreetMap</td><td>repères, eau, chemins (Overpass), lieux (Nominatim)</td><td>ODbL</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="regles">
+  <div class="sec-head"><h2>Règles du projet</h2></div>
+  <ul>
+    <li>Pas de clé d'API ni de service payant. Une nouvelle source entre dans <code>terrain/sources.ts</code>, dans <code>docs/sources.md</code> et dans la CSP de <code>src-tauri/tauri.conf.json</code>.</li>
+    <li>Pas de Node à l'exécution. Le site et l'application de bureau doivent toujours marcher tous les deux.</li>
+    <li>Fichiers et stockage passent toujours par <code>getPlatform()</code>.</li>
+    <li>TypeScript strict : <code>import type</code>, pas d'<code>enum</code>, pas de propriétés de paramètre de constructeur. Pas de React dans <code>geo/</code>, <code>import/</code>, <code>terrain/</code>.</li>
+    <li>Aperçu = export : tout ce qui bouge dépend de la progression et du temps du film, jamais de l'horloge murale.</li>
+    <li>Interface en français ; charte « Carte alpine » (<code>src/ui/theme.css</code>), polices embarquées, icônes Lucide.</li>
+  </ul>
+</section>
+
+<section id="limites">
+  <div class="sec-head"><h2>Limites connues</h2></div>
+  <ul>
+    <li><span class="tag warn">à vérifier</span> Jamais vu sur une vraie carte graphique : vitesse de l'export, fluidité, son, rendu. Le développement se fait en rendu logiciel.</li>
+    <li><span class="tag warn">à vérifier</span> Application de bureau jamais lancée ni empaquetée sur une vraie machine ; workflows d'installeurs jamais lancés.</li>
+    <li><span class="tag">navigateurs</span> Export non testé sous Firefox et Safari ; sans écriture directe, le fichier reste en mémoire (≈ 2 fois sa taille).</li>
+    <li><span class="tag">licences</span> SDK FIT de Garmin (non libre) à trancher avant une diffusion publique ; Esri, EOX et Open-Meteo non commerciaux ou à relire.</li>
+    <li><span class="tag">médias</span> Vidéos de 50 Mo au plus, embarquées dans le projet ; photos HEIC refusées ; EXIF lu seulement dans les JPEG.</li>
+    <li><span class="tag">rendu</span> Ombres limitées à la zone chargée ; les nuages n'ombrent pas le relief ; la météo d'un seul point s'applique à toute la scène.</li>
+  </ul>
+</section>
+
+<section id="lire">
+  <div class="sec-head"><h2>Par où lire le code</h2></div>
+  <ol class="steps">
+    <li><span><code>src/core/types.ts</code> : les contrats, pour savoir ce qu'est une trace, une tuile, un repère.</span></li>
+    <li><span><code>src/state/store.ts</code> : tout l'état de l'application et ses actions.</span></li>
+    <li><span><code>src/film/model.ts</code> puis <code>src/film/clock.ts</code> : ce qu'est un film, et comment le temps s'y déroule.</span></li>
+    <li><span><code>src/flyover/filmCamera.ts</code> : où est la caméra à chaque instant.</span></li>
+    <li><span><code>src/scene/FlyoverCanvas.tsx</code> : comment la scène 3D s'assemble.</span></li>
+    <li><span><code>src/export/ExportController.tsx</code> puis <code>capture.ts</code> : comment un film devient un fichier.</span></li>
+    <li><span><code>ARCHITECTURE.md</code> : le détail de chaque module, avec ses chiffres.</span></li>
+  </ol>
+</section>
+
+</main>
+
+<footer>
+  OpenFlyover · code sous licence MIT · cette page résume <code>ARCHITECTURE.md</code>, <code>README.md</code> et le code au 8 octobre 2026. En cas de doute, le code et <code>ARCHITECTURE.md</code> font foi.
+</footer>
+
+</div>
+</body>
+</html>

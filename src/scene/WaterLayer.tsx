@@ -24,6 +24,7 @@ import { useAppStore } from '../state/store'
 import { useDebouncedCallback } from './useDebouncedCallback'
 import { REDRAPE_DEBOUNCE_MS, REDRAPE_MAX_WAIT_MS } from './TrackLines'
 import { useTerrainContext } from './TerrainLayer'
+import { wakeScene } from './renderOnDemand'
 import { useFilmClock } from './usePacing'
 import { buildWaterMesh, type WaterMesh } from './waterMesh'
 
@@ -220,6 +221,7 @@ export function WaterLayer() {
       const previous = mesh.geometry
       mesh.geometry = drapeWater(meshes, current, frame, factor)
       previous.dispose()
+      wakeScene()
     },
     [mesh, frame, meshes],
   )

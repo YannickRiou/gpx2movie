@@ -6,6 +6,7 @@
  * frames came before (the export renders any frame on its own).
  */
 import { useEffect, useState } from 'react'
+import { wakeScene } from './renderOnDemand'
 import { CanvasTexture, SRGBColorSpace, Vector3 } from 'three'
 import type { Camera, Sprite, SpriteMaterial, Texture } from 'three'
 import type { LocalFrame } from '../core/types'
@@ -149,7 +150,11 @@ export function useMarkerImage(dataUrl: string): HTMLImageElement | null {
     if (!dataUrl) return
     let alive = true
     loadMarkerImage(dataUrl).then(
-      (image) => alive && setLoaded({ src: dataUrl, image }),
+      (image) => {
+        if (!alive) return
+        setLoaded({ src: dataUrl, image })
+        wakeScene()
+      },
       () => alive && setLoaded(null),
     )
     return () => {

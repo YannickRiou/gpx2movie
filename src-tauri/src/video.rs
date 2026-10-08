@@ -47,32 +47,52 @@ impl Videos {
     }
 }
 
-/// Constant rate factor of libx264 for each export quality (lower: sharper and larger).
-fn crf(quality: &str) -> Option<u8> {
-    match quality {
-        "standard" => Some(23),
-        "high" => Some(20),
-        "max" => Some(17),
+/// True when the name typed in the save dialog ends in `.webm`: VP9 + Opus in WebM, MP4 otherwise.
+fn is_webm(output: &Path) -> bool {
+    output.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("webm"))
+}
+
+/// Constant rate factor for each export quality (lower: sharper and larger), on the scale of libx264 or libvpx-vp9.
+fn crf(quality: &str, webm: bool) -> Option<u8> {
+    match (quality, webm) {
+        ("standard", false) => Some(23),
+        ("high", false) => Some(20),
+        ("max", false) => Some(17),
+        ("standard", true) => Some(34),
+        ("high", true) => Some(31),
+        ("max", true) => Some(26),
         _ => None,
     }
 }
 
-/// Arguments of ffmpeg: raw RGBA frames on stdin, the optional WAV soundtrack, MP4 / H.264 (+ AAC) at `output`.
-/// Colours converted and tagged as BT.709, what players assume for HD video.
+/// Arguments of ffmpeg: raw RGBA frames on stdin, the optional WAV soundtrack, MP4 / H.264 (+ AAC) at `output`, or
+/// WebM / VP9 (+ Opus) when its name ends in `.webm`. Colours converted and tagged as BT.709, what players assume for
+/// HD video.
 fn ffmpeg_args(width: u32, height: u32, fps: u32, crf: u8, sound: Option<&Path>, output: &Path) -> Vec<OsString> {
     let os = |items: &[&str]| items.iter().map(OsString::from).collect::<Vec<_>>();
     let (size, fps, crf) = (format!("{width}x{height}"), fps.to_string(), crf.to_string());
+    let webm = is_webm(output);
     let mut args = os(&["-hide_banner", "-loglevel", "error", "-nostats"]);
     args.extend(os(&["-f", "rawvideo", "-pix_fmt", "rgba", "-s", &size, "-r", &fps, "-i", "-"]));
     if let Some(sound) = sound {
         args.extend([OsString::from("-i"), sound.into()]);
     }
-    args.extend(os(&["-c:v", "libx264", "-preset", "medium", "-crf", &crf, "-pix_fmt", "yuv420p"]));
+    if webm {
+        // constant quality (-b:v 0); "good" with cpu-used 4 and row threads: a few times slower than x264, not dozens
+        args.extend(os(&["-c:v", "libvpx-vp9", "-crf", &crf, "-b:v", "0", "-deadline", "good", "-cpu-used", "4", "-row-mt", "1"]));
+        args.extend(os(&["-pix_fmt", "yuv420p"]));
+    } else {
+        args.extend(os(&["-c:v", "libx264", "-preset", "medium", "-crf", &crf, "-pix_fmt", "yuv420p"]));
+    }
     args.extend(os(&["-vf", "scale=out_color_matrix=bt709", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]));
     if sound.is_some() {
-        args.extend(os(&["-c:a", "aac", "-b:a", AUDIO_BITRATE]));
+        args.extend(os(&["-c:a", if webm { "libopus" } else { "aac" }, "-b:a", AUDIO_BITRATE]));
     }
-    args.extend(os(&["-movflags", "+faststart", "-f", "mp4", "-y"]));
+    if webm {
+        args.extend(os(&["-f", "webm", "-y"]));
+    } else {
+        args.extend(os(&["-movflags", "+faststart", "-f", "mp4", "-y"]));
+    }
     args.push(output.into());
     args
 }
@@ -153,7 +173,7 @@ pub async fn video_sound(request: Request<'_>, videos: State<'_, VideoState>) ->
 
 /// ffmpeg started on `output`, reading its frames from the pipe.
 fn start(app: &AppHandle, output: PathBuf, width: u32, height: u32, fps: u32, quality: &str, sound: Option<PathBuf>) -> Result<Session, String> {
-    let crf = crf(quality).ok_or(format!("Qualité inconnue : {quality}"))?;
+    let crf = crf(quality, is_webm(&output)).ok_or(format!("Qualité inconnue : {quality}"))?;
     if !output.is_absolute() || !app.fs_scope().is_allowed(&output) {
         return Err("Ce fichier n'a pas été choisi dans la fenêtre « Enregistrer ».".into());
     }
@@ -249,10 +269,11 @@ mod tests {
 
     #[test]
     fn maps_each_quality_to_a_crf() {
-        assert_eq!(crf("standard"), Some(23));
-        assert_eq!(crf("high"), Some(20));
-        assert_eq!(crf("max"), Some(17));
-        assert_eq!(crf("best"), None);
+        assert_eq!(crf("standard", false), Some(23));
+        assert_eq!(crf("high", false), Some(20));
+        assert_eq!(crf("max", false), Some(17));
+        assert_eq!(crf("high", true), Some(31));
+        assert_eq!(crf("best", false), None);
     }
 
     #[test]
@@ -268,6 +289,17 @@ mod tests {
         let args = text(&ffmpeg_args(1080, 1920, 60, 17, Some(Path::new("/tmp/s.wav")), Path::new("/films/Tour.mp4")));
         assert!(args.contains("-i - -i /tmp/s.wav -c:v libx264"));
         assert!(args.contains("-c:a aac -b:a 192k -movflags"));
+    }
+
+    #[test]
+    fn writes_vp9_and_opus_in_webm_when_the_name_ends_in_webm() {
+        assert!(is_webm(Path::new("/films/Tour.WebM")));
+        assert!(!is_webm(Path::new("/films/Tour.mp4")));
+        let args = text(&ffmpeg_args(1920, 1080, 30, 31, Some(Path::new("/tmp/s.wav")), Path::new("/films/Tour.webm")));
+        assert!(args.contains("-i /tmp/s.wav -c:v libvpx-vp9 -crf 31 -b:v 0"));
+        assert!(args.contains("-c:a libopus -b:a 192k"));
+        assert!(args.ends_with("-f webm -y /films/Tour.webm"));
+        assert!(!args.contains("movflags"));
     }
 
     #[test]

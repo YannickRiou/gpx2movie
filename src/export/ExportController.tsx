@@ -19,6 +19,7 @@
 import { useEffect, useRef } from 'react'
 import { useThree, type RootState } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
+import { errorMessage } from '../core/errors'
 import type { LocalFrame, TerrainEngine } from '../core/types'
 import { mixFilmAudio } from '../film/audio'
 import type { FilmClock } from '../film/clock'
@@ -69,10 +70,6 @@ interface RunDeps {
   /** film clock of the preview (the request's schedule was built from it) */
   clock: () => FilmClock
   signal: AbortSignal
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 /** Camera placement of FlyoverRig at `progress` and film time `timeS` with the terrain loaded now (same inputs as the rig). */
