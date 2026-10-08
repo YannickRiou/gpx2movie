@@ -662,13 +662,6 @@
   color: var(--color-white);
 }
 
-/* epochs: sand block like an old print, clock-back icon before the years */
-.film-tl__block--epoch {
-  gap: 4px;
-  background: var(--color-line);
-  color: var(--color-ink);
-}
-
 /* photos: paper block, thumbnail at its start */
 .film-tl__block--media {
   gap: 4px;

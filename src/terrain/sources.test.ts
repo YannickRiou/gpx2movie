@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ImagerySource, TileSourceBase } from '../core/types'
 import {
-  HISTORICAL_IMAGERY,
   IMAGERY_SOURCES,
   TERRAIN_SOURCES,
   buildTileUrl,
-  getHistoricalImagery,
   getImagerySource,
-  historicalImageryFor,
   getTerrainSource,
   sourceCovers,
 } from './sources'
@@ -214,20 +211,5 @@ describe('catalogue integrity (values verified 2026-10-05, see docs/sources.md)'
       expect(source.attribution).toContain(period)
       expect(source.coverage).toEqual(ign.coverage)
     }
-  })
-})
-
-describe('dated imagery for the film epochs', () => {
-  it('lists catalogued sources, oldest first, with their years', () => {
-    for (const { id, label } of HISTORICAL_IMAGERY) {
-      expect(getHistoricalImagery(id)?.source.attribution).toContain(label)
-    }
-    expect(HISTORICAL_IMAGERY[0].id).toBe('ign-ortho-1950-1965')
-    expect(getHistoricalImagery('ign-ortho')).toBeUndefined()
-  })
-
-  it('offers only the ones covering the track (France)', () => {
-    expect(historicalImageryFor(CHAMONIX).map((h) => h.id)).toEqual(HISTORICAL_IMAGERY.map((h) => h.id))
-    expect(historicalImageryFor({ lon: -74, lat: 40.7 })).toEqual([])
   })
 })

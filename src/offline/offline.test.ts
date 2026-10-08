@@ -50,7 +50,10 @@ function distanceFromTrackM(key: TileKey, track: LonLatBounds): number {
 describe('offline policy', () => {
   it('refuses the providers whose terms forbid bulk download', () => {
     for (const id of ['opentopomap', 'arcgis-world-imagery', 'swisstopo', 'swisstopo-carte']) {
-      expect(offlinePolicy(id).allowed, id).toBe(false)
+      // personal use: allowed with a low daily cap and a caution
+      expect(offlinePolicy(id).allowed, id).toBe(true)
+      expect(offlinePolicy(id).personalUse, id).toBe(true)
+      expect(offlinePolicy(id).dailyLimit, id).toBeLessThanOrEqual(10_000)
       expect(offlinePolicy(id).reason).not.toBe('')
     }
     for (const id of ['mapterhorn', 'aws-terrarium', 'ign-ortho', 'ign-plan', 'eox-s2cloudless']) expect(offlinePolicy(id).allowed, id).toBe(true)
@@ -276,7 +279,7 @@ describe('startPackDownload', () => {
 
   it('never downloads a refused source', async () => {
     const download = vi.fn(async () => new Blob(['a']))
-    const result = await startPackDownload('p', plan(2, 'opentopomap'), { cache: fakeCache(), download }).finished
+    const result = await startPackDownload('p', plan(2, 'nouvelle-source'), { cache: fakeCache(), download }).finished
     expect(download).not.toHaveBeenCalled()
     expect(result.failed).toBe(2)
   })

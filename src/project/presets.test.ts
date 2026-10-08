@@ -79,8 +79,7 @@ describe('presetSettings', () => {
     const stop = { id: 'stop-1', atM: 500, durationS: 3, camera: 'fixe' as const }
     const text = { id: 'text-1', startS: 1, durationS: 2, text: 'Départ', anchor: 'center' as const, size: 1 }
     const music = { id: 'music-1', src: 'audio-1', startS: 0, durationS: 30, inS: 0, volume: 1, fadeInS: 0, fadeOutS: 0 }
-    const epoch = { id: 'epoch-1', startS: 4, durationS: 6, imagerySourceId: 'ign-ortho-1950-1965', badge: true }
-    const saved = { ...DEFAULT_SETTINGS.film, opening: { style: 'saut' as const, durationS: 3 }, autoStops: false, stops: [stop], audio: [music], epochs: [epoch] }
+    const saved = { ...DEFAULT_SETTINGS.film, opening: { style: 'saut' as const, durationS: 3 }, autoStops: false, stops: [stop], audio: [music] }
     const store = createPresetStore(memoryStorage())
     store.save('Plans', { ...DEFAULT_SETTINGS, film: saved })
     expect(store.list()[0].settings.film).toEqual({ opening: saved.opening, closing: saved.closing })

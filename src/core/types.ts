@@ -219,12 +219,6 @@ export interface TerrainEngine {
    * budget. Returns the number of loads started.
    */
   prefetch?(camera: PerspectiveCamera, viewportHeightPx: number): number
-  /**
-   * Blend a second imagery source over the drawn tiles with weight `mix` (0–1; film epochs). Its textures load for
-   * the drawn tiles while it is set (also at weight 0, ahead of a block) and count as pending visible tiles while
-   * the weight is above 0; null frees them. A tile it does not cover keeps the current imagery.
-   */
-  setEpoch?(imagery: ImagerySource | null, mix: number): void
   dispose(): void
 }
 
@@ -269,8 +263,6 @@ export interface LoadImageryOptions {
   zoomOffset: number
   signal?: AbortSignal
   priority?: number
-  /** leave missing parts transparent instead of grey (dated imagery blended over the current one) */
-  transparent?: boolean
 }
 
 export type LoadImageryTexture = (

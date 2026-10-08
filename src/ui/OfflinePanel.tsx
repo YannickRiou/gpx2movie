@@ -101,11 +101,17 @@ export function OfflinePanel() {
 
           <p className="field__hint">
             Relief : {terrain.name}
-            {terrainPolicy.allowed ? '' : ` — non téléchargeable. ${terrainPolicy.reason}`}
+            {terrainPolicy.allowed
+              ? terrainPolicy.personalUse
+                ? ` — ${terrainPolicy.reason}`
+                : ''
+              : ` — non téléchargeable. ${terrainPolicy.reason}`}
             <br />
             Imagerie : {imagery.name}
             {imageryPolicy.allowed
-              ? ''
+              ? imageryPolicy.personalUse
+                ? ` — ${imageryPolicy.reason}`
+                : ''
               : ` — non incluse, elle restera en ligne. ${imageryPolicy.reason} Pour l’inclure : IGN ou Sentinel-2 (EOX), onglet Carte.`}
           </p>
 

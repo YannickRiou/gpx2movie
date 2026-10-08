@@ -7,11 +7,8 @@ import type { FilmClockInput } from './clock'
 import { AUDIO_DEFAULTS, AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, MIN_SPEED_SPAN_M, clipTimeS, isValidFilm } from './model'
 import type { Film, FilmAudio, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
 import {
-  NEW_EPOCH_S,
   NEW_MEDIA_S,
   NEW_VIDEO_MAX_S,
-  addEpoch,
-  addEpochOverStop,
   addMedia,
   addMusic,
   addSpeed,
@@ -34,7 +31,6 @@ import {
   stopPositionAt,
   syncClip,
   syncClipPlacement,
-  updateEpoch,
   updateShot,
   updateSpeed,
   updateStop,
@@ -535,35 +531,5 @@ describe('music', () => {
     const removed = removeFilmItem(withMusic, 'music-1')
     expect(removed.audio).toEqual([])
     expect(hasFilmItem(removed, [], 'music-1')).toBe(false)
-  })
-})
-
-describe('epochs', () => {
-  const OLD = 'ign-ortho-1950-1965'
-
-  it('adds a block at the playhead, its badge shown, valid; over the whole window of a stop', () => {
-    const added = addEpoch(film, 12.345, OLD)
-    expect(added.id).toBe('epoch-1')
-    expect(added.film.epochs).toEqual([{ id: 'epoch-1', startS: 12.35, durationS: NEW_EPOCH_S, imagerySourceId: OLD, badge: true }])
-    expect(isValidFilm(added.film)).toBe(true)
-    const placed = contextOf(film).clock.stops[0]
-    const over = addEpochOverStop(added.film, placed, OLD)
-    expect(over.id).toBe('epoch-2')
-    const e = over.film.epochs[1]
-    expect(e.startS).toBeCloseTo(placed.startS, 2)
-    expect(e.startS + e.durationS).toBeCloseTo(placed.endS, 1)
-  })
-
-  it('moves and stretches like a text, edges snap targets; updates clamp; removed like any block', () => {
-    const f = addEpoch(film, 20, OLD).film
-    expect(dragFilm(f, 'epoch-1', 'move', 3, contextOf(f)).epochs[0]).toMatchObject({ startS: 23, durationS: NEW_EPOCH_S })
-    expect(dragFilm(f, 'epoch-1', 'start', -2, contextOf(f)).epochs[0]).toMatchObject({ startS: 18, durationS: NEW_EPOCH_S + 2 })
-    expect(dragFilm(f, 'epoch-1', 'end', 4, contextOf(f)).epochs[0]).toMatchObject({ startS: 20, durationS: NEW_EPOCH_S + 4 })
-    expect(snapTargets(contextOf(f).clock, f, [], 0)).toEqual(expect.arrayContaining([20, 20 + NEW_EPOCH_S]))
-    const u = updateEpoch(f, 'epoch-1', { startS: -3, durationS: 0.1, label: 'Hier', badge: false, imagerySourceId: 'ign-ortho-2000-2005' })
-    expect(u.epochs[0]).toEqual({ id: 'epoch-1', startS: 0, durationS: 0.5, label: 'Hier', badge: false, imagerySourceId: 'ign-ortho-2000-2005' })
-    expect(updateEpoch(u, 'epoch-1', { label: '  ' }).epochs[0].label).toBeUndefined()
-    expect(hasFilmItem(f, [], 'epoch-1')).toBe(true)
-    expect(removeFilmItem(f, 'epoch-1').epochs).toEqual([])
   })
 })

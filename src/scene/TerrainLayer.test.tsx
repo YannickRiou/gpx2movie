@@ -13,7 +13,6 @@ const {
   statsEqual,
   engineOptionsFromSettings,
   diffEngineOptions,
-  epochImageryAt,
 } = await import('./TerrainLayer')
 
 const outer: LonLatBounds = { west: 6, south: 45, east: 7, north: 46 }
@@ -122,21 +121,5 @@ describe('engine options from settings', () => {
     })
     const partial = diffEngineOptions(a, b)
     expect(Object.keys(partial ?? {}).sort()).toEqual(['imageryZoomOffset', 'terrain', 'wireframe'])
-  })
-})
-
-describe('epochImageryAt', () => {
-  const epoch = { id: 'epoch-1', startS: 10, durationS: 8, imagerySourceId: 'ign-ortho-1950-1965', badge: true }
-
-  it('gives the dated source of the block and its weight, ahead of it at weight 0', () => {
-    expect(epochImageryAt([epoch], 14)).toEqual({ source: getImagerySource('ign-ortho-1950-1965'), mix: 1 })
-    expect(epochImageryAt([epoch], 9)).toEqual({ source: getImagerySource('ign-ortho-1950-1965'), mix: 0 })
-    expect(epochImageryAt([epoch], 5)).toBeNull()
-    expect(epochImageryAt([epoch], 18)).toBeNull()
-  })
-
-  it('ignores a source that is not dated imagery of the catalogue', () => {
-    expect(epochImageryAt([{ ...epoch, imagerySourceId: 'ign-ortho' }], 14)).toBeNull()
-    expect(epochImageryAt([{ ...epoch, imagerySourceId: 'gone' }], 14)).toBeNull()
   })
 })

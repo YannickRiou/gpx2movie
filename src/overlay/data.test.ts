@@ -156,12 +156,4 @@ describe('overlayCredits', () => {
     // unknown ids fall back to the default sources, like the scene
     expect(overlayCredits({ ...sources, imagerySourceId: 'nope' })[1]).toBe(`Imagerie : ${getImagerySource('nope').attribution}`)
   })
-
-  it('credits the dated imagery of the film epochs once each', () => {
-    const sources = { terrainSourceId: 'mapterhorn', imagerySourceId: 'ign-ortho', weather: false, landmarks: false }
-    const ids = ['ign-ortho-1950-1965', 'ign-ortho-1950-1965', 'gone']
-    expect(overlayCredits({ ...sources, epochSourceIds: ids }).slice(2)).toEqual([
-      `Photos 1950–1965 : ${getImagerySource('ign-ortho-1950-1965').attribution}`,
-    ])
-  })
 })
