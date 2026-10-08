@@ -6,7 +6,7 @@ import { TileFetchError } from '../terrain/fetch'
 import { getImagerySource, getTerrainSource, IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
 import { createDailyQuota, MAX_FAILURES_IN_A_ROW, startPackDownload } from './download'
 import type { DownloadProgress } from './download'
-import { createPackRegistry, createStoredTileReader, packIdFor, sourcePrefix } from './packs'
+import { createPackRegistry, createStoredTileReader, packIdFor, sourcePrefixes } from './packs'
 import type { PackInfo } from './packs'
 import { LANDSCAPE_LEVELS, planOfflineTiles, splitDistanceM } from './plan'
 import type { OfflinePlanInput, PlannedTile } from './plan'
@@ -157,9 +157,11 @@ describe('packs', () => {
   })
 
   it('takes the fixed start of a source URL', () => {
-    expect(sourcePrefix(getTerrainSource('mapterhorn'))).toBe('https://tiles.mapterhorn.com/')
-    expect(sourcePrefix(getImagerySource('ign-ortho'))).toContain('LAYER=ORTHOIMAGERY.ORTHOPHOTOS&')
-    expect(sourcePrefix(getImagerySource('ign-ortho'))).not.toBe(sourcePrefix(getImagerySource('ign-plan')))
+    expect(sourcePrefixes(getTerrainSource('mapterhorn'))).toEqual(['https://tiles.mapterhorn.com/'])
+    expect(sourcePrefixes(getImagerySource('ign-ortho'))[0]).toContain('LAYER=ORTHOIMAGERY.ORTHOPHOTOS&')
+    expect(sourcePrefixes(getImagerySource('ign-ortho'))).not.toEqual(sourcePrefixes(getImagerySource('ign-plan')))
+    // one prefix per subdomain, never a bare « https:// » that every URL starts with
+    expect(sourcePrefixes(getImagerySource('opentopomap'))).toEqual(['https://a.tile.opentopomap.org/', 'https://b.tile.opentopomap.org/', 'https://c.tile.opentopomap.org/'])
   })
 
   it('keeps the list in the storage and ignores damaged entries', () => {
@@ -189,7 +191,7 @@ describe('packs', () => {
     const cache = { get: vi.fn(async () => new Blob(['x'])) }
     const reader = createStoredTileReader(registry, cache)
     expect(reader.covers(tiles[0].url)).toBe(false)
-    registry.save({ id: 'p', name: '', createdAt: 0, terrainSourceId: 'mapterhorn', imagerySourceId: null, corridorM: 0, tiles: 0, bytes: 0, complete: false, prefixes: [sourcePrefix(getTerrainSource('mapterhorn'))] })
+    registry.save({ id: 'p', name: '', createdAt: 0, terrainSourceId: 'mapterhorn', imagerySourceId: null, corridorM: 0, tiles: 0, bytes: 0, complete: false, prefixes: sourcePrefixes(getTerrainSource('mapterhorn')) })
     expect(reader.covers(tiles[0].url)).toBe(true)
     expect(reader.covers('https://s3.amazonaws.com/elevation-tiles-prod/terrarium/1/0/0.png')).toBe(false)
     expect(await reader.get(tiles[0].url)).toBeInstanceOf(Blob)
@@ -261,6 +263,17 @@ describe('startPackDownload', () => {
       return new Blob(['a'])
     })
     expect(await startPackDownload('p', tiles, { cache, download, concurrency: 1 }).finished).toMatchObject({ state: 'done', done: 3, missing: 1, failed: 1 })
+
+    // a busy server (429) or an IGN glitch (400) is a failure, not a tile without data
+    const busy = vi.fn(async (url: string) => {
+      throw new TileFetchError(url, url === tiles[0].url ? 429 : 400)
+    })
+    expect(await startPackDownload('p', plan(2), { cache: fakeCache(), download: busy, concurrency: 1 }).finished).toMatchObject({ missing: 0, failed: 2 })
+
+    // the storage refusing to answer stops the pack: not complete
+    const broken = { ...fakeCache(), has: vi.fn(async () => Promise.reject(new Error('quota'))) }
+    const stopped = await startPackDownload('p', plan(2), { cache: broken, download, concurrency: 1 }).finished
+    expect(stopped.state).toBe('failed')
 
     const offline = vi.fn(async () => {
       throw new TypeError('Failed to fetch')

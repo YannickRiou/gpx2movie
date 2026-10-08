@@ -95,7 +95,9 @@ function parseGpxPoint(element: Element): TrackPoint | undefined {
         break
       }
       case 'time': {
-        const time = Date.parse(textOf(child))
+        // GPX times are UTC: a time written without a zone is read as UTC, not in the browser's zone
+        const raw = textOf(child).trim()
+        const time = Date.parse(raw.includes('T') && !/(z|[+-]\d{2}:?\d{2})$/i.test(raw) ? `${raw}Z` : raw)
         if (Number.isFinite(time)) point.time = time
         break
       }

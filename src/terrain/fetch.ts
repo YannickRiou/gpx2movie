@@ -65,6 +65,16 @@ function createAbortError(): DOMException {
 }
 
 /**
+ * A 4xx answer on a DEM tile means the source has no data there (Mapterhorn stops at z12 where
+ * only Copernicus 30 m exists, swisstopo answers 400 out of bounds...). Such a tile is a leaf:
+ * the parent keeps being rendered, nothing is retried and it is not an error for the user. A busy server (408, 429)
+ * is not « no data »: the tile is retried later like any failure.
+ */
+export function isNoDataError(error: unknown): boolean {
+  return error instanceof TileFetchError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429
+}
+
+/**
  * Network-level failures (`fetch()` rejects with a TypeError on DNS/CORS/connection errors, e.g. a network
  * change), server errors, 429 and 400 are retried; other client errors such as 403/404 are final. Our tile URLs
  * are well formed, so a 400 is a server glitch: the IGN Géoplateforme answered bursts of « Layer … unknown »
@@ -81,8 +91,20 @@ function isRetryable(error: unknown): boolean {
  */
 const MAX_RETRIES = 3
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+/** Wait `ms`, or reject at once when `signal` aborts (a canceled tile frees its slot without waiting). */
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(createAbortError())
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(createAbortError())
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 /**
@@ -105,7 +127,7 @@ export async function downloadTile(url: string, signal?: AbortSignal, retryDelay
       return await fetchTileBlob(url, signal, attempt > 0)
     } catch (error) {
       if (signal?.aborted || attempt >= MAX_RETRIES || !isRetryable(error)) throw error
-      if (retryDelayMs > 0) await delay(retryDelayMs * 4 ** attempt)
+      if (retryDelayMs > 0) await delay(retryDelayMs * 4 ** attempt, signal)
     }
   }
 }
