@@ -1438,7 +1438,7 @@
   container: film-tl / inline-size;
 }
 
-@container film-tl (max-width: 1000px) {
+@container film-tl (max-width: 1200px) {
   .film-tl__bar .icon-btn--label .icon-btn__text {
     position: absolute;
     width: 1px;
