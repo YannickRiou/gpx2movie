@@ -546,9 +546,29 @@ describe('timeline photos', () => {
     expect(order).toEqual(['image', 'text'])
     expect(render(noCredits, [full], 40.2).images[0].alpha).toBeCloseTo(0.5, 6)
     expect(render(noCredits, [full], 60).images).toEqual([])
-    // not loaded yet, or a video: nothing
+    // not loaded yet, or a video without its frame: nothing
     expect(render(noCredits, [{ ...full, src: 'photo-2' }], 50).calls).toEqual([])
     expect(render(noCredits, [{ ...full, kind: 'video' }], 50).calls).toEqual([])
+  })
+
+  it('video: the frame at its time in the file, full screen without Ken Burns or as a card', () => {
+    const asked: number[] = []
+    const frame = { image: {} as CanvasImageSource, width: 1920, height: 1080 }
+    const video = (_item: FilmMedia, clipS: number) => (asked.push(clipS), frame)
+    const clip: FilmMedia = { ...full, kind: 'video', src: 'video-1', inS: 3 }
+    const draw = (media: FilmMedia, timeS: number) => {
+      const drawn = fakeContext()
+      drawOverlay(drawn.ctx, overlayFrameAt(track, 0.5), noCredits, SIZE, { ...assets, video }, { media: [media], time: at(timeS) })
+      return drawn.images
+    }
+    expect(draw(clip, 42)[0].args.slice(4)).toEqual([0, 0, SIZE.width, SIZE.height])
+    expect(asked).toEqual([5])
+    // Ken Burns is for photos: the crop holds still
+    expect(draw(clip, 42)[0].args.slice(0, 4)).toEqual(draw(clip, 58)[0].args.slice(0, 4))
+    expect(draw({ ...clip, layout: 'carte' }, 50)).toHaveLength(1)
+    expect(draw(clip, 61)).toEqual([])
+    // a playing clip changes every frame: the export renders the held frames again
+    expect(overlayTimedState(DEFAULT_OVERLAY, [], at(50), [{ ...clip, layout: 'carte' }])).toEqual([1, 50])
   })
 
   it('full screen: the Ken Burns move follows the film time, still without it', () => {

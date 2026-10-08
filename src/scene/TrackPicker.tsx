@@ -1,7 +1,7 @@
 /**
  * TrackPicker — direct manipulation of the first track in the 3D view: a click on the line moves the playhead there
- * (film time of that progress), a right-click opens a small menu « Ajouter un arrêt ici » / « Ajouter un texte ici »
- * (`TrackMenu`, DOM, next to the canvas); the cursor becomes a pointer over the line. A press that travels
+ * (film time of that progress), a right-click opens a small menu « Ajouter un arrêt ici » / « Ajouter un texte ici » /
+ * « Accélérer / ralentir ici » (`TrackMenu`, DOM, next to the canvas); the cursor becomes a pointer over the line. A press that travels
  * `CLICK_SLOP_PX` or more is a camera drag (OrbitControls), not a click. Nothing during an export.
  *
  * Picking is in screen space (`pickProjectedPath`, pure): samples of the path draped like the line (terrain height, else
@@ -14,7 +14,7 @@ import { Vector3 } from 'three'
 import { create } from 'zustand'
 import { isExportBusy, useExportStore } from '../export/store'
 import { filmClockFor } from '../film/clock'
-import { addStop, addText } from '../film/timeline'
+import { addSpeed, addStop, addText } from '../film/timeline'
 import { buildTrackPath, pickProjectedPath, samplePath } from '../flyover/path'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
@@ -30,7 +30,7 @@ const PICK_SAMPLES = 1500
 /** Draped positions are recomputed after this delay (the terrain keeps loading finer tiles). */
 const DRAPE_TTL_MS = 1000
 /** Room the menu needs before it opens on the other side of the pointer (CSS pixels). */
-const MENU_ROOM = { width: 220, height: 96 }
+const MENU_ROOM = { width: 220, height: 136 }
 
 interface TrackMenuState {
   /** position in the canvas (CSS pixels), distance along the first track, open towards the left / the top */
@@ -162,9 +162,11 @@ export function TrackPicker() {
 }
 
 /**
- * Menu of a right-click on the track (DOM, positioned in the canvas wrapper): add a stop or a text there, one undo
- * step each, the new block selected. Closes on Escape, on a click elsewhere, when the focus leaves it and on export.
+ * Menu of a right-click on the track (DOM, positioned in the canvas wrapper): add a stop, a text or a speed portion
+ * there (×2 from that point; inside a portion, that portion is selected), one undo step each, the new block selected. Closes on Escape, on a click elsewhere, when the focus leaves it and on export.
  */
+type Item = 'stop' | 'text' | 'speed'
+
 export function TrackMenu() {
   const menu = useTrackMenu((s) => s.menu)
   const busy = useExportStore((s) => isExportBusy(s.phase))
@@ -188,17 +190,22 @@ export function TrackMenu() {
   }, [busy])
 
   if (!menu || busy) return null
-  const add = (what: 'stop' | 'text') => {
+  const add = (what: Item) => {
     closeMenu()
     const source = getFilmSource()
     const lengthM = source.track?.stats.distanceM ?? 0
     if (lengthM <= 0) return
     if (what === 'stop') editFilm((f) => addStop(f, Math.round(menu.atM)), { stops: true })
-    else editFilm((f) => addText(f, filmClockFor(source).timeAtProgress(menu.atM / lengthM)))
+    else if (what === 'text') editFilm((f) => addText(f, filmClockFor(source).timeAtProgress(menu.atM / lengthM)))
+    else {
+      const atM = Math.round(menu.atM)
+      editFilm((f) => addSpeed(f, atM, lengthM) ?? { film: f, id: f.speeds.find((s) => atM >= s.fromM && atM < s.toM)?.id })
+    }
   }
-  const items: { what: 'stop' | 'text'; label: string }[] = [
+  const items: { what: Item; label: string }[] = [
     { what: 'stop', label: 'Ajouter un arrêt ici' },
     { what: 'text', label: 'Ajouter un texte ici' },
+    { what: 'speed', label: 'Accélérer / ralentir ici' },
   ]
 
   return (

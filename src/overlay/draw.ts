@@ -9,9 +9,10 @@
  *
  * What is timed in film seconds (the opening and closing cards, the texts and photos of the timeline) reads the
  * film time of the frame (`OverlayTime`, from the film clock); the live values follow the progress (`OverlayFrame`).
- * The photos of the timeline are drawn even while the rest of the overlay is off: full-screen ones under
- * everything, framed cards at their anchor.
+ * The photos and video clips of the timeline are drawn even while the rest of the overlay is off: full-screen ones
+ * under everything, framed cards at their anchor (a clip shows its frame at its time in the file, without Ken Burns).
  */
+import { clipTimeS } from '../film/model'
 import type { FilmMedia, FilmText } from '../film/model'
 import { formatDistance, formatDuration, formatNumber } from '../ui/format'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
@@ -43,6 +44,8 @@ export interface OverlayAssets {
   logo?: OverlayImage | null
   /** decoded picture of a photo of the timeline (`FilmMedia.src`), undefined while it is not loaded */
   photo?: (src: string) => OverlayImage | undefined
+  /** frame of a video clip of the timeline at `clipS` seconds in its file (`clipTimeS`), undefined while it is not ready */
+  video?: (item: FilmMedia, clipS: number) => OverlayImage | undefined
 }
 
 /** Where a frame is in the film: film time and the lengths of the film clock (seconds at ×1). */
@@ -79,7 +82,7 @@ export interface OverlayExtras {
   time?: OverlayTime
   /** texts of the timeline (`settings.film.texts`), drawn inside their window */
   texts?: readonly FilmText[]
-  /** photos of the timeline (`settings.film.media`), drawn inside their window once their picture is loaded */
+  /** photos and clips of the timeline (`settings.film.media`), drawn inside their window once their picture or frame is loaded */
   media?: readonly FilmMedia[]
   /** credits of the sources in the film (`overlayCredits`), drawn while `settings.credits` is on */
   credits?: readonly string[]
@@ -163,8 +166,8 @@ export function filmTextOpacity(text: Pick<FilmText, 'startS' | 'durationS'>, ti
 
 /**
  * Opacities of what the overlay times in film seconds at `time` (opening and closing cards, timeline texts and
- * photos, plus the time itself while a full-screen photo moves): two frames of one progress with the same values
- * draw the same overlay, so the export may repeat a held frame.
+ * photos, plus the time itself while a full-screen photo moves or a video clip plays): two frames of one progress
+ * with the same values draw the same overlay, so the export may repeat a held frame.
  */
 export function overlayTimedState(
   settings: OverlaySettings,
@@ -173,8 +176,9 @@ export function overlayTimedState(
   media: readonly FilmMedia[] = [],
 ): number[] {
   const photos = media.flatMap((item) => {
-    const opacity = item.kind === 'image' ? filmTextOpacity(item, time.timeS) : 0
-    return opacity > 0 && item.layout === 'plein-ecran' && item.kenBurns ? [opacity, time.timeS] : [opacity]
+    const opacity = filmTextOpacity(item, time.timeS)
+    const moving = item.kind === 'video' || (item.layout === 'plein-ecran' && item.kenBurns)
+    return opacity > 0 && moving ? [opacity, time.timeS] : [opacity]
   })
   if (!settings.enabled) return photos
   const title = settings.title.enabled ? titleCardOpacity(time, settings.title.end) : 0
@@ -1040,12 +1044,12 @@ function filmTextWidget(p: Painter, item: FilmText, opacity: number, maxWidth: n
   }
 }
 
-/** A full-screen photo of the timeline, under everything else, with its Ken Burns move. */
+/** A full-screen photo (with its Ken Burns move) or video clip of the timeline, under everything else. */
 function drawFullPhoto(p: Painter, item: FilmMedia, image: OverlayImage, opacity: number, timeS: number): void {
   const { ctx, size } = p
   if (image.width <= 0 || image.height <= 0) return
   const t = (timeS - item.startS) / item.durationS
-  const c = kenBurnsCrop(image.width, image.height, size.width, size.height, t, seedOf(item.id), item.kenBurns)
+  const c = kenBurnsCrop(image.width, image.height, size.width, size.height, t, seedOf(item.id), item.kind === 'image' && item.kenBurns)
   ctx.save()
   ctx.globalAlpha = opacity
   ctx.imageSmoothingQuality = 'high'
@@ -1160,10 +1164,11 @@ export function drawOverlay(
   if (size.width <= 0 || size.height <= 0) return
   const credits = settings.credits.enabled ? [...(extras.credits ?? [])] : []
   const time = extras.time ?? progressTime(frame.progress)
-  // photos inside their window whose picture is loaded (videos are not drawn yet)
+  // photos and clips inside their window whose picture or frame is loaded
   const photos = (extras.media ?? []).flatMap((item) => {
-    const opacity = item.kind === 'image' ? filmTextOpacity(item, time.timeS) : 0
-    const image = opacity > 0.001 ? assets.photo?.(item.src) : undefined
+    const opacity = filmTextOpacity(item, time.timeS)
+    const visible = opacity > 0.001
+    const image = !visible ? undefined : item.kind === 'video' ? assets.video?.(item, clipTimeS(item, time.timeS)) : assets.photo?.(item.src)
     return image ? [{ item, opacity, image }] : []
   })
   if (!settings.enabled && credits.length === 0 && photos.length === 0) return

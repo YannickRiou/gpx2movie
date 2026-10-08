@@ -48,33 +48,35 @@ export function ProjectPanel() {
         Préréglages
       </h2>
 
-      <div className="field">
-        <label className="field__label" htmlFor={`${id}-preset`}>
-          Préréglage
-        </label>
-        <select
-          id={`${id}-preset`}
-          className="select"
-          value={selectedPreset}
-          onChange={(e) => setSelectedPreset(e.currentTarget.value)}
-          disabled={presets.length === 0}
-        >
-          <option value="">{presets.length === 0 ? 'Aucun préréglage' : 'Choisir un préréglage…'}</option>
-          {presets.map((preset) => (
-            <option key={preset.name} value={preset.name}>
-              {preset.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="project__row">
-        <button type="button" className="btn btn--secondary" onClick={applyPreset} disabled={!selected}>
-          Appliquer
-        </button>
-        <button type="button" className="btn btn--secondary" onClick={deletePreset} disabled={!selected}>
-          Supprimer
-        </button>
-      </div>
+      <p className="field__hint">Tous les réglages, sans traces, arrêts, textes ni photos. Gardés dans ce navigateur.</p>
+
+      {presets.length === 0 ? (
+        <p className="tracks__empty">Aucun préréglage. Donnez un nom ci-dessous pour garder les réglages actuels.</p>
+      ) : (
+        <>
+          <div className="field">
+            <label className="field__label" htmlFor={`${id}-preset`}>
+              Préréglage
+            </label>
+            <select id={`${id}-preset`} className="select" value={selectedPreset} onChange={(e) => setSelectedPreset(e.currentTarget.value)}>
+              <option value="">Choisir…</option>
+              {presets.map((preset) => (
+                <option key={preset.name} value={preset.name}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="project__row">
+            <button type="button" className="btn btn--secondary" onClick={applyPreset} disabled={!selected}>
+              Appliquer
+            </button>
+            <button type="button" className="btn btn--secondary" onClick={deletePreset} disabled={!selected}>
+              Supprimer
+            </button>
+          </div>
+        </>
+      )}
 
       <form
         className="field"
@@ -84,7 +86,7 @@ export function ProjectPanel() {
         }}
       >
         <label className="field__label" htmlFor={`${id}-preset-name`}>
-          Enregistrer les réglages actuels sous…
+          Nouveau préréglage
         </label>
         <div className="project__row">
           <input
@@ -101,6 +103,8 @@ export function ProjectPanel() {
           </button>
         </div>
       </form>
+
+      <p className="field__hint">Ouvrir et enregistrer le projet : barre du haut (Ctrl+O, Ctrl+S).</p>
     </section>
   )
 }

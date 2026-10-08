@@ -7,18 +7,20 @@ import { Icon } from './icons'
 import { ModifiedMarker } from './ModifiedMarker'
 
 /**
- * Foldable section of a tab, flat with a sticky header (title, « modifié / Par défaut » of `keys`, chevron).
+ * Foldable section of a tab, flat with a sticky header (title, « modifié / Par défaut » of `keys` if given, chevron).
  * Open at first; the content stays mounted when folded.
  */
-export function PanelSection({ title, keys, children }: { title: string; keys: (keyof Settings)[]; children: ReactNode }) {
+export function PanelSection({ title, keys, children }: { title: string; keys?: (keyof Settings)[]; children: ReactNode }) {
   return (
     <details className="fold panel-section" open>
       <summary className="fold__summary">
         <h2 className="section-title fold__title">{title}</h2>
         {/* the marker's button must not fold the section */}
-        <span className="fold__marker" onClick={(e) => e.preventDefault()}>
-          <ModifiedMarker keys={keys} label={title} />
-        </span>
+        {keys && (
+          <span className="fold__marker" onClick={(e) => e.preventDefault()}>
+            <ModifiedMarker keys={keys} label={title} />
+          </span>
+        )}
         <Icon name="chevron-down" size={16} />
       </summary>
       <div className="panel-section__body">{children}</div>

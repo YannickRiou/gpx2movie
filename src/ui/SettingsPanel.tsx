@@ -6,6 +6,7 @@ import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
+import { CLOUD_ALTITUDE_RANGE, type CloudMode, type CloudQuality } from '../weather/sceneClouds'
 import { useWeatherStore } from '../weather/store'
 import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
 import { formatNumber } from './format'
@@ -91,16 +92,17 @@ function SunTimeControl() {
   const setHour = (hour: number) => getSettingsHistory().transaction(() => setSetting('sunHour', hour))
 
   let dayHint = 'Lever et coucher calculés une fois la trace chargée.'
+  let solarTip = 'Heure du soleil au lieu de la sortie : à midi, il est au plus haut.'
   if (day?.polar === 'day') dayHint = 'Jour polaire : le soleil ne se couche pas ce jour-là.'
   else if (day?.polar === 'night') dayHint = 'Nuit polaire : le soleil ne se lève pas ce jour-là.'
   else if (day && day.sunrise !== null && day.sunset !== null && lon !== undefined) {
-    const where = 'au lieu et au jour de la sortie.'
-    const solar = `${formatHour(day.sunrise)} · coucher ${formatHour(day.sunset)} en heure solaire`
+    const solar = `lever ${formatHour(day.sunrise)} · coucher ${formatHour(day.sunset)}`
     // clock time of the place only when the track gives its UTC offset (no time zone database)
-    if (utcOffsetMin === undefined) dayHint = `Lever ${solar}, ${where}`
+    if (utcOffsetMin === undefined) dayHint = `Lever ${formatHour(day.sunrise)} · coucher ${formatHour(day.sunset)} (heure solaire)`
     else {
       const clock = (hour: number) => formatHour(clockHourOfSolar(hour, lon, utcOffsetMin))
-      dayHint = `Lever ${clock(day.sunrise)} · coucher ${clock(day.sunset)} à l’heure locale (lever ${solar}), ${where}`
+      dayHint = `Lever ${clock(day.sunrise)} · coucher ${clock(day.sunset)} (heure locale)`
+      solarTip = `${solarTip} Ce jour-là, en heure solaire : ${solar}.`
     }
   }
 
@@ -134,16 +136,19 @@ function SunTimeControl() {
           {!trackHasTime
             ? '« Suivre la trace » demande une trace horodatée.'
             : follows
-              ? 'Le soleil suit l’heure enregistrée sous le marqueur.'
-              : 'Le soleil reste à la même heure pendant tout le film.'}
+              ? 'Le soleil suit l’heure enregistrée au marqueur.'
+              : 'Le soleil reste à la même heure tout le film.'}
         </p>
       </fieldset>
 
       {!follows && (
         <div className="field">
-          <label className="field__label" htmlFor={`${id}-sun-hour`}>
-            Heure solaire
-          </label>
+          <div className="field__label-row">
+            <label className="field__label" htmlFor={`${id}-sun-hour`}>
+              Heure solaire
+            </label>
+            <InfoTip text={solarTip} />
+          </div>
           <div className="range-row">
             <div className="sun-day">
               <input
@@ -189,6 +194,126 @@ function SunTimeControl() {
             })}
           </div>
         </div>
+      )}
+    </>
+  )
+}
+
+const CLOUD_MODE_OPTIONS: { value: CloudMode; label: string }[] = [
+  { value: 'meteo', label: 'Météo' },
+  { value: 'manuel', label: 'Manuel' },
+  { value: 'aucun', label: 'Aucun' },
+]
+const CLOUD_QUALITY_OPTIONS: { value: CloudQuality; label: string }[] = [
+  { value: 'low', label: 'Rapide' },
+  { value: 'medium', label: 'Moyenne' },
+  { value: 'high', label: 'Fine' },
+]
+
+/** « Nuages » (atmosphere on): volumetric clouds from the weather of the outing, a manual cover, or none. */
+function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
+  const id = useId()
+  const clouds = useAppStore((s) => s.settings.clouds)
+  const setSetting = useAppStore((s) => s.setSetting)
+  const set = (patch: Partial<Settings['clouds']>) => setSetting('clouds', { ...clouds, ...patch })
+  return (
+    <>
+      <fieldset className="field fieldset">
+        <legend className="field__label">Nuages</legend>
+        <div className="segmented">
+          {CLOUD_MODE_OPTIONS.map((option) => (
+            <label key={option.value} className="segmented__option">
+              <input
+                type="radio"
+                name={`${id}-clouds-mode`}
+                checked={clouds.mode === option.value}
+                onChange={() => set({ mode: option.value })}
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+        <p className="field__hint">
+          {clouds.mode === 'aucun'
+            ? 'Pas de nuages en volume.'
+            : clouds.mode === 'manuel'
+              ? 'Couverture choisie ci-dessous, la même tout le film.'
+              : weatherReady
+                ? 'Nuages bas, moyens et hauts de la météo au marqueur.'
+                : 'Ciel dégagé tant que la météo de la sortie n’est pas chargée.'}
+        </p>
+      </fieldset>
+
+      {clouds.mode === 'manuel' && (
+        <div className="field">
+          <label className="field__label" htmlFor={`${id}-clouds-coverage`}>
+            Couverture nuageuse
+          </label>
+          <div className="range-row">
+            <input
+              id={`${id}-clouds-coverage`}
+              className="range"
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={clouds.coverage}
+              onChange={(e) => set({ coverage: Number(e.currentTarget.value) })}
+              aria-valuetext={formatPercent(clouds.coverage)}
+            />
+            <output className="range-row__value range-row__value--wide" htmlFor={`${id}-clouds-coverage`}>
+              {formatPercent(clouds.coverage)}
+            </output>
+          </div>
+        </div>
+      )}
+
+      {clouds.mode !== 'aucun' && (
+        <MoreSettings paths={['clouds.altitudeM', 'clouds.quality']}>
+          <div className="field">
+            <div className="field__label-row">
+              <label className="field__label" htmlFor={`${id}-clouds-altitude`}>
+                Base des nuages bas
+              </label>
+              <InfoTip text="Hauteur au-dessus du point le plus bas de la trace. Les nuages moyens sont 2 km plus haut." />
+            </div>
+            <div className="range-row">
+              <input
+                id={`${id}-clouds-altitude`}
+                className="range"
+                type="range"
+                min={CLOUD_ALTITUDE_RANGE.min}
+                max={CLOUD_ALTITUDE_RANGE.max}
+                step={CLOUD_ALTITUDE_RANGE.step}
+                value={clouds.altitudeM}
+                onChange={(e) => set({ altitudeM: Number(e.currentTarget.value) })}
+              />
+              <output className="range-row__value range-row__value--wide" htmlFor={`${id}-clouds-altitude`}>
+                {formatNumber(clouds.altitudeM)} m
+              </output>
+            </div>
+          </div>
+          <div className="field">
+            <div className="field__label-row">
+              <label className="field__label" htmlFor={`${id}-clouds-quality`}>
+                Qualité des nuages à l’export
+              </label>
+              <InfoTip text="L’aperçu reste en qualité rapide. Une qualité fine allonge l’export." />
+            </div>
+            <select
+              id={`${id}-clouds-quality`}
+              className="select"
+              value={clouds.quality}
+              onChange={(e) => set({ quality: e.currentTarget.value as CloudQuality })}
+            >
+              {CLOUD_QUALITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </MoreSettings>
       )}
     </>
   )
@@ -249,7 +374,7 @@ export function SettingsPanel() {
 
         <MoreSettings paths={['imageryZoomOffset', 'terrainSourceId']}>
           <fieldset className="field fieldset">
-            <legend className="field__label">Détail imagerie</legend>
+            <legend className="field__label">Détail de l’imagerie</legend>
             <div className="segmented">
               {ZOOM_OFFSETS.map((option) => (
                 <label key={option.value} className="segmented__option">
@@ -349,19 +474,19 @@ export function SettingsPanel() {
         {settings.atmosphere ? (
           <SunTimeControl />
         ) : (
-          <p className="field__hint">L’heure du soleil se règle avec l’atmosphère (section « Atmosphère et météo »).</p>
+          <p className="field__hint">Activez l’atmosphère (section suivante) pour régler l’heure du soleil.</p>
         )}
       </PanelSection>
 
-      <PanelSection title="Atmosphère et météo" keys={['atmosphere', 'shadows', 'exposureEv', 'weatherScene']}>
-        <label className="checkbox" htmlFor={atmosphereId}>
+      <PanelSection title="Atmosphère et météo" keys={['atmosphere', 'shadows', 'exposureEv', 'weatherScene', 'clouds']}>
+        <label className="checkbox checkbox--switch" htmlFor={atmosphereId}>
           <input
             id={atmosphereId}
             type="checkbox"
             checked={settings.atmosphere}
             onChange={(e) => setSetting('atmosphere', e.currentTarget.checked)}
           />
-          Atmosphère (ciel, lumière du soleil, brume)
+          Atmosphère : ciel, soleil et brume
         </label>
 
         {settings.atmosphere && (
@@ -387,6 +512,8 @@ export function SettingsPanel() {
             Météo dans la scène
           </label>
         )}
+
+        {settings.atmosphere && <CloudsControl weatherReady={weatherReady} />}
 
         {settings.atmosphere && (
           <MoreSettings paths={['exposureEv', 'weatherScene.strength']}>

@@ -19,7 +19,7 @@ import { computeFilmView, filmViewMovesWithTime, type FilmView } from '../flyove
 import { buildTrackPath, type TrackPath } from '../flyover/path'
 import { loadOverlayFonts } from '../overlay/assets'
 import { overlayTime, overlayTimedState } from '../overlay/draw'
-import { loadFramePhotos } from '../overlay/exportOverlay'
+import { loadFrameMedia, releaseFrameMedia } from '../overlay/exportOverlay'
 import { useTerrainContext } from '../scene/TerrainLayer'
 import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
 import { useFilmClock } from '../scene/usePacing'
@@ -95,6 +95,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     schedule =
       still === undefined ? buildFrameSchedule(request) : [still < 1 ? still + REPLACE_EPSILON : still - REPLACE_EPSILON]
   } catch (error) {
+    await request.destination?.discard().catch(() => undefined)
     if (exportStore().begin(request.id, 0, performance.now())) exportStore().fail(errorMessage(error))
     return
   }
@@ -214,8 +215,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     if (request.still) {
       const { progress } = request.still
       const time = overlayTime(filmClock, progress, saved.timeS)
-      // pictures decoded before the render: composing must follow it in the same task
-      await loadFramePhotos(time.timeS)
+      // pictures and video frames decoded before the render: composing must follow it in the same task
+      await loadFrameMedia(time.timeS)
       const complete = await renderSettledFrame(schedule[0], frameDeps)
       composeFrame(ctx, canvas, { progress, time }, width, height, deps.overlay())
       exportStore().reportFrame(1, performance.now())
@@ -236,7 +237,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
 
     session = await createVideoEncoder(compositor, request)
     const settings = useAppStore.getState().settings
-    /** opacities of the timed overlay (cards, timeline texts and photos) at a frame, '' without overlay */
+    /** opacities of the timed overlay (cards, timeline texts, photos and clips) at a frame, '' without overlay */
     const overlayKey = (progress: number, timeS: number) =>
       deps.overlay()
         ? overlayTimedState(settings.overlay, settings.film.texts, overlayTime(filmClock, progress, timeS), settings.film.media).join()
@@ -255,8 +256,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
         frameTimeS = times[i]
         previousTimed = timed
         previousOverlay = overlayNow
-        // pictures decoded before the render: composing must follow it in the same task
-        await loadFramePhotos(frameTimeS)
+        // pictures and video frames decoded before the render: composing must follow it in the same task
+        await loadFrameMedia(frameTimeS)
         const complete = await renderSettledFrame(progress, frameDeps)
         // same task as the last render: the drawing buffer still holds the frame
         const t0 = performance.now()
@@ -274,7 +275,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     }
 
     exportStore().finalizing()
-    const blob = await session.finish()
+    const { blob, sizeBytes } = await session.finish()
     const { container, codec } = session.codec
     const s = (ms: number) => (ms / 1000).toFixed(1)
     console.info(
@@ -283,18 +284,22 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
         `${timings.timeouts} délai(s) dépassé(s)`,
     )
     exportStore().complete({
-      url: URL.createObjectURL(blob),
-      fileName: videoFileName(request.baseName, session.extension),
+      // null: already written to the chosen file
+      url: blob && URL.createObjectURL(blob),
+      fileName: request.destination?.fileName ?? videoFileName(request.baseName, session.extension),
       mimeType: session.mimeType,
-      sizeBytes: blob.size,
+      sizeBytes,
       codec: `${container}/${codec}`,
       incompleteFrames: timings.timeouts,
     })
   } catch (error) {
     await session?.cancel().catch(() => undefined)
+    // also when failing before the encoder existed
+    await request.destination?.discard().catch(() => undefined)
     if (error instanceof ExportCanceledError || isCanceled()) exportStore().canceled()
     else exportStore().fail(errorMessage(error))
   } finally {
+    releaseFrameMedia()
     // the layout size may have changed meanwhile: measure the canvas container again
     const box = canvas.parentElement?.getBoundingClientRect()
     const restoreWidth = box && box.width > 0 ? box.width : saved.size.width

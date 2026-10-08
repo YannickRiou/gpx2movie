@@ -44,22 +44,22 @@ export function LandmarkPanel() {
 
   return (
     <PanelSection title="Repères (OpenStreetMap)" keys={['landmarks']}>
-      <label className="checkbox" htmlFor={`${id}-enabled`}>
+      <label className="checkbox checkbox--switch" htmlFor={`${id}-enabled`}>
         <input
           id={`${id}-enabled`}
           type="checkbox"
           checked={settings.enabled}
           onChange={(e) => setSetting('landmarks', { ...settings, enabled: e.currentTarget.checked })}
         />
-        Rechercher les sommets, cols, refuges… autour de la trace
+        Sommets, cols, refuges… autour de la trace
       </label>
 
       {settings.enabled && (
         <fieldset className="field fieldset">
-          <legend className="field__label">Types affichés</legend>
-          <div className="landmarks__kinds">
+          <legend className="field__label">Types</legend>
+          <div className="chips">
             {OSM_KINDS.map((kind) => (
-              <label key={kind} className="checkbox">
+              <label key={kind} className="chip">
                 <input
                   type="checkbox"
                   checked={settings.kinds[kind]}
@@ -77,7 +77,7 @@ export function LandmarkPanel() {
       {settings.enabled && (
         <div className="field">
           <label className="field__label" htmlFor={`${id}-distance`}>
-            Distance maximale à la trace
+            Distance à la trace
           </label>
           <div className="range-row">
             <input
@@ -98,14 +98,14 @@ export function LandmarkPanel() {
       )}
 
       <p className="field__hint" role="status" aria-live="polite">
-        {!settings.enabled && 'Désactivés : aucune requête n’est envoyée.'}
+        {!settings.enabled && 'Désactivés : aucune requête envoyée.'}
         {settings.enabled && status === 'loading' && 'Recherche des repères…'}
         {settings.enabled && status === 'error' && message}
         {settings.enabled &&
           status === 'ready' &&
           (list.length === 0
-            ? 'Aucun repère de ces types près de la première trace.'
-            : `${list.length} ${list.length > 1 ? 'repères' : 'repère'} le long de la première trace.`)}
+            ? 'Aucun repère de ces types près de la trace.'
+            : `${list.length} ${list.length > 1 ? 'repères' : 'repère'} le long de la trace. Cliquez pour y aller.`)}
       </p>
 
       {settings.enabled && status === 'error' && (
@@ -129,7 +129,7 @@ export function LandmarkPanel() {
                 </span>
                 <span className="landmark__name">{landmark.text}</span>
                 <span className="landmark__meta">
-                  {formatNumber(landmark.alongM / 1000, 1)} km du départ · à {formatDistance(landmark.distanceM)} de la trace
+                  au km {formatNumber(landmark.alongM / 1000, 1)} · à {formatDistance(landmark.distanceM)} de la trace
                 </span>
               </button>
             </li>

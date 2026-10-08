@@ -8,14 +8,15 @@
  * (docs/sources.md); the exact distance to the track is computed here (`landmarks.ts`). Changing the kinds
  * or the distance later only filters the cached result and never sends a new query.
  *
- * Usage policy: requests are sent one at a time (module queue), results are cached in memory and in
- * `localStorage` keyed by a hash of the query, a busy server (HTTP 429 / 504) is retried once after a delay
+ * Usage policy: requests are sent one at a time (module queue), results are cached in memory and in the
+ * platform storage (`getPlatform().storage`, localStorage on both targets) keyed by a hash of the query, a busy server (HTTP 429 / 504) is retried once after a delay
  * and then the next endpoint of `OVERPASS_ENDPOINTS` is tried.
  *
  * The POST body is form-encoded so the browser sends a "simple" CORS request: overpass-api.de answers the
  * OPTIONS preflight with 406.
  */
 import type { LonLat, LonLatBounds, Track } from '../core/types'
+import { getPlatform, type KeyValueStore } from '../platform'
 
 /** Main public instance, then VK Maps (no rate limit stated, listed on the OSM wiki); both send CORS headers. */
 export const OVERPASS_ENDPOINTS = [
@@ -262,7 +263,7 @@ export class OverpassError extends Error {
 export interface OverpassDeps {
   fetch: typeof fetch
   sleep(ms: number, signal?: AbortSignal): Promise<void>
-  storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'> | null
+  storage: KeyValueStore | null
   now(): number
 }
 
@@ -281,18 +282,10 @@ function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
   })
 }
 
-function defaultStorage(): OverpassDeps['storage'] {
-  try {
-    return globalThis.localStorage ?? null
-  } catch {
-    return null
-  }
-}
-
 const defaultDeps = (): OverpassDeps => ({
   fetch: (...args) => globalThis.fetch(...args),
   sleep: defaultSleep,
-  storage: defaultStorage(),
+  storage: getPlatform().storage,
   now: () => Date.now(),
 })
 
@@ -353,7 +346,7 @@ const memoryCache = new Map<string, Promise<OsmFeature[]>>()
 
 function readCache(storage: OverpassDeps['storage'], key: string, now: number): OsmFeature[] | null {
   try {
-    const raw = storage?.getItem(CACHE_PREFIX + key)
+    const raw = storage?.get(CACHE_PREFIX + key)
     if (!raw) return null
     const entry = JSON.parse(raw) as { t: number; features: OsmFeature[] }
     if (!Array.isArray(entry.features) || !(now - entry.t < CACHE_TTL_MS)) return null
@@ -366,22 +359,11 @@ function readCache(storage: OverpassDeps['storage'], key: string, now: number): 
 function writeCache(storage: OverpassDeps['storage'], key: string, features: OsmFeature[], now: number): void {
   if (!storage) return
   const value = JSON.stringify({ t: now, features })
-  try {
-    storage.setItem(CACHE_PREFIX + key, value)
-  } catch {
-    // quota: drop our older entries and try once more
-    try {
-      const keys: string[] = []
-      for (let i = 0; i < storage.length; i++) {
-        const k = storage.key(i)
-        if (k?.startsWith(CACHE_PREFIX)) keys.push(k)
-      }
-      for (const k of keys) storage.removeItem(k)
-      storage.setItem(CACHE_PREFIX + key, value)
-    } catch {
-      // storage unavailable: the memory cache still avoids repeated queries in this session
-    }
-  }
+  if (storage.set(CACHE_PREFIX + key, value)) return
+  // full: drop our older entries (never other keys) and try once more; if refused again, the memory cache still
+  // avoids repeated queries in this session
+  for (const k of storage.keys(CACHE_PREFIX)) storage.remove(k)
+  storage.set(CACHE_PREFIX + key, value)
 }
 
 /**

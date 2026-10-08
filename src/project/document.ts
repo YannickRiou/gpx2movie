@@ -24,6 +24,7 @@ import { TRACK_COLOR_MODES } from '../flyover/trackColor'
 import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS } from '../state/store'
 import type { AppState, Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
+import { isValidClouds } from '../weather/sceneClouds'
 
 export const PROJECT_FORMAT = 'openflyover-project'
 export const PROJECT_VERSION = 2
@@ -106,6 +107,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   film: isValidFilm,
   exposureEv: (v) => v >= -4 && v <= 4,
   weatherScene: (v) => v.strength >= 0 && v.strength <= 1,
+  clouds: isValidClouds,
   trackColorBy: (v) => (TRACK_COLOR_MODES as readonly string[]).includes(v),
   overlay: isValidOverlay,
   video: isValidVideoSettings,
@@ -373,10 +375,10 @@ export function parseProject(text: string): LoadedProject {
   }
   // photos whose picture is missing or unreadable are left out of the film
   const media = sanitizeMediaTable(doc.media)
-  const kept = settings.film.media.filter((m) => m.kind !== 'image' || media[m.src])
+  const kept = settings.film.media.filter((m) => media[m.src])
   const removed = settings.film.media.length - kept.length
   if (removed > 0) {
-    warnings.push(`${removed} photo${removed > 1 ? 's' : ''} sans image lisible dans le projet, retirée${removed > 1 ? 's' : ''} du film.`)
+    warnings.push(`${removed} média${removed > 1 ? 's' : ''} sans fichier lisible dans le projet, retiré${removed > 1 ? 's' : ''} du film.`)
     settings.film = { ...settings.film, media: kept }
   }
   const rawSpeed = isRecord(doc.playback) ? doc.playback.speed : undefined

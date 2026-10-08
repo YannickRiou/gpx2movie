@@ -2,11 +2,11 @@
  * Film timeline under the 3D view, in film time (opening and closing included).
  *
  * Bar (icon buttons with tooltips): play / pause, stop (back to the first frame), film time, distance, altitude and
- * recorded time at the marker, add a stop (at the playhead or at a highlight), a text or photos, speed, zoom (− / slider
+ * recorded time at the marker, add a stop (at the playhead or at a highlight), a text or media, speed, zoom (− / slider
  * / + / « Ajuster »), « Options » menu (automatic stops, « modifié » marker of the film), fold. Ruler: click or drag to
  * scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile and its stops, closing),
- * « Arrêts », « Textes », « Médias » (photos also dropped onto the timeline; those taken along the track can then be
- * placed where they were taken): drag a block to move it, an edge to stretch it, snapping to the other edges, the
+ * « Vitesse » (portions of the track flown faster or slower, added at the marker), « Arrêts », « Textes », « Médias » (photos and video clips, also dropped onto the timeline; photos taken along the
+ * track can then be placed where they were taken): drag a block to move it, an edge to stretch it, snapping to the other edges, the
  * highlights and the playhead (Alt: no snapping); Ctrl+wheel zooms. Keyboard on a block: arrows nudge (Shift:
  * finer), Delete removes (Escape deselects: `App`); Space plays / pauses anywhere outside a control. The selection
  * lives in the store (`filmSelection`): the inspector of the selected block is in the right dock (`FilmInspector`).
@@ -19,16 +19,19 @@ import type { KeyboardEvent, PointerEvent } from 'react'
 import { materializeStops, stopCandidates } from '../film/assemble'
 import { buildFilmClock, filmClockInputFor } from '../film/clock'
 import { photoTimeMs } from '../film/exif'
-import { readPhoto, useMediaStore } from '../film/media'
-import type { Film, FilmMedia, FilmStop } from '../film/model'
+import { useMediaStore } from '../film/media'
+import { isMediaFile, readMedia } from '../film/video'
+import type { Film, FilmMedia, FilmSpeed, FilmStop } from '../film/model'
 import {
   ZOOM_RANGE,
-  addPhotos,
+  addMedia,
+  addSpeed,
   addStop,
   addText,
   dragFilm,
   fitPxPerS,
   formatFilmTime,
+  formatSpeedFactor,
   hasFilmItem,
   photoFilmTime,
   removeFilmItem,
@@ -39,6 +42,7 @@ import {
 } from '../film/timeline'
 import type { DragContext, Grip, TimelineItem } from '../film/timeline'
 import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath, type ElevationProfile } from '../flyover/path'
+import { getPlatform } from '../platform'
 import { modifiedSettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
@@ -51,6 +55,8 @@ import { withShortcut } from './shortcuts'
 import { showToast } from './toast'
 
 const SPEEDS = [0.5, 1, 2, 4]
+/** « Média » picker: pictures and videos recognised on both targets (the desktop types a file by `mimeTypeOf`). */
+const MEDIA_FILTERS = [{ name: 'Photos et vidéos', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'mp4', 'm4v', 'mov', 'webm'] }]
 /** Profile resolution (samples over the track) and drawing height in viewBox units. */
 const PROFILE_SAMPLES = 400
 const PROFILE_HEIGHT = 100
@@ -235,7 +241,6 @@ export function Timeline() {
   const [collapsed, setCollapsed] = useState(false)
   const [width, setWidth] = useState(0)
   const [reading, setReading] = useState(false)
-  const photoInputRef = useRef<HTMLInputElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const gestureRef = useRef<Gesture | null>(null)
@@ -248,7 +253,13 @@ export function Timeline() {
   const shownClock = useMemo(
     () =>
       draft
-        ? buildFilmClock({ ...input, opening: draft.opening, closing: draft.closing, stops: draft.autoStops ? input.stops : draft.stops })
+        ? buildFilmClock({
+            ...input,
+            opening: draft.opening,
+            closing: draft.closing,
+            stops: draft.autoStops ? input.stops : draft.stops,
+            speeds: draft.speeds,
+          })
         : clock,
     [draft, input, clock],
   )
@@ -337,6 +348,7 @@ export function Timeline() {
   const dragContext = (item: TimelineItem): DragContext => ({
     clock,
     clockOf: (stops: readonly FilmStop[]) => buildFilmClock({ ...input, stops }),
+    clockOfSpeeds: (speeds: readonly FilmSpeed[]) => buildFilmClock({ ...input, speeds }),
     lengthM,
     targets: snapTargets(clock, film, candidates.map((c) => c.atM / lengthM), playheadS, item),
     targetsM: candidates.map((c) => c.atM),
@@ -344,50 +356,65 @@ export function Timeline() {
   })
   const remove = (item: TimelineItem) => editFilm((f) => ({ film: removeFilmItem(f, item), id: null }), { stops: isStop(item) })
   const addStopAt = (atM: number, patch?: Parameters<typeof addStop>[2]) => editFilm((f) => addStop(f, atM, patch), { stops: true })
-  /** photos added at the playhead, one after the other (one undo step); offers to place them on the track */
-  const addPhotoFiles = async (files: readonly File[]) => {
-    const images = files.filter((f) => f.type.startsWith('image/'))
+  /** a portion twice as fast from the marker (one undo step) */
+  const addSpeedAt = (atM: number) => {
+    const added = addSpeed(film, atM, lengthM)
+    if (added) editFilm(() => added)
+    else showToast({ kind: 'error', text: 'Pas de place ici : le marqueur est dans une portion de vitesse ou trop près d’une autre.' })
+  }
+  /** photos and clips added at the playhead, one after the other (one undo step); offers to place photos on the track */
+  const addMediaFiles = async (files: readonly File[]) => {
+    const images = files.filter(isMediaFile)
     const others = files.length - images.length
-    const unsupported = others > 0 ? ` ${plural(others, 'fichier ignoré', 'fichiers ignorés')} : seules les photos sont prises en charge (vidéos : bientôt).` : ''
+    const unsupported = others > 0 ? ` ${plural(others, 'fichier ignoré', 'fichiers ignorés')} : seules les photos et les vidéos sont prises en charge.` : ''
     if (images.length === 0) {
       showToast({ kind: 'error', text: unsupported.trim() })
       return
     }
     const startS = playheadS
     setReading(true)
-    const read: Awaited<ReturnType<typeof readPhoto>>[] = []
+    const read: Awaited<ReturnType<typeof readMedia>>[] = []
     const failed: string[] = []
     for (const file of images) {
       try {
-        read.push(await readPhoto(file, file.name))
+        read.push(await readMedia(file, file.name))
       } catch (err) {
         failed.push(`« ${file.name} » : ${err instanceof Error ? err.message : String(err)}`)
       }
     }
     setReading(false)
-    const errors = failed.length > 0 ? ` Non ajoutées : ${failed.join(' ; ')}` : ''
+    const errors = failed.length > 0 ? ` Non ajouté : ${failed.join(' ; ')}` : ''
     if (read.length === 0) {
       showToast({ kind: 'error', text: `${errors}${unsupported}`.trim() })
       return
     }
     const srcs = useMediaStore.getState().add(read.map((r) => r.asset))
-    const added = addPhotos(useAppStore.getState().settings.film, startS, srcs)
+    const added = addMedia(
+      useAppStore.getState().settings.film,
+      startS,
+      srcs.map((src, k) => ({ src, videoS: read[k].asset.durationS })),
+    )
     commit(added.film)
     setSelected(added.ids[0])
     const placements = added.ids.flatMap((photoId, k) => {
-      const t = photoFilmTime(path, clock, { lon: read[k].exif.lon, lat: read[k].exif.lat, timeMs: photoTimeMs(read[k].exif) })
+      const exif = read[k].exif
+      const t = exif ? photoFilmTime(path, clock, { lon: exif.lon, lat: exif.lat, timeMs: photoTimeMs(exif) }) : undefined
       return t === undefined ? [] : [{ id: photoId, startS: t }]
     })
+    const videos = read.filter((r) => r.asset.durationS !== undefined).length
+    const photos = read.length - videos
     const n = placements.length
     const located =
       n === 0
         ? ''
         : n === 1
-          ? ` ${read.length === 1 ? 'Elle' : "L'une d'elles"} a été prise le long du parcours : la placer au moment où le marqueur y passe ?`
-          : ` ${n} ont été prises le long du parcours : les placer au moment où le marqueur y passe ?`
+          ? ` ${photos === 1 ? 'La photo' : "L'une des photos"} a été prise le long du parcours : la placer au moment où le marqueur y passe ?`
+          : ` ${n} photos ont été prises le long du parcours : les placer au moment où le marqueur y passe ?`
+    const what = [photos > 0 ? plural(photos, 'photo', 'photos') : '', videos > 0 ? plural(videos, 'vidéo', 'vidéos') : ''].filter(Boolean).join(' et ')
+    const silent = videos > 0 ? ' Les vidéos sont muettes : le son n’est pas encore pris en charge.' : ''
     showToast({
       kind: errors || unsupported ? 'info' : 'success',
-      text: `${plural(read.length, 'photo ajoutée', 'photos ajoutées')} à la tête de lecture.${located}${errors}${unsupported}`,
+      text: `${what} ${read.length > 1 ? 'ajoutées' : 'ajoutée'} à la tête de lecture.${silent}${located}${errors}${unsupported}`,
       action: n > 0 ? { label: 'Placer sur le parcours', run: () => placePhotos(placements) } : undefined,
     })
   }
@@ -477,6 +504,7 @@ export function Timeline() {
     className: string,
     grips: Grip[],
     thumb?: string,
+    icon?: IconName,
   ) => (
     <div
       key={item}
@@ -499,6 +527,11 @@ export function Timeline() {
     >
       {grips.includes('start') && <span className="film-tl__grip film-tl__grip--start" onPointerDown={(e) => startEdit(e, item, 'start')} />}
       {thumb && <img className="film-tl__thumb" src={thumb} alt="" draggable={false} />}
+      {icon && (
+        <span className="film-tl__icon">
+          <Icon name={icon} size={12} />
+        </span>
+      )}
       <span className="film-tl__label">{label}</span>
       {grips.includes('end') && <span className="film-tl__grip film-tl__grip--end" onPointerDown={(e) => startEdit(e, item, 'end')} />}
     </div>
@@ -508,7 +541,7 @@ export function Timeline() {
   const flightStart = shownClock.openingS
   const flightEnd = flightStart + shownClock.flightS
   const ticks = rulerTicks(total, pxPerS)
-  const mediaLabel = (m: FilmMedia) => m.caption?.trim() || pictures[m.src]?.name || 'Photo'
+  const mediaLabel = (m: FilmMedia) => m.caption?.trim() || pictures[m.src]?.name || (m.kind === 'video' ? 'Vidéo' : 'Photo')
 
   return (
     <div
@@ -523,7 +556,7 @@ export function Timeline() {
       onDrop={(e) => {
         if (e.dataTransfer.files.length === 0) return
         e.preventDefault()
-        void addPhotoFiles(Array.from(e.dataTransfer.files))
+        void addMediaFiles(Array.from(e.dataTransfer.files))
       }}
     >
       <div className="film-tl__bar">
@@ -595,6 +628,13 @@ export function Timeline() {
           </select>
         )}
         <BarButton
+          icon="gauge"
+          label="Vitesse"
+          name="Accélérer ou ralentir une portion à partir du marqueur"
+          tip="Accélérer ou ralentir une portion (1 km à ×2) à partir du marqueur"
+          onClick={() => addSpeedAt(Math.round(progress * lengthM))}
+        />
+        <BarButton
           icon="type"
           label="Texte"
           name="Ajouter un texte à la tête de lecture"
@@ -603,25 +643,15 @@ export function Timeline() {
         />
         <BarButton
           icon="image"
-          label={reading ? 'Lecture…' : 'Photo'}
-          name={reading ? 'Lecture des photos…' : 'Ajouter des photos à la tête de lecture'}
-          tip="Ajouter des photos à la tête de lecture (ou les glisser sur la timeline)"
-          onClick={() => photoInputRef.current?.click()}
+          label={reading ? 'Lecture…' : 'Média'}
+          name={reading ? 'Lecture des fichiers…' : 'Ajouter des photos ou des vidéos à la tête de lecture'}
+          tip="Ajouter des photos ou des vidéos (MP4, WebM, MOV ; sans le son) à la tête de lecture, ou les glisser sur la timeline"
+          onClick={() =>
+            void getPlatform()
+              .openFiles({ filters: MEDIA_FILTERS, multiple: true })
+              .then((files) => (files.length > 0 ? addMediaFiles(files) : undefined))
+          }
           disabled={reading}
-        />
-        <input
-          ref={photoInputRef}
-          className="visually-hidden"
-          type="file"
-          accept="image/*"
-          multiple
-          tabIndex={-1}
-          aria-hidden="true"
-          onChange={(e) => {
-            const files = Array.from(e.currentTarget.files ?? [])
-            e.currentTarget.value = ''
-            if (files.length > 0) void addPhotoFiles(files)
-          }}
         />
         <span className="film-tl__sep" aria-hidden="true" />
         <select className="film-tl__select" aria-label="Vitesse de lecture" value={speed} onChange={(e) => setSpeed(Number(e.currentTarget.value))}>
@@ -680,7 +710,7 @@ export function Timeline() {
           <div className="film-tl__heads">
             <div className="film-tl__head film-tl__head--ruler" />
             {/* the lanes carry the same names */}
-            {['Plans', 'Arrêts', 'Textes', 'Médias'].map((name) => (
+            {['Plans', 'Vitesse', 'Arrêts', 'Textes', 'Médias'].map((name) => (
               <div key={name} className="film-tl__head" aria-hidden="true">
                 {name}
               </div>
@@ -755,6 +785,22 @@ export function Timeline() {
                 )}
               </div>
 
+              <div className="film-tl__lane" role="group" aria-label="Vitesse">
+                {shownClock.speeds.map((s) => {
+                  const label = formatSpeedFactor(s.factor)
+                  const how = s.factor > 1 ? 'accélérée' : s.factor < 1 ? 'ralentie' : 'à vitesse normale'
+                  return block(
+                    s.id,
+                    s.startS,
+                    s.endS,
+                    label,
+                    `Portion ${how} ${label}, de ${formatDistance(s.fromM)} à ${formatDistance(s.toM)}`,
+                    `film-tl__block--speed${s.factor < 1 ? ' film-tl__block--slow' : ''}`,
+                    ['start', 'move', 'end'],
+                  )
+                })}
+              </div>
+
               <div className="film-tl__lane" role="group" aria-label="Arrêts">
                 {shownClock.stops.map((s) => {
                   const label = s.label || 'Arrêt'
@@ -787,10 +833,11 @@ export function Timeline() {
                     m.startS,
                     m.startS + m.durationS,
                     mediaLabel(m),
-                    `Photo ${m.layout === 'carte' ? 'en carte' : 'plein écran'} : ${mediaLabel(m)}`,
+                    `${m.kind === 'video' ? 'Vidéo' : 'Photo'} ${m.layout === 'carte' ? 'en carte' : 'plein écran'} : ${mediaLabel(m)}`,
                     'film-tl__block--media',
                     ['start', 'move', 'end'],
                     pictures[m.src]?.thumb,
+                    m.kind === 'video' ? 'video' : undefined,
                   ),
                 )}
               </div>

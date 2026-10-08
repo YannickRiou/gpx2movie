@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { isValidSetting, parseProject, sanitizeSettings } from '../project/document'
 import { DEFAULT_SETTINGS } from '../state/store'
-import { DEFAULT_FILM, MEDIA_DEFAULTS, isValidFilm, nextFilmId, shotDurationS } from './model'
-import type { Film, FilmMedia, FilmStop, FilmText } from './model'
+import { DEFAULT_FILM, MEDIA_DEFAULTS, clipTimeS, isValidFilm, nextFilmId, shotDurationS } from './model'
+import type { Film, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
 
 const stop = (id: string, patch: Partial<FilmStop> = {}): FilmStop => ({ id, atM: 1000, durationS: 3, camera: 'orbite', ...patch })
 const text = (id: string, patch: Partial<FilmText> = {}): FilmText => ({
@@ -23,6 +23,7 @@ const media = (id: string, patch: Partial<FilmMedia> = {}): FilmMedia => ({
   ...MEDIA_DEFAULTS,
   ...patch,
 })
+const speed = (id: string, fromM: number, toM: number, factor = 2): FilmSpeed => ({ id, fromM, toM, factor })
 const film = (patch: Partial<Film>): Film => ({ ...DEFAULT_FILM, ...patch })
 
 describe('film model', () => {
@@ -44,10 +45,35 @@ describe('film model', () => {
       autoStops: false,
       stops: [stop('stop-1', { label: 'Sommet', source: { kind: 'landmark', ref: 'node/1' } }), stop('auto-4520', { camera: 'fixe' })],
       texts: [text('text-1', { subtitle: '1 653 m' })],
-      media: [media('media-1'), media('media-2', { layout: 'carte', anchor: 'top-right', size: 1.5, kenBurns: false, caption: 'Lac Blanc' })],
+      media: [
+        media('media-1'),
+        media('media-2', { layout: 'carte', anchor: 'top-right', size: 1.5, kenBurns: false, caption: 'Lac Blanc' }),
+        media('media-3', { kind: 'video', src: 'video-1', inS: 2.5, outS: 9, muted: true }),
+      ],
     })
     expect(isValidFilm(full)).toBe(true)
     expect(isValidSetting('film', full)).toBe(true)
+  })
+
+  it('speed portions: factor ×0,25 to ×4, not overlapping (they may touch), unique ids', () => {
+    expect(DEFAULT_FILM.speeds).toEqual([])
+    const good = film({ speeds: [speed('speed-2', 3000, 4000, 0.25), speed('speed-1', 1000, 3000, 4)] })
+    expect(isValidFilm(good)).toBe(true)
+    expect(isValidSetting('film', good)).toBe(true)
+    const bad: Film[] = [
+      film({ speeds: [speed('speed-1', 1000, 3000), speed('speed-2', 2999, 4000)] }),
+      film({ speeds: [speed('speed-1', 1000, 1000)] }),
+      film({ speeds: [speed('speed-1', -5, 1000)] }),
+      film({ speeds: [speed('speed-1', 0, 1000, 5)] }),
+      film({ speeds: [speed('speed-1', 0, 1000, 0.2)] }),
+      film({ speeds: [speed('', 0, 1000)] }),
+      film({ speeds: [speed('a', 0, 1000)], texts: [text('a')] }),
+    ]
+    for (const f of bad) expect(isValidFilm(f)).toBe(false)
+    // a film saved before the speed portions: none
+    const { speeds: _, ...saved } = film({ texts: [text('text-1')] })
+    expect(sanitizeSettings({ film: saved }).settings.film).toEqual(film({ texts: [text('text-1')] }))
+    expect(nextFilmId(good, 'speed')).toBe('speed-3')
   })
 
   it('rejects bad shots, items and duplicate ids', () => {
@@ -67,6 +93,9 @@ describe('film model', () => {
       film({ media: [media('media-1', { layout: 'mosaique' as 'carte' })] }),
       film({ media: [media('media-1', { size: 3 })] }),
       film({ media: [media('media-1', { anchor: 'nowhere' as 'center' })] }),
+      film({ media: [media('media-1', { kind: 'video', inS: -1 })] }),
+      film({ media: [media('media-1', { kind: 'video', inS: 4, outS: 4 })] }),
+      film({ media: [media('media-1', { kind: 'video', muted: 'oui' as unknown as boolean })] }),
       film({ stops: [stop('a')], texts: [text('a')] }),
     ]
     for (const f of bad) expect(isValidFilm(f)).toBe(false)
@@ -102,6 +131,15 @@ describe('film model', () => {
     // a v1 project saved before the film existed: default shots, stops of its pacing
     const { film: _, ...before } = doc.settings
     expect(parseProject(JSON.stringify({ ...doc, settings: before })).settings.film).toEqual(film({ autoMode: 'rythme' }))
+  })
+
+  it('time in the file of a video: from its start in the file, held at its end', () => {
+    const clip = media('media-1', { kind: 'video', startS: 10, inS: 2 })
+    expect(clipTimeS(clip, 10)).toBe(2)
+    expect(clipTimeS(clip, 13.5)).toBe(5.5)
+    expect(clipTimeS(clip, 8)).toBe(2)
+    expect(clipTimeS({ ...clip, outS: 4 }, 13.5)).toBe(4)
+    expect(clipTimeS(media('media-2', { startS: 10 }), 11)).toBe(1)
   })
 
   it('next id: one more than the highest number of the kind', () => {

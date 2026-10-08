@@ -107,7 +107,7 @@ describe('serializeProject / parseProject', () => {
     delete raw.media
     const without = parseProject(JSON.stringify(raw))
     expect(without.settings.film.media).toEqual([])
-    expect(without.warnings).toEqual(['1 photo sans image lisible dans le projet, retirée du film.'])
+    expect(without.warnings).toEqual(['1 média sans fichier lisible dans le projet, retiré du film.'])
     // a film without photos writes no table
     expect(serializeProject(STATE, 'x', { 'photo-1': picture })).not.toContain('"media": {')
     expect(parseProject(serializeProject(STATE, 'x')).media).toEqual({})

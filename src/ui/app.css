@@ -631,6 +631,18 @@
   border: 1px dashed var(--color-ink);
 }
 
+/* speed portions: glacier frame, full for a faster portion, dashed for a slower one */
+.film-tl__block--speed {
+  justify-content: center;
+  border: 1px solid var(--color-glacier);
+  background: rgb(169 204 217 / 0.22);
+  color: var(--color-white);
+}
+
+.film-tl__block--slow {
+  border-style: dashed;
+}
+
 .film-tl__block--text {
   background: var(--color-moss);
   color: var(--color-white);
@@ -650,6 +662,13 @@
   max-width: 32px;
   border-radius: 2px;
   object-fit: cover;
+  pointer-events: none;
+}
+
+/* video clips: small film icon after the thumbnail */
+.film-tl__icon {
+  display: inline-flex;
+  flex: none;
   pointer-events: none;
 }
 
@@ -826,26 +845,7 @@
   color: var(--color-ink);
 }
 
-.weather__now {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--color-line);
-}
-
-.weather__now h3 {
-  font-family: var(--font-body);
-  font-size: 13px;
-}
-
 /* Landmarks (OpenStreetMap) ---------------------------------------------- */
-.landmarks__kinds {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-1) var(--space-2);
-}
-
 .landmarks {
   display: flex;
   flex-direction: column;
@@ -1082,3 +1082,222 @@
   white-space: nowrap;
 }
 /* ======================== fin Carte et Survol ============================ */
+
+/* ==========================================================================
+ * Clarté : interrupteurs, puces à cocher, message sans trace, météo en une ligne, résumé d'export
+ * ========================================================================== */
+/* option text lighter than the field labels (600): the labels lead, the options follow */
+.checkbox {
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+/* on / off of a whole feature (habillage, a widget, météo, repères…): a switch, the label in bold */
+.checkbox--switch {
+  font-weight: 600;
+}
+
+.checkbox.checkbox--switch input {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  border: 1px solid var(--text-2);
+  border-radius: 999px;
+  background: var(--color-white);
+  appearance: none;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.checkbox.checkbox--switch input::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: transform 120ms ease;
+}
+
+.checkbox.checkbox--switch input:checked {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+}
+
+.checkbox.checkbox--switch input:checked::before {
+  background: var(--color-white);
+  transform: translateX(12px);
+}
+
+.checkbox.checkbox--switch input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* several choices at once (landmark kinds, counters): wrapping chips, filled with a tick when chosen */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--color-white);
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chip input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+.chip:hover {
+  border-color: var(--color-ink);
+}
+
+.chip:has(input:checked) {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-white);
+}
+
+.chip:has(input:checked)::before {
+  content: '✓';
+  font-size: 11px;
+}
+
+.chip:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.chip:has(input:disabled) {
+  border-style: dashed;
+  background: transparent;
+  color: var(--text-2);
+  cursor: not-allowed;
+}
+
+/* Carte, Survol, Habillage without a track: one line on what to do */
+.tabpanel > .tab-hint {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-card);
+  color: var(--text-1);
+  font-size: 13px;
+}
+
+/* track delete: Lucide cross, centred */
+.track__delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.track__delete:hover {
+  color: var(--text-1);
+}
+
+/* widget options: nested under their switch by a rule, the first widget of a section without its top rule */
+.overlay-widget__body {
+  margin-left: 14px;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--line);
+}
+
+.panel-section__body > .overlay-widget:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* weather: the outing and the marker in one line each, the tables folded under « Détails » */
+.weather__line {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-1);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather__line-label {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.weather__details {
+  border-top: 1px solid var(--line);
+}
+
+.weather__details-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--control-h);
+  padding-top: var(--space-2);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+.weather__details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.weather__details-summary:hover,
+.weather__details[open] > .weather__details-summary {
+  color: var(--text-1);
+}
+
+.weather__details:not([open]) > .weather__details-summary > .icon {
+  transform: rotate(-90deg);
+}
+
+.weather__details > .field__label {
+  display: block;
+  margin: var(--space-2) 0 var(--space-1);
+  font-family: var(--font-body);
+}
+
+/* export: duration, images, codec and size on one tinted line */
+.export__summary {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkbox.checkbox--switch input,
+  .checkbox.checkbox--switch input::before {
+    transition: none;
+  }
+}
+/* ============================== fin Clarté =============================== */
