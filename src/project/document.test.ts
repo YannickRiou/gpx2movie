@@ -126,7 +126,7 @@ describe('serializeProject / parseProject', () => {
   it('falls back to the default per invalid or missing setting and ignores unknown keys', () => {
     const d = doc()
     d.settings = { exaggeration: 'beaucoup', wireframe: true, imageryZoomOffset: 5, terrainSourceId: 'inconnu', sunHour: 14, extra: 1 }
-    d.playback = { speed: -1 }
+    d.playback = { speed: 3 }
     d.unknownTopLevel = { anything: true }
     const loaded = parseProject(JSON.stringify(d))
     expect(loaded.settings).toEqual({ ...DEFAULT_SETTINGS, wireframe: true, sunHour: 14 })

@@ -105,6 +105,11 @@ export interface Playback {
   speed: number
 }
 
+const overlaps = (a: LonLatBounds, b: LonLatBounds) => a.west <= b.east && b.west <= a.east && a.south <= b.north && b.south <= a.north
+
+/** Playback speeds offered (timeline) and accepted in a project. */
+export const PLAYBACK_SPEEDS: readonly number[] = [0.5, 1, 2, 4]
+
 export interface AppState {
   tracks: Track[]
   addTracks(tracks: Track[]): void
@@ -257,7 +262,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const state = get()
     const tracks = [...state.tracks, ...incoming]
     const bounds = unionBounds(tracks)!
-    const frameOrigin = state.frameOrigin ?? computeFrameOrigin(bounds)
+    // the origin of a plan area stays for a track drawn in it, not for one elsewhere (the local frame would tilt)
+    const area = state.tracks.length === 0 ? state.planArea : null
+    const keepOrigin = state.frameOrigin !== null && (area === null || overlaps(area, bounds))
+    const frameOrigin = keepOrigin && state.frameOrigin ? state.frameOrigin : computeFrameOrigin(bounds)
 
     let settings = state.settings
     if (!imageryChosenByUser) {
@@ -293,7 +301,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
     set({
       tracks,
       bounds: unionBounds(tracks) ?? state.planArea,
-      frameOrigin: tracks.length === 0 && !state.planArea ? null : state.frameOrigin,
+      // back to the plan area alone: its own origin (the tracks removed may have been elsewhere)
+      frameOrigin: tracks.length > 0 ? state.frameOrigin : state.planArea ? computeFrameOrigin(state.planArea) : null,
       playback: { ...state.playback, playing: false, progress: 0, timeS: null },
     })
   },

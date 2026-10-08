@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { VIDEO_ASPECTS } from '../export/schedule'
+import { useBatchStore } from '../export/batch'
 import { isExportBusy, useExportStore } from '../export/store'
 import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
@@ -59,7 +60,9 @@ export function TopBar({ onOpen, exportOpen, onToggleExport, onHelp }: TopBarPro
   const dirty = useAppStore((s) => isProjectDirty({ settings: s.settings, tracks: s.tracks, name: s.projectName }, s.savedProject))
   const phase = useExportStore((s) => s.phase)
   const percent = useExportStore((s) => (s.frameCount > 0 ? Math.round((s.frame / s.frameCount) * 100) : 0))
-  const busy = isExportBusy(phase)
+  // a batch is busy between two films too (the export store is idle then)
+  const batchRunning = useBatchStore((s) => s.phase === 'running')
+  const busy = isExportBusy(phase) || batchRunning
 
   return (
     <header className="topbar">

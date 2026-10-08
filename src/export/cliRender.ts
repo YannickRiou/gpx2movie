@@ -9,9 +9,9 @@
 import type { InvokeArgs } from '@tauri-apps/api/core'
 import { errorMessage } from '../core/errors'
 import { getPlatform } from '../platform'
-import { joinPath, readableFolderAt, writableFolderAt } from '../platform/folder'
+import { readableFolderAt, writableFolderAt } from '../platform/folder'
 import { applySettings } from '../project/apply'
-import { getPresetStore, presetSettings } from '../project/presets'
+import { getPresetStore, normalizePresetName, presetSettings } from '../project/presets'
 import { startPoster } from '../poster/export'
 import { useAppStore } from '../state/store'
 import { buildBatchJobs, formatKey, trackFiles, useBatchStore } from './batch'
@@ -70,7 +70,9 @@ export async function runCliRenderIfAsked(invoke: Invoke = tauriInvoke): Promise
   const exit = (code: number, message: string) => invoke('cli_exit', { code, message })
   try {
     if (request.preset !== null) {
-      const preset = getPresetStore().list().find((p) => p.name === request.preset)
+      // names are kept normalized (spaces trimmed and collapsed), as the panel saves them
+      const name = normalizePresetName(request.preset)
+      const preset = getPresetStore().list().find((p) => p.name === name)
       if (!preset) return void (await exit(2, `Préréglage introuvable : « ${request.preset} ».`))
       applySettings(presetSettings(preset, useAppStore.getState().settings))
     }
@@ -80,16 +82,23 @@ export async function runCliRenderIfAsked(invoke: Invoke = tauriInvoke): Promise
     const files = trackFiles((await readableFolderAt(request.input)).files)
     if (files.length === 0) return void (await exit(2, `Aucune trace GPX ou FIT dans ${request.input}.`))
     console.info(`[rendu en lot] ${files.length} trace(s) × ${jobs.length} format(s) → ${request.output}`)
+    const folder = writableFolderAt(request.output)
     const tracks = await useBatchStore.getState().runTracks(files, jobs, {
-      folder: writableFolderAt(request.output),
+      folder,
       still: { progress: 0, type: 'image/png' },
       containerOf: async (j) => (await exportCodec({ width: j.width, height: j.height, fps: video.fps, quality: video.quality }))?.container ?? null,
       startPoster,
       save: () => undefined,
     })
     const report = cliReport(tracks, request.output)
-    const { writeFile } = await import('@tauri-apps/plugin-fs')
-    await writeFile(joinPath(request.output, REPORT_FILE), new TextEncoder().encode(report.text))
+    try {
+      const file = await folder.createFile(REPORT_FILE)
+      await file.write(new TextEncoder().encode(report.text), 0)
+      await file.close()
+    } catch (error) {
+      // the films are made: the exit code stays theirs
+      console.warn(`[rendu en lot] ${REPORT_FILE} non écrit :`, errorMessage(error))
+    }
     await exit(report.code, report.text)
   } catch (error) {
     await exit(2, `Rendu en lot impossible : ${errorMessage(error)}`)

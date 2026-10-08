@@ -178,6 +178,12 @@ describe('getSettingsHistory (app store)', () => {
     getSettingsHistory().clear()
   })
 
+  it('records no step for the regional imagery chosen with a plan area', () => {
+    useAppStore.getState().setPlanArea({ west: 6.8, south: 45.9, east: 6.95, north: 45.98 })
+    expect(useAppStore.getState().settings.imagerySourceId).not.toBe(DEFAULT_SETTINGS.imagerySourceId)
+    expect(getSettingsHistory().getState().canUndo).toBe(false)
+  })
+
   it('undoes any setting through setSetting', () => {
     const { setSetting } = useAppStore.getState()
     setSetting('wireframe', true)
@@ -258,6 +264,17 @@ describe('installHistoryShortcuts', () => {
     target.dispatchEvent(event)
     return event
   }
+
+  it('does nothing while disabled (an export running)', () => {
+    uninstall()
+    let enabled = false
+    uninstall = installHistoryShortcuts(history, window, () => enabled)
+    press({ key: 'z', ctrlKey: true })
+    expect(history.undo).not.toHaveBeenCalled()
+    enabled = true
+    press({ key: 'z', ctrlKey: true })
+    expect(history.undo).toHaveBeenCalledTimes(1)
+  })
 
   it('maps Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl+Y', () => {
     expect(press({ key: 'z', ctrlKey: true }).defaultPrevented).toBe(true)
