@@ -17,6 +17,7 @@ import type { FilmMedia, FilmText } from '../film/model'
 import { formatDistance, formatDuration, formatNumber } from '../ui/format'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import type { WeatherSummary } from '../weather/series'
+import { recordedAtProgress } from './data'
 import type { OverlayFrame, OverlayTrack } from './data'
 import type { CounterId, CreditsPosition, OverlayAnchor, OverlaySettings } from './settings'
 import { COUNTER_IDS } from './settings'
@@ -1164,11 +1165,17 @@ export function drawOverlay(
   if (size.width <= 0 || size.height <= 0) return
   const credits = settings.credits.enabled ? [...(extras.credits ?? [])] : []
   const time = extras.time ?? progressTime(frame.progress)
-  // photos and clips inside their window whose picture or frame is loaded
+  // photos and clips inside their window whose picture or frame is loaded (a clip following the flight: its frame
+  // recorded under the marker)
+  const recordedMs = extras.media?.some((m) => m.sync?.follow) ? recordedAtProgress(frame.track.path, frame.progress) : undefined
   const photos = (extras.media ?? []).flatMap((item) => {
     const opacity = filmTextOpacity(item, time.timeS)
     const visible = opacity > 0.001
-    const image = !visible ? undefined : item.kind === 'video' ? assets.video?.(item, clipTimeS(item, time.timeS)) : assets.photo?.(item.src)
+    const image = !visible
+      ? undefined
+      : item.kind === 'video'
+        ? assets.video?.(item, clipTimeS(item, time.timeS, recordedMs))
+        : assets.photo?.(item.src)
     return image ? [{ item, opacity, image }] : []
   })
   if (!settings.enabled && credits.length === 0 && photos.length === 0) return

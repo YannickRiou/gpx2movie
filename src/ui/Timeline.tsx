@@ -6,7 +6,8 @@
  * / + / « Ajuster »), « Options » menu (automatic stops, « modifié » marker of the film), fold. Ruler: click or drag to
  * scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile and its stops, closing),
  * « Vitesse » (portions of the track flown faster or slower, added at the marker), « Arrêts », « Textes », « Médias » (photos and video clips, also dropped onto the timeline; photos taken along the
- * track can then be placed where they were taken): drag a block to move it, an edge to stretch it, snapping to the other edges, the
+ * track can then be placed where they were taken, clips filmed during the outing synced with it), « Musique » (sound files with their waveform, added from the
+ * « Options » menu or dropped; played along by the preview, muted by the bar's button, mixed into the export): drag a block to move it, an edge to stretch it, snapping to the other edges, the
  * highlights and the playhead (Alt: no snapping); Ctrl+wheel zooms. Keyboard on a block: arrows nudge (Shift:
  * finer), Delete removes (Escape deselects: `App`); Space plays / pauses anywhere outside a control. The selection
  * lives in the store (`filmSelection`): the inspector of the selected block is in the right dock (`FilmInspector`).
@@ -15,9 +16,10 @@
  * functions of `film/timeline.ts`; editing a stop writes the generated stops out first (`materializeStops`).
  */
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { KeyboardEvent, PointerEvent } from 'react'
+import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
 import { materializeStops, stopCandidates } from '../film/assemble'
-import { buildFilmClock, filmClockInputFor } from '../film/clock'
+import { AUDIO_FILE_EXTENSIONS, fitFilmToMusic, isAudioFile, musicLengthS, readAudio, startMusicPreview, useMusicPreview, waveformPath } from '../film/audio'
+import { buildFilmClock, filmClockFor, filmClockInputFor } from '../film/clock'
 import { photoTimeMs } from '../film/exif'
 import { useMediaStore } from '../film/media'
 import { isMediaFile, readMedia } from '../film/video'
@@ -25,9 +27,11 @@ import type { Film, FilmMedia, FilmSpeed, FilmStop } from '../film/model'
 import {
   ZOOM_RANGE,
   addMedia,
+  addMusic,
   addSpeed,
   addStop,
   addText,
+  clipSyncOffsetS,
   dragFilm,
   fitPxPerS,
   formatFilmTime,
@@ -37,6 +41,7 @@ import {
   removeFilmItem,
   rulerTicks,
   snapTargets,
+  syncClip,
   updateMedia,
   zoomAt,
 } from '../film/timeline'
@@ -45,7 +50,7 @@ import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath, type Elev
 import { getPlatform } from '../platform'
 import { modifiedSettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
-import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
+import { editFilm, getFilmSource, useFilmClock, useFilmSource } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
@@ -57,6 +62,7 @@ import { showToast } from './toast'
 const SPEEDS = [0.5, 1, 2, 4]
 /** « Média » picker: pictures and videos recognised on both targets (the desktop types a file by `mimeTypeOf`). */
 const MEDIA_FILTERS = [{ name: 'Photos et vidéos', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'mp4', 'm4v', 'mov', 'webm'] }]
+const MUSIC_FILTERS = [{ name: 'Musique', extensions: AUDIO_FILE_EXTENSIONS }]
 /** Profile resolution (samples over the track) and drawing height in viewBox units. */
 const PROFILE_SAMPLES = 400
 const PROFILE_HEIGHT = 100
@@ -75,9 +81,6 @@ const BUTTON_ZOOM = 1.5
 const ZOOM_SLIDER_STEPS = 100
 const zoomToSlider = (zoom: number) => Math.round((ZOOM_SLIDER_STEPS * Math.log(zoom / ZOOM_RANGE.min)) / Math.log(ZOOM_RANGE.max / ZOOM_RANGE.min))
 const sliderToZoom = (v: number) => ZOOM_RANGE.min * (ZOOM_RANGE.max / ZOOM_RANGE.min) ** (v / ZOOM_SLIDER_STEPS)
-
-/** Photos that can be placed where they were taken (offered by the message after adding them). */
-type Placements = { id: string; startS: number }[]
 
 const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`
 
@@ -145,7 +148,17 @@ function BarButton({ icon, name, tip = name, label, onClick, disabled }: BarButt
  * « Options » of the film, in a small menu over the bar: automatic stops, « modifié » marker of the film. Closes on
  * Escape (before the shell deselects anything), on a click outside and when the focus leaves it.
  */
-function FilmOptions({ autoStops, onAutoStops }: { autoStops: boolean; onAutoStops(on: boolean): void }) {
+function FilmOptions({
+  autoStops,
+  onAutoStops,
+  onAddMusic,
+  reading,
+}: {
+  autoStops: boolean
+  onAutoStops(on: boolean): void
+  onAddMusic(): void
+  reading: boolean
+}) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -198,6 +211,19 @@ function FilmOptions({ autoStops, onAutoStops }: { autoStops: boolean; onAutoSto
       {open && (
         <div id={`${id}-menu`} className="film-tl__menu" role="group" aria-label="Options du film">
           <p className="film-tl__menu-title">Options du film</p>
+          <button
+            type="button"
+            className="btn btn--secondary btn--small"
+            disabled={reading}
+            onClick={() => {
+              setOpen(false)
+              onAddMusic()
+            }}
+          >
+            <Icon name="music" size={16} />
+            Ajouter une musique…
+          </button>
+          <p className="film-tl__menu-hint">MP3, M4A, OGG, WAV ou FLAC, 30 Mo au plus. Ou glissez le fichier sur la timeline.</p>
           <label className="film-tl__check">
             <input type="checkbox" checked={autoStops} onChange={(e) => onAutoStops(e.currentTarget.checked)} />
             Arrêts automatiques
@@ -222,6 +248,7 @@ export function Timeline() {
   const setSpeed = useAppStore((s) => s.setSpeed)
   const setSetting = useAppStore((s) => s.setSetting)
   const pictures = useMediaStore((s) => s.table)
+  const muted = useMusicPreview((s) => s.muted)
   const id = useId()
   const clipId = `profile-played-${id.replace(/[^\w-]/g, '')}`
 
@@ -302,6 +329,9 @@ export function Timeline() {
     pendingScrollRef.current = null
   }, [zoom])
 
+  // the music plays along the preview
+  useEffect(() => startMusicPreview(), [])
+
   useEffect(() => {
     // Space plays / pauses, except in a control that uses it
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
@@ -353,6 +383,7 @@ export function Timeline() {
     targets: snapTargets(clock, film, candidates.map((c) => c.atM / lengthM), playheadS, item),
     targetsM: candidates.map((c) => c.atM),
     snapS: SNAP_PX / pxPerS,
+    audioFileS: (src) => pictures[src]?.durationS,
   })
   const remove = (item: TimelineItem) => editFilm((f) => ({ film: removeFilmItem(f, item), id: null }), { stops: isStop(item) })
   const addStopAt = (atM: number, patch?: Parameters<typeof addStop>[2]) => editFilm((f) => addStop(f, atM, patch), { stops: true })
@@ -401,6 +432,12 @@ export function Timeline() {
       const t = exif ? photoFilmTime(path, clock, { lon: exif.lon, lat: exif.lat, timeMs: photoTimeMs(exif) }) : undefined
       return t === undefined ? [] : [{ id: photoId, startS: t }]
     })
+    // clips recorded during the outing (camera clock possibly set to local time: whole hours)
+    const syncs = added.ids.flatMap((clipId, k) => {
+      const { recordedMs, durationS } = read[k].asset
+      const offsetS = recordedMs === undefined || durationS === undefined ? undefined : clipSyncOffsetS(path, recordedMs, durationS)
+      return offsetS === undefined ? [] : [{ id: clipId, sync: { startMs: recordedMs!, offsetS, follow: false }, fileS: durationS! }]
+    })
     const videos = read.filter((r) => r.asset.durationS !== undefined).length
     const photos = read.length - videos
     const n = placements.length
@@ -410,16 +447,64 @@ export function Timeline() {
         : n === 1
           ? ` ${photos === 1 ? 'La photo' : "L'une des photos"} a été prise le long du parcours : la placer au moment où le marqueur y passe ?`
           : ` ${n} photos ont été prises le long du parcours : les placer au moment où le marqueur y passe ?`
+    const filmed =
+      syncs.length === 0
+        ? ''
+        : syncs.length === 1
+          ? ` ${videos === 1 ? 'La vidéo' : "L'une des vidéos"} a été filmée pendant la sortie : la caler sur le parcours ?`
+          : ` ${syncs.length} vidéos ont été filmées pendant la sortie : les caler sur le parcours ?`
+    /** photos placed, clips synced with the film clock of the moment (one undo step) */
+    const place = () =>
+      editFilm((f) => {
+        const clockNow = filmClockFor(getFilmSource())
+        const placed = placements.reduce((g, p) => updateMedia(g, p.id, { startS: p.startS }), f)
+        return { film: syncs.reduce((g, c) => syncClip(g, c.id, c.sync, path, clockNow, c.fileS) ?? g, placed) }
+      })
     const what = [photos > 0 ? plural(photos, 'photo', 'photos') : '', videos > 0 ? plural(videos, 'vidéo', 'vidéos') : ''].filter(Boolean).join(' et ')
-    const silent = videos > 0 ? ' Les vidéos sont muettes : le son n’est pas encore pris en charge.' : ''
+    const silent = videos > 0 ? ' Les vidéos sont muettes : leur son n’est pas repris.' : ''
     showToast({
       kind: errors || unsupported ? 'info' : 'success',
-      text: `${what} ${read.length > 1 ? 'ajoutées' : 'ajoutée'} à la tête de lecture.${silent}${located}${errors}${unsupported}`,
-      action: n > 0 ? { label: 'Placer sur le parcours', run: () => placePhotos(placements) } : undefined,
+      text: `${what} ${read.length > 1 ? 'ajoutées' : 'ajoutée'} à la tête de lecture.${silent}${located}${filmed}${errors}${unsupported}`,
+      action: n + syncs.length > 0 ? { label: n > 0 ? 'Placer sur le parcours' : 'Caler sur le parcours', run: place } : undefined,
     })
   }
-  const placePhotos = (placements: Placements) =>
-    editFilm((f) => ({ film: placements.reduce((g, p) => updateMedia(g, p.id, { startS: p.startS }), f) }))
+  /** sound files added after the music already there (one undo step); offers to fit the film to the music */
+  const addMusicFiles = async (files: readonly File[]) => {
+    setReading(true)
+    const read: Awaited<ReturnType<typeof readAudio>>[] = []
+    const failed: string[] = []
+    for (const file of files) {
+      try {
+        read.push(await readAudio(file, file.name))
+      } catch (err) {
+        failed.push(`« ${file.name} » : ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    setReading(false)
+    const errors = failed.length > 0 ? ` Non ajouté : ${failed.join(' ; ')}` : ''
+    if (read.length === 0) {
+      showToast({ kind: 'error', text: errors.trim() })
+      return
+    }
+    const first = useAppStore.getState().settings.film.audio.length === 0
+    const srcs = useMediaStore.getState().add(read.map((r) => r.asset))
+    const added = addMusic(
+      useAppStore.getState().settings.film,
+      srcs.map((src, k) => ({ src, fileS: read[k].asset.durationS ?? 0 })),
+    )
+    commit(added.film)
+    setSelected(added.ids[0])
+    const what = read.length > 1 ? `${read.length} musiques ajoutées` : 'Musique ajoutée'
+    showToast({
+      kind: errors ? 'info' : 'success',
+      text: `${what} ${first ? 'au début du film' : 'à la suite'}. ${read.length > 1 ? 'Elles sont jouées' : 'Elle est jouée'} pendant la lecture et ajoutée${read.length > 1 ? 's' : ''} au film exporté.${errors}`,
+      action: { label: 'Caler la durée du film', run: () => showToast(fitFilmToMusic()) },
+    })
+  }
+  const pickMusic = () =>
+    void getPlatform()
+      .openFiles({ filters: MUSIC_FILTERS, multiple: true })
+      .then((files) => (files.length > 0 ? addMusicFiles(files) : undefined))
   const toggleAutoStops = (on: boolean) =>
     commit(on ? { ...film, autoStops: true, autoMode: 'temps-forts', stops: [] } : withOwnStops(film))
 
@@ -505,6 +590,7 @@ export function Timeline() {
     grips: Grip[],
     thumb?: string,
     icon?: IconName,
+    extra?: ReactNode,
   ) => (
     <div
       key={item}
@@ -526,6 +612,7 @@ export function Timeline() {
       onKeyDown={(e) => onBlockKeyDown(e, item)}
     >
       {grips.includes('start') && <span className="film-tl__grip film-tl__grip--start" onPointerDown={(e) => startEdit(e, item, 'start')} />}
+      {extra}
       {thumb && <img className="film-tl__thumb" src={thumb} alt="" draggable={false} />}
       {icon && (
         <span className="film-tl__icon">
@@ -556,7 +643,14 @@ export function Timeline() {
       onDrop={(e) => {
         if (e.dataTransfer.files.length === 0) return
         e.preventDefault()
-        void addMediaFiles(Array.from(e.dataTransfer.files))
+        const files = Array.from(e.dataTransfer.files)
+        const sounds = files.filter(isAudioFile)
+        const others = files.filter((f) => !isAudioFile(f))
+        // one after the other: both read files and show a message
+        void (async () => {
+          if (sounds.length > 0) await addMusicFiles(sounds)
+          if (others.length > 0) await addMediaFiles(others)
+        })()
       }}
     >
       <div className="film-tl__bar">
@@ -654,6 +748,14 @@ export function Timeline() {
           disabled={reading}
         />
         <span className="film-tl__sep" aria-hidden="true" />
+        {film.audio.length > 0 && (
+          <BarButton
+            icon={muted ? 'volume-x' : 'volume-2'}
+            name={muted ? 'Remettre le son' : 'Couper le son'}
+            tip={muted ? 'Remettre le son de la musique' : 'Couper le son de la musique pendant la lecture (le film exporté la garde)'}
+            onClick={() => useMusicPreview.getState().setMuted(!muted)}
+          />
+        )}
         <select className="film-tl__select" aria-label="Vitesse de lecture" value={speed} onChange={(e) => setSpeed(Number(e.currentTarget.value))}>
           {SPEEDS.map((value) => (
             <option key={value} value={value}>
@@ -689,7 +791,7 @@ export function Timeline() {
           />
           <BarButton icon="move-horizontal" label="Ajuster" name="Ajuster : voir tout le film" tip="Voir tout le film" onClick={fitZoom} disabled={zoom <= ZOOM_RANGE.min} />
         </div>
-        <FilmOptions autoStops={film.autoStops} onAutoStops={toggleAutoStops} />
+        <FilmOptions autoStops={film.autoStops} onAutoStops={toggleAutoStops} onAddMusic={pickMusic} reading={reading} />
         <button
           type="button"
           className="icon-btn"
@@ -710,7 +812,7 @@ export function Timeline() {
           <div className="film-tl__heads">
             <div className="film-tl__head film-tl__head--ruler" />
             {/* the lanes carry the same names */}
-            {['Plans', 'Vitesse', 'Arrêts', 'Textes', 'Médias'].map((name) => (
+            {['Plans', 'Vitesse', 'Arrêts', 'Textes', 'Médias', 'Musique'].map((name) => (
               <div key={name} className="film-tl__head" aria-hidden="true">
                 {name}
               </div>
@@ -840,6 +942,36 @@ export function Timeline() {
                     m.kind === 'video' ? 'video' : undefined,
                   ),
                 )}
+              </div>
+
+              <div className="film-tl__lane" role="group" aria-label="Musique">
+                {shownFilm.audio.length === 0 && (
+                  <span className="film-tl__empty" style={{ left: xOf(0) }}>
+                    Glissez un fichier audio ici, ou Options › Ajouter une musique
+                  </span>
+                )}
+                {shownFilm.audio.map((a) => {
+                  const sound = pictures[a.src]
+                  const lengthS = musicLengthS(a, sound?.durationS)
+                  const label = sound?.name ?? 'Musique'
+                  const wave = sound?.peaks && sound.durationS ? waveformPath(sound.peaks, sound.durationS, a.inS, lengthS) : ''
+                  return block(
+                    a.id,
+                    a.startS,
+                    a.startS + a.durationS,
+                    label,
+                    `Musique : ${label}, volume ${Math.round(a.volume * 100)} %`,
+                    'film-tl__block--music',
+                    ['start', 'move', 'end'],
+                    undefined,
+                    'music',
+                    wave && (
+                      <svg className="film-tl__wave" viewBox={`0 0 ${a.durationS} 1`} preserveAspectRatio="none" aria-hidden="true">
+                        <path d={wave} />
+                      </svg>
+                    ),
+                  )
+                })}
               </div>
 
               <div className="film-tl__playhead" style={{ left: xOf(playheadS) }} aria-hidden="true" />

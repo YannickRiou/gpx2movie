@@ -19,9 +19,13 @@ import type { RaceSettings } from '../flyover/race'
 import type { TrackColorBy } from '../flyover/trackColor'
 import { centroid } from '../geo/ellipsoid'
 import { DEFAULT_LANDMARK_SETTINGS } from '../osm/landmarks'
+import { DEFAULT_WATER } from '../osm/water'
+import type { WaterSettings } from '../osm/water'
 import type { LandmarkSettings } from '../osm/landmarks'
 import { DEFAULT_OVERLAY } from '../overlay/settings'
 import type { OverlaySettings } from '../overlay/settings'
+import { DEFAULT_POSTER } from '../poster/settings'
+import type { PosterSettings } from '../poster/settings'
 import { IMAGERY_SOURCES, sourceCovers } from '../terrain/sources'
 import { DEFAULT_CLOUDS } from '../weather/sceneClouds'
 import type { CloudSettings } from '../weather/sceneClouds'
@@ -62,10 +66,14 @@ export interface Settings {
   weatherScene: WeatherSceneSettings
   /** volumetric clouds: from the weather of the outing, manual or none; export quality (atmosphere only) */
   clouds: CloudSettings
+  /** lakes and rivers of OpenStreetMap drawn as reflective water (Overpass API, network) */
+  water: WaterSettings
   /** film overlay (« habillage »): style and widgets, drawn by src/overlay/draw.ts */
   overlay: OverlaySettings
   /** exported film: size, frame rate, encoding quality */
   video: VideoSettings
+  /** printable poster of the outing (« Affiche »): format, style, title, figures (see poster/settings.ts) */
+  poster: PosterSettings
   /** OpenStreetMap landmarks along the tracks (Overpass API, network): kinds shown and corridor width */
   landmarks: LandmarkSettings
   /** ghost race: markers on the other tracks, synchronised with the first one (see flyover/race.ts) */
@@ -148,8 +156,10 @@ export const DEFAULT_SETTINGS: Settings = {
   weather: { enabled: true },
   weatherScene: DEFAULT_WEATHER_SCENE,
   clouds: DEFAULT_CLOUDS,
+  water: DEFAULT_WATER,
   overlay: DEFAULT_OVERLAY,
   video: DEFAULT_VIDEO_SETTINGS,
+  poster: DEFAULT_POSTER,
   landmarks: DEFAULT_LANDMARK_SETTINGS,
   race: DEFAULT_RACE,
 }

@@ -319,6 +319,52 @@ function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
   )
 }
 
+/** « Plans d'eau »: lakes and rivers of OpenStreetMap drawn as reflective water, and their strength. */
+function WaterControl() {
+  const id = useId()
+  const water = useAppStore((s) => s.settings.water)
+  const setSetting = useAppStore((s) => s.setSetting)
+  return (
+    <>
+      <div className="field__label-row">
+        <label className="checkbox" htmlFor={`${id}-water`}>
+          <input
+            id={`${id}-water`}
+            type="checkbox"
+            checked={water.enabled}
+            onChange={(e) => setSetting('water', { ...water, enabled: e.currentTarget.checked })}
+          />
+          Lacs et rivières reflétants
+        </label>
+        <InfoTip text="Plans d’eau d’OpenStreetMap autour de la trace : reflets du ciel et du soleil, vaguelettes." />
+      </div>
+      {water.enabled && (
+        <div className="field">
+          <label className="field__label" htmlFor={`${id}-water-strength`}>
+            Intensité de l’eau
+          </label>
+          <div className="range-row">
+            <input
+              id={`${id}-water-strength`}
+              className="range"
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={water.strength}
+              onChange={(e) => setSetting('water', { ...water, strength: Number(e.currentTarget.value) })}
+              aria-valuetext={formatPercent(water.strength)}
+            />
+            <output className="range-row__value range-row__value--wide" htmlFor={`${id}-water-strength`}>
+              {formatPercent(water.strength)}
+            </output>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 /**
  * « Carte » tab (before the landmarks): sections Fond de carte, Relief et trace, Lumière, Atmosphère et météo, each
  * with its essentials and its rarely used settings under « Plus de réglages ».
@@ -353,7 +399,7 @@ export function SettingsPanel() {
   return (
     <>
       {/* the imagery source is left out of the marker: the import picks it per region (IGN, swisstopo) */}
-      <PanelSection title="Fond de carte" keys={['terrainSourceId', 'imageryZoomOffset']}>
+      <PanelSection title="Fond de carte" keys={['terrainSourceId', 'imageryZoomOffset', 'water']}>
         <div className="field">
           <label className="field__label" htmlFor={imageryId}>
             Imagerie
@@ -371,6 +417,8 @@ export function SettingsPanel() {
             ))}
           </select>
         </div>
+
+        <WaterControl />
 
         <MoreSettings paths={['imageryZoomOffset', 'terrainSourceId']}>
           <fieldset className="field fieldset">

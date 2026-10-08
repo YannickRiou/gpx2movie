@@ -1,18 +1,34 @@
-import { useId, useRef } from 'react'
+import { useId, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { fitFilmToMusic, musicLengthS } from '../film/audio'
 import { useMediaStore } from '../film/media'
-import { ITEM_DURATION_RANGE, MEDIA_LAYOUTS, SHOT_DURATION_RANGE, SHOT_STYLES, STOP_CAMERAS, STOP_DURATION_RANGE } from '../film/model'
-import type { Film, MediaLayout, ShotStyle, StopCamera } from '../film/model'
 import {
+  AUDIO_DURATION_RANGE,
+  FADE_RANGE,
+  ITEM_DURATION_RANGE,
+  MEDIA_LAYOUTS,
+  SHOT_DURATION_RANGE,
+  SHOT_STYLES,
+  STOP_CAMERAS,
+  STOP_DURATION_RANGE,
+  SYNC_OFFSET_RANGE,
+} from '../film/model'
+import type { Film, MediaLayout, MediaSync, ShotStyle, StopCamera } from '../film/model'
+import {
+  clipSyncOffsetS,
   formatFilmTime,
   formatSpeedFactor,
   removeFilmItem,
   updateMedia,
+  updateMusic,
   updateShot,
   updateSpeed,
   updateStop,
+  syncClip,
+  syncClipPlacement,
   updateText,
 } from '../film/timeline'
+import { buildTrackPath } from '../flyover/path'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
@@ -20,6 +36,7 @@ import { useAppStore } from '../state/store'
 import { formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
 import { nextGridIndex } from './shell'
+import { showToast } from './toast'
 
 const SHOT_STYLE_LABELS: Record<ShotStyle, string> = { aucune: 'Aucune', descente: 'Descente', saut: 'Saut' }
 const SHOT_HINTS: Record<ShotStyle, string> = {
@@ -36,6 +53,9 @@ const SPEED_SLIDER = { min: -2, max: 2, step: 0.05 }
 const km = (m: number) => Math.round(m / 10) / 100
 
 const seconds = (s: number) => `${formatNumber(s, Number.isInteger(s) ? 0 : 1)} s`
+const VOLUME_RANGE = { min: 0, max: 1, step: 0.01 }
+const FADE_SLIDER = { min: FADE_RANGE.min, max: 10, step: FADE_RANGE.step }
+
 
 /** Position in the frame as a 3 × 3 grid of radio buttons (the arrows move and choose, like native radios). */
 function AnchorPicker({ label, value, onChange }: { label: string; value: OverlayAnchor; onChange(anchor: OverlayAnchor): void }) {
@@ -89,7 +109,8 @@ export function FilmInspector() {
   const item = useAppStore((s) => s.filmSelection)
   const { track, film, pacing } = useFilmSource()
   const clock = useFilmClock()
-  if (!item || !track) return null
+  const path = useMemo(() => (track ? buildTrackPath(track) : null), [track])
+  if (!item || !track || !path) return null
   const lengthM = track.stats.distanceM
   const change = (fn: (f: Film) => Film, stops: boolean) => editFilm((f) => ({ film: fn(f) }), { stops, step: false })
   const close = () => useAppStore.getState().setFilmSelection(null)
@@ -213,6 +234,7 @@ export function FilmInspector() {
     const speed = clock.speeds.find((s) => s.id === item)
     const filmText = film.texts.find((t) => t.id === item)
     const media = film.media.find((m) => m.id === item)
+    const music = film.audio.find((a) => a.id === item)
     if (stop) {
       isStop = true
       title = 'Arrêt'
@@ -295,6 +317,58 @@ export function FilmInspector() {
       const picture = pictures[media.src]
       const card = media.layout === 'carte'
       const fileS = picture?.durationS ?? ITEM_DURATION_RANGE.max
+      /** « Caler sur le parcours »: recording start, clock correction, following the flight */
+      const clipSync = (recordedMs: number, approx: boolean, lengthS: number) => {
+        const timed = track.stats.startTime !== undefined
+        const current: MediaSync = { startMs: recordedMs, offsetS: 0, follow: false, ...media.sync }
+        // synced and placed again in the same edit; outside the outing, only the sync is kept
+        const apply = (patch: Partial<MediaSync>, step: boolean) => {
+          const sync = { ...current, ...patch }
+          editFilm((f) => ({ film: syncClip(f, item, sync, path, clock, lengthS) ?? updateMedia(f, item, { sync }) }), { step })
+        }
+        const placeable = syncClipPlacement({ ...media, sync: current }, path, clock, lengthS) !== undefined
+        const syncNow = () => {
+          const offsetS = media.sync?.offsetS ?? clipSyncOffsetS(path, recordedMs, lengthS)
+          if (offsetS === undefined || !syncClipPlacement({ ...media, sync: { ...current, offsetS } }, path, clock, lengthS)) {
+            showToast({ kind: 'error', text: 'Vidéo filmée en dehors de la sortie : corrigez l’heure de la caméra avec le décalage.' })
+            return
+          }
+          apply({ offsetS }, true)
+          showToast({ kind: 'success', text: 'Vidéo calée : elle passe quand le marqueur arrive là où elle a été filmée.' })
+        }
+        const hours = current.offsetS !== 0 && current.offsetS % 3600 === 0 ? Math.abs(current.offsetS / 3600) : 0
+        const filmedAt = new Date(recordedMs + current.offsetS * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' })
+        return (
+          <fieldset className="field fieldset">
+            <legend className="field__label">Calage sur le parcours</legend>
+            <p className="field__hint">
+              Filmée le {filmedAt}
+              {approx && ' (heure approximative, d’après la date du fichier)'}.
+              {!timed && ' La trace n’a pas d’heures : la vidéo ne peut pas être calée.'}
+              {timed && media.sync && !placeable && ' Cette heure est en dehors de la sortie : ajustez le décalage.'}
+              {hours > 0 && ` Décalage de ${hours} h : la caméra était sans doute à l’heure locale.`}
+            </p>
+            {timed && (
+              <>
+                <button type="button" className="btn btn--secondary" onClick={syncNow}>
+                  {media.sync ? 'Recaler sur le parcours' : 'Caler sur le parcours'}
+                </button>
+                {number('offset', 'Décalage de l’horloge (s)', current.offsetS, SYNC_OFFSET_RANGE.min, SYNC_OFFSET_RANGE.max, (offsetS) =>
+                  apply({ offsetS: Math.round(Math.min(SYNC_OFFSET_RANGE.max, Math.max(SYNC_OFFSET_RANGE.min, offsetS)) * 10) / 10 }, false),
+                )}
+                <label className="checkbox">
+                  <input type="checkbox" checked={current.follow} onChange={(e) => apply({ follow: e.currentTarget.checked }, true)} />
+                  Suivre la vitesse du survol
+                </label>
+                <p className="field__hint">
+                  Décalage positif : la vidéo passe plus tard. En suivant la vitesse du survol, l’image montre toujours l’endroit où
+                  est le marqueur (ralentis et portions de vitesse compris) ; pendant un arrêt, elle reste figée.
+                </p>
+              </>
+            )}
+          </fieldset>
+        )
+      }
       body = (
         <>
           {picture && <img className="film-inspector__thumb" src={picture.thumb} alt={picture.name ?? title} />}
@@ -320,10 +394,38 @@ export function FilmInspector() {
           {range('size', 'Taille', media.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
           {timing(media.startS, media.durationS, set)}
           {video && number('in', 'Début dans la vidéo (s)', media.inS ?? 0, 0, fileS, (inS) => set({ inS: Math.min(inS, fileS) }))}
+          {video && picture?.recordedMs !== undefined && clipSync(picture.recordedMs, picture.recordedApprox === true, fileS)}
           <p className="field__hint">
             {card ? `La ${title.toLowerCase()} s’affiche encadrée, au style de l’habillage.` : `La ${title.toLowerCase()} couvre la vue 3D, en fondu.`}
             {video && picture?.durationS !== undefined && ` Vidéo de ${formatFilmTime(fileS)} ; au-delà de sa fin, la dernière image reste affichée.`}
-            {video && ' Le son n’est pas encore pris en charge : la vidéo est muette.'}
+            {video && ' Le son des vidéos n’est pas repris : la vidéo est muette. Pour du son, ajoutez une musique (Options de la timeline).'}
+          </p>
+        </>
+      )
+    } else if (music) {
+      title = 'Musique'
+      const sound = pictures[music.src]
+      const fileS = sound?.durationS
+      const set = (patch: Parameters<typeof updateMusic>[2]) => change((f) => updateMusic(f, item, patch, fileS), false)
+      const lengthS = musicLengthS(music, fileS)
+      body = (
+        <>
+          {sound?.name && <p className="field__hint">{sound.name}</p>}
+          {range('volume', 'Volume', music.volume, VOLUME_RANGE, (v) => `${Math.round(v * 100)} %`, (volume) => set({ volume }))}
+          {range('fade-in', 'Fondu d’entrée', Math.min(music.fadeInS, FADE_SLIDER.max), FADE_SLIDER, seconds, (fadeInS) => set({ fadeInS }))}
+          {range('fade-out', 'Fondu de sortie', Math.min(music.fadeOutS, FADE_SLIDER.max), FADE_SLIDER, seconds, (fadeOutS) => set({ fadeOutS }))}
+          <div className="film-inspector__row">
+            {number('start', 'Début (s)', music.startS, 0, clock.totalTime(), (startS) => set({ startS }))}
+            {number('length', 'Durée (s)', music.durationS, AUDIO_DURATION_RANGE.min, fileS ?? AUDIO_DURATION_RANGE.max, (durationS) => set({ durationS }))}
+          </div>
+          {number('in', 'Début dans le fichier (s)', music.inS, 0, fileS ?? AUDIO_DURATION_RANGE.max, (inS) => set({ inS }))}
+          <button type="button" className="btn btn--secondary film-inspector__remove" onClick={() => showToast(fitFilmToMusic())}>
+            Caler la durée du film sur la musique
+          </button>
+          <p className="field__hint">
+            Jouée de {formatFilmTime(music.startS)} à {formatFilmTime(music.startS + lengthS)} dans le film
+            {fileS !== undefined && ` (fichier de ${formatFilmTime(fileS)})`}, pendant la lecture et dans le film exporté. Caler la durée
+            change la durée du survol pour que le film finisse avec la musique.
           </p>
         </>
       )

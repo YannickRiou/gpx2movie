@@ -336,5 +336,12 @@ distance ne refait pas de requête (filtrage local).
 | `overpass.kumi.systems`, `overpass.private.coffee`, `overpass.osm.jp` | injoignables depuis ce réseau (délai 60 s / connexion refusée) : non retenues |
 | Balises utiles | `ele` en texte libre (« 1650 », « 1969.1 » ; ailleurs « 1 653 m », « 1,653 », pieds) → `parseEle` ; `name:fr` rare en France (repli `name`) ; des sommets sans nom (ex. 2 303 m) → filtre `["name"]` dans la requête ; lacs en chemins / relations → `out center` ; le Col de Voza porte `natural=saddle` + `mountain_pass=yes`, `ele=1650` (1 653 m dans le GPX d'exemple) ; 81 hameaux à moins de 3 km de 20 km de trace → lieux désactivés par défaut |
 
+**Plans d'eau (2026-10-08)** : une deuxième requête par trace, seulement si « Lacs et rivières reflétants » est cochée :
+`way` / `relation` (multipolygones) `natural=water`, `waterway=riverbank`, `water=*` dans le couloir de la trace élargi à
+**8 km**, `out geom qt` (géométrie complète). Même file d'attente, même cache 30 jours (le résultat réduit : polygones simplifiés à
+4 m, au plus 300, coordonnées à 1e-6°), même politique de réessai. Mesure (curl, boîte 45,81–45,98 N × 6,66–6,90 E autour de la
+trace d'exemple) : **200 en 3,7 s, 593 ko, 232 éléments** (220 chemins, 12 relations : l'Arve, le lac de Passy, des retenues,
+ruisseaux et bassins) → 80 polygones gardés. La même requête envoyée par `curl` sans `User-Agent` reçoit 406.
+
 Journal (curl, 2026-10-07) : `[out:json][timeout:60]; ( node["natural"~"^(peak|volcano|saddle)$"]["name"](45.79485,6.68680,45.91881,6.83916); … 8 instructions … ); out center tags qt;`
 → 200, 5,7 s, 44 447 octets ; même requête depuis Chromium headless (origine `http://127.0.0.1:5184`) → 200 en 3,6 s.

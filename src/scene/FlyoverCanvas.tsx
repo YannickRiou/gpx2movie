@@ -28,6 +28,7 @@ import { Labels } from './Labels'
 import { RaceMarkers } from './RaceMarkers'
 import { TerrainLayer } from './TerrainLayer'
 import { TrackLines } from './TrackLines'
+import { WaterLayer } from './WaterLayer'
 import { TrackMenu, TrackPicker } from './TrackPicker'
 
 export const SKY_TOP_COLOR = '#A9CCD9'
@@ -78,6 +79,7 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
         {hasTracks && (
           <TerrainLayer>
             <TrackLines />
+            <WaterLayer />
             <CameraRig />
             <FlyoverRig />
             <RaceMarkers />

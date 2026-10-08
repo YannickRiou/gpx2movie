@@ -2,6 +2,9 @@
  * Where and when a photo was taken, read from the EXIF block of a JPEG file: GPS position, capture time (with its
  * time zone when the camera wrote one). A tiny pure parser (no DOM, no dependency) over the first bytes of the
  * file; anything unreadable gives an empty result, never an error.
+ *
+ * Also when a video clip was recorded (`mp4CreationTimeMs`, `quickTimeDateMs`): the creation time of the movie
+ * header (`mvhd`) of an MP4 / QuickTime file, and the date with its time zone written by Apple devices.
  */
 
 export interface PhotoExif {
@@ -179,4 +182,83 @@ export function photoTimeMs(
   if (exif.timeMs !== undefined) return exif.timeMs
   const fields = exif.localTime ? parseWallClock(exif.localTime) : undefined
   return fields ? toInstant(...fields) : undefined
+}
+
+// ---------------------------------------------------------------------------
+// Video clips (MP4 / QuickTime)
+// ---------------------------------------------------------------------------
+
+/** Seconds from 1904-01-01 (MP4 epoch) to 1970-01-01 (UTC). */
+const MP4_EPOCH_S = 2_082_844_800
+/** Recording instants before this are unset camera clocks (0, 1904, 1970…) and are ignored. */
+const PLAUSIBLE_FROM_MS = Date.UTC(2000, 0, 1)
+const PLAUSIBLE_TO_MS = Date.UTC(2100, 0, 1)
+/** Boxes looked at before giving up (a file is a handful of top-level boxes). */
+const MAX_BOXES = 2000
+
+const plausible = (ms: number) => ms >= PLAUSIBLE_FROM_MS && ms < PLAUSIBLE_TO_MS
+
+/** Reads `length` bytes at `offset` of the file (fewer at its end). */
+export type ReadBytes = (offset: number, length: number) => Promise<Uint8Array>
+
+const fourcc = (b: Uint8Array, at: number) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3])
+
+/** Child box `type` of the boxes in [start, end) of the file: its content offset and end, undefined when absent. */
+async function findBox(read: ReadBytes, start: number, end: number, type: string): Promise<{ at: number; end: number } | undefined> {
+  let offset = start
+  for (let n = 0; n < MAX_BOXES && offset + 8 <= end; n++) {
+    const head = await read(offset, 16)
+    if (head.length < 8) return undefined
+    const view = new DataView(head.buffer, head.byteOffset, head.byteLength)
+    let size = view.getUint32(0)
+    let headerSize = 8
+    if (size === 1) {
+      if (head.length < 16) return undefined
+      size = view.getUint32(8) * 2 ** 32 + view.getUint32(12)
+      headerSize = 16
+    } else if (size === 0) {
+      size = end - offset
+    }
+    if (size < headerSize) return undefined
+    if (fourcc(head, 4) === type) return { at: offset + headerSize, end: Math.min(end, offset + size) }
+    offset += size
+  }
+  return undefined
+}
+
+/**
+ * Recording instant of an MP4 / QuickTime file (ms since epoch): the creation time of its movie header (`moov` ›
+ * `mvhd`, seconds since 1904 in UTC; read as seconds since 1970 when an encoder wrote that by mistake). Undefined
+ * for another file or an unset camera clock. Only the box headers and the movie header are read (`read`), wherever
+ * the `moov` box is (start or end of the file). Note: some cameras write their local time there instead of UTC.
+ */
+export async function mp4CreationTimeMs(read: ReadBytes, size: number): Promise<number | undefined> {
+  try {
+    const moov = await findBox(read, 0, size, 'moov')
+    const mvhd = moov && (await findBox(read, moov.at, moov.end, 'mvhd'))
+    if (!mvhd) return undefined
+    const body = await read(mvhd.at, 12)
+    if (body.length < 8) return undefined
+    const view = new DataView(body.buffer, body.byteOffset, body.byteLength)
+    const seconds = body[0] === 1 ? (body.length < 12 ? Number.NaN : view.getUint32(4) * 2 ** 32 + view.getUint32(8)) : view.getUint32(4)
+    if (!Number.isFinite(seconds) || seconds === 0) return undefined
+    const ms = (seconds - MP4_EPOCH_S) * 1000
+    if (plausible(ms)) return ms
+    // before 1970 in the MP4 epoch: seconds since 1970 written by mistake
+    return seconds < MP4_EPOCH_S && plausible(seconds * 1000) ? seconds * 1000 : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Date of a QuickTime metadata entry (`com.apple.quicktime.creationdate`: "2024-06-12T10:15:30+0200", the start of
+ * the recording in local time with its offset) -> instant; undefined without a time and a time zone.
+ */
+export function quickTimeDateMs(text: string): number | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|([+-])(\d{2}):?(\d{2}))$/.exec(text.trim())
+  if (!m) return undefined
+  const minutes = m[7] === 'Z' ? 0 : (m[8] === '-' ? -1 : 1) * (Number(m[9]) * 60 + Number(m[10]))
+  const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])) - minutes * 60_000
+  return plausible(ms) ? ms : undefined
 }
