@@ -71,6 +71,12 @@ const laneCount = (page, lane) =>
     lane,
   )
 
+/**
+ * The 3D scene, loaded in its own chunk after the timeline shows: its WebGL canvas (three.js tags it) is there, so
+ * the export controller it holds is mounted.
+ */
+const waitForScene = (page) => page.waitForSelector('canvas[data-engine^="three.js"]', { timeout: STEP_MS })
+
 /** Takes the keyboard away from any field or button (shortcuts are ignored in a text field). */
 const blur = (page) => page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur())
 
@@ -146,6 +152,7 @@ const SCENARIOS = [
         return text.includes('Ouverture') && text.includes('Survol') && text.includes('Clôture')
       })
       assert(!(await page.$('#empty-title')), "l'accueil est resté affiché après le chargement de l'exemple")
+      await waitForScene(page)
     },
   },
   {
@@ -246,6 +253,7 @@ const SCENARIOS = [
     retries: 1,
     async run({ page }) {
       await until(page, () => !!document.querySelector('[role="group"][aria-label="Plans"]'))
+      await waitForScene(page)
       await exposeStores(page)
       // after a failed attempt: the previous export stopped first
       await until(
