@@ -34,7 +34,7 @@ export const TRACK_DASH_LABELS: Record<TrackDash, string> = { plein: 'Plein', ti
 export const MARKER_KINDS = ['boule', 'figurine', 'image'] as const
 export type MarkerKind = (typeof MARKER_KINDS)[number]
 
-export const MARKER_FIGURES = ['randonneur', 'coureur', 'cycliste', 'vtt', 'skieur', 'parapente', 'voiture'] as const
+export const MARKER_FIGURES = ['randonneur', 'alpiniste', 'coureur', 'cycliste', 'bikepacking', 'vtt', 'skieur', 'parapente', 'moto', 'voiture', 'avion'] as const
 export type MarkerFigure = (typeof MARKER_FIGURES)[number]
 
 export interface MarkerSettings {
@@ -58,12 +58,16 @@ export const MARKER_KIND_LABELS: Record<MarkerKind, string> = { boule: 'Boule', 
 
 export const MARKER_FIGURE_LABELS: Record<MarkerFigure, string> = {
   randonneur: 'Randonneur',
+  alpiniste: 'Alpiniste',
   coureur: 'Coureur',
   cycliste: 'Cycliste',
+  bikepacking: 'Bikepacking',
   vtt: 'VTT',
   skieur: 'Skieur',
   parapente: 'Parapente',
+  moto: 'Moto',
   voiture: 'Voiture',
+  avion: 'Avion léger',
 }
 
 // ---------------------------------------------------------------------------

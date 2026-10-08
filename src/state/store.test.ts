@@ -126,6 +126,28 @@ describe('removeTrack / clearTracks', () => {
     expect(st.bounds).toBeNull()
     expect(st.frameOrigin).toBeNull()
   })
+
+  it('setTrackColor recolours one track and keeps the playback', () => {
+    useAppStore.getState().addTracks([FR, CH])
+    useAppStore.getState().setProgress(0.5)
+    useAppStore.getState().setTrackColor('ch', '#ff0000')
+    const st = useAppStore.getState()
+    expect(st.tracks.map((t) => t.color)).toEqual(['#000000', '#ff0000'])
+    expect(st.playback.progress).toBe(0.5)
+    const before = useAppStore.getState()
+    useAppStore.getState().setTrackColor('ch', '#ff0000')
+    expect(useAppStore.getState()).toBe(before)
+  })
+
+  it('flyTrack puts the track first; no-op on the first or an unknown one', () => {
+    useAppStore.getState().addTracks([FR, CH, CA])
+    useAppStore.getState().flyTrack('ca')
+    expect(useAppStore.getState().tracks.map((t) => t.id)).toEqual(['ca', 'fr', 'ch'])
+    const before = useAppStore.getState()
+    useAppStore.getState().flyTrack('ca')
+    useAppStore.getState().flyTrack('nope')
+    expect(useAppStore.getState()).toBe(before)
+  })
 })
 
 describe('setPlanArea', () => {

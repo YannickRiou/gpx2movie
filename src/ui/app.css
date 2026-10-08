@@ -32,7 +32,7 @@
 
 .track {
   display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) auto;
+  grid-template-columns: 12px minmax(0, 1fr) auto auto;
   grid-template-rows: auto auto;
   column-gap: var(--space-2);
   align-items: center;
@@ -43,10 +43,47 @@
 
 .track__swatch {
   grid-row: 1 / span 2;
+  position: relative;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   border: 1px solid rgba(28, 42, 51, 0.35);
+  cursor: pointer;
+}
+
+/* the native colour picker, invisible over the swatch: a click on the swatch opens it */
+.track__color {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.track__swatch:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.track__fly {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+}
+
+.track__fly:hover:not(:disabled) {
+  background: var(--color-line);
 }
 
 .track__name {
@@ -65,7 +102,7 @@
 }
 
 .track__delete {
-  grid-column: 3;
+  grid-column: 4;
   grid-row: 1 / span 2;
   width: 28px;
   height: 28px;
