@@ -1,14 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { fitLines, fitText, posterLayout, truncate, wrapText } from './layout'
+import { LIST_NAME_SHARE, fitLines, fitText, fitTrackList, posterLayout, truncate, wrapText } from './layout'
 import type { Box, Measure, PosterLayout, PosterRows } from './layout'
 import { POSTER_FORMATS, POSTER_STYLES } from './settings'
 
 /** a glyph is half the font size wide */
 const measure: Measure = (text, px) => text.length * px * 0.5
 
-const FULL: PosterRows = { subtitle: true, figures: 5, profile: true, weather: true }
-const BARE: PosterRows = { subtitle: false, figures: 0, profile: false, weather: false }
-const ROWS = [FULL, BARE, { subtitle: true, figures: 3, profile: false, weather: true }, { subtitle: false, figures: 1, profile: true, weather: false }]
+const FULL: PosterRows = { subtitle: true, figures: 5, profile: true, weather: true, tracks: 0 }
+const BARE: PosterRows = { subtitle: false, figures: 0, profile: false, weather: false, tracks: 0 }
+/** the longest list (a ghost race keeps the weather of the lead) */
+const LIST: PosterRows = { subtitle: true, figures: 5, profile: false, weather: true, tracks: 6 }
+const ROWS = [
+  FULL,
+  BARE,
+  LIST,
+  { subtitle: true, figures: 3, profile: false, weather: true, tracks: 0 },
+  { subtitle: false, figures: 1, profile: true, weather: false, tracks: 0 },
+  { subtitle: true, figures: 5, profile: false, weather: false, tracks: 3 },
+]
 
 const EPS = 1e-6
 const inside = (inner: Box, outer: Box) =>
@@ -16,7 +25,7 @@ const inside = (inner: Box, outer: Box) =>
 const overlap = (a: Box, b: Box) => a.x < b.x + b.w - EPS && b.x < a.x + a.w - EPS && a.y < b.y + b.h - EPS && b.y < a.y + a.h - EPS
 
 function textBoxes(l: PosterLayout): Box[] {
-  return [l.title, l.subtitle, ...l.figures, l.profile, l.weather, l.credits].filter((b): b is Box => b !== null)
+  return [l.title, l.subtitle, ...l.figures, ...l.tracks, l.profile, l.weather, l.credits].filter((b): b is Box => b !== null)
 }
 
 const cases = POSTER_FORMATS.flatMap((f) => POSTER_STYLES.flatMap((style) => ROWS.map((rows) => ({ f, style, rows }))))
@@ -31,6 +40,7 @@ describe('posterLayout', () => {
     for (const v of [l.view.x, l.view.y, l.view.w, l.view.h]) expect(Number.isInteger(v)).toBe(true)
     const boxes = textBoxes(l)
     expect(l.figures).toHaveLength(rows.figures)
+    expect(l.tracks).toHaveLength(rows.tracks)
     expect(l.subtitle !== null).toBe(rows.subtitle)
     expect(l.profile !== null).toBe(rows.profile)
     expect(l.weather !== null).toBe(rows.weather)
@@ -66,12 +76,42 @@ describe('posterLayout', () => {
     expect(posterLayout(2160, 2160, 'broadcast', FULL).side).toBe(false)
   })
 
+  it('lists the tracks in one column, two on a square poster, filled column after column', () => {
+    const portrait = posterLayout(2480, 3508, 'editorial', LIST)
+    expect(new Set(portrait.tracks.map((b) => b.x)).size).toBe(1)
+    expect(new Set(posterLayout(4960, 3508, 'broadcast', LIST).tracks.map((b) => b.x)).size).toBe(1)
+    const square = posterLayout(2160, 2160, 'app', LIST).tracks
+    expect(new Set(square.map((b) => b.x)).size).toBe(2)
+    expect(square[1].y).toBeGreaterThan(square[0].y)
+    expect(square[3].x).toBeGreaterThan(square[2].x)
+  })
+
   it('gives more room to the view when there is less text', () => {
     expect(posterLayout(2480, 3508, 'editorial', BARE).view.h).toBeGreaterThan(posterLayout(2480, 3508, 'editorial', FULL).view.h)
   })
 })
 
 describe('text fitting', () => {
+  it('sets every line of the list at one size, its figures in columns as wide as their widest text', () => {
+    const lines = [
+      { distance: '12,4 km', ascent: 'D+ 850 m', date: '12/07/2026' },
+      { distance: '112,4 km', ascent: '', date: '' },
+    ]
+    const roomy = fitTrackList(measure, lines, 1000, 20, 10)
+    expect(roomy).toMatchObject({ px: 20, distance: 80, ascent: 80, date: 100, gap: 24 })
+    expect(roomy.name).toBeCloseTo(1000 - 260 - 3 * 24, 6)
+    // narrow: smaller, until the name keeps its share
+    const narrow = fitTrackList(measure, lines, 300, 20, 8)
+    expect(narrow.px).toBeLessThan(20)
+    expect(narrow.name).toBeGreaterThanOrEqual(300 * LIST_NAME_SHARE)
+    expect(narrow.name + narrow.distance + narrow.ascent + narrow.date + 3 * narrow.gap).toBeCloseTo(300, 6)
+    // no D+ nor date anywhere: no column, no gap for them
+    const bare = fitTrackList(measure, [{ distance: '5 km', ascent: '', date: '' }], 200, 20, 10)
+    expect(bare).toMatchObject({ ascent: 0, date: 0, name: 200 - 40 - 24 })
+    // too narrow even at the smallest size: the name gets what is left
+    expect(fitTrackList(measure, lines, 100, 20, 10)).toMatchObject({ px: 10, name: 0 })
+  })
+
   it('keeps the largest size that fits, shrinks a long text, then cuts it with an ellipsis', () => {
     expect(fitText(measure, 'Col', 100, 20, 10)).toEqual({ text: 'Col', px: 20 })
     const shrunk = fitText(measure, 'Tour du Mont-Blanc', 100, 20, 5)

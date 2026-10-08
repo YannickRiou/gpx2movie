@@ -109,6 +109,8 @@ export interface AppState {
   tracks: Track[]
   addTracks(tracks: Track[]): void
   removeTrack(id: string): void
+  /** the whole list at once (chaining tracks and its « Annuler »): same frame origin, playback back to the start */
+  replaceTracks(tracks: Track[]): void
   clearTracks(): void
   /** union of track bounds, null when no track */
   bounds: LonLatBounds | null
@@ -265,7 +267,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
   removeTrack(id) {
     const state = get()
     const tracks = state.tracks.filter((t) => t.id !== id)
-    if (tracks.length === state.tracks.length) return
+    if (tracks.length !== state.tracks.length) state.replaceTracks(tracks)
+  },
+
+  replaceTracks(tracks) {
+    const state = get()
     set({
       tracks,
       bounds: unionBounds(tracks),

@@ -30,6 +30,8 @@ export interface History {
   transaction(fn: () => void): void
   /** until the returned end is called, changes of the same keys form a single step whatever their spacing */
   beginGesture(): () => void
+  /** until the returned resume is called, no change is recorded (a run that puts every setting back at its end) */
+  suspend(): () => void
   /** forget every step (e.g. after opening a project) */
   clear(): void
   /** current state; a new object only when it changes (usable with useSyncExternalStore) */
@@ -79,6 +81,7 @@ export function createHistory<T extends object>(options: HistoryOptions<T>): His
   let batchDepth = 0
   let batchStart: T | null = null
   let gesture = false
+  let suspended = false
   let state: HistoryState = { canUndo: false, canRedo: false }
   const listeners = new Set<() => void>()
 
@@ -99,7 +102,7 @@ export function createHistory<T extends object>(options: HistoryOptions<T>): His
   }
 
   const unsubscribe = options.subscribe((next, previous) => {
-    if (restoring || next === previous) return
+    if (restoring || suspended || next === previous) return
     if (batchDepth > 0) {
       batchStart ??= previous
       return
@@ -162,6 +165,13 @@ export function createHistory<T extends object>(options: HistoryOptions<T>): His
       lastAt = -Infinity
       return () => {
         gesture = false
+        lastAt = -Infinity
+      }
+    },
+    suspend() {
+      suspended = true
+      return () => {
+        suspended = false
         lastAt = -Infinity
       }
     },

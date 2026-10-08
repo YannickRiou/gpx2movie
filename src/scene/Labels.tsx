@@ -1,10 +1,11 @@
 /**
  * Labels — names anchored on the draped relief, drawn inside WebGL so a canvas capture (video export)
- * includes them: tops of the climbs of the first track, GPX waypoints of every track, and every external
- * source registered in `labelSources.ts`.
+ * includes them: tops of the climbs of the first track, GPX waypoints of every track, points of interest placed by
+ * hand (`film.pois`), and every external source registered in `labelSources.ts`.
  *
  * Each label is a Sprite (sizeAttenuation off, so a constant size on screen) whose canvas texture holds an
- * ink panel with white text, a stem and an anchor dot in the accent of its kind. Sprites skip the depth
+ * ink panel with white text, a stem and an anchor dot in the accent of its kind (a point of interest has a pin
+ * in place of the accent stripe). Sprites skip the depth
  * test; instead, every frame, a label fades out when its line of sight passes under the relief or when it
  * is far away, and colliding labels are dropped by priority; they also fade out while an opening or closing
  * card of the film overlay is shown. Opacity is a pure function of the view, the progress, the film time and
@@ -30,6 +31,7 @@ import {
   labelOpacity,
   lineOfSightClearance,
   occlusionFade,
+  poiLabels,
   resolveOverlaps,
   spriteScaleForPixels,
   waypointLabels,
@@ -57,6 +59,11 @@ const PAD_X = 8
 const STRIPE_W = 3
 const STEM_H = 10
 const DOT_R = 4
+/** Pin of a point of interest: Lucide « map-pin » (24 × 24 view box), `PIN_PX` wide, `PIN_X` from the left, before the text. */
+const PIN_PX = 14
+const PIN_X = 6
+const PIN_GAP = 4
+const PIN_PATH = 'M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0'
 /** Texture pixels per CSS pixel (sharp on high-density screens). */
 const TEXTURE_SCALE = 2
 const MAX_CHARS = 40
@@ -86,7 +93,10 @@ function drawLabelTexture(rawText: string, kind: LandmarkKind): LabelTexture | n
   if (!ctx) return null
   const s = TEXTURE_SCALE
   ctx.font = labelFont(s)
-  const width = Math.ceil(STRIPE_W + 2 * PAD_X + ctx.measureText(text).width / s)
+  const pin = kind === 'poi'
+  // left of the text: the accent stripe and its padding, or a padding, the pin and a gap
+  const lead = pin ? PIN_X + PIN_PX + PIN_GAP : STRIPE_W + PAD_X
+  const width = Math.ceil(lead + PAD_X + ctx.measureText(text).width / s)
   const height = PANEL_H + STEM_H + 2 * DOT_R + 2
   canvas.width = width * s
   canvas.height = height * s
@@ -102,13 +112,14 @@ function drawLabelTexture(rawText: string, kind: LandmarkKind): LabelTexture | n
   ctx.fillRect(0, 0, width, PANEL_H)
   ctx.globalAlpha = 1
   ctx.fillStyle = accent
-  ctx.fillRect(0, 0, STRIPE_W, PANEL_H)
+  if (!pin) ctx.fillRect(0, 0, STRIPE_W, PANEL_H)
   ctx.restore()
+  if (pin) drawPin(ctx, PIN_X, (PANEL_H - PIN_PX) / 2, accent)
 
   ctx.font = labelFont(1)
   ctx.fillStyle = LABEL_TEXT_COLOR
   ctx.textBaseline = 'middle'
-  ctx.fillText(text, STRIPE_W + PAD_X, PANEL_H / 2 + 0.5)
+  ctx.fillText(text, lead, PANEL_H / 2 + 0.5)
 
   const cx = width / 2
   const dotY = PANEL_H + STEM_H + 1 + DOT_R
@@ -130,6 +141,21 @@ function drawLabelTexture(rawText: string, kind: LandmarkKind): LabelTexture | n
   texture.minFilter = LinearFilter
   texture.generateMipmaps = false
   return { texture, width, height, anchorY: (DOT_R + 1) / height }
+}
+
+/** The pin of a point of interest, its top left corner at (x, y). */
+function drawPin(ctx: CanvasRenderingContext2D, x: number, y: number, color: string): void {
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.scale(PIN_PX / 24, PIN_PX / 24)
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2.5
+  ctx.lineJoin = 'round'
+  ctx.stroke(new Path2D(PIN_PATH))
+  ctx.beginPath()
+  ctx.arc(12, 10, 3, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.restore()
 }
 
 interface LabelEntry {
@@ -230,6 +256,7 @@ export function Labels() {
   const tracks = useAppStore((s) => s.tracks)
   const show = useAppStore((s) => s.settings.labels)
   const exaggeration = useAppStore((s) => s.settings.exaggeration)
+  const pois = useAppStore((s) => s.settings.film.pois)
   const sources = useLabelSources((s) => s.sources)
   const { engine, frame } = useTerrainContext()
 
@@ -244,9 +271,10 @@ export function Labels() {
     const first = tracks[0]
     if (show.climbs && first) out.push(...climbLabels(first, climbsOf(first)))
     if (show.waypoints) out.push(...waypointLabels(tracks))
+    out.push(...poiLabels(pois))
     out.push(...externalLabels(sources))
     return out
-  }, [tracks, show, sources])
+  }, [tracks, show, pois, sources])
 
   // Redraw the textures once the web font is available (the first ones may use the fallback font).
   useEffect(() => {

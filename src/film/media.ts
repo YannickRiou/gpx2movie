@@ -20,6 +20,8 @@
 import { create } from 'zustand'
 import { fitWithin } from '../overlay/assets'
 import { useAppStore } from '../state/store'
+import { isValidBeats } from './beats'
+import type { MusicBeats } from './beats'
 import { EXIF_SCAN_BYTES, parseExif } from './exif'
 import type { PhotoExif } from './exif'
 import type { Film, FilmMedia } from './model'
@@ -42,6 +44,8 @@ export interface MediaAsset {
   durationS?: number
   /** sound: loudest level (0–1) of each slice of the file, evenly spread over it (the waveform of the timeline) */
   peaks?: number[]
+  /** sound: its tempo and beats (`detectBeats`; absent for a file read before they were, found on demand) */
+  beats?: MusicBeats
   /** video: recording start read from the file (ms since epoch), to sync it with the track */
   recordedMs?: number
   /** video: `recordedMs` is only guessed from the date of the file (its last change minus its length) */
@@ -80,7 +84,9 @@ const isPeaks = (v: unknown) =>
 export function isValidMediaAsset(v: unknown): v is MediaAsset {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return false
   const a = v as Record<string, unknown>
-  if (isAudioDataUrl(a.data)) return isLength(a.durationS) && isPeaks(a.peaks) && (a.name === undefined || typeof a.name === 'string')
+  if (isAudioDataUrl(a.data)) {
+    return isLength(a.durationS) && isPeaks(a.peaks) && (a.beats === undefined || isValidBeats(a.beats)) && (a.name === undefined || typeof a.name === 'string')
+  }
   const video = isVideoDataUrl(a.data)
   const recorded = a.recordedMs === undefined || (video && typeof a.recordedMs === 'number' && Number.isFinite(a.recordedMs))
   return (
@@ -104,11 +110,21 @@ export function isAudioAsset(asset: Pick<MediaAsset, 'data'>): boolean {
   return asset.data.startsWith('data:audio/')
 }
 
+/** A damaged `beats` of a sound is dropped, not the sound: the beats are found again on demand. */
+function withoutBadBeats(asset: unknown): unknown {
+  if (asset === null || typeof asset !== 'object' || !('beats' in asset) || isValidBeats(asset.beats)) return asset
+  const { beats: _beats, ...rest } = asset
+  return rest
+}
+
 /** Valid pictures of a loaded media table (the others are left out). */
 export function sanitizeMediaTable(raw: unknown): MediaTable {
   const media: MediaTable = {}
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return media
-  for (const [id, asset] of Object.entries(raw)) if (id && isValidMediaAsset(asset)) media[id] = asset
+  for (const [id, asset] of Object.entries(raw)) {
+    const entry = withoutBadBeats(asset)
+    if (id && isValidMediaAsset(entry)) media[id] = entry
+  }
   return media
 }
 

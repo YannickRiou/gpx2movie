@@ -1,10 +1,11 @@
 /**
  * Web platform: file input, download through an object URL, localStorage (the behaviour of the static site); files
- * written while produced through `showSaveFilePicker` (File System Access, Chrome and Edge); offline tiles in Cache
- * Storage (HTTPS or localhost only).
+ * written while produced through `showSaveFilePicker` (File System Access, Chrome and Edge); offline tiles and
+ * « Mes projets » in Cache Storage (HTTPS or localhost only).
  */
 import { acceptAttribute, droppedFiles, keyValueStore, pickerTypes, saveFilters } from './platform'
 import type { Capabilities, Platform, SaveFileOptions, WritableFile } from './platform'
+import { createProjectLibrary, createWebLibraryFiles } from './projectLibrary'
 import { createWebTileCache } from './tileCache'
 
 /** The part of File System Access used here (not in the DOM typings yet). */
@@ -102,5 +103,6 @@ export function createWebPlatform(capabilities: Capabilities): Platform {
     createWritableFile,
     droppedFiles,
     tileCache: globalThis.caches ? createWebTileCache(globalThis.caches, globalThis.navigator?.storage) : null,
+    projectLibrary: globalThis.caches ? createProjectLibrary(createWebLibraryFiles(globalThis.caches, globalThis.navigator?.storage)) : null,
   }
 }

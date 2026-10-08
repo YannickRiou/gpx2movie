@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-video-sound"
+description = "Enables the video_sound command without any pre-configured scope."
+commands.allow = ["video_sound"]
+
+[[permission]]
+identifier = "deny-video-sound"
+description = "Denies the video_sound command without any pre-configured scope."
+commands.deny = ["video_sound"]

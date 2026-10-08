@@ -1,14 +1,16 @@
 /**
- * Label model shared by every source of 3D labels on the relief (climbs, GPX waypoints, external sources
- * registered in `labelSources.ts`), and the pure screen-space rules used by `Labels.tsx`.
+ * Label model shared by every source of 3D labels on the relief (climbs, GPX waypoints, points of interest placed
+ * by hand, external sources registered in `labelSources.ts`), and the pure screen-space rules used by `Labels.tsx`.
  *
  * No React, no renderer: everything here is unit-tested.
  */
 import type { Track } from '../core/types'
+import type { FilmPoi } from '../film/model'
 import type { Climb, ClimbCategory } from '../flyover/climbs'
 import { formatNumber } from '../ui/format'
 
-export type LandmarkKind = 'climb' | 'waypoint' | 'peak' | 'pass' | 'hut' | 'water' | 'place' | 'other'
+/** 'poi': a point of interest placed by hand (drawn with a pin instead of the stripe). */
+export type LandmarkKind = 'climb' | 'waypoint' | 'peak' | 'pass' | 'hut' | 'water' | 'place' | 'other' | 'poi'
 
 export interface LandmarkLabel {
   /** unique across every source (prefix it with the source id) */
@@ -36,12 +38,15 @@ export const LABEL_KIND_ACCENTS: Readonly<Record<LandmarkKind, string>> = {
   hut: '#EAE4D6', // --color-card
   place: '#D6CDBB', // --color-line
   other: '#D6CDBB', // --color-line
+  poi: '#FF8A5C', // --color-accent-light
 }
 export const LABEL_PANEL_COLOR = '#1C2A33' // --color-ink
 export const LABEL_TEXT_COLOR = '#FFFFFF' // --color-white
 
 /** Priority of waypoint labels; climbs come above them, hardest first (`climbPriority`). */
 export const WAYPOINT_PRIORITY = 50
+/** Points of interest placed by hand come above every other label: the user named them. */
+export const POI_PRIORITY = 200
 const CATEGORY_RANK: Readonly<Record<ClimbCategory, number>> = { '4': 1, '3': 2, '2': 3, '1': 4, HC: 5 }
 
 export function climbPriority(category: ClimbCategory | null): number {
@@ -87,6 +92,13 @@ export function waypointLabels(tracks: readonly Track[]): LandmarkLabel[] {
     })
   }
   return out
+}
+
+/** One label per point of interest placed by hand, except those whose name is blank. */
+export function poiLabels(pois: readonly FilmPoi[]): LandmarkLabel[] {
+  return pois
+    .filter((poi) => poi.name.trim() !== '')
+    .map((poi) => ({ id: `poi:${poi.id}`, lon: poi.lon, lat: poi.lat, text: poi.name.trim(), kind: 'poi', priority: POI_PRIORITY }))
 }
 
 // ---------------------------------------------------------------------------

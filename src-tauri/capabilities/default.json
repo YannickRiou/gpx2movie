@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main window: open and save dialogs; reading and writing only the files picked in those dialogs (the dialog plugin adds each picked path to the fs scope). A film is written through a file handle (open, seek, write) and removed when its export does not finish. Offline tile packs: files under $APPDATA/tiles only (mkdir, read_dir, exists added, scope limited to that folder).",
+  "description": "Main window: open and save dialogs; reading and writing only the files picked in those dialogs (the dialog plugin adds each picked path to the fs scope). A film is written through a file handle (open, seek, write) and removed when its export does not finish. Offline tile packs and « Mes projets »: files under $APPDATA/tiles and $APPDATA/projects only (mkdir, read_dir, exists added, scope limited to those folders). Native video encoder (system ffmpeg, src/video.rs): its six commands, writing only a file picked in the save dialog.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -16,9 +16,20 @@
     "fs:allow-mkdir",
     "fs:allow-read-dir",
     "fs:allow-exists",
+    "allow-video-available",
+    "allow-video-sound",
+    "allow-video-open",
+    "allow-video-frame",
+    "allow-video-finish",
+    "allow-video-cancel",
     {
       "identifier": "fs:scope",
-      "allow": [{ "path": "$APPDATA/tiles" }, { "path": "$APPDATA/tiles/**" }]
+      "allow": [
+        { "path": "$APPDATA/tiles" },
+        { "path": "$APPDATA/tiles/**" },
+        { "path": "$APPDATA/projects" },
+        { "path": "$APPDATA/projects/**" }
+      ]
     }
   ]
 }

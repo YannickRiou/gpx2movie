@@ -82,6 +82,10 @@
   background: var(--color-line);
 }
 
+.tracks__chain {
+  margin-top: var(--space-3);
+}
+
 .tracks__empty {
   padding: var(--space-3);
   border-radius: var(--radius-md);
@@ -381,6 +385,50 @@
 
 .project__row > [type='submit'] {
   flex: none;
+}
+
+/* « Mes projets »: one card per project, the open one outlined */
+.library {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.library__item {
+  display: grid;
+  /* the card never grows past the panel (long names, three buttons) */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+}
+
+.library__item--current {
+  border-color: var(--color-accent);
+  background: var(--color-card);
+}
+
+.library__item > .project__row {
+  margin-top: var(--space-1);
+}
+
+.library__item > .project__row > .btn {
+  padding-inline: var(--space-2);
+}
+
+.library__name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.library__badge {
+  margin-left: var(--space-2);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-accent-strong);
 }
 
 /* « Hors ligne » packs: name and figures, then « Supprimer » */
@@ -748,6 +796,14 @@
   opacity: 0.55;
 }
 
+/* beats of the music: thin marks from the top, longer at a bar start */
+.film-tl__wave .film-tl__beats {
+  fill: none;
+  stroke: var(--color-glacier);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
 /* empty music lane: where to drop a file */
 .film-tl__empty {
   position: absolute;
@@ -1055,6 +1111,27 @@
 .landmark__meta {
   font-size: 12px;
   color: var(--color-ink-soft);
+}
+
+/* Points of interest placed by hand (PoiPanel): name field, « Arrêt », delete */
+.pois {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.poi {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.poi > .input {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* ==========================================================================

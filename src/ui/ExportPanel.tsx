@@ -6,10 +6,16 @@ import {
   buildBatchJobs,
   estimateBatch,
   formatKey,
+  trackFiles,
+  trackFraction,
+  trackProgressLabel,
   useBatchStore,
+  type BatchContext,
   type BatchJobState,
+  type TrackRunState,
 } from '../export/batch'
-import { ALPHA_CANDIDATES, pickCodec, videoBitrate, type CodecCandidate } from '../export/encoder'
+import { videoBitrate, type CodecCandidate } from '../export/encoder'
+import { exportCodec } from '../export/nativeEncoder'
 import {
   EXPORT_HOLD_END_S,
   EXPORT_HOLD_START_S,
@@ -33,7 +39,7 @@ import {
   type StillType,
 } from '../export/store'
 import { getPlatform, videoEncoderMissingHint } from '../platform'
-import { canPickFolder, pickFolder, type WritableFolder } from '../platform/folder'
+import { canPickFolder, pickFolder, pickReadableFolder, type ReadableFolder, type WritableFolder } from '../platform/folder'
 import { startPoster } from '../poster/export'
 import { PosterPanel } from '../poster/PosterPanel'
 import { usePacing } from '../scene/usePacing'
@@ -129,8 +135,7 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   const [probe, setProbe] = useState<CodecProbe | null>(null)
   useEffect(() => {
     let alive = true
-    const candidates = overlayOnly ? ALPHA_CANDIDATES : undefined
-    void pickCodec({ width, height, fps: video.fps, quality: video.quality }, undefined, candidates).then((codec) => {
+    void exportCodec({ width, height, fps: video.fps, quality: video.quality, transparent: overlayOnly }).then((codec) => {
       if (alive) setProbe({ key: probeKey, codec })
     })
     return () => {
@@ -305,12 +310,12 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         <p className="field__hint" role="alert">
           Ce navigateur ne sait pas encoder une vidéo WebM (VP9) de {formatNumber(width)} × {formatNumber(height)} pixels,
           nécessaire à l'habillage transparent :{' '}
-          {videoEncoderMissingHint() ?? 'exportez-le depuis Chrome ou Edge, ou choisissez une résolution plus petite.'}
+          {videoEncoderMissingHint(undefined, true) ?? 'exportez-le depuis Chrome ou Edge, ou choisissez une résolution plus petite.'}
         </p>
       )}
       {codec === null && !overlayOnly && (
         <p className="field__hint" role="alert">
-          Ce navigateur ne sait pas encoder une vidéo de {formatNumber(width)} × {formatNumber(height)} pixels :
+          Ce navigateur ne sait pas encoder une vidéo de {formatNumber(width)} × {formatNumber(height)} pixels :{' '}
           {videoEncoderMissingHint() ?? 'choisissez une résolution plus petite.'}
         </p>
       )}
@@ -471,9 +476,36 @@ function announceBatch(states: readonly BatchJobState[], folderName: string | nu
   else showToast({ kind: 'success', text: `${files} exporté${done > 1 ? 's' : ''}${folderName ? ` dans ${folderName}` : ''}` })
 }
 
+/** Line of a track in the result list of « Un film par trace ». */
+function trackStatusText({ status, error, jobs }: TrackRunState): string {
+  if (status === 'pending') return 'en attente'
+  if (status === 'running') return 'en cours…'
+  if (status === 'canceled') return 'annulé'
+  if (status === 'error') return `échec : ${error ?? 'inconnu'}`
+  return `enregistré : ${jobs.map((j) => j.result?.fileName).join(', ')}`
+}
+
+/** Message at the end of « Un film par trace ». */
+function announceTrackFilms(tracks: readonly TrackRunState[], folderName: string): void {
+  const { done, failed, canceled } = batchSummary(tracks)
+  const plural = (n: number) => (n > 1 ? 's' : '')
+  if (failed > 0) {
+    showToast({ kind: 'error', text: `Un film par trace : ${done} trace${plural(done)} sur ${tracks.length}, ${failed} échec${plural(failed)}` })
+  } else if (canceled > 0) showToast({ kind: 'info', text: `Un film par trace annulé (${done} trace${plural(done)} faite${plural(done)})` })
+  else showToast({ kind: 'success', text: `Films de ${done} trace${plural(done)} exportés dans ${folderName}` })
+}
+
+/** « 3 traces dans « Saison » : a.gpx, b.fit, c.gpx… » */
+function trackFolderText(folder: ReadableFolder, files: readonly { name: string }[]): string {
+  if (files.length === 0) return `Aucun fichier GPX ou FIT dans « ${folder.name} ».`
+  const names = files.slice(0, 3).map((f) => f.name).join(', ')
+  return `${files.length} trace${files.length > 1 ? 's' : ''} dans « ${folder.name} » : ${names}${files.length > 3 ? '…' : ''}`
+}
+
 /**
  * « Plusieurs formats »: films ticked as aspect × resolution, plus a still image and the poster, with the total
  * estimate and one « Tout exporter » (src/export/batch.ts). Frame rate and quality are those of the « Vidéo » mode.
+ * Source « Un film par trace »: the films ticked for each GPX / FIT file of a folder, into an output folder.
  */
 function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; modes: ReactNode; hidden: boolean }) {
   const video = useAppStore((s) => s.settings.video)
@@ -484,12 +516,18 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   const exportBusy = useExportStore((s) => isExportBusy(s.phase))
   const fraction = useExportStore((s) => (s.phase === 'finalizing' ? 1 : s.frameCount > 0 ? s.frame / s.frameCount : 0))
   const rate = useExportStore((s) => s.secondsPerMegapixel)
-  const { phase, selection, jobs: states, folderName, cancelRequested, select } = useBatchStore()
+  const { phase, selection, jobs: states, tracks: trackRuns, folderName, cancelRequested, select } = useBatchStore()
   const id = useId()
   const running = phase === 'running'
   const busy = running || exportBusy
   const capabilities = getPlatform().capabilities
   const toFolder = capabilities.canStreamToDisk && canPickFolder(capabilities)
+  // « Un film par trace »: the track files of the folder picked, the films written into an output folder
+  const [perTrack, setPerTrack] = useState(false)
+  const [trackFolder, setTrackFolder] = useState<ReadableFolder | null>(null)
+  const sources = useMemo(() => (trackFolder ? trackFiles(trackFolder.files) : []), [trackFolder])
+  const runningTrack = trackRuns.find((t) => t.status === 'running')
+  const tracksFinished = trackRuns.filter((t) => t.status !== 'pending' && t.status !== 'running').length
 
   const jobs = useMemo(() => buildBatchJobs(selection, video), [selection, video])
   const films = useMemo(() => jobs.flatMap((j) => (j.kind === 'video' ? [j] : [])), [jobs])
@@ -506,7 +544,7 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   useEffect(() => {
     let alive = true
     void Promise.all(
-      films.map(async (j) => [j.key, await pickCodec({ width: j.width, height: j.height, fps: video.fps, quality: video.quality })] as const),
+      films.map(async (j) => [j.key, await exportCodec({ width: j.width, height: j.height, fps: video.fps, quality: video.quality })] as const),
     ).then((entries) => {
       if (alive) setProbe({ key: probeKey, codecs: Object.fromEntries(entries) })
     })
@@ -531,6 +569,14 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   const toggle = (key: string, on: boolean) =>
     select({ formats: on ? [...selection.formats, key] : selection.formats.filter((k) => k !== key) })
 
+  /** What both sources share (the folder aside). */
+  const shared = (): Pick<BatchContext, 'still' | 'containerOf' | 'startPoster' | 'save'> => ({
+    still: { progress: useAppStore.getState().playback.progress, type: 'image/png' },
+    containerOf: async (j) => (await exportCodec({ width: j.width, height: j.height, fps: video.fps, quality: video.quality }))?.container ?? null,
+    startPoster,
+    save: (r) => r.url && download(r.url, r.fileName),
+  })
+
   const start = () => {
     if (!track || jobs.length === 0) return
     // asked now: the browser's folder picker needs this click; null = closed (no export), undefined = in memory
@@ -552,14 +598,34 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
           holdStartS: EXPORT_HOLD_START_S,
           holdEndS: EXPORT_HOLD_END_S,
         },
-        still: { progress: useAppStore.getState().playback.progress, type: 'image/png' },
+        ...shared(),
         folder: picked ?? null,
-        containerOf: async (j) => (await pickCodec({ width: j.width, height: j.height, fps: video.fps, quality: video.quality }))?.container ?? null,
-        startPoster,
-        save: (r) => r.url && download(r.url, r.fileName),
       })
       announceBatch(states, picked?.name ?? null)
     })
+  }
+
+  const reason = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+  const chooseTrackFolder = () => {
+    // called from the click: the browser's folder picker needs it
+    void pickReadableFolder(capabilities).then(
+      (folder) => folder && setTrackFolder(folder),
+      (error: unknown) => showToast({ kind: 'error', text: `Impossible de lire ce dossier : ${reason(error)}` }),
+    )
+  }
+
+  const startPerTrack = () => {
+    if (sources.length === 0 || jobs.length === 0) return
+    // asked now: the browser's folder picker needs this click; null = closed (no export)
+    void pickFolder(capabilities).then(
+      async (folder) => {
+        if (!folder) return
+        const tracks = await useBatchStore.getState().runTracks(sources, jobs, { ...shared(), folder })
+        announceTrackFilms(tracks, folder.name)
+      },
+      (error: unknown) => showToast({ kind: 'error', text: `Impossible d'écrire dans ce dossier : ${reason(error)}` }),
+    )
   }
 
   return (
@@ -580,6 +646,33 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         </button>
       )}
       {modes}
+
+      <fieldset className="field fieldset" disabled={busy}>
+        <legend className="field__label">Source</legend>
+        <div className="segmented">
+          <label className="segmented__option">
+            <input type="radio" name={`${id}-source`} checked={!perTrack} onChange={() => setPerTrack(false)} />
+            Ce film
+          </label>
+          <label className="segmented__option" title={toFolder ? undefined : "Avec Chrome, Edge ou l'application de bureau"}>
+            <input type="radio" name={`${id}-source`} checked={perTrack} disabled={!toFolder} onChange={() => setPerTrack(true)} />
+            Un film par trace
+          </label>
+        </div>
+      </fieldset>
+      {perTrack && (
+        <div className="field">
+          <button type="button" className="btn btn--secondary btn--block" onClick={chooseTrackFolder} disabled={busy}>
+            <Icon name="folder-open" size={18} />
+            {trackFolder ? 'Changer de dossier…' : 'Choisir le dossier des traces…'}
+          </button>
+          <p className="field__hint">
+            {trackFolder
+              ? trackFolderText(trackFolder, sources)
+              : "Les fichiers cochés, pour chaque fichier GPX ou FIT du dossier, avec les réglages actuels. Les arrêts sont refaits pour chaque trace ; textes, photos, vidéos et points d'intérêt posés à la main ne sont pas repris, la musique l'est. Vos traces reviennent à la fin."}
+          </p>
+        </div>
+      )}
 
       <fieldset className="field fieldset" disabled={busy}>
         <legend className="field__label">Formats</legend>
@@ -622,17 +715,24 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         </label>
       </fieldset>
 
-      <p className="export__summary">
-        {estimate.files} fichier{estimate.files > 1 ? 's' : ''} · {formatNumber(estimate.frames)} images
-        {estimate.bytes > 0 && ` · ≈ ${formatMegabytes(estimate.bytes)}`}
-        {estimate.seconds !== null && ` · ≈ ${formatClock(estimate.seconds)} de rendu`}
-      </p>
+      {perTrack ? (
+        <p className="export__summary">
+          {sources.length} trace{sources.length > 1 ? 's' : ''} × {jobs.length} fichier{jobs.length > 1 ? 's' : ''} ·{' '}
+          {sources.length * jobs.length} fichier{sources.length * jobs.length > 1 ? 's' : ''} en tout
+        </p>
+      ) : (
+        <p className="export__summary">
+          {estimate.files} fichier{estimate.files > 1 ? 's' : ''} · {formatNumber(estimate.frames)} images
+          {estimate.bytes > 0 && ` · ≈ ${formatMegabytes(estimate.bytes)}`}
+          {estimate.seconds !== null && ` · ≈ ${formatClock(estimate.seconds)} de rendu`}
+        </p>
+      )}
       <p className="field__hint">
         {video.fps} i/s, qualité {QUALITIES.find((q) => q.value === video.quality)?.label.toLowerCase()} (mode « Vidéo »).{' '}
         {toFolder
           ? 'Un dossier vous est demandé : chaque fichier y est écrit au fur et à mesure.'
           : "Chaque fichier se télécharge dès qu'il est prêt."}
-        {estimate.seconds === null && films.length > 0 && ' Durée estimée après un premier film exporté.'}
+        {!perTrack && estimate.seconds === null && films.length > 0 && ' Durée estimée après un premier film exporté.'}
       </p>
       {warnsInMemory(estimate.bytes, toFolder) && (
         <p className="field__hint">Au-delà de 1,5 Go en tout, les films gardés en mémoire peuvent saturer l'onglet.</p>
@@ -646,7 +746,12 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
 
       {!busy && (
         <div className="export__actions">
-          <button type="button" className="btn btn--primary" onClick={start} disabled={!track || jobs.length === 0}>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={perTrack ? startPerTrack : start}
+            disabled={jobs.length === 0 || (perTrack ? sources.length === 0 : !track)}
+          >
             <Icon name="download" size={18} />
             Tout exporter
           </button>
@@ -655,13 +760,27 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
 
       {running && (
         <div className="field">
-          <progress
-            className="export__progress"
-            aria-label="Progression de l'export en lot"
-            max={Math.max(1, states.length)}
-            value={finished + (states.some((s) => s.status === 'running') ? fraction : 0)}
-          />
-          <p className="field__hint">{batchProgressLabel(states, fraction) || 'Préparation…'}</p>
+          {trackRuns.length > 0 ? (
+            <>
+              <progress
+                className="export__progress"
+                aria-label="Progression de l'export par trace"
+                max={trackRuns.length}
+                value={tracksFinished + (runningTrack ? trackFraction(runningTrack, fraction) : 0)}
+              />
+              <p className="field__hint">{trackProgressLabel(trackRuns, fraction)}</p>
+            </>
+          ) : (
+            <>
+              <progress
+                className="export__progress"
+                aria-label="Progression de l'export en lot"
+                max={Math.max(1, states.length)}
+                value={finished + (states.some((s) => s.status === 'running') ? fraction : 0)}
+              />
+              <p className="field__hint">{batchProgressLabel(states, fraction) || 'Préparation…'}</p>
+            </>
+          )}
           <button
             type="button"
             className="btn btn--secondary btn--block"
@@ -670,6 +789,20 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
           >
             Tout annuler
           </button>
+        </div>
+      )}
+
+      {trackRuns.length > 0 && (
+        <div className="field">
+          {folderName && <p className="field__hint">Dossier : {folderName}</p>}
+          <ul className="batch-results">
+            {trackRuns.map((t, i) => (
+              <li key={i} className="batch-results__item">
+                <span className="batch-results__label">{t.name}</span>
+                <span className="field__hint">{trackStatusText(t)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -697,7 +830,7 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
       )}
 
       <p className="visually-hidden" role="status">
-        {running ? batchProgressLabel(states, 0) : ''}
+        {running ? (trackRuns.length > 0 ? trackProgressLabel(trackRuns, 0) : batchProgressLabel(states, 0)) : ''}
       </p>
     </section>
   )

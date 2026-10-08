@@ -4,10 +4,12 @@
  * by the dialog plugin, so the capabilities (src-tauri/capabilities) grant no other path.
  * Storage stays localStorage: the webview keeps it in the app data folder. A film is written while it is encoded
  * through a file handle (`open`, `seek`, `write`), removed if the export does not finish. Offline tiles are files
- * under `<app data>/tiles/` (the only folder the capability adds to the fs scope).
+ * under `<app data>/tiles/`, « Mes projets » under `<app data>/projects/` (the only folders the capability adds to the
+ * fs scope).
  */
 import { droppedFiles, fileNameOf, keyValueStore, mimeTypeOf, saveFilters } from './platform'
 import type { Capabilities, FileFilter, Platform, SaveFileOptions, SaveOutcome, WritableFile } from './platform'
+import { createDesktopLibraryFiles, createProjectLibrary } from './projectLibrary'
 import { createDesktopTileCache } from './tileCache'
 
 const dialogFilters = (filters: readonly FileFilter[]) => filters.map((f) => ({ name: f.name, extensions: [...f.extensions] }))
@@ -35,6 +37,7 @@ export async function openWritablePath(path: string): Promise<WritableFile> {
   let state: 'open' | 'closed' | 'discarded' = 'open'
   return {
     fileName: fileNameOf(path),
+    path,
     async write(data, position) {
       if (position !== cursor) await file.seek(position, fs.SeekMode.Start)
       for (let offset = 0; offset < data.length; ) {
@@ -79,5 +82,6 @@ export function createDesktopPlatform(capabilities: Capabilities): Platform {
     createWritableFile,
     droppedFiles,
     tileCache: createDesktopTileCache(() => import('@tauri-apps/plugin-fs')),
+    projectLibrary: createProjectLibrary(createDesktopLibraryFiles(() => import('@tauri-apps/plugin-fs'))),
   }
 }
