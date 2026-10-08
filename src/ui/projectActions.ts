@@ -73,6 +73,17 @@ export async function openFiles(files: readonly File[]): Promise<void> {
   }
 }
 
+/** « Choisir un fichier », « Ajouter » : GPX / FIT files to import (dialog on the desktop). */
+export async function chooseTracksToImport(): Promise<void> {
+  importTrackFiles(await getPlatform().openFiles({ filters: [{ name: 'Traces GPX ou FIT', extensions: ['gpx', 'fit'] }], multiple: true }))
+}
+
+/** « Ouvrir un projet… » : one project file (dialog on the desktop). */
+export async function chooseProjectToOpen(): Promise<void> {
+  const files = await getPlatform().openFiles({ filters: [{ name: 'Projet OpenFlyover', extensions: ['json'] }] })
+  if (files.length > 0) await openFiles(files)
+}
+
 /** « Ouvrir » : file picker (dialog on the desktop) for tracks and a project. */
 export async function chooseFilesToOpen(): Promise<void> {
   const files = await getPlatform().openFiles({

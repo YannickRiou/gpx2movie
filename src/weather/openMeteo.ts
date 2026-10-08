@@ -2,11 +2,12 @@
  * Historical weather of an outing from the Open-Meteo archive (https://open-meteo.com, no key, CC BY 4.0,
  * free tier non commercial; see docs/sources.md). A few places are sampled along the track, the hourly
  * values of the recorded days are fetched in one request and cached per place and UTC day, in memory and in
- * localStorage, so a track is fetched once.
+ * the platform storage (localStorage), so a track is fetched once.
  *
  * No DOM beyond `fetch` and an optional `Storage`; no React, no Three.
  */
 import { samplePath, type TrackPath } from '../flyover/path'
+import { getPlatform } from '../platform'
 import { WEATHER_VARIABLES, type WeatherSeries, type WeatherStation, type WeatherVariable } from './series'
 
 export const OPEN_METEO_ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive'
@@ -216,20 +217,20 @@ interface StoredEntry {
   day: WeatherDay
 }
 
-function defaultStorage(): Storage | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage
-  } catch {
-    return null
-  }
+type CacheStorage = Pick<Storage, 'getItem' | 'setItem'>
+
+/** The platform storage (same key as when it was localStorage directly: the days already cached are kept). */
+function platformStorage(): CacheStorage {
+  const storage = getPlatform().storage
+  return { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value) }
 }
 
 /**
- * Memory cache backed by `storage` (localStorage by default; null = memory only). The stored map holds at
+ * Memory cache backed by `storage` (the platform storage by default; null = memory only). The stored map holds at
  * most `maxStored` days (~1.5 kB each), the least recently used ones evicted. Every storage access is guarded:
  * a full, blocked or corrupt storage only loses persistence.
  */
-export function createWeatherCache(storage: Storage | null = defaultStorage(), maxStored = MAX_STORED_DAYS): WeatherCache {
+export function createWeatherCache(storage: CacheStorage | null = platformStorage(), maxStored = MAX_STORED_DAYS): WeatherCache {
   const memory = new Map<string, WeatherDay>()
   let stored: Record<string, StoredEntry> | null = null
 

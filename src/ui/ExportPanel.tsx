@@ -11,7 +11,16 @@ import {
   type VideoQuality,
   type VideoSettings,
 } from '../export/schedule'
-import { isExportBusy, stillBaseName, useExportStore, type StillType } from '../export/store'
+import {
+  chooseVideoDestination,
+  isExportBusy,
+  stillBaseName,
+  useExportStore,
+  videoFileName,
+  warnsInMemory,
+  type ExportResult,
+  type StillType,
+} from '../export/store'
 import { getPlatform, videoEncoderMissingHint } from '../platform'
 import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
@@ -86,7 +95,8 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
   const { phase, frame, frameCount, etaS, result, error, timings } = useExportStore()
   const id = useId()
   const [stillType, setStillType] = useState<StillType>('image/png')
-  const downloadedRef = useRef<string | null>(null)
+  const downloadedRef = useRef<ExportResult | null>(null)
+  const streams = getPlatform().capabilities.canStreamToDisk
 
   const busy = isExportBusy(phase)
   const { width, height } = videoSize(video.aspect, video.resolution)
@@ -116,12 +126,16 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
 
   // Download the film automatically once it is ready (the link stays available), and say so.
   useEffect(() => {
-    if (!result || downloadedRef.current === result.url) return
-    downloadedRef.current = result.url
-    download(result.url, result.fileName)
+    if (!result || downloadedRef.current === result) return
+    downloadedRef.current = result
+    const { url, fileName } = result
+    // written straight to disk: already saved
+    if (url === null) return void showToast({ kind: 'success', text: `Vidéo enregistrée dans ${fileName}` })
+    download(url, fileName)
     if (result.mimeType.startsWith('image/')) showToast({ kind: 'success', text: 'Image prête' })
     else {
-      const again = { label: 'Télécharger à nouveau', run: () => download(result.url, result.fileName) }
+      const label = getPlatform().capabilities.isDesktop ? 'Enregistrer…' : 'Télécharger à nouveau'
+      const again = { label, run: () => download(url, fileName) }
       showToast({ kind: 'success', text: 'Vidéo prête', action: again })
     }
   }, [result])
@@ -146,7 +160,11 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
 
   const start = () => {
     if (!trackName || !codec) return
-    useExportStore.getState().start({ ...request, baseName: trackName })
+    // asked now: the browser's save picker needs this click
+    const fileName = videoFileName(trackName, `.${codec.container}`)
+    void chooseVideoDestination(getPlatform(), fileName).then(({ start: go, destination }) => {
+      if (go) useExportStore.getState().start({ ...request, baseName: trackName, destination })
+    })
   }
 
   const startStill = () => {
@@ -237,6 +255,13 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
         {formatClock(totalFrames / video.fps)} · {formatNumber(totalFrames)} images
         {codec && ` · ${CODEC_LABELS[`${codec.container}/${codec.codec}`]} · ≈ ${formatMegabytes(estimatedBytes)}`}
       </p>
+      {codec && streams && <p className="field__hint">Enregistrement direct sur le disque</p>}
+      {codec && warnsInMemory(estimatedBytes, streams) && (
+        <p className="field__hint">
+          Au-delà de 1,5 Go, le film gardé en mémoire peut saturer l'onglet : Chrome et Edge l'écrivent directement sur
+          le disque.
+        </p>
+      )}
       {codec === null && (
         <p className="field__hint" role="alert">
           Ce navigateur ne sait pas encoder une vidéo de {formatNumber(width)} × {formatNumber(height)} pixels :
@@ -293,9 +318,17 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
 
       {phase === 'done' && result && (
         <p className="field__hint">
-          <a href={result.url} download={result.fileName}>
-            Télécharger {result.fileName}
-          </a>{' '}
+          {result.url === null ? (
+            `Enregistrée dans ${result.fileName}`
+          ) : getPlatform().capabilities.isDesktop ? (
+            <button type="button" className="btn btn--secondary btn--small" onClick={() => result.url && download(result.url, result.fileName)}>
+              Enregistrer {result.fileName}…
+            </button>
+          ) : (
+            <a href={result.url} download={result.fileName}>
+              Télécharger {result.fileName}
+            </a>
+          )}{' '}
           ({formatMegabytes(result.sizeBytes)}, {CODEC_LABELS[result.codec] ?? result.codec})
           {result.incompleteFrames > 0 &&
             ` — ${formatNumber(result.incompleteFrames)} image(s) rendue(s) avant la fin du chargement du relief.`}

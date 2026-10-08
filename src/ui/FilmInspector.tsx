@@ -3,7 +3,16 @@ import type { ReactNode } from 'react'
 import { useMediaStore } from '../film/media'
 import { ITEM_DURATION_RANGE, MEDIA_LAYOUTS, SHOT_DURATION_RANGE, SHOT_STYLES, STOP_CAMERAS, STOP_DURATION_RANGE } from '../film/model'
 import type { Film, MediaLayout, ShotStyle, StopCamera } from '../film/model'
-import { formatFilmTime, removeFilmItem, updateMedia, updateShot, updateStop, updateText } from '../film/timeline'
+import {
+  formatFilmTime,
+  formatSpeedFactor,
+  removeFilmItem,
+  updateMedia,
+  updateShot,
+  updateSpeed,
+  updateStop,
+  updateText,
+} from '../film/timeline'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
@@ -21,6 +30,10 @@ const SHOT_HINTS: Record<ShotStyle, string> = {
 const CAMERA_LABELS: Record<StopCamera, string> = { orbite: 'Orbite', fixe: 'Fixe' }
 const LAYOUT_LABELS: Record<MediaLayout, string> = { 'plein-ecran': 'Plein écran', carte: 'Carte' }
 const SIZE_RANGE = { min: WIDGET_SIZE_MIN, max: WIDGET_SIZE_MAX, step: 0.1 }
+/** Quick choices of a speed portion, and its slider in powers of two (×0,25 to ×4). */
+const SPEED_CHIPS = [0.25, 0.5, 1.5, 2, 3, 4]
+const SPEED_SLIDER = { min: -2, max: 2, step: 0.05 }
+const km = (m: number) => Math.round(m / 10) / 100
 
 const seconds = (s: number) => `${formatNumber(s, Number.isInteger(s) ? 0 : 1)} s`
 
@@ -68,13 +81,13 @@ function AnchorPicker({ label, value, onChange }: { label: string; value: Overla
 
 /**
  * Settings of the block selected on the timeline (`filmSelection`), in the right dock: opening / closing shot, stop,
- * text, photo or video. Typing is merged into one undo step; editing a generated stop writes the stops out first.
+ * speed portion, text, photo or video. Typing is merged into one undo step; editing a generated stop writes the stops out first.
  */
 export function FilmInspector() {
   const id = useId()
   const pictures = useMediaStore((s) => s.table)
   const item = useAppStore((s) => s.filmSelection)
-  const { track, film } = useFilmSource()
+  const { track, film, pacing } = useFilmSource()
   const clock = useFilmClock()
   if (!item || !track) return null
   const lengthM = track.stats.distanceM
@@ -197,6 +210,7 @@ export function FilmInspector() {
     )
   } else {
     const stop = clock.stops.find((s) => s.id === item)
+    const speed = clock.speeds.find((s) => s.id === item)
     const filmText = film.texts.find((t) => t.id === item)
     const media = film.media.find((m) => m.id === item)
     if (stop) {
@@ -221,6 +235,43 @@ export function FilmInspector() {
           <p className="field__hint">
             À {formatDistance(stop.atM)} sur {formatDistance(lengthM)}, de {formatFilmTime(stop.startS)} à {formatFilmTime(stop.endS)}
             {film.autoStops && ' · arrêt automatique : le retoucher fige les arrêts'}
+          </p>
+        </>
+      )
+    } else if (speed) {
+      title = 'Vitesse'
+      const set = (patch: Parameters<typeof updateSpeed>[2]) => change((f) => updateSpeed(f, item, patch, lengthM), false)
+      const factor = formatSpeedFactor(speed.factor)
+      const how = speed.factor > 1 ? `accéléré (${factor})` : speed.factor < 1 ? `ralenti (${factor})` : 'à vitesse normale'
+      body = (
+        <>
+          <div className="field">
+            <span id={`${id}-factor-label`} className="field__label">
+              Vitesse
+            </span>
+            <div className="sun-chips" role="group" aria-labelledby={`${id}-factor-label`}>
+              {SPEED_CHIPS.map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  className="sun-chip"
+                  aria-pressed={speed.factor === f}
+                  onClick={() => editFilm((g) => ({ film: updateSpeed(g, item, { factor: f }, lengthM) }))}
+                >
+                  {formatSpeedFactor(f)}
+                </button>
+              ))}
+            </div>
+          </div>
+          {range('factor', 'Réglage fin', Math.log2(speed.factor), SPEED_SLIDER, (v) => formatSpeedFactor(2 ** v), (v) => set({ factor: 2 ** v }))}
+          <div className="film-inspector__row">
+            {number('from', 'De (km)', km(speed.fromM), 0, km(lengthM), (v) => set({ fromM: v * 1000 }))}
+            {number('to', 'À (km)', km(speed.toM), 0, km(lengthM), (v) => set({ toM: v * 1000 }))}
+          </div>
+          <p className="field__hint">
+            Survol {how} de {formatDistance(speed.fromM)} à {formatDistance(speed.toM)}, de {formatFilmTime(speed.startS)} à{' '}
+            {formatFilmTime(speed.endS)} dans le film. La vitesse change en douceur aux bords.
+            {pacing.keepDuration ? ' La durée du survol ne change pas : le reste du parcours s’adapte.' : ' La durée du film change d’autant.'}
           </p>
         </>
       )

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Track } from '../core/types'
-import { buildPacing, DEFAULT_PACING, PAUSE_EASE_S } from '../flyover/pacing'
+import { buildPacing, DEFAULT_PACING, flightPacing, PAUSE_EASE_S } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
 import { buildTrack } from '../import/stats'
 import type { Landmark } from '../osm/landmarks'
@@ -83,6 +83,39 @@ describe('film clock — phases', () => {
     expect(position.progress).toBe(1)
     expect(frames / 30).toBeCloseTo(clock.totalTime(), 1)
     expect(clock.advance({ timeS: 1, progress: 0 }, 1, 2)).toEqual({ timeS: 3, progress: 0 })
+  })
+})
+
+describe('film clock — speed portions', () => {
+  const speeds = [{ id: 'speed-1', fromM: 6000, toM: 8000, factor: 0.5 }, { id: 'speed-2', fromM: 1000, toM: 3000, factor: 2 }]
+  const clock = clockOf({ speeds, stops: [stop('a', 2000, 2)] })
+
+  it('placed in film time by position; the flight follows the factor; same as the bare flight pacing', () => {
+    expect(clock.speeds.map((s) => s.id)).toEqual(['speed-2', 'speed-1'])
+    const [fast, slow] = clock.speeds
+    // before the first portion: the base ground speed after the opening
+    expect(fast.startS).toBeCloseTo(6 + (1000 / L) * D, 9)
+    expect(fast.endS).toBeGreaterThan(clock.stops[0].endS)
+    expect(slow.startS).toBe(clock.timeAtProgress(0.6))
+    expect(slow.endS).toBe(clock.timeAtProgress(0.8))
+    const flight = flightPacing(L, [], D, OFF, [{ atM: 2000, durationS: 2 }], [...speeds].sort((a, b) => a.fromM - b.fromM))
+    expect(clock.flightS).toBe(flight.totalTime())
+    for (let t = 0; t <= clock.totalTime(); t += 0.3) expect(clock.progressAtTime(t)).toBe(flight.progressAtTime(t - 6))
+  })
+
+  it('a portion to the end of the track ends with the flight, not the film; no track: no portion', () => {
+    const toEnd = clockOf({ speeds: [{ id: 'speed-1', fromM: 9000, toM: L, factor: 3 }] })
+    expect(toEnd.speeds[0].endS).toBeCloseTo(toEnd.openingS + toEnd.flightS, 9)
+    expect(clockOf({ lengthM: 0, speeds }).speeds).toEqual([])
+  })
+
+  it('the film clock of a track takes the speeds of the film', () => {
+    const points = [0, 1, 2].map((k) => ({ lon: 6.8, lat: 45.8 + k * 0.01, ele: 1000 }))
+    const track: Track = buildTrack({ name: 't', source: 'gpx', segments: [{ points }] })
+    const film: Film = { ...DEFAULT_FILM, speeds: [{ id: 'speed-1', fromM: 0, toM: 1000, factor: 2 }] }
+    expect(filmClockFor({ track, film, durationS: D, pacing: OFF }).speeds.map((s) => s.id)).toEqual(['speed-1'])
+    expect(filmClockFor({ track, film, durationS: D, pacing: OFF }).flightS).toBeLessThan(D)
+    expect(filmClockFor({ track: undefined, film, durationS: D, pacing: OFF }).speeds).toEqual([])
   })
 })
 

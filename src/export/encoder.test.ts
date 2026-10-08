@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // WebCodecs is not available in jsdom: mediabunny is replaced by a recording fake.
 const fake = vi.hoisted(() => ({
-  outputs: [] as { format: { kind: string }; state: string; finalize: () => Promise<void>; cancel: () => Promise<void> }[],
+  outputs: [] as {
+    format: { kind: string; options?: { fastStart?: unknown } }
+    state: string
+    finalize: () => Promise<void>
+    cancel: () => Promise<void>
+  }[],
+  streams: [] as { options: unknown }[],
   sources: [] as { config: { codec: string; quality: { options: { bitrate: number } } }; added: [number, number][]; closed: boolean }[],
   buffer: new ArrayBuffer(8) as ArrayBuffer | null,
 }))
@@ -17,8 +23,23 @@ vi.mock('mediabunny', () => {
   class BufferTarget {
     buffer: ArrayBuffer | null = null
   }
+  // like mediabunny: a writer taken at start, chunks at their position, closed on finalize and on cancel
+  class StreamTarget {
+    writer: WritableStreamDefaultWriter<{ type: 'write'; data: Uint8Array; position: number }> | null = null
+    writable: WritableStream
+    options: unknown
+    constructor(writable: WritableStream, options: unknown) {
+      this.writable = writable
+      this.options = options
+      fake.streams.push(this)
+    }
+  }
   class Mp4OutputFormat {
     kind = 'mp4'
+    options: unknown
+    constructor(options?: unknown) {
+      this.options = options
+    }
   }
   class WebMOutputFormat {
     kind = 'webm'
@@ -40,9 +61,9 @@ vi.mock('mediabunny', () => {
   }
   class Output {
     format: unknown
-    target: BufferTarget
+    target: BufferTarget | StreamTarget
     state = 'pending'
-    constructor({ format, target }: { format: unknown; target: BufferTarget }) {
+    constructor({ format, target }: { format: unknown; target: BufferTarget | StreamTarget }) {
       this.format = format
       this.target = target
       fake.outputs.push(this as never)
@@ -50,16 +71,23 @@ vi.mock('mediabunny', () => {
     addVideoTrack() {}
     async start() {
       this.state = 'started'
+      if (this.target instanceof StreamTarget) this.target.writer = this.target.writable.getWriter()
     }
     async finalize() {
+      if (this.target instanceof StreamTarget) {
+        const writer = this.target.writer!
+        await writer.write({ type: 'write', data: new Uint8Array(10), position: 0 })
+        await writer.write({ type: 'write', data: new Uint8Array(4), position: 2 })
+        await writer.close()
+      } else this.target.buffer = fake.buffer
       this.state = 'finalized'
-      this.target.buffer = fake.buffer
     }
     async cancel() {
       this.state = 'canceled'
+      if (this.target instanceof StreamTarget) await this.target.writer?.close()
     }
   }
-  return { Quality, BufferTarget, Mp4OutputFormat, WebMOutputFormat, CanvasSource, Output, canEncodeVideo: vi.fn() }
+  return { Quality, BufferTarget, StreamTarget, Mp4OutputFormat, WebMOutputFormat, CanvasSource, Output, canEncodeVideo: vi.fn() }
 })
 
 import {
@@ -67,6 +95,8 @@ import {
   ExportCanceledError,
   MAX_BITRATE,
   MIN_BITRATE,
+  STREAM_CHUNK_BYTES,
+  candidatesFor,
   createVideoEncoder,
   pickCodec,
   videoBitrate,
@@ -83,6 +113,7 @@ function supporting(...codecs: string[]): CanEncode & ReturnType<typeof vi.fn> {
 
 beforeEach(() => {
   fake.outputs.length = 0
+  fake.streams.length = 0
   fake.sources.length = 0
   fake.buffer = new ArrayBuffer(8)
 })
@@ -163,9 +194,11 @@ describe('createVideoEncoder', () => {
     expect(fake.sources[0].added.map(([t]) => t)).toEqual([0, 1 / 30, 2 / 30])
     expect(fake.sources[0].added[0][1]).toBeCloseTo(1 / 30)
 
-    const blob = await session.finish()
-    expect(blob.type).toBe('video/mp4')
-    expect(blob.size).toBe(8)
+    const { blob, sizeBytes } = await session.finish()
+    expect(blob?.type).toBe('video/mp4')
+    expect(blob?.size).toBe(8)
+    expect(sizeBytes).toBe(8)
+    expect(fake.outputs[0].format.options?.fastStart).toBeUndefined()
     expect(fake.sources[0].closed).toBe(true)
     expect(fake.outputs[0].state).toBe('finalized')
   })
@@ -174,7 +207,7 @@ describe('createVideoEncoder', () => {
     const session = await createVideoEncoder(canvas, OPTIONS, supporting('vp8'))
     expect(session.extension).toBe('.webm')
     expect(fake.outputs[0].format.kind).toBe('webm')
-    expect((await session.finish()).type).toBe('video/webm')
+    expect((await session.finish()).blob?.type).toBe('video/webm')
   })
 
   it('rejects when no codec is available', async () => {
@@ -196,5 +229,60 @@ describe('createVideoEncoder', () => {
     fake.buffer = null
     const session = await createVideoEncoder(canvas, OPTIONS, supporting('avc'))
     await expect(session.finish()).rejects.toThrow(/vide/)
+  })
+})
+
+/** Destination file recording what reaches it. */
+function fakeFile(fileName = 'Tour.mp4') {
+  return {
+    fileName,
+    write: vi.fn(async (_data: Uint8Array, _position: number) => undefined),
+    close: vi.fn(async () => undefined),
+    discard: vi.fn(async () => undefined),
+  }
+}
+
+describe('createVideoEncoder on disk', () => {
+  it('streams a plain MP4 (no fast start) to the destination, in chunks', async () => {
+    const destination = fakeFile()
+    const session = await createVideoEncoder(canvas, { ...OPTIONS, destination }, supporting('avc'))
+    expect(fake.outputs[0].format.options?.fastStart).toBe(false)
+    expect(fake.streams[0].options).toEqual({ chunked: true, chunkSize: STREAM_CHUNK_BYTES })
+    await session.addFrame(0)
+    const { blob, sizeBytes } = await session.finish()
+    expect(blob).toBeNull()
+    expect(sizeBytes).toBe(10)
+    expect(destination.write.mock.calls.map(([data, position]) => [position, data.length])).toEqual([
+      [0, 10],
+      [2, 4],
+    ])
+    expect(destination.close).toHaveBeenCalledTimes(1)
+    expect(destination.discard).not.toHaveBeenCalled()
+  })
+
+  it('removes the file when canceled (mediabunny closes its writer then)', async () => {
+    const destination = fakeFile()
+    const session = await createVideoEncoder(canvas, { ...OPTIONS, destination }, supporting('avc'))
+    await session.addFrame(0)
+    await session.cancel()
+    expect(destination.close).not.toHaveBeenCalled()
+    expect(destination.discard).toHaveBeenCalled()
+    await expect(session.finish()).rejects.toBeInstanceOf(ExportCanceledError)
+  })
+
+  it('removes the file even when canceling fails (a write failed)', async () => {
+    const destination = fakeFile()
+    const session = await createVideoEncoder(canvas, { ...OPTIONS, destination }, supporting('avc'))
+    vi.spyOn(fake.outputs[0], 'cancel').mockRejectedValueOnce(new Error('disque plein'))
+    await expect(session.cancel()).rejects.toThrow(/disque plein/)
+    expect(destination.discard).toHaveBeenCalledTimes(1)
+  })
+
+  it('follows the extension of the chosen file', async () => {
+    const session = await createVideoEncoder(canvas, { ...OPTIONS, destination: fakeFile('Tour.webm') }, supporting('avc', 'vp9'))
+    expect(session.codec).toEqual({ container: 'webm', codec: 'vp9' })
+    expect(candidatesFor('Tour.MP4').map((c) => c.container)).toEqual(['mp4', 'mp4'])
+    expect(candidatesFor('Tour')).toBe(CODEC_CANDIDATES)
+    expect(candidatesFor(undefined)).toBe(CODEC_CANDIDATES)
   })
 })

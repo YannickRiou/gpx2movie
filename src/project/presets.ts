@@ -1,5 +1,5 @@
 /**
- * Named presets of settings, kept in localStorage.
+ * Named presets of settings, kept in the platform storage (localStorage).
  *
  * Every storage access is wrapped in try/catch: without storage (private browsing, blocked site data,
  * quota) the presets still work for the session, from memory.
@@ -8,6 +8,7 @@
  * track of the project it was saved from.
  */
 import type { Film } from '../film/model'
+import { getPlatform } from '../platform'
 import type { Settings } from '../state/store'
 import { sanitizeSettings } from './document'
 
@@ -87,18 +88,16 @@ export function createPresetStore(storage: StorageLike | null): PresetStore {
   }
 }
 
-function browserStorage(): StorageLike | null {
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
+/** The platform storage (same key as when it was localStorage directly: the presets already saved are kept). */
+function platformStorage(): StorageLike {
+  const storage = getPlatform().storage
+  return { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value) }
 }
 
 let appPresets: PresetStore | null = null
 
-/** Presets of the page, backed by localStorage when available. */
+/** Presets of the page, backed by the platform storage. */
 export function getPresetStore(): PresetStore {
-  appPresets ??= createPresetStore(browserStorage())
+  appPresets ??= createPresetStore(platformStorage())
   return appPresets
 }

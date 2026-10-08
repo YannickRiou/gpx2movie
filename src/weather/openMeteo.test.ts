@@ -234,4 +234,14 @@ describe('createWeatherCache', () => {
     const stored = JSON.parse(storage.getItem('openflyover.weather.v1')!) as Record<string, unknown>
     expect(Object.keys(stored)).toEqual(['45.90,6.80,@2025-07-11', '45.90,6.80,@2025-07-12'])
   })
+
+  it('persists in the platform storage by default, under the localStorage key of before', () => {
+    localStorage.setItem('openflyover.weather.v1', JSON.stringify({ old: { at: 1, day } }))
+    const cache = createWeatherCache()
+    expect(cache.get('old')).toEqual(day)
+    cache.set('new', day, true)
+    const stored = JSON.parse(localStorage.getItem('openflyover.weather.v1')!) as Record<string, unknown>
+    expect(Object.keys(stored)).toEqual(['old', 'new'])
+    localStorage.removeItem('openflyover.weather.v1')
+  })
 })

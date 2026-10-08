@@ -6,6 +6,8 @@
  *   `autoStops` is set they are generated from the highlights (`autoStops` in `assemble.ts`, so they follow the
  *   OpenStreetMap landmarks loaded later), as `autoMode` says; the first edit on the timeline writes them into
  *   `stops` and clears the flag.
+ * - `speeds`: portions of the first track (metres) flown faster or slower by hand (`factor`), not overlapping;
+ *   the flight pacing eases into and out of each (`flightPacing`).
  * - `texts` and `media`: items anchored in film time (seconds at ×1 from the very start, opening included), on
  *   their own lanes, drawn by the overlay. A medium names its picture or video clip by id (`src`): the bytes live in the media
  *   table of the project document (`film/media.ts`), so the settings and the undo history stay light.
@@ -96,6 +98,20 @@ export interface FilmMedia {
   muted?: boolean
 }
 
+export interface FilmSpeed {
+  id: string
+  /** portion of the first track (metres, `fromM` < `toM`) */
+  fromM: number
+  toM: number
+  /** local ground speed multiplied by this (2 = twice as fast, 0.5 = half as fast) */
+  factor: number
+}
+
+/** Range of the speed factor (also its validity range in a loaded project). */
+export const SPEED_FACTOR_RANGE = { min: 0.25, max: 4 } as const
+/** Shortest speed portion made on the timeline (metres). */
+export const MIN_SPEED_SPAN_M = 50
+
 /** Placement of a photo added on the timeline (and of a medium saved before these fields existed). */
 export const MEDIA_DEFAULTS: Pick<FilmMedia, 'layout' | 'anchor' | 'size' | 'kenBurns'> = {
   layout: 'plein-ecran',
@@ -111,6 +127,8 @@ export interface Film {
   autoStops: boolean
   autoMode: AutoStopMode
   stops: FilmStop[]
+  /** sorted by position or not, never overlapping */
+  speeds: FilmSpeed[]
   texts: FilmText[]
   media: FilmMedia[]
 }
@@ -128,6 +146,7 @@ export const DEFAULT_FILM: Film = {
   autoStops: true,
   autoMode: 'temps-forts',
   stops: [],
+  speeds: [],
   texts: [],
   media: [],
 }
@@ -150,11 +169,12 @@ export function shotDurationS(shot: FilmShot): number {
 // Ids
 // ---------------------------------------------------------------------------
 
-export type FilmItemKind = 'stop' | 'text' | 'media'
+export type FilmItemKind = 'stop' | 'speed' | 'text' | 'media'
 
 /** Next free id `<kind>-<n>` of the film (one more than the highest number used by that kind). */
 export function nextFilmId(film: Film, kind: FilmItemKind): string {
-  const items: readonly { id: string }[] = kind === 'stop' ? film.stops : kind === 'text' ? film.texts : film.media
+  const lanes = { stop: film.stops, speed: film.speeds, text: film.texts, media: film.media }
+  const items: readonly { id: string }[] = lanes[kind]
   const pattern = new RegExp(`^${kind}-(\\d+)$`)
   let max = 0
   for (const { id } of items) {
@@ -189,6 +209,23 @@ export function isValidStop(stop: unknown): stop is FilmStop {
     optionalString(stop.label) &&
     (source === undefined || (isRecord(source) && oneOf(STOP_SOURCES, source.kind) && optionalString(source.ref)))
   )
+}
+
+export function isValidSpeed(speed: unknown): speed is FilmSpeed {
+  return (
+    isRecord(speed) &&
+    isId(speed.id) &&
+    within(speed.fromM, 0, Number.MAX_VALUE) &&
+    within(speed.toM, 0, Number.MAX_VALUE) &&
+    (speed.toM as number) > (speed.fromM as number) &&
+    within(speed.factor, SPEED_FACTOR_RANGE.min, SPEED_FACTOR_RANGE.max)
+  )
+}
+
+/** No two portions overlap (they may touch). */
+function apart(speeds: readonly FilmSpeed[]): boolean {
+  const sorted = [...speeds].sort((a, b) => a.fromM - b.fromM)
+  return sorted.every((s, i) => i === 0 || sorted[i - 1].toM <= s.fromM)
 }
 
 /** Shared by texts and media: id, start in film time, duration. */
@@ -227,13 +264,14 @@ export function isValidMedia(media: unknown): media is FilmMedia {
 
 /**
  * Value checks of a film whose top-level shape already matches `DEFAULT_FILM` (see `SETTING_CHECKS` in the
- * project document): shots, every item of every lane, ids unique across the film.
+ * project document): shots, every item of every lane, speed portions apart, ids unique across the film.
  */
 export function isValidFilm(film: Film): boolean {
   if (!isValidShot(film.opening) || !isValidShot(film.closing) || typeof film.autoStops !== 'boolean') return false
   if (!oneOf(AUTO_STOP_MODES, film.autoMode)) return false
   if (!film.stops.every(isValidStop) || !film.texts.every(isValidText) || !film.media.every(isValidMedia)) return false
-  const ids = [...film.stops, ...film.texts, ...film.media].map((item) => item.id)
+  if (!film.speeds.every(isValidSpeed) || !apart(film.speeds)) return false
+  const ids = [...film.stops, ...film.speeds, ...film.texts, ...film.media].map((item) => item.id)
   return new Set(ids).size === ids.length
 }
 

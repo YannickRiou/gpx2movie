@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LonLat, Track } from '../core/types'
 import { buildTrack } from '../import/stats'
+import { keyValueStore, type KeyValueStore } from '../platform'
 import {
   MAX_LANDMARK_DISTANCE_M,
   OverpassError,
@@ -127,18 +128,22 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   return new Response(JSON.stringify(body), { status, headers })
 }
 
-function memoryStorage(): NonNullable<OverpassDeps['storage']> & { map: Map<string, string> } {
+/** localStorage-like map behind the platform store, refusing new values past `capacity` entries. */
+function memoryStorage(capacity = Infinity): KeyValueStore & { map: Map<string, string> } {
   const map = new Map<string, string>()
-  return {
-    map,
-    getItem: (k) => map.get(k) ?? null,
-    setItem: (k, v) => void map.set(k, v),
-    removeItem: (k) => void map.delete(k),
-    key: (i) => [...map.keys()][i] ?? null,
+  const storage = {
+    getItem: (k: string) => map.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      if (!map.has(k) && map.size >= capacity) throw new DOMException('full', 'QuotaExceededError')
+      map.set(k, v)
+    },
+    removeItem: (k: string) => void map.delete(k),
+    key: (i: number) => [...map.keys()][i] ?? null,
     get length() {
       return map.size
     },
   }
+  return Object.assign(keyValueStore(storage), { map })
 }
 
 function makeDeps(responses: (Response | Error)[], storage: OverpassDeps['storage'] = null): OverpassDeps & { fetch: ReturnType<typeof vi.fn> } {
@@ -237,7 +242,7 @@ describe('fetchTrackFeatures', () => {
   })
 
   it('does not cache a failed query and survives a broken storage', async () => {
-    const broken: OverpassDeps['storage'] = {
+    const broken = keyValueStore({
       getItem: () => {
         throw new Error('denied')
       },
@@ -247,12 +252,22 @@ describe('fetchTrackFeatures', () => {
       removeItem: () => {},
       key: () => null,
       length: 0,
-    }
+    })
     const deps = makeDeps([new Response('', { status: 400 }), json(RESPONSE)], broken)
     const track = northTrack(3, 1000)
     await expect(fetchTrackFeatures(track, undefined, deps)).rejects.toBeInstanceOf(OverpassError)
     expect(await fetchTrackFeatures(track, undefined, deps)).toHaveLength(6)
     expect(deps.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('frees its own older entries when the storage is full, never other keys', async () => {
+    const storage = memoryStorage(2)
+    storage.set('openflyover.prefs', '{}')
+    storage.set('openflyover.osm.v1.old', '{}')
+    const deps = makeDeps([json(RESPONSE)], storage)
+    const track = northTrack(3, 1000)
+    await fetchTrackFeatures(track, undefined, deps)
+    expect([...storage.map.keys()]).toEqual(['openflyover.prefs', `openflyover.osm.v1.${hashQuery(trackQuery(track))}`])
   })
 
   it('sends the queries one after the other', async () => {

@@ -1,7 +1,7 @@
 /**
  * Tile fetcher: `fetch()` + `createImageBitmap()` behind a priority queue, with bounded concurrency,
- * in-flight de-duplication by URL, an LRU cache of decoded bitmaps, AbortSignal support and one
- * automatic retry on transient errors.
+ * in-flight de-duplication by URL, an LRU cache of decoded bitmaps, AbortSignal support and automatic
+ * retries on transient errors.
  *
  * Lifecycle of a request
  * ----------------------
@@ -19,7 +19,7 @@ export interface TileFetcherOptions {
   concurrency?: number
   /** Maximum decoded bitmaps kept in the LRU cache. Default 600. */
   maxEntries?: number
-  /** Pause before the single automatic retry, in milliseconds. Default 250. */
+  /** Pause before the first automatic retry, in milliseconds (×4 before each next one). Default 250. */
   retryDelayMs?: number
 }
 
@@ -46,21 +46,32 @@ function createAbortError(): DOMException {
 }
 
 /**
- * Network-level failures (`fetch()` rejects with a TypeError on DNS/CORS/connection errors) and
- * server errors are worth one retry; client errors such as 403/404 are final.
+ * Network-level failures (`fetch()` rejects with a TypeError on DNS/CORS/connection errors, e.g. a network
+ * change), server errors, 429 and 400 are retried; other client errors such as 403/404 are final. Our tile URLs
+ * are well formed, so a 400 is a server glitch: the IGN Géoplateforme answered bursts of « Layer … unknown »
+ * (400) for valid tiles in October 2026, with `max-age` 21 days, hence the retries bypass the HTTP cache.
  */
 function isRetryable(error: unknown): boolean {
-  if (error instanceof TileFetchError) return error.status >= 500
+  if (error instanceof TileFetchError) return error.status >= 500 || error.status === 429 || error.status === 400
   return error instanceof TypeError
 }
+
+/**
+ * Retries of a transient error, after 250 ms, 1 s and 4 s by default: a failed imagery sub-tile stays grey for
+ * the life of its terrain tile, and a short network outage (or a burst of 502) outlasts a single quick retry.
+ */
+const MAX_RETRIES = 3
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** Download one tile as a Blob. Rejects with `TileFetchError` on HTTP errors, with the fetch error otherwise. */
-export async function fetchTileBlob(url: string, signal?: AbortSignal): Promise<Blob> {
-  const response = await fetch(url, { signal })
+/**
+ * Download one tile as a Blob. Rejects with `TileFetchError` on HTTP errors, with the fetch error otherwise.
+ * `reload` skips the HTTP cache (a retry must not get a cached error back).
+ */
+export async function fetchTileBlob(url: string, signal?: AbortSignal, reload = false): Promise<Blob> {
+  const response = await fetch(url, reload ? { signal, cache: 'reload' } : { signal })
   if (!response.ok) throw new TileFetchError(url, response.status)
   return response.blob()
 }
@@ -249,11 +260,11 @@ export function createTileFetcher(options: TileFetcherOptions = {}): TileFetcher
     const signal = request.controller.signal
     for (let attempt = 0; ; attempt++) {
       try {
-        const blob = await fetchTileBlob(request.url, signal)
+        const blob = await fetchTileBlob(request.url, signal, attempt > 0)
         return await decodeBlob(blob)
       } catch (error) {
-        if (signal.aborted || attempt >= 1 || !isRetryable(error)) throw error
-        if (retryDelayMs > 0) await delay(retryDelayMs)
+        if (signal.aborted || attempt >= MAX_RETRIES || !isRetryable(error)) throw error
+        if (retryDelayMs > 0) await delay(retryDelayMs * 4 ** attempt)
       }
     }
   }
