@@ -121,7 +121,7 @@ reproduire à côté de la case.
 - [ ] « Jour » du soleil (Heure fixe) : 21 décembre puis 21 juin à 10 h, lumière et ombres qui changent, lever et
       coucher de la barre recalculés, « Jour de la sortie » ; export identique à l'aperçu.
 - [ ] Liste des traces : pastille de couleur (trace, profil et mini-carte recolorés, lecture non interrompue) ; flèche
-      d'une deuxième trace : elle passe en tête et est survolée, Ctrl+Z.
+      d'une deuxième trace : elle passe en tête et est survolée (pas d'annulation : les traces sont hors historique).
 - [ ] Étiquettes dans la vue : bornes tous les 1, 2, 5, 10 km au bon endroit (comparées au compteur de distance),
       cédant la place aux étiquettes nommées ; « Taille » ×0,6 à ×1,6 lisible, aussi en 4K ; « Portée » 10 km puis
       150 km.
