@@ -11,9 +11,11 @@
  * film time of the frame (`OverlayTime`, from the film clock); the live values follow the progress (`OverlayFrame`).
  * The photos and video clips of the timeline are drawn even while the rest of the overlay is off: full-screen ones
  * under everything, framed cards at their anchor (a clip shows its frame at its time in the file, without Ken Burns).
+ * So is the badge of the epoch block shown at the frame's film time (« 1950–1965 », faded with the dated imagery).
  */
-import { clipTimeS } from '../film/model'
-import type { FilmMedia, FilmText } from '../film/model'
+import { clipTimeS, epochAt } from '../film/model'
+import type { FilmEpoch, FilmMedia, FilmText } from '../film/model'
+import { getHistoricalImagery } from '../terrain/sources'
 import { formatDistance, formatDuration, formatNumber } from '../ui/format'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import type { WeatherSummary } from '../weather/series'
@@ -87,6 +89,8 @@ export interface OverlayExtras {
   media?: readonly FilmMedia[]
   /** credits of the sources in the film (`overlayCredits`), drawn while `settings.credits` is on */
   credits?: readonly string[]
+  /** epoch blocks of the timeline (`settings.film.epochs`): the badge of the one shown */
+  epochs?: readonly FilmEpoch[]
 }
 
 /** Safe area: 5 % of the frame on each side. */
@@ -157,6 +161,23 @@ export function cardOpacityAt(time: OverlayTime, settings: OverlaySettings): num
   return Math.max(title, end)
 }
 
+/** Where the badge of an epoch block goes, and its second line. */
+export const EPOCH_BADGE_ANCHOR: OverlayAnchor = 'top-center'
+export const EPOCH_BADGE_SUBTITLE = 'Photos aériennes'
+
+/**
+ * Badge of the epoch block shown at film time `timeS` (`epochAt`), as a timeline text with its opacity: the label of
+ * the block, else the years of its source; faded with the dated imagery. Null without a badge to show.
+ */
+export function epochBadgeAt(epochs: readonly FilmEpoch[], timeS: number): { item: FilmText; opacity: number } | null {
+  const at = epochAt(epochs, timeS)
+  if (!at || !at.epoch.badge || at.mix <= 0.001) return null
+  const { id, startS, durationS, label, imagerySourceId } = at.epoch
+  const text = label?.trim() || getHistoricalImagery(imagerySourceId)?.label || ''
+  if (!text) return null
+  return { item: { id, startS, durationS, text, subtitle: EPOCH_BADGE_SUBTITLE, anchor: EPOCH_BADGE_ANCHOR, size: 1 }, opacity: at.mix }
+}
+
 /** Opacity of a timeline text at film time `timeS`: 0 outside [startS, startS + durationS), short fades at both ends. */
 export function filmTextOpacity(text: Pick<FilmText, 'startS' | 'durationS'>, timeS: number): number {
   const local = timeS - text.startS
@@ -167,20 +188,23 @@ export function filmTextOpacity(text: Pick<FilmText, 'startS' | 'durationS'>, ti
 
 /**
  * Opacities of what the overlay times in film seconds at `time` (opening and closing cards, timeline texts and
- * photos, plus the time itself while a full-screen photo moves or a video clip plays): two frames of one progress
- * with the same values draw the same overlay, so the export may repeat a held frame.
+ * photos, plus the time itself while a full-screen photo moves or a video clip plays) and the weight of the dated
+ * imagery of an epoch (terrain and badge): two frames of one progress with the same values draw the same image, so
+ * the export may repeat a held frame.
  */
 export function overlayTimedState(
   settings: OverlaySettings,
   texts: readonly FilmText[],
   time: OverlayTime,
   media: readonly FilmMedia[] = [],
+  epochs: readonly FilmEpoch[] = [],
 ): number[] {
   const photos = media.flatMap((item) => {
     const opacity = filmTextOpacity(item, time.timeS)
     const moving = item.kind === 'video' || (item.layout === 'plein-ecran' && item.kenBurns)
     return opacity > 0 && moving ? [opacity, time.timeS] : [opacity]
   })
+  if (epochs.length > 0) photos.push(epochAt(epochs, time.timeS)?.mix ?? 0)
   if (!settings.enabled) return photos
   const title = settings.title.enabled ? titleCardOpacity(time, settings.title.end) : 0
   const end = settings.end.enabled ? endCardOpacity(time, settings.end.start) : 0
@@ -1178,7 +1202,8 @@ export function drawOverlay(
         : assets.photo?.(item.src)
     return image ? [{ item, opacity, image }] : []
   })
-  if (!settings.enabled && credits.length === 0 && photos.length === 0) return
+  const badge = extras.epochs ? epochBadgeAt(extras.epochs, time.timeS) : null
+  if (!settings.enabled && credits.length === 0 && photos.length === 0 && !badge) return
   const transform = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null
   const p: Painter = {
     ctx,
@@ -1231,6 +1256,7 @@ export function drawOverlay(
     if (item.layout === 'carte') add(photoCardWidget(p, item, image, opacity))
     else if (caption) texts.push({ item: { ...item, text: caption }, opacity })
   }
+  if (badge) texts.push(badge)
   // texts after the widgets of their anchor
   const maxWidths = filmTextMaxWidths(
     texts.map(({ item }) => item.anchor),

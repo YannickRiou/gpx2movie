@@ -143,7 +143,67 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
   dessin, préréglages). Jamais vu ni essayé avec de vrais fichiers. Détail : `ARCHITECTURE.md`, « Vidéo calée sur le
   parcours ».
 
+- Branche `lot-video-sync-phase7` : **géoïde** (fin de la phase 3) — `src/geo/geoid.ts` (EGM96, grille 1° générée par
+  `scripts/gen-geoid.mjs`, 170 Ko), monde de l'atmosphère remonté de l'ondulation N à l'origine (`mslLocalToEcef`),
+  altitudes des nuages + N ; la scène reste en hauteurs MSL. Non vu à l'écran : écart attendu minime (+51 m à Chamonix,
+  soit ~0,6 % de densité d'air en moins sous la caméra), plus net au bord de mer où N est grand (−107 m au sud du Sri Lanka).
+
+- Même branche, phase 6, packs hors ligne (non commités) : module `src/offline/` (plan des tuiles d'après la règle de
+  découpage du moteur et la caméra de suivi, couloir 2 / 5 / 10 km ; politique par source ; téléchargement 4 à la fois
+  avec pause, reprise, annulation et limite par jour ; liste des packs), `Platform.tileCache` (`src/platform/tileCache.ts` :
+  Cache Storage sur le site, fichiers sous `<app data>/tiles/` sur le bureau, droits `fs:allow-mkdir`, `read-dir`,
+  `exists` et portée `$APPDATA/tiles/**`), cache d'abord dans `src/terrain/fetch.ts` (`setStoredTileReader`), section
+  « Hors ligne » de l'onglet Trace. Refusés : OpenTopoMap, Esri, swisstopo. Vérifié : tests (plan, politique,
+  téléchargement, registre, cache d'abord, deux stockages sur faux Cache Storage et faux plugin-fs), typecheck, lint,
+  build, `cargo check --target x86_64-pc-windows-msvc` (droits acceptés). Jamais vu à l'écran ni essayé sans réseau.
+  Détail : `ARCHITECTURE.md`, « Packs hors ligne ».
+
+- Même branche, phase 7, **rendu en lot** (non commité) : mode « Plusieurs formats » du tiroir d'export (pastilles de
+  résolution par format, image fixe, affiche, estimation fichiers · images · taille · durée d'après le dernier film,
+  « Tout exporter », avancement « 2 / 4 · 16:9 1080p · 42 % », « Tout annuler », liste des fichiers avec « Enregistrer à
+  nouveau » quand ils sont en mémoire), `src/export/batch.ts` (tâches une à une par le store et l'`ExportController`
+  existants), `src/platform/folder.ts` (dossier choisi une fois : `showDirectoryPicker` sur le site, fenêtre de dossier
+  sur le bureau ; fichiers « <projet> – 16x9-1080p.mp4 »), `takeResult` et `secondsPerMegapixel` dans le store d'export.
+  Vérifié : tests (liste des tâches, noms, estimation, enchaînement et annulation avec faux contrôleur, écriture dans un
+  faux dossier, site et bureau), typecheck, lint, build. Jamais vu à l'écran. Détail : `ARCHITECTURE.md`, « Export vidéo ».
+
+- Branche `lot-video-sync-phase7`, phase 7, **remonter le temps** (non commité) : `film.epochs[]` (blocs de temps du film,
+  hors préréglages), piste « Époques », « Options » › « Ajouter une époque », « Avant / après » dans l'inspecteur d'un
+  arrêt, inspecteur (photos qui couvrent la trace, libellé, case du libellé, début, durée) ; moteur : seconde imagerie
+  par nœud mêlée par un uniforme partagé (`setEpoch`, `patchEpochShader`), fondu d'1 s aux bords, tuiles datées attendues
+  par l'export, chargées 2 s avant le bloc ; libellé « 1950–1965 » en haut au centre de l'habillage ; crédit des photos
+  datées. Petites retouches hors du lot : une ligne dans `ExportController` (poids de l'époque dans la clé des images
+  tenues) et dans `StatusBar` (crédit). Vérifié : tests (modèle, gestes, moteur avec faux chargeur, ancres du shader dans
+  three, libellé, crédits, préréglages), typecheck, lint, build. Jamais vu à l'écran ni compilé par un vrai GPU. Détail :
+  `ARCHITECTURE.md`, « Époques » (Film et timeline, moteur de terrain).
+
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
+
+- Remonter le temps (exemple du Mont-Blanc, en France) : « Options » › « Ajouter une époque » (bloc sable sur la piste
+  « Époques », inspecteur ouvert), lecture à travers le bloc (fondu vers les photos 1950–1965 en niveaux de gris puis
+  retour, sans tuile grise ni saut), pause au milieu (photos d'époque à l'arrêt), changer pour 1965–1980 (trous laissant
+  voir l'imagerie actuelle) et 2000–2005, libellé « 1950–1965 » en haut au centre dans les 3 styles, habillage désactivé
+  compris, libellé personnalisé, case décochée ; glisser / étirer / Suppr / Ctrl+Z ; « Avant / après » sur un arrêt fixe
+  puis export (fondu rendu pendant l'arrêt, images identiques à l'aperçu, pas de tuile manquante) ; bande d'état et
+  crédits incrustés avec « Photos 1950–1965 » ; trace hors de France (bouton désactivé et son explication, liste
+  désactivée) ; projet enregistré puis rouvert ; console sans erreur de compilation du shader (Chrome, Firefox, bureau).
+
+- Rendu en lot : les trois modes du tiroir sur une ligne à 300 px (« Plusieurs formats » assez court ?), pastilles des 5
+  formats × 4 résolutions, estimation (taille après le sondage des codecs, durée seulement après un premier film), « Tout
+  exporter » dans Chrome (dossier demandé une fois, fichiers qui grossissent dans le dossier, noms, image et affiche
+  copiées à la fin, un nom déjà présent remplacé), Firefox (un téléchargement par fichier, « Enregistrer à nouveau »),
+  bureau Windows (fenêtre de dossier, fichiers écrits sous le dossier sans refus du scope fs), vue remise entre deux films,
+  « Tout annuler » et « Annuler » de la barre du haut pendant le 2ᵉ film (fichier commencé supprimé, suivants annulés),
+  format refusé par l'encodeur (9:16 4K en H.264 ?) marqué en échec sans arrêter les autres, interface pendant le court
+  intervalle entre deux tâches (onglets brièvement déverrouillés).
+
+- Packs hors ligne : section « Hors ligne » (estimation qui change avec le couloir, la source et le niveau de détail ;
+  imagerie refusée avec Esri par défaut, relief seul ; « Trop de tuiles »), préparation de l'exemple en 2 km (progression,
+  Pause / Reprendre, Annuler qui retire le pack neuf), liste (taille, « incomplet », Supprimer), espace utilisé (site),
+  puis **hors ligne** (DevTools › Network › Offline, ou Wi-Fi coupé) : rechargement, vue et export sans trou dans le
+  couloir, relief plus grossier au-delà, temps d'attente de l'export sur les tuiles absentes ; Firefox (demande de
+  stockage persistant) ; Safari (quota) ; bureau Windows : dossier `%APPDATA%\io.github.yannickriou.openflyover\tiles`
+  créé, fichiers lus au redémarrage hors ligne, Supprimer qui vide le dossier.
 
 - Vidéo calée sur le parcours, avec de vrais fichiers et une trace horodatée de la même sortie : iPhone (date Apple),
   Android, GoPro (heure locale écrite comme UTC : décalage d'heures trouvé seul ?), DJI, WebM (date du fichier) ; vérifier
@@ -233,14 +293,14 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
    encodeur natif pour Linux (plan dans `ARCHITECTURE.md`, « Export vidéo sans WebCodecs »)  ; accès disque pour les photos et vidéos derrière `readMedia` (un chemin de fichier plutôt que les octets
    pour les grosses vidéos) ; sans WebCodecs, les vidéos sont refusées à l'ajout. Hébergement en sous-dossier : `/fonts/`, `/samples/`,
    `/favicon.svg` sont absolus → `import.meta.env.BASE_URL` (seulement si nécessaire).
-5. Phase 3 restante : géoïde. Phase 7 : vidéo embarquée (reste : export de l'habillage seul sur fond transparent, heure GPS des GoPro dans
-   le flux GPMF, relire l'heure des vidéos ajoutées avant le calage), comparatif photos IGN anciennes, rendu en lot, calage musical ; affiche : plusieurs traces, carte à plat.
+5. Phase 7 : vidéo embarquée (reste : export de l'habillage seul sur fond transparent, heure GPS des GoPro dans
+   le flux GPMF, relire l'heure des vidéos ajoutées avant le calage), rendu en lot d'un dossier de GPX (plusieurs formats d'un film : fait), calage musical ; affiche : plusieurs traces, carte à plat.
 
 ## Limites et points ouverts
 
 - Licence du SDK Garmin FIT (non libre, redistribution « sauf cas prévus ») : à trancher avant diffusion publique ; usage
-  perso OK. Conditions Esri (sans clé) à relire. Open-Meteo et EOX non commerciaux ; OpenTopoMap CC BY-SA, à exclure des
-  futurs packs hors ligne. Catalogue d'étoiles de Yale : licence non indiquée.
+  perso OK. Conditions Esri (sans clé) à relire pour l'usage en ligne. Open-Meteo et EOX non commerciaux ; OpenTopoMap,
+  Esri et swisstopo exclus des packs hors ligne (README, « Sources »). Catalogue d'étoiles de Yale : licence non indiquée.
 - Photos HEIC refusées (le navigateur ne les décode pas) ; EXIF lu seulement dans les JPEG.
 - Vidéos : muettes, 50 Mo au plus (le projet les contient : ~1,33 × leur taille dans le fichier JSON), non placées
   par GPS (calées seulement sur l'heure, la trace doit être horodatée) ; un ancien projet modifié à la main avec une vidéo absente de sa table la garde dans le film sans

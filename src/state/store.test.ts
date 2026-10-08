@@ -157,6 +157,7 @@ describe('settings and misc', () => {
         texts: [],
         media: [],
         audio: [],
+        epochs: [],
       },
       labels: { climbs: true, waypoints: true },
       weather: { enabled: true },

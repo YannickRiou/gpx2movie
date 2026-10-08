@@ -283,7 +283,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     /** opacities of the timed overlay (cards, timeline texts, photos and clips) at a frame, '' without overlay */
     const overlayKey = (progress: number, timeS: number) =>
       deps.overlay()
-        ? overlayTimedState(settings.overlay, settings.film.texts, overlayTime(filmClock, progress, timeS), settings.film.media).join()
+        ? overlayTimedState(settings.overlay, settings.film.texts, overlayTime(filmClock, progress, timeS), settings.film.media, settings.film.epochs).join()
         : ''
     let previous = Number.NaN
     /** the view of the last rendered frame moved with time */

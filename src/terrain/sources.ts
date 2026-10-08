@@ -194,6 +194,31 @@ export const IMAGERY_SOURCES: ImagerySource[] = [
   },
 ]
 
+/**
+ * Dated orthophotos a film can switch to for a while (« Remonter le temps », `film.epochs`), oldest first, with the
+ * years shown on the timeline and in the badge of the film.
+ */
+export const HISTORICAL_IMAGERY: readonly { id: string; label: string }[] = [
+  { id: 'ign-ortho-1950-1965', label: '1950–1965' },
+  { id: 'ign-ortho-1965-1980', label: '1965–1980' },
+  { id: 'ign-ortho-2000-2005', label: '2000–2005' },
+]
+
+/** The dated imagery source `id` of `HISTORICAL_IMAGERY` with its years, undefined for any other id. */
+export function getHistoricalImagery(id: string): { source: ImagerySource; label: string } | undefined {
+  const entry = HISTORICAL_IMAGERY.find((h) => h.id === id)
+  const source = entry && IMAGERY_SOURCES.find((s) => s.id === id)
+  return source && entry ? { source, label: entry.label } : undefined
+}
+
+/** The dated imagery of `HISTORICAL_IMAGERY` whose coverage contains `area` (oldest first). */
+export function historicalImageryFor(area: LonLatBounds | LonLat): { id: string; label: string }[] {
+  return HISTORICAL_IMAGERY.filter((h) => {
+    const source = IMAGERY_SOURCES.find((s) => s.id === h.id)
+    return source !== undefined && sourceCovers(source, area)
+  })
+}
+
 export function getTerrainSource(id: string): TerrainSource {
   return TERRAIN_SOURCES.find((s) => s.id === id) ?? TERRAIN_SOURCES[0]
 }

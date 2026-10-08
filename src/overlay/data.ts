@@ -12,7 +12,7 @@ import type { ElevationProfile, TrackPath } from '../flyover/path'
 import { metricValues } from '../flyover/trackColor'
 import { ELEVATION_HYSTERESIS_M, smoothElevations } from '../import/stats'
 import { OSM_ATTRIBUTION } from '../osm/overpass'
-import { getImagerySource, getTerrainSource } from '../terrain/sources'
+import { getHistoricalImagery, getImagerySource, getTerrainSource } from '../terrain/sources'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import { summarizeOuting, weatherWidgetData } from '../weather/series'
 import type { WeatherSeries, WeatherSummary, WeatherWidgetData } from '../weather/series'
@@ -282,16 +282,23 @@ export interface CreditSources {
   weather: boolean
   /** OpenStreetMap landmarks are loaded */
   landmarks: boolean
+  /** dated imagery of the film's epochs (`film.epochs[].imagerySourceId`) */
+  epochSourceIds?: readonly string[]
 }
 
 /**
- * Credits of the sources in the film, the same strings as the status bar: relief and imagery always, Open-Meteo
- * and OpenStreetMap when their data is loaded.
+ * Credits of the sources in the film, the same strings as the status bar: relief and imagery always, the dated
+ * imagery of its epochs, Open-Meteo and OpenStreetMap when their data is loaded.
  */
-export function overlayCredits({ terrainSourceId, imagerySourceId, weather, landmarks }: CreditSources): string[] {
+export function overlayCredits({ terrainSourceId, imagerySourceId, weather, landmarks, epochSourceIds = [] }: CreditSources): string[] {
+  const dated = [...new Set(epochSourceIds)].flatMap((id) => {
+    const found = getHistoricalImagery(id)
+    return found && id !== imagerySourceId ? [`Photos ${found.label} : ${found.source.attribution}`] : []
+  })
   return [
     `Relief : ${getTerrainSource(terrainSourceId).attribution}`,
     `Imagerie : ${getImagerySource(imagerySourceId).attribution}`,
+    ...dated,
     ...(weather ? [OPEN_METEO_ATTRIBUTION] : []),
     ...(landmarks ? [`Repères : ${OSM_ATTRIBUTION}`] : []),
   ]
