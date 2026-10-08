@@ -2,7 +2,8 @@
  * TrackPicker — direct manipulation of the first track in the 3D view: a click on the line moves the playhead there
  * (film time of that progress), a right-click opens a small menu « Ajouter un arrêt ici » / « Ajouter un texte ici » /
  * « Accélérer / ralentir ici » (`TrackMenu`, DOM, next to the canvas); the cursor becomes a pointer over the line. A
- * right-click on the relief, on the line or off it, also offers « Point d'intérêt ici » (a name typed in the menu). A
+ * right-click on the relief, on the line or off it, also offers « Point d'intérêt ici » (a name typed in the menu) and
+ * « Point de passage ici » (a point of the route being drawn, `route/planner.ts`; the only entry without a track). A
  * press that travels `CLICK_SLOP_PX` or more is a camera drag (OrbitControls), not a click. Nothing during an export.
  *
  * Picking is in screen space (`pickProjectedPath`, pure): samples of the path draped like the line (terrain height, else
@@ -20,6 +21,7 @@ import { filmClockFor } from '../film/clock'
 import { POI_NAME_MAX, addPoi, defaultPoiName } from '../film/pois'
 import { addSpeed, addStop, addText } from '../film/timeline'
 import { buildTrackPath, pickProjectedPath, samplePath } from '../flyover/path'
+import { useRouteStore } from '../route/planner'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
 import { LINE_LIFT_M } from './TrackLines'
@@ -33,8 +35,11 @@ const CLICK_SLOP_PX = 4
 const PICK_SAMPLES = 1500
 /** Draped positions are recomputed after this delay (the terrain keeps loading finer tiles). */
 const DRAPE_TTL_MS = 1000
+/** Samples of the first track picked on screen (see `TrackPicker`). */
+type Samples = { distM: Float64Array; lon: Float64Array; lat: Float64Array; ele: Float64Array }
+
 /** Room the menu needs before it opens on the other side of the pointer (CSS pixels). */
-const MENU_ROOM = { width: 220, height: 168 }
+const MENU_ROOM = { width: 220, height: 200 }
 
 interface TrackMenuState {
   /**
@@ -83,19 +88,20 @@ export function TrackPicker() {
 
   useEffect(() => {
     drapeRef.current = null
-    if (!samples || !frame) return
+    // without a track (a route being drawn on the relief alone), only the right-click on the ground
+    if (!frame) return
     const v = new Vector3()
-    const screen = new Float32Array(samples.distM.length * 2)
+    const screen = new Float32Array((samples?.distM.length ?? 0) * 2)
 
-    const drape = () => {
+    const drape = (path: Samples) => {
       const now = performance.now()
       const cached = drapeRef.current
       if (cached && now - cached.at < DRAPE_TTL_MS) return cached.world
-      const world = cached?.world ?? new Float32Array(samples.distM.length * 3)
-      for (let k = 0; k < samples.distM.length; k++) {
-        let h = engine?.sampleHeight(samples.lon[k], samples.lat[k])
-        if (h === undefined || Number.isNaN(h)) h = Number.isNaN(samples.ele[k]) ? 0 : samples.ele[k]
-        frame.toLocal(samples.lon[k], samples.lat[k], h * exaggeration + LINE_LIFT_M, v)
+      const world = cached?.world ?? new Float32Array(path.distM.length * 3)
+      for (let k = 0; k < path.distM.length; k++) {
+        let h = engine?.sampleHeight(path.lon[k], path.lat[k])
+        if (h === undefined || Number.isNaN(h)) h = Number.isNaN(path.ele[k]) ? 0 : path.ele[k]
+        frame.toLocal(path.lon[k], path.lat[k], h * exaggeration + LINE_LIFT_M, v)
         world[3 * k] = v.x
         world[3 * k + 1] = v.y
         world[3 * k + 2] = v.z
@@ -106,8 +112,9 @@ export function TrackPicker() {
 
     /** distance along the track under the pointer, undefined when the line is not there */
     const pick = (e: PointerEvent): number | undefined => {
+      if (!samples) return undefined
       const rect = canvas.getBoundingClientRect()
-      const world = drape()
+      const world = drape(samples)
       for (let k = 0; k < samples.distM.length; k++) {
         v.set(world[3 * k], world[3 * k + 1], world[3 * k + 2]).project(camera)
         const behind = v.z < -1 || v.z > 1
@@ -140,13 +147,13 @@ export function TrackPicker() {
       press = null
       if (!p || p.button !== e.button || exporting() || Math.hypot(e.clientX - p.x, e.clientY - p.y) >= CLICK_SLOP_PX) return
       const atM = pick(e)
-      if (e.button === 0 && atM !== undefined) {
+      if (e.button === 0 && atM !== undefined && samples) {
         const clock = clockRef.current
         const progress = atM / samples.lengthM
         const t = clock.timeAtProgress(progress)
         useAppStore.getState().setProgress(progress, t < clock.totalTime() ? t : null)
       } else if (e.button === 2) {
-        const ground = pickGround(e) ?? (atM === undefined ? undefined : samplePath(samples.path, atM))
+        const ground = pickGround(e) ?? (atM === undefined || !samples ? undefined : samplePath(samples.path, atM))
         if (atM === undefined && !ground) return
         const rect = canvas.getBoundingClientRect()
         const x = e.clientX - rect.left
@@ -189,7 +196,7 @@ export function TrackPicker() {
  * on the relief, on the track or off it, a point of interest (`PoiNameForm`). Closes on Escape, on a click
  * elsewhere, when the focus leaves it and on export.
  */
-type Item = 'stop' | 'text' | 'speed' | 'poi'
+type Item = 'stop' | 'text' | 'speed' | 'poi' | 'route'
 
 /** The name of a point of interest added from the menu at `at`: Enter adds it (one undo step), empty = default name. */
 function PoiNameForm({ at }: { at: LonLat }) {
@@ -218,6 +225,7 @@ function PoiNameForm({ at }: { at: LonLat }) {
 export function TrackMenu() {
   const menu = useTrackMenu((s) => s.menu)
   const busy = useExportStore((s) => isExportBusy(s.phase))
+  const hasTracks = useAppStore((s) => s.tracks.length > 0)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -243,6 +251,11 @@ export function TrackMenu() {
       useTrackMenu.setState({ menu: { ...menu, naming: true } })
       return
     }
+    if (what === 'route') {
+      closeMenu()
+      if (menu.ground) useRouteStore.getState().add(menu.ground)
+      return
+    }
     closeMenu()
     const source = getFilmSource()
     const lengthM = source.track?.stats.distanceM ?? 0
@@ -261,7 +274,8 @@ export function TrackMenu() {
       { what: 'speed', label: 'Accélérer / ralentir ici' },
     )
   }
-  if (menu.ground) items.push({ what: 'poi', label: "Point d'intérêt ici" })
+  if (menu.ground && hasTracks) items.push({ what: 'poi', label: "Point d'intérêt ici" })
+  if (menu.ground) items.push({ what: 'route', label: 'Point de passage ici' })
 
   return (
     <div

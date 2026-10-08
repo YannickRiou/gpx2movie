@@ -316,6 +316,59 @@ const SCENARIOS = [
       log(`    image : ${still.result.fileName}, ${png.size} octets, ${still.result.incompleteFrames} image(s) incomplète(s)`)
     },
   },
+  {
+    id: 'reconnaissance',
+    title: 'Reconnaissance : relief sans trace, deux points de passage, itinéraire calculé',
+    async run({ page, url }) {
+      // Overpass answered in the page: a grid of paths every 0.002° around Chamonix (the public servers are not tested)
+      const elements = []
+      for (let i = 0; i <= 70; i++) {
+        const lon = Math.round((6.8 + i * 0.002) * 1000) / 1000
+        elements.push({ type: 'way', id: i + 1, tags: { highway: 'path' }, geometry: Array.from({ length: 51 }, (_, k) => ({ lon, lat: Math.round((45.87 + k * 0.002) * 1000) / 1000 })) })
+      }
+      for (let k = 0; k <= 50; k++) {
+        const lat = Math.round((45.87 + k * 0.002) * 1000) / 1000
+        elements.push({ type: 'way', id: 100 + k, tags: { highway: 'track' }, geometry: Array.from({ length: 71 }, (_, i) => ({ lon: Math.round((6.8 + i * 0.002) * 1000) / 1000, lat })) })
+      }
+      // only the Overpass calls answered this way (an interception of every request would break the tiles' CORS)
+      await page.evaluateOnNewDocument((body) => {
+        const fetch = window.fetch
+        window.fetch = (input, init) =>
+          /overpass-api\.de|maps\.mail\.ru/.test(String(input?.url ?? input))
+            ? Promise.resolve(new Response(body, { status: 200, headers: { 'content-type': 'application/json' } }))
+            : fetch(input, init)
+      }, JSON.stringify({ elements }))
+
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: STEP_MS })
+      await page.waitForSelector('#place', { visible: true, timeout: STEP_MS })
+      await page.type('#place', '45.92, 6.87')
+      await page.keyboard.press('Enter')
+      await until(page, () => !document.querySelector('#empty-title'))
+      await waitForScene(page)
+      // relief drawn under the pointer: the right-click offers « Point de passage ici »
+      const canvas = await page.$('canvas[data-engine^="three.js"]')
+      for (const [fx, fy] of [[0.4, 0.5], [0.6, 0.55]]) {
+        const box = await canvas.boundingBox()
+        for (let attempt = 0; ; attempt++) {
+          await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy, { button: 'right' })
+          const item = await page.waitForSelector('button::-p-text(Point de passage ici)', { visible: true, timeout: 5000 }).catch(() => null)
+          if (item) {
+            await item.click()
+            break
+          }
+          if (attempt >= 10) throw new Error('aucun relief sous le pointeur')
+          await page.keyboard.press('Escape')
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+        }
+      }
+      const points = await page.$$eval('.route-point__name', (els) => els.map((e) => e.textContent))
+      assert(points.join(',') === 'Départ,Arrivée', `points placés : ${points.join(', ')}`)
+      await clickButton(page, "Calculer l'itinéraire")
+      await page.waitForSelector('.toast::-p-text(Itinéraire)', { visible: true, timeout: STEP_MS })
+      await until(page, () => (document.querySelector('[role="group"][aria-label="Plans"]')?.textContent ?? '').includes('Survol'))
+      assert((await page.$$('.route-point')).length === 0, 'les points placés sont restés après le calcul')
+    },
+  },
 ]
 
 // ----------------------------------------------------------------------------------------------------- runner

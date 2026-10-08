@@ -33,8 +33,8 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 - Vérifications : `npm run typecheck`, `npm run lint` (34 avertissements préexistants dans `src/scene`, 0 erreur),
   `npx vitest run --maxWorkers=1` (63 fichiers, 844 tests au dernier commit vert), `npm run build`.
 - Tests de bout en bout : `npm run e2e` (`e2e/run.mjs`, puppeteer-core, Chromium de Playwright ou `OPENFLYOVER_CHROME`,
-  SwiftShader, serveur Vite lancé par le script sans surveillance des fichiers). 5 scénarios : accueil et exemple, onglets
-  et aide, T / Ctrl+Z / S, projet enregistré puis rouvert, export 320 × 180 + image fixe. 7 à 8 min ici (export
+  SwiftShader, serveur Vite lancé par le script sans surveillance des fichiers). 6 scénarios : accueil et exemple, onglets
+  et aide, T / Ctrl+Z / S, projet enregistré puis rouvert, export 320 × 180 + image fixe, reconnaissance (Overpass simulé). 7 à 8 min ici (export
   5 à 6 min, nuages coupés) ; `OPENFLYOVER_E2E_SKIP_EXPORT=1` : moins de 1 min 30. Échoue sur toute erreur de console hors bruit
   réseau. Un seul navigateur à la fois sur cette machine.
 - Vérifier le Rust de l'application de bureau (Linux impossible ici, Ubuntu 20.04 sans webkit2gtk-4.1) :

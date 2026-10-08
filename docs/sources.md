@@ -308,6 +308,22 @@ aucun en-tête de quota renvoyé). Attribution affichée : « Données météo :
 Journal (curl, 2026-10-07) : `start_date=end_date=2025-07-12`, 2 lieux (45,89/6,80 et 45,83/6,73) → 200, mailles 45,940/6,704 (1 021 m) et
 45,870/6,693 (1 109 m) ; `2026-10-07` (jour même) → 24 heures complètes ; `2026-10-10` → 400 hors plage ; `1939-12-31` → 400 hors plage.
 
+## Lieu tapé — Nominatim (2026-10-08)
+
+« Préparer une sortie » cherche un lieu tapé sur l'instance publique `https://nominatim.openstreetmap.org/search`
+(`format=jsonv2`, `limit=1`, `accept-language=fr`), sans clé. Règles d'usage relevées (page officielle
+operations.osmfoundation.org/policies/nominatim injoignable depuis la machine de développement ; reprises du forum d'aide
+et des listes OSM, non vérifiées sur le texte actuel) : au plus **1 requête par seconde** pour toute l'application,
+identification par un Referer ou un User-Agent propre (le navigateur envoie le Referer), **pas de recherche à la frappe**
+(autocomplétion interdite). Le code (`src/osm/geocode.ts`) ne cherche qu'à la validation, espace les requêtes d'une
+seconde et garde les réponses en mémoire pour la session ; des coordonnées tapées (« 45.92, 6.87 ») ne font aucune
+requête. Données ODbL, même attribution qu'Overpass. À vérifier : identification depuis l'application de bureau
+(WebView), dont le Referer n'est pas celui d'un site.
+
+Les chemins de la reconnaissance passent par Overpass (section suivante) : une requête par boîte calée sur une grille de
+0,02° autour des points posés (2 km de marge, 0,3° au plus), `way["highway"]` sans autoroutes, voies en construction ni
+voies privées, `out geom qt`, réponse réduite au type et aux points arrondis à 1e-5°, gardée 30 jours comme les autres.
+
 ## Repères OpenStreetMap — Overpass API (2026-10-07)
 
 Sommets, cols, refuges, lacs, cascades, lieux habités, points de vue et glaciers autour de la trace, lus dans OpenStreetMap par
