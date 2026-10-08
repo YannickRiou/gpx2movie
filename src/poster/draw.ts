@@ -1,7 +1,7 @@
 /**
  * Draws a poster on a 2D context from its layout (layout.ts) and content (content.ts): the 3D view (or, for the live
  * preview before any render, a placeholder with the track's outline), the text panel, title, subtitle, figures,
- * elevation profile, weather and credits. Synchronous; the fonts must be loaded first (`loadOverlayFonts`).
+ * list of the tracks, elevation profile, weather and credits. Synchronous; the fonts must be loaded first (`loadOverlayFonts`).
  *
  * The three styles take the fonts of the overlay styles of the same name and the « Carte alpine » colours.
  */
@@ -9,7 +9,7 @@ import { fillSky } from '../export/capture'
 import type { MiniMapOutline } from '../overlay/data'
 import { formatDistance, formatNumber } from '../ui/format'
 import type { PosterContent, PosterProfile } from './content'
-import { CREDIT_LINES, FIGURE_VALUE_SHARE, fitLines, fitText } from './layout'
+import { CREDIT_LINES, FIGURE_VALUE_SHARE, fitLines, fitText, fitTrackList, truncate } from './layout'
 import type { Box, Measure, PosterLayout } from './layout'
 import type { PosterStyleId } from './settings'
 
@@ -260,6 +260,33 @@ function drawFigures(ctx: PosterContext, layout: PosterLayout, content: PosterCo
   })
 }
 
+/** The list of the tracks: a dot of each one's colour, its name, then its distance, D+ and date in aligned columns. */
+function drawTrackList(ctx: PosterContext, layout: PosterLayout, content: PosterContent, theme: PosterTheme): void {
+  const rows = layout.tracks.slice(0, content.tracks.length)
+  if (rows.length === 0) return
+  const maxPx = layout.fonts.list
+  const dot = maxPx * 0.62
+  const indent = maxPx * 1.1
+  const body = measurer(ctx, theme.body)
+  const fit = fitTrackList(body, content.tracks, rows[0].w - indent, maxPx, maxPx * 0.6)
+  rows.forEach((row, i) => {
+    const line = content.tracks[i]
+    const cy = row.y + row.h / 2
+    ctx.beginPath()
+    ctx.arc(row.x + dot / 2, cy, dot / 2, 0, 2 * Math.PI)
+    ctx.fillStyle = line.color
+    ctx.fill()
+    text(ctx, truncate(body, line.name, fit.name, fit.px), row.x + indent, cy, theme.body, fit.px, theme.text)
+    // figures right-aligned in their columns, from the right edge
+    let right = row.x + row.w
+    for (const [value, width] of [[line.date, fit.date], [line.ascent, fit.ascent], [line.distance, fit.distance]] as const) {
+      if (width === 0) continue
+      if (value) text(ctx, value, right, cy, theme.body, fit.px, theme.textSoft, 'right')
+      right -= width + fit.gap
+    }
+  })
+}
+
 /**
  * The whole poster. `view` null draws the placeholder (with `outline`, the plan of the track) in its place.
  */
@@ -317,6 +344,7 @@ export function drawPoster(
   }
 
   drawFigures(ctx, layout, content, theme)
+  drawTrackList(ctx, layout, content, theme)
 
   if (layout.profile && content.profile) drawProfile(ctx, layout.profile, content.profile, theme, fonts.profile)
 

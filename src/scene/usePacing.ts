@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { materializeStops } from '../film/assemble'
+import { freezeLandmarkTitles, materializeStops, sameLandmarkTitles, withLandmarkTitles, withoutLandmarkTitles } from '../film/assemble'
+import type { PassingTimes } from '../film/assemble'
 import { filmClockFor } from '../film/clock'
 import type { FilmClock, FilmClockFor } from '../film/clock'
 import type { Film } from '../film/model'
@@ -27,18 +28,45 @@ export function getFilmSource(): FilmClockFor {
 
 /**
  * Edit the film of the stores: `stops` writes the generated stops out first (`materializeStops`, editing a stop);
- * one undo step, or merged with the quick changes before it when `step` is false (typing in the inspector). The
- * edit's `id` is selected on the timeline (null: nothing selected, absent: unchanged).
+ * retouching a landmark title fixes them (`freezeLandmarkTitles`); one undo step, or merged with the quick changes
+ * before it when `step` is false (typing in the inspector). The edit's `id` is selected on the timeline (null:
+ * nothing selected, absent: unchanged).
  */
 export function editFilm(edit: (film: Film) => { film: Film; id?: string | null }, { stops = false, step = true } = {}): void {
   const { track, film, pacing, landmarks } = getFilmSource()
   const result = edit(stops && track ? materializeStops(film, { track, landmarks, pacing }) : film)
-  const set = () => useAppStore.getState().setSetting('film', result.film)
-  if (result.film !== film) {
+  const next = freezeLandmarkTitles(film, result.film)
+  const set = () => useAppStore.getState().setSetting('film', next)
+  if (next !== film) {
     if (step) getSettingsHistory().transaction(set)
     else set()
   }
   if (result.id !== undefined) useAppStore.getState().setFilmSelection(result.id)
+}
+
+/**
+ * « Ralentir et titrer aux repères » on the film of the stores: on, its landmark slow-downs and titles made again from
+ * the landmarks loaded for the first track (`withLandmarkTitles`); off, removed. One undo step, none when nothing
+ * changes (the landmarks are published again and again with the same content).
+ */
+export function setLandmarkTitles(on: boolean): void {
+  const source = getFilmSource()
+  const { track, film, landmarks, pacing } = source
+  const next =
+    on && track
+      ? withLandmarkTitles({ ...film, landmarkTitles: true }, { track, landmarks, pacing }, passingTimes(source))
+      : withoutLandmarkTitles({ ...film, landmarkTitles: on })
+  if (next.landmarkTitles === film.landmarkTitles && sameLandmarkTitles(film, next)) return
+  getSettingsHistory().transaction(() => useAppStore.getState().setSetting('film', next))
+}
+
+/** Film time at which the marker passes a distance along the first track of `source`, in a given film (flight only). */
+function passingTimes(source: FilmClockFor): PassingTimes {
+  const lengthM = source.track?.stats.distanceM ?? 0
+  return (film) => {
+    const clock = filmClockFor({ ...source, film })
+    return (atM) => Math.min(clock.timeAtProgress(lengthM > 0 ? atM / lengthM : 0), clock.openingS + clock.flightS)
+  }
 }
 
 /**

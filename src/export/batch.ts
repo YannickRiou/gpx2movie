@@ -6,15 +6,21 @@
  * Destination: a folder picked once (`pickFolder`) receives every file, named « <projet> – 16x9-1080p.mp4 »; without
  * it, each file kept in memory is saved as soon as it is ready (`save`) and its URL kept for « Enregistrer à nouveau ».
  *
- * Pure (tested): the job list, the names, the estimate, the progress line and `runBatch` (sequencing with an injected
- * runner). `exportJob` drives the real export store; the batch store keeps the selection and the last run.
+ * « Un film par trace »: the same films for each GPX / FIT file of a folder, each track shown alone with its automatic
+ * film (`trackFilms.ts`), files named « <fichier> – 16x9-1080p.mp4 », the tracks and film of before put back at the end.
+ *
+ * Pure (tested): the job list, the names, the estimate, the progress lines, `runBatch` and `runTrackFilms`
+ * (sequencing with an injected runner). `exportJob` drives the real export store; the batch store keeps the
+ * selection and the last run.
  */
 import { create } from 'zustand'
-import type { WritableFolder } from '../platform/folder'
+import { supportedExtension } from '../import'
+import type { FolderFile, WritableFolder } from '../platform/folder'
 import { VIDEO_ASPECTS, VIDEO_RESOLUTIONS, videoSize } from './schedule'
 import type { VideoAspect, VideoResolution } from './schedule'
 import { isExportBusy, useExportStore, videoFileName } from './store'
 import type { ExportRequest, ExportResult, ExportState, StillType } from './store'
+import { beginTrackFilms, shownFilm } from './trackFilms'
 
 export interface BatchFormat {
   aspect: VideoAspect
@@ -196,13 +202,125 @@ export function batchProgressLabel(jobs: readonly BatchJobState[], fraction: num
   return `${index + 1} / ${jobs.length} · ${jobs[index].job.label} · ${percent} %`
 }
 
-/** Counts of a finished run, for its message. */
-export function batchSummary(jobs: readonly BatchJobState[]): { done: number; failed: number; canceled: number } {
+/** Counts of a finished run (jobs or tracks), for its message. */
+export function batchSummary(jobs: readonly { status: BatchStatus }[]): { done: number; failed: number; canceled: number } {
   return {
     done: jobs.filter((s) => s.status === 'done').length,
     failed: jobs.filter((s) => s.status === 'error').length,
     canceled: jobs.filter((s) => s.status === 'canceled').length,
   }
+}
+
+// ---------------------------------------------------------------------------
+// One film per track of a folder
+// ---------------------------------------------------------------------------
+
+/** The GPX and FIT files of a folder, sorted by name as a file browser does (« Sortie 2 » before « Sortie 10 »). */
+export function trackFiles<F extends { name: string }>(files: readonly F[]): F[] {
+  return files.filter((f) => supportedExtension(f.name)).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }))
+}
+
+const stemOf = (fileName: string) => fileName.replace(/\.[^.]+$/, '')
+
+/**
+ * Name of the films of a track file: the file name without its extension, « Sortie (fit) » when another file of
+ * `folder` has the same name (a .gpx and a .fit of the same outing would overwrite each other's films).
+ */
+export function trackFilmName(fileName: string, folder: readonly string[] = []): string {
+  const stem = stemOf(fileName)
+  const twin = folder.some((other) => other !== fileName && stemOf(other).toLowerCase() === stem.toLowerCase())
+  return twin ? `${stem} (${fileName.slice(stem.length + 1).toLowerCase()})` : stem
+}
+
+export interface TrackRunState {
+  /** file name */
+  name: string
+  status: BatchStatus
+  /** why the track was skipped (unreadable file), or the first failure of its films */
+  error?: string
+  /** its films, one per format */
+  jobs: BatchJobState[]
+}
+
+export interface TrackFilmsRunner {
+  /** import the file alone and show its automatic film; a throw skips the track */
+  show(file: FolderFile): Promise<void>
+  /** export one film of the track shown, named after `name` (like `BatchRunner.run`) */
+  run(job: BatchJob, name: string): Promise<JobOutcome>
+  canceled(): boolean
+  report(tracks: readonly TrackRunState[]): void
+  /** put back what was shown before the run; called once at the end, whatever happened */
+  restore(): void
+}
+
+/** Status of a track from those of its films: canceled when one was, else failed when one failed. */
+function trackOutcome(films: readonly BatchJobState[]): Pick<TrackRunState, 'status' | 'error'> {
+  if (films.some((f) => f.status === 'canceled')) return { status: 'canceled' }
+  const failed = films.find((f) => f.status === 'error')
+  return failed ? { status: 'error', error: failed.error } : { status: 'done' }
+}
+
+/**
+ * Show each track file alone and export its films (`runBatch`), one track after the other. An unreadable file or a
+ * failed film marks its track and goes on with the next; a cancel stops the run and cancels the tracks left. What
+ * was shown before is put back at the end.
+ */
+export async function runTrackFilms(
+  files: readonly FolderFile[],
+  jobs: readonly BatchJob[],
+  runner: TrackFilmsRunner,
+): Promise<TrackRunState[]> {
+  let states: TrackRunState[] = files.map((f) => ({ name: f.name, status: 'pending', jobs: [] }))
+  const update = (from: number, to: number, patch: Partial<Omit<TrackRunState, 'name'>>) => {
+    states = states.map((s, i) => (i >= from && i < to ? { ...s, ...patch } : s))
+    runner.report(states)
+  }
+  try {
+    for (let i = 0; i < files.length; i++) {
+      if (runner.canceled()) {
+        update(i, files.length, { status: 'canceled' })
+        break
+      }
+      update(i, i + 1, { status: 'running' })
+      try {
+        await runner.show(files[i])
+      } catch (error) {
+        update(i, i + 1, { status: 'error', error: errorMessage(error) })
+        continue
+      }
+      const name = trackFilmName(files[i].name, files.map((f) => f.name))
+      const films = await runBatch(jobs, {
+        run: (job) => runner.run(job, name),
+        canceled: runner.canceled,
+        report: (list) => update(i, i + 1, { jobs: [...list] }),
+      })
+      const outcome = trackOutcome(films)
+      update(i, i + 1, outcome)
+      if (outcome.status === 'canceled') {
+        update(i + 1, files.length, { status: 'canceled' })
+        break
+      }
+    }
+  } finally {
+    runner.restore()
+  }
+  return states
+}
+
+/** Part (0..1) of the films of a track that is done, `fraction` of the film running included. */
+export function trackFraction({ jobs }: TrackRunState, fraction: number): number {
+  if (jobs.length === 0) return 0
+  const finished = jobs.filter((j) => j.status !== 'pending' && j.status !== 'running').length
+  const running = jobs.some((j) => j.status === 'running') ? Math.min(1, Math.max(0, fraction)) : 0
+  return (finished + running) / jobs.length
+}
+
+/** « 3 / 12 · Sortie 3.gpx · 42 % » for the track running (`fraction` of its film running done); '' when none is. */
+export function trackProgressLabel(tracks: readonly TrackRunState[], fraction: number): string {
+  const index = tracks.findIndex((s) => s.status === 'running')
+  if (index < 0) return ''
+  const percent = Math.round(trackFraction(tracks[index], fraction) * 100)
+  return `${index + 1} / ${tracks.length} · ${tracks[index].name} · ${percent} %`
 }
 
 // ---------------------------------------------------------------------------
@@ -303,11 +421,16 @@ export async function exportJob(job: BatchJob, ctx: BatchContext): Promise<JobOu
 
 export type BatchPhase = 'idle' | 'running' | 'finished'
 
+/** What « Un film par trace » shares with a batch: each film is named after its file, from the film of its track. */
+export type TrackFilmsContext = Omit<BatchContext, 'canceled' | 'projectName' | 'film' | 'folder'> & { folder: WritableFolder }
+
 export interface BatchState {
   phase: BatchPhase
   selection: BatchSelection
   /** jobs of the current or last run */
   jobs: BatchJobState[]
+  /** tracks of the current or last « Un film par trace » (empty after a batch of the film shown) */
+  tracks: TrackRunState[]
   cancelRequested: boolean
   /** folder of the current or last run, null when the files were kept in memory */
   folderName: string | null
@@ -315,6 +438,8 @@ export interface BatchState {
   select(patch: Partial<BatchSelection>): void
   /** run the jobs; resolves with their final states (immediately and unchanged when a run is going on) */
   run(jobs: readonly BatchJob[], ctx: Omit<BatchContext, 'canceled'>): Promise<BatchJobState[]>
+  /** the films `jobs` for each track file, into `ctx.folder`; resolves with the tracks (unchanged when a run is going on) */
+  runTracks(files: readonly FolderFile[], jobs: readonly BatchJob[], ctx: TrackFilmsContext): Promise<TrackRunState[]>
   /** stop the job running and drop the others */
   cancel(): void
   /** forget the last run (revokes the URLs of the files kept in memory) */
@@ -331,6 +456,7 @@ export const useBatchStore = create<BatchState>()((set, get) => ({
   phase: 'idle',
   selection: DEFAULT_SELECTION,
   jobs: [],
+  tracks: [],
   cancelRequested: false,
   folderName: null,
 
@@ -341,12 +467,29 @@ export const useBatchStore = create<BatchState>()((set, get) => ({
   async run(jobs, ctx) {
     if (get().phase === 'running') return get().jobs
     revokeAll(get().jobs)
-    set({ phase: 'running', jobs: [], cancelRequested: false, folderName: ctx.folder?.name ?? null })
+    set({ phase: 'running', jobs: [], tracks: [], cancelRequested: false, folderName: ctx.folder?.name ?? null })
     const canceled = () => get().cancelRequested
     const states = await runBatch(jobs, {
       run: (job) => exportJob(job, { ...ctx, canceled }),
       canceled,
       report: (list) => set({ jobs: [...list] }),
+    })
+    set({ phase: 'finished', cancelRequested: false })
+    return states
+  },
+
+  async runTracks(files, jobs, ctx) {
+    if (get().phase === 'running') return get().tracks
+    revokeAll(get().jobs)
+    set({ phase: 'running', jobs: [], tracks: [], cancelRequested: false, folderName: ctx.folder.name })
+    const canceled = () => get().cancelRequested
+    const session = beginTrackFilms(canceled)
+    const states = await runTrackFilms(files, jobs, {
+      show: async (file) => session.show(await file.read()),
+      run: (job, name) => exportJob(job, { ...ctx, projectName: name, film: shownFilm(), canceled }),
+      canceled,
+      report: (list) => set({ tracks: [...list] }),
+      restore: session.restore,
     })
     set({ phase: 'finished', cancelRequested: false })
     return states
@@ -361,12 +504,12 @@ export const useBatchStore = create<BatchState>()((set, get) => ({
   clear() {
     if (get().phase === 'running') return
     revokeAll(get().jobs)
-    set({ phase: 'idle', jobs: [], folderName: null })
+    set({ phase: 'idle', jobs: [], tracks: [], folderName: null })
   },
 }))
 
 /** Back to the initial state (tests). */
 export function resetBatchStore(): void {
   revokeAll(useBatchStore.getState().jobs)
-  useBatchStore.setState({ phase: 'idle', selection: DEFAULT_SELECTION, jobs: [], cancelRequested: false, folderName: null })
+  useBatchStore.setState({ phase: 'idle', selection: DEFAULT_SELECTION, jobs: [], tracks: [], cancelRequested: false, folderName: null })
 }

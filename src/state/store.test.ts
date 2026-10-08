@@ -162,6 +162,8 @@ describe('settings and misc', () => {
         media: [],
         audio: [],
         duckMusic: false,
+        landmarkTitles: true,
+        pois: [],
       },
       labels: { climbs: true, waypoints: true },
       weather: { enabled: true },
@@ -177,6 +179,7 @@ describe('settings and misc', () => {
         subtitle: '',
         figures: { distance: true, ascent: true, time: true, maxAltitude: true, climbs: true },
         weather: true,
+        flat: false,
       },
       landmarks: {
         enabled: true,

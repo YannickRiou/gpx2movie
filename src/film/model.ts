@@ -16,6 +16,8 @@
  * - `audio`: music clips of the soundtrack, in film time too, on the « Musique » lane: played along by the preview
  *   and mixed into the exported film (`film/audio.ts`); their files are in the media table as well. The sound of the
  *   video clips joins that mix (`clipHasSound`), and `duckMusic` lowers the music under it.
+ * - `pois`: points of interest named by hand (« Le chalet de Paul »), drawn as labels on the relief like the
+ *   OpenStreetMap landmarks (`poiLabels`, scene/labelModel.ts); edited by `film/pois.ts`.
  *
  * Part of `Settings` (key `film`): saved in the project document, undone, read the same way by the preview and
  * the export. Ids are stable (`stop-3`, `text-1`, `auto-4520` for a generated stop) so the timeline can select
@@ -25,8 +27,11 @@ import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { OVERLAY_ANCHORS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 
-export const SHOT_STYLES = ['aucune', 'descente', 'saut'] as const
-/** 'descente': the camera glides from the overview down to the flight; 'saut': overview held, then a quick move. */
+export const SHOT_STYLES = ['aucune', 'descente', 'saut', 'situation'] as const
+/**
+ * 'descente': the camera glides from the overview down to the flight; 'saut': overview held, then a quick move;
+ * 'situation': like 'descente', from much higher above the region (closing: back up to it).
+ */
 export type ShotStyle = (typeof SHOT_STYLES)[number]
 
 export interface FilmShot {
@@ -168,6 +173,14 @@ export const FADE_RANGE = { min: 0, max: 30, step: 0.5 } as const
  * and ranges as the camera settings. The camera eases from one key to the next, and from the film's settings into
  * the first key and back to them after the last one (`keyedCamera`, flyover/filmCamera.ts).
  */
+/** A point of interest placed by hand: a name at a place on the ground, shown as a label in the view and the film. */
+export interface FilmPoi {
+  id: string
+  lon: number
+  lat: number
+  name: string
+}
+
 export interface FilmCameraKey {
   id: string
   /** distance along the first track (metres, same scale as `buildTrackPath`) */
@@ -210,6 +223,13 @@ export interface Film {
   audio: FilmAudio[]
   /** the music is lowered while a video clip with sound plays (« Baisser la musique sous les vidéos ») */
   duckMusic: boolean
+  /** points of interest placed by hand (labels only: they change neither the flight nor its time) */
+  pois: FilmPoi[]
+  /**
+   * slow-downs and titles made at the landmarks as they load (« Ralentir et titrer aux repères », `withLandmarkTitles`
+   * in `assemble.ts`); off for the films saved before it, cleared by retouching one of those items
+   */
+  landmarkTitles: boolean
 }
 
 /** Slider ranges (also the validity ranges of a loaded project), seconds. */
@@ -231,6 +251,8 @@ export const DEFAULT_FILM: Film = {
   media: [],
   audio: [],
   duckMusic: false,
+  pois: [],
+  landmarkTitles: true,
 }
 
 /**
@@ -265,11 +287,19 @@ export function shotDurationS(shot: FilmShot): number {
 // Ids
 // ---------------------------------------------------------------------------
 
-export type FilmItemKind = 'stop' | 'speed' | 'camera' | 'text' | 'media' | 'music'
+export type FilmItemKind = 'stop' | 'speed' | 'camera' | 'text' | 'media' | 'music' | 'poi'
 
 /** Next free id `<kind>-<n>` of the film (one more than the highest number used by that kind). */
 export function nextFilmId(film: Film, kind: FilmItemKind): string {
-  const lanes = { stop: film.stops, speed: film.speeds, camera: film.cameraKeys, text: film.texts, media: film.media, music: film.audio }
+  const lanes = {
+    stop: film.stops,
+    speed: film.speeds,
+    camera: film.cameraKeys,
+    text: film.texts,
+    media: film.media,
+    music: film.audio,
+    poi: film.pois,
+  }
   const items: readonly { id: string }[] = lanes[kind]
   const pattern = new RegExp(`^${kind}-(\\d+)$`)
   let max = 0
@@ -316,6 +346,10 @@ export function isValidSpeed(speed: unknown): speed is FilmSpeed {
     (speed.toM as number) > (speed.fromM as number) &&
     within(speed.factor, SPEED_FACTOR_RANGE.min, SPEED_FACTOR_RANGE.max)
   )
+}
+
+export function isValidPoi(poi: unknown): poi is FilmPoi {
+  return isRecord(poi) && isId(poi.id) && within(poi.lon, -180, 180) && within(poi.lat, -90, 90) && typeof poi.name === 'string'
 }
 
 export function isValidCameraKey(key: unknown): key is FilmCameraKey {
@@ -402,12 +436,12 @@ export function isValidAudio(audio: unknown): audio is FilmAudio {
  */
 export function isValidFilm(film: Film): boolean {
   if (!isValidShot(film.opening) || !isValidShot(film.closing) || typeof film.autoStops !== 'boolean') return false
-  if (typeof film.duckMusic !== 'boolean') return false
+  if (typeof film.duckMusic !== 'boolean' || typeof film.landmarkTitles !== 'boolean') return false
   if (!oneOf(AUTO_STOP_MODES, film.autoMode)) return false
   if (!film.stops.every(isValidStop) || !film.texts.every(isValidText) || !film.media.every(isValidMedia)) return false
   if (!film.speeds.every(isValidSpeed) || !apart(film.speeds) || !film.audio.every(isValidAudio)) return false
-  if (!film.cameraKeys.every(isValidCameraKey)) return false
-  const ids = [...film.stops, ...film.speeds, ...film.cameraKeys, ...film.texts, ...film.media, ...film.audio].map((item) => item.id)
+  if (!film.cameraKeys.every(isValidCameraKey) || !film.pois.every(isValidPoi)) return false
+  const ids = [...film.stops, ...film.speeds, ...film.cameraKeys, ...film.texts, ...film.media, ...film.audio, ...film.pois].map((item) => item.id)
   return new Set(ids).size === ids.length
 }
 
@@ -415,14 +449,15 @@ export function isValidFilm(film: Film): boolean {
  * Fill-in of a film saved before a field existed (`SETTING_UPGRADES`): missing fields from `DEFAULT_FILM`, except
  * `autoMode`, which keeps the automatic stops of those films following the pacing ('rythme') as they did; media
  * saved before their placement get `MEDIA_DEFAULTS`; a film saved before the music gets no music (`audio: []`), one
- * saved before the camera keys none (`cameraKeys: []`);
+ * saved before the camera keys none (`cameraKeys: []`), one saved before the points of interest none (`pois: []`),
+ * one saved before the landmark titles none (`landmarkTitles: false`: its flight stays as it was);
  * video clips saved before their sound was handled stay silent (`muted: true`). The `epochs` key of earlier versions
  * is dropped.
  */
 export function withFilmDefaults(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
   const { epochs: _dropped, ...saved } = raw
-  const film = { ...DEFAULT_FILM, autoMode: 'rythme', ...saved }
+  const film = { ...DEFAULT_FILM, autoMode: 'rythme', landmarkTitles: false, ...saved }
   return Array.isArray(film.media) ? { ...film, media: film.media.map(withMediaDefaults) } : film
 }
 

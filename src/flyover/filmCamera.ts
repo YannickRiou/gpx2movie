@@ -10,6 +10,8 @@
  * (no turn during the transition). Transition between the overview and the flight view: target lerped,
  * direction nlerped, distance interpolated geometrically, eased by smootherstep, kept MIN_GROUND_CLEARANCE_M
  * above the ground. 'descente' eases over the whole shot; 'saut' holds the overview and moves in JUMP_S.
+ * 'situation' eases over the whole shot like 'descente', from (or to) the region view: same target and side,
+ * higher and steeper (`regionDistanceM`), in one move that passes the overview's distance on the way.
  */
 import { Vector3 } from 'three'
 import { clamp, smootherstep } from '../core/math'
@@ -29,6 +31,13 @@ export { CAMERA_KEY_EASE_S, cameraKeyEaseM, keyedCamera } from './cameraKeys'
 export const OVERVIEW_DISTANCE_FACTOR = 1.6
 export const OVERVIEW_MIN_DISTANCE_M = 2_000
 export const OVERVIEW_PITCH_DEG = 40
+/** Region view of a 'situation' shot: at most this × box diagonal away, this much above the horizon. */
+export const REGION_DISTANCE_FACTOR = 5
+export const REGION_PITCH_DEG = 65
+/** Terrain area around the tracks (same as scene/TerrainLayer.tsx) and vertical field of view (scene/FlyoverCanvas.tsx). */
+const TERRAIN_MARGIN_M = 25_000
+const TERRAIN_MIN_SIZE_M = 40_000
+const CAMERA_FOV_DEG = 50
 /** Length of the quick move of a 'saut' shot (seconds). */
 export const JUMP_S = 0.6
 /** 'orbite' stop: the camera turns out by STOP_ORBIT_DEG_PER_S × stop duration (at most STOP_ORBIT_MAX_DEG) and back. */
@@ -140,6 +149,73 @@ function keepAboveGround(position: Vector3, frame: LocalFrame, sample: HeightSam
   return position
 }
 
+/** Distance factor for a frame taller than wide (9:16 keeps the whole track). */
+const portraitFactor = (aspect: number) => (aspect > 0 && aspect < 1 ? 1 / aspect : 1)
+
+/** Distance of the overview from the centre of a track box `diagonal` long (relief included). */
+export function overviewDistanceM(diagonal: number, aspect: number): number {
+  return Math.max(OVERVIEW_MIN_DISTANCE_M, OVERVIEW_DISTANCE_FACTOR * diagonal * portraitFactor(aspect))
+}
+
+/**
+ * Farthest flat ground in the frame from the target, per metre of camera distance, for a camera `pitchDeg` above
+ * the horizon (more than half the field of view: no sky) and a frame of `aspect`: the top or bottom corners.
+ */
+export function groundReach(pitchDeg: number, aspect: number): number {
+  const sin = Math.sin(pitchDeg * DEG)
+  const cos = Math.cos(pitchDeg * DEG)
+  const t = Math.tan((CAMERA_FOV_DEG / 2) * DEG)
+  // camera 1 m from the target; corner ray = forward + side·t·up + aspect·t·right, cut by the ground plane
+  const corner = (side: number) => {
+    const length = sin / (sin - side * t * cos)
+    return Math.hypot(length * aspect * t, length * (cos + side * t * sin) - cos)
+  }
+  return Math.max(corner(1), corner(-1))
+}
+
+/**
+ * Distance of the region view of a 'situation' shot: REGION_DISTANCE_FACTOR × diagonal, but its frame reaches no
+ * farther than the terrain area (`halfSideM` = smaller half side of the track box, plus the margin) or than the
+ * overview already shows; never nearer than the overview.
+ */
+export function regionDistanceM(diagonal: number, halfSideM: number, aspect: number): number {
+  const overview = overviewDistanceM(diagonal, aspect)
+  const terrainM = Math.max(halfSideM + TERRAIN_MARGIN_M, TERRAIN_MIN_SIZE_M / 2)
+  const shownM = Math.max(terrainM, overview * groundReach(OVERVIEW_PITCH_DEG, aspect))
+  const wanted = REGION_DISTANCE_FACTOR * diagonal * portraitFactor(aspect)
+  return Math.max(overview, Math.min(wanted, shownM / groundReach(REGION_PITCH_DEG, aspect)))
+}
+
+/** Centre of the track's box on the ground, the box diagonal (relief included) and its smaller half side. */
+function trackFraming(path: TrackPath, frame: LocalFrame, sample: HeightSampler | null, exaggeration: number) {
+  const box = trackBox(path, frame)
+  const centre = new Vector3((box.minX + box.maxX) / 2, 0, (box.minZ + box.maxZ) / 2)
+  const at = frame.toLonLat(centre)
+  const recorded = Number.isNaN(box.minEle) ? 0 : (box.minEle + box.maxEle) / 2
+  const target = frame.toLocal(at.lon, at.lat, (sample?.(at.lon, at.lat) ?? recorded) * exaggeration)
+  const relief = Number.isNaN(box.minEle) ? 0 : (box.maxEle - box.minEle) * exaggeration
+  const diagonal = Math.hypot(box.maxX - box.minX, box.maxZ - box.minZ, relief)
+  const halfSideM = Math.min(box.maxX - box.minX, box.maxZ - box.minZ) / 2
+  return { target, diagonal, halfSideM }
+}
+
+/** View of `target` from `distance` away, `pitchDeg` above the horizon, on the side the `joined` view looks from. */
+function viewFromSide(
+  target: Vector3,
+  joined: CameraView,
+  pitchDeg: number,
+  distance: number,
+  frame: LocalFrame,
+  sample: HeightSampler | null,
+  exaggeration: number,
+): CameraView {
+  const back = joined.position.clone().sub(joined.target).setY(0)
+  if (back.lengthSq() < 1e-12) back.set(1, 0, 1)
+  back.normalize().multiplyScalar(Math.cos(pitchDeg * DEG)).addScaledVector(UP, Math.sin(pitchDeg * DEG))
+  const position = target.clone().addScaledVector(back, distance)
+  return { target, position: keepAboveGround(position, frame, sample, exaggeration) }
+}
+
 /**
  * Overview of the whole track for a frame of `aspect` (width / height), seen from the side the `joined` flight
  * view looks from.
@@ -152,22 +228,22 @@ export function overviewView(
   aspect: number,
   joined: CameraView,
 ): CameraView {
-  const box = trackBox(path, frame)
-  const centre = new Vector3((box.minX + box.maxX) / 2, 0, (box.minZ + box.maxZ) / 2)
-  const at = frame.toLonLat(centre)
-  const recorded = Number.isNaN(box.minEle) ? 0 : (box.minEle + box.maxEle) / 2
-  const target = frame.toLocal(at.lon, at.lat, (sample?.(at.lon, at.lat) ?? recorded) * exaggeration)
+  const { target, diagonal } = trackFraming(path, frame, sample, exaggeration)
+  return viewFromSide(target, joined, OVERVIEW_PITCH_DEG, overviewDistanceM(diagonal, aspect), frame, sample, exaggeration)
+}
 
-  const relief = Number.isNaN(box.minEle) ? 0 : (box.maxEle - box.minEle) * exaggeration
-  const diagonal = Math.hypot(box.maxX - box.minX, box.maxZ - box.minZ, relief)
-  const portrait = aspect > 0 && aspect < 1 ? 1 / aspect : 1
-  const distance = Math.max(OVERVIEW_MIN_DISTANCE_M, OVERVIEW_DISTANCE_FACTOR * diagonal * portrait)
-
-  const back = joined.position.clone().sub(joined.target).setY(0)
-  if (back.lengthSq() < 1e-12) back.set(1, 0, 1)
-  back.normalize().multiplyScalar(Math.cos(OVERVIEW_PITCH_DEG * DEG)).addScaledVector(UP, Math.sin(OVERVIEW_PITCH_DEG * DEG))
-  const position = target.clone().addScaledVector(back, distance)
-  return { target, position: keepAboveGround(position, frame, sample, exaggeration) }
+/** Region view of a 'situation' shot: the overview's target and side, higher and steeper. */
+export function regionView(
+  path: TrackPath,
+  frame: LocalFrame,
+  sample: HeightSampler | null,
+  exaggeration: number,
+  aspect: number,
+  joined: CameraView,
+): CameraView {
+  const { target, diagonal, halfSideM } = trackFraming(path, frame, sample, exaggeration)
+  const distance = regionDistanceM(diagonal, halfSideM, aspect)
+  return viewFromSide(target, joined, REGION_PITCH_DEG, distance, frame, sample, exaggeration)
 }
 
 /** View `k` of the way from `a` to `b` (exactly `a` at 0 and `b` at 1). */
@@ -232,12 +308,13 @@ export function computeFilmView(
   const flight = computeCameraView(path, progress, frame, sample, { ...flightOptions, camera, timeS: motionS, orbitRad })
   if (state.phase !== 'opening' && state.phase !== 'closing') return { ...flight, marker: flight.target }
 
-  const overview = overviewView(path, frame, sample, options.exaggeration, aspect, flight)
   const shot = state.phase === 'opening' ? clock.opening : clock.closing
+  const wideView = shot.style === 'situation' ? regionView : overviewView
+  const wide = wideView(path, frame, sample, options.exaggeration, aspect, flight)
   const k = shotBlend(shot.style, state.phase, state.localS, state.lengthS)
   const view =
     state.phase === 'opening'
-      ? blendViews(overview, flight, k, frame, sample, options.exaggeration)
-      : blendViews(flight, overview, k, frame, sample, options.exaggeration)
+      ? blendViews(wide, flight, k, frame, sample, options.exaggeration)
+      : blendViews(flight, wide, k, frame, sample, options.exaggeration)
   return { ...view, marker: flight.target }
 }

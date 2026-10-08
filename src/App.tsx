@@ -16,8 +16,10 @@ import { HelpDialog } from './ui/HelpDialog'
 import { Icon } from './ui/icons'
 import type { IconName } from './ui/icons'
 import { LandmarkPanel } from './ui/LandmarkPanel'
+import { installLibraryAutosave } from './ui/library'
 import { ModifiedMarker } from './ui/ModifiedMarker'
 import { OverlayPanel } from './ui/OverlayPanel'
+import { PoiPanel } from './ui/PoiPanel'
 import { chooseFilesToOpen, openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
@@ -181,6 +183,7 @@ export default function App() {
 
   useEffect(() => installHistoryShortcuts(getSettingsHistory()), [])
   useEffect(() => installSliderGestures(getSettingsHistory()), [])
+  useEffect(() => installLibraryAutosave(() => !isExporting()), [])
 
   /** a pointer button is down */
   const pressed = useRef(false)
@@ -397,6 +400,7 @@ export default function App() {
             <>
               <SettingsPanel />
               <LandmarkPanel />
+              <PoiPanel />
             </>,
           )}
           {panel('survol', <CameraPanel />)}

@@ -156,7 +156,7 @@ describe('useExportStore', () => {
 describe('straight to disk', () => {
   const file = () => ({ fileName: 'Mon film.mp4', write: vi.fn(), close: vi.fn(), discard: vi.fn(async () => undefined) })
   const platform = (canStreamToDisk: boolean, createWritableFile: () => Promise<unknown>) => ({
-    capabilities: { isDesktop: false, canEncodeVideo: true, canStreamToDisk },
+    capabilities: { isDesktop: false, videoEncoder: 'webcodecs' as const, canStreamToDisk },
     createWritableFile: vi.fn(createWritableFile) as never,
   })
 

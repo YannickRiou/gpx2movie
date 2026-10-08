@@ -20,7 +20,7 @@ import { buildTrack, isUtcOffsetMin } from '../import/stats'
 import { isValidVideoSettings, withVideoDefaults } from '../export/schedule'
 import { LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { isValidOverlay, withOverlayDefaults } from '../overlay/settings'
-import { isValidPoster } from '../poster/settings'
+import { isValidPoster, withPosterDefaults } from '../poster/settings'
 import { isValidGrading } from '../scene/grading'
 import { TRACK_COLOR_MODES } from '../flyover/trackColor'
 import { isValidMarker, isValidTrackStyle, withMarkerDefaults, withTrackStyleDefaults } from '../scene/markerSettings'
@@ -133,6 +133,7 @@ export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unkno
   film: withFilmDefaults,
   trackStyle: withTrackStyleDefaults,
   marker: withMarkerDefaults,
+  poster: withPosterDefaults,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

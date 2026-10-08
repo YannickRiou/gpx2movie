@@ -63,6 +63,10 @@ describe('media table', () => {
     expect(isValidMediaAsset({ ...sound, peaks: [] })).toBe(false)
     expect(isValidMediaAsset({ ...sound, peaks: [1.2] })).toBe(false)
     expect(isValidMediaAsset({ ...sound, peaks: undefined })).toBe(false)
+    expect(isValidMediaAsset({ ...sound, beats: { bpm: 120, confidence: 0.5, times: [0.5, 1], downbeat: 0 } })).toBe(true)
+    expect(isValidMediaAsset({ ...sound, beats: { bpm: 120, times: [] } })).toBe(false)
+    // a damaged tempo is dropped on load, the sound kept
+    expect(sanitizeMediaTable({ 'audio-1': { ...sound, beats: { bpm: 120, times: [] } } })).toEqual({ 'audio-1': sound })
     expect(sanitizeMediaTable({ 'photo-1': asset('a'), 'photo-2': { data: 1 } })).toEqual({ 'photo-1': asset('a') })
     expect(sanitizeMediaTable(undefined)).toEqual({})
     expect(sanitizeMediaTable([asset('a')])).toEqual({})

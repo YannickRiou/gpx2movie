@@ -11,6 +11,7 @@
  * starts the export), else it is kept in memory and downloaded at the end.
  */
 import { create } from 'zustand'
+import type { TrackPath } from '../flyover/path'
 import type { Platform, WritableFile } from '../platform'
 import type { VideoQuality } from './schedule'
 
@@ -39,6 +40,10 @@ export interface ExportRequest {
     type: StillType
     /** the whole track from the south (overview shot framing) instead of the view at `progress`, no marker */
     overview?: boolean
+    /** what the overview frames (default: the first track) */
+    framing?: TrackPath
+    /** the view drawn without the scene (flat map poster), in place of a 3D render */
+    drawView?: (signal: AbortSignal) => Promise<OffscreenCanvas>
     /** draws the rendered image into the final picture (the poster), in place of the film overlay */
     compose?: (view: OffscreenCanvas) => Promise<OffscreenCanvas>
   }

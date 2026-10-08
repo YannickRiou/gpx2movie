@@ -27,10 +27,19 @@ export function getPlatform(): Platform {
   return current
 }
 
-/** Why no video can be encoded here, null when WebCodecs is present (hint of the export panel). */
-export function videoEncoderMissingHint(capabilities: Capabilities = getPlatform().capabilities): string | null {
-  if (capabilities.canEncodeVideo) return null
-  return capabilities.isDesktop
-    ? "l'application de bureau n'a pas encore d'encodeur vidéo sur ce système. Exportez depuis le site dans Chrome ou Edge ; l'image fixe reste disponible ici."
-    : "l'encodage vidéo (WebCodecs) manque. Exportez depuis Chrome, Edge ou un Firefox récent ; l'image fixe reste disponible ici."
+/**
+ * Why no video can be encoded here, null when WebCodecs is present (hint of the export panel, shown when no codec was
+ * found). Desktop without WebCodecs: ffmpeg is missing, or the film is transparent (the overlay alone, WebCodecs only).
+ */
+export function videoEncoderMissingHint(capabilities: Capabilities = getPlatform().capabilities, transparent = false): string | null {
+  switch (capabilities.videoEncoder) {
+    case 'webcodecs':
+      return null
+    case 'native':
+      return transparent
+        ? "l'application de bureau ne sait pas encore l'encoder sur ce système. Exportez-le depuis le site dans Chrome ou Edge."
+        : "installez ffmpeg (sudo apt install ffmpeg), qui encode la vidéo sur ce système, puis relancez l'application ; l'image fixe reste disponible ici."
+    default:
+      return "l'encodage vidéo (WebCodecs) manque. Exportez depuis Chrome, Edge ou un Firefox récent ; l'image fixe reste disponible ici."
+  }
 }

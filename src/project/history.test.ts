@@ -102,6 +102,20 @@ describe('createHistory', () => {
     expect(h.get().a).toBe(1)
   })
 
+  it('records nothing while suspended, transactions included', () => {
+    const h = setup()
+    h.set({ a: 1 })
+    const resume = h.history.suspend()
+    h.tick(1000)
+    h.set({ a: 2 })
+    h.history.transaction(() => h.set({ b: 2 }))
+    h.set({ a: 1, b: 0 })
+    resume()
+    h.history.undo()
+    expect(h.get()).toEqual({ a: 0, b: 0 })
+    expect(h.history.getState().canUndo).toBe(false)
+  })
+
   it('does not coalesce changes of different keys, nor across an undo', () => {
     const h = setup()
     h.set({ a: 1 })

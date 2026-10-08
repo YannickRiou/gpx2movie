@@ -2,7 +2,8 @@
  * Poster layout as pure functions: boxes in pixels for the 3D view, the text panel and each text row, and text
  * fitting (a text is shrunk, then cut with « … », until it fits its box). The box geometry depends only on the size,
  * the style and which rows are present, never on measured text: the size of the 3D view to render is known before
- * the fonts are measured, and the drawing cannot push a row onto its neighbour.
+ * the fonts are measured, and the drawing cannot push a row onto its neighbour. The list of several tracks takes the
+ * place of the profile, in two columns on a square poster.
  *
  * Units: 1 u = 1 % of the shorter side. Portrait and square posters stack the view above the text; landscape ones
  * put the text in a column beside the view. Styles: « Éditorial » (paper page, view inset with a margin),
@@ -24,6 +25,8 @@ export interface PosterRows {
   figures: number
   profile: boolean
   weather: boolean
+  /** lines of the list of tracks (0 = no list) */
+  tracks: number
 }
 
 export interface PosterFonts {
@@ -33,6 +36,7 @@ export interface PosterFonts {
   label: number
   profile: number
   weather: number
+  list: number
   credits: number
 }
 
@@ -54,6 +58,8 @@ export interface PosterLayout {
   figures: Box[]
   profile: Box | null
   weather: Box | null
+  /** one row per listed track, column after column */
+  tracks: Box[]
   credits: Box
   /** largest font size of each row (px): drawing shrinks a text until it fits */
   fonts: PosterFonts
@@ -76,6 +82,8 @@ const ROW = {
   figureGap: 2,
   profile: 12,
   weather: 3,
+  track: 3,
+  trackColumnGap: 4,
   credits: CREDIT_LINES * 1.6,
 } as const
 
@@ -90,6 +98,7 @@ function fontsAt(u: number, s: number): PosterFonts {
     label: 1.6 * u * s,
     profile: 1.6 * u * s,
     weather: 2.1 * u * s,
+    list: 1.9 * u * s,
     // the credits keep their size: they must stay legible
     credits: 1.15 * u,
   }
@@ -101,15 +110,34 @@ interface Stacked {
   figures: Box[]
   profile: Box | null
   weather: Box | null
+  tracks: Box[]
   credits: Box
   height: number
 }
 
+/** Cells per row of the figures, columns of the list of tracks. */
+interface Columns {
+  figures: number
+  tracks: number
+}
+
+/** `count` boxes in `columns` columns of rows `rowH` high from (x, y), filled column after column. */
+function grid(count: number, columns: number, x: number, y: number, w: number, rowH: number, gap: number): Box[] {
+  const lines = Math.ceil(count / columns)
+  const cellW = (w - (columns - 1) * gap) / columns
+  return Array.from({ length: count }, (_, i) => ({
+    x: x + Math.floor(i / lines) * (cellW + gap),
+    y: y + (i % lines) * rowH,
+    w: cellW,
+    h: rowH,
+  }))
+}
+
 /**
- * Text rows from top to bottom in a column at (x, y) of width w. `columns` figure cells per row; `bottom`, when
- * given, pins the credits to that edge (else they follow the other rows).
+ * Text rows from top to bottom in a column at (x, y) of width w, with `columns` figure cells per row and list
+ * columns; `bottom`, when given, pins the credits to that edge (else they follow the other rows).
  */
-function stackRows(rows: PosterRows, x: number, y: number, w: number, u: number, s: number, columns: number, bottom?: number): Stacked {
+function stackRows(rows: PosterRows, x: number, y: number, w: number, u: number, s: number, columns: Columns, bottom?: number): Stacked {
   let cursor = y
   const take = (h: number): Box => {
     const box = { x, y: cursor, w, h }
@@ -125,7 +153,7 @@ function stackRows(rows: PosterRows, x: number, y: number, w: number, u: number,
   const figures: Box[] = []
   if (rows.figures > 0) {
     cursor += ROW.group * u * s
-    const perRow = Math.min(columns, rows.figures)
+    const perRow = Math.min(columns.figures, rows.figures)
     const gap = ROW.figureGap * u * s
     const cellW = (w - (perRow - 1) * gap) / perRow
     const cellH = ROW.figure * u * s
@@ -136,6 +164,14 @@ function stackRows(rows: PosterRows, x: number, y: number, w: number, u: number,
       figures.push({ x: x + col * (cellW + gap), y: cursor + row * (cellH + gap), w: cellW, h: cellH })
     }
     cursor += lines * cellH + (lines - 1) * gap
+  }
+  let tracks: Box[] = []
+  if (rows.tracks > 0) {
+    cursor += ROW.group * u * s
+    const listColumns = Math.min(columns.tracks, rows.tracks)
+    const rowH = ROW.track * u * s
+    tracks = grid(rows.tracks, listColumns, x, cursor, w, rowH, ROW.trackColumnGap * u * s)
+    cursor += Math.ceil(rows.tracks / listColumns) * rowH
   }
   let profile: Box | null = null
   if (rows.profile) {
@@ -150,7 +186,7 @@ function stackRows(rows: PosterRows, x: number, y: number, w: number, u: number,
   const creditsH = ROW.credits * u
   cursor += ROW.group * u * s * 0.7
   const credits = bottom === undefined ? take(creditsH) : { x, y: Math.max(cursor, bottom - creditsH), w, h: creditsH }
-  return { title, subtitle, figures, profile, weather, credits, height: Math.max(cursor, credits.y + creditsH) - y }
+  return { title, subtitle, figures, profile, weather, tracks, credits, height: Math.max(cursor, credits.y + creditsH) - y }
 }
 
 const rounded = (b: Box): Box => {
@@ -169,8 +205,8 @@ export function posterLayout(width: number, height: number, style: PosterStyleId
   const base = { width, height, u, side, fonts }
 
   if (!side) {
-    // portrait and square: every figure on one row
-    const columns = Math.max(1, rows.figures)
+    // portrait and square: every figure on one row; the list in one column, two on a square (less height)
+    const columns = { figures: Math.max(1, rows.figures), tracks: s < 1 ? 2 : 1 }
     // measure the text column once (its height does not depend on where it starts)
     const probe = (w: number) => stackRows(rows, 0, 0, w, u, s, columns).height
     if (style === 'editorial') {
@@ -202,13 +238,14 @@ export function posterLayout(width: number, height: number, style: PosterStyleId
     return { ...base, view: { x: 0, y: 0, w: width, h: height }, panel, accentBar: null, ...pick(text) }
   }
 
-  // landscape: a text column, two figures per row
+  // landscape: a text column, two figures per row, the list in one column
   const column = 40 * u
+  const columns = { figures: 2, tracks: 1 }
   if (style === 'editorial') {
     const margin = 6 * u
     const gap = 5 * u
     const view = rounded({ x: margin, y: margin, w: width - 2 * margin - gap - column, h: height - 2 * margin })
-    const text = stackRows(rows, view.x + view.w + gap, margin, column, u, s, 2, height - margin)
+    const text = stackRows(rows, view.x + view.w + gap, margin, column, u, s, columns, height - margin)
     return { ...base, view, panel: null, accentBar: null, ...pick(text) }
   }
   if (style === 'broadcast') {
@@ -217,19 +254,19 @@ export function posterLayout(width: number, height: number, style: PosterStyleId
     const panelW = column + 2 * pad + bar
     const view = rounded({ x: 0, y: 0, w: width - panelW, h: height })
     const panel = { x: view.w, y: 0, w: width - view.w, h: height }
-    const text = stackRows(rows, panel.x + bar + pad, pad, column, u, s, 2, height - pad)
+    const text = stackRows(rows, panel.x + bar + pad, pad, column, u, s, columns, height - pad)
     return { ...base, view, panel, accentBar: { x: panel.x, y: 0, w: bar, h: height }, ...pick(text) }
   }
   const margin = 4 * u
   const pad = 4 * u
-  const cardH = stackRows(rows, 0, 0, column, u, s, 2).height + 2 * pad
+  const cardH = stackRows(rows, 0, 0, column, u, s, columns).height + 2 * pad
   const panel = { x: width - margin - column - 2 * pad, y: height - margin - cardH, w: column + 2 * pad, h: cardH }
-  const text = stackRows(rows, panel.x + pad, panel.y + pad, column, u, s, 2)
+  const text = stackRows(rows, panel.x + pad, panel.y + pad, column, u, s, columns)
   return { ...base, view: { x: 0, y: 0, w: width, h: height }, panel, accentBar: null, ...pick(text) }
 }
 
-function pick({ title, subtitle, figures, profile, weather, credits }: Stacked) {
-  return { title, subtitle, figures, profile, weather, credits }
+function pick({ title, subtitle, figures, profile, weather, tracks, credits }: Stacked) {
+  return { title, subtitle, figures, profile, weather, tracks, credits }
 }
 
 // ---------------------------------------------------------------------------
@@ -261,6 +298,48 @@ export function fitText(measure: Measure, text: string, maxWidth: number, maxPx:
   let px = Math.max(minPx, (maxPx * maxWidth) / width)
   for (let i = 0; i < 8 && px > minPx && measure(text, px) > maxWidth; i++) px = Math.max(minPx, px * 0.97)
   return { text: truncate(measure, text, maxWidth, px), px }
+}
+
+/** Columns of the lines of the list of tracks: the name, then the distance, D+ and date, each as wide as its widest text. */
+export interface TrackListFit {
+  px: number
+  /** widths (px); 0 for a column no line fills */
+  name: number
+  distance: number
+  ascent: number
+  date: number
+  /** space before each filled column after the name */
+  gap: number
+}
+
+/** Least share of a line kept for the name before the whole list is set smaller. */
+export const LIST_NAME_SHARE = 0.4
+
+/**
+ * One size for every line of the list (≤ maxPx, ≥ minPx): the largest at which the figures of every line fit and
+ * leave LIST_NAME_SHARE of `width` to the name (cut with « … » when longer).
+ */
+export function fitTrackList(
+  measure: Measure,
+  lines: readonly { distance: string; ascent: string; date: string }[],
+  width: number,
+  maxPx: number,
+  minPx: number,
+): TrackListFit {
+  const fitAt = (px: number): TrackListFit => {
+    const widest = (key: 'distance' | 'ascent' | 'date') => Math.max(0, ...lines.map((l) => (l[key] ? measure(l[key], px) : 0)))
+    const distance = widest('distance')
+    const ascent = widest('ascent')
+    const date = widest('date')
+    const gap = px * 1.2
+    const gaps = [distance, ascent, date].filter((w) => w > 0).length * gap
+    return { px, name: Math.max(0, width - distance - ascent - date - gaps), distance, ascent, date, gap }
+  }
+  for (let px = maxPx; px > minPx; px *= 0.94) {
+    const fit = fitAt(px)
+    if (fit.name >= width * LIST_NAME_SHARE) return fit
+  }
+  return fitAt(minPx)
 }
 
 /** Words of `text` greedily on lines of `maxWidth`; null when they need more than `maxLines`. */
