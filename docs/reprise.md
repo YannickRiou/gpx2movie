@@ -5,10 +5,11 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
 ## Branches, PR, dépôt
 
-- `master` : tout ce qui est fusionné (PR #1 à #8 ; #8 le 2026-10-08 : petites suites, rendu à la demande, balayage,
-  ralentis sur le rythme, styles et cadrage par élément, rendu en ligne de commande, reconnaissance, doc technique).
-- `ai-dev/confident-darwin-83rxik` (session cloud) : vérification complète du projet après la PR #8 (voir « Travail en
-  cours »).
+- `master` : tout ce qui est fusionné (PR #1 à #9 ; #8 le 2026-10-08 : petites suites, rendu à la demande, balayage,
+  ralentis sur le rythme, styles et cadrage par élément, rendu en ligne de commande, reconnaissance, doc technique ;
+  #9 le 2026-10-08 : vérification complète du projet et corrections).
+- `ai-dev/confident-darwin-83rxik` (session cloud) : dette technique laissée par la vérification, puis petites et
+  moyennes fonctions de la feuille de route (voir « Travail en cours »).
 - Méthode : une branche par lot, une PR avec procédure de test manuel, fusion (`gh pr merge N --merge`), puis nouvelle
   branche partie de `origin/master`.
 - **Pousser** : `git push` tout simplement. Le remote `origin` est `git@github-yannickriou:YannickRiou/gpx2movie.git`,
@@ -72,37 +73,24 @@ Voir `git log` et les PR #1 à #7 (vagues 3 et 4 : plan de situation, points d'i
 titres aux repères, calage sur la musique, affiche à plusieurs traces et carte à plat, un film par trace d'un dossier,
 Mes projets, encodeur natif Linux, installeurs) ; détail technique dans `ARCHITECTURE.md`, fonctionnalités dans `README.md`.
 
-## Travail en cours (branche `ai-dev/confident-darwin-83rxik`) : vérification complète
+## Travail en cours (branche `ai-dev/confident-darwin-83rxik`) : dette technique et feuille de route
 
-Relecture de tout le code en quatre domaines, puis corrections. Vérifié : typecheck, lint (0 erreur), `npx vitest run
---maxWorkers=1` (91 fichiers, 1 455 tests), `npm run build` (premier écran sans three.js), `cargo test` (9), `npm run
-e2e` (accueil, onglets, timeline, projet, export ; reconnaissance vérifiée plus tôt avec la source AWS, Mapterhorn étant
-bloqué par le réseau de la session). Le reste : [`docs/tests-gpu.md`](tests-gpu.md).
+Vérifié : typecheck, lint (0 erreur), `npx vitest run --maxWorkers=1` (92 fichiers, 1 466 tests), `npm run build`,
+`npm run e2e` avec `OPENFLYOVER_E2E_SKIP_EXPORT=1` (accueil, onglets, timeline, projet ; la reconnaissance échoue ici
+faute de tuiles de relief, comme sur `master`). Contrôles d'écran faits en Chromium sans GPU : liste des traces,
+champ « Jour », « Étiquettes dans la vue », pictogrammes des points d'intérêt.
 
-- **Bloquant corrigé** : `cli_render` et `cli_exit` absents de `build.rs` et de `capabilities/default.json` : la ligne
-  de commande était refusée par Tauri (fenêtre ouverte, jamais fermée). Formats en ligne de commande sans casse (`4K`).
-- **Données** : heure GPX sans fuseau lue en UTC ; 429 / 408 jamais pris pour « pas de donnée » (`isNoDataError`, dans
-  `fetch.ts`) ; un 400 d'un pack compte comme échec ; attente entre deux essais annulable ; pack « complet » seulement
-  si toutes les tuiles sont traitées, échec si le stockage refuse ; préfixes des sources à sous-domaines
-  (`sourcePrefixes`, OpenTopoMap) ; repères publiés avec les réglages du moment ; requête Overpass partagée oubliée à
-  l'annulation ; altitude d'un itinéraire lue sur une tuile plus grossière là où la source s'arrête ; cache météo écrit
-  une fois par requête.
-- **Film et scène** : balayage gardé au-dessus du relief ; cadrage par élément calculé sur les cadrages triés ; « Caler
-  sur le rythme » cale les portions de vitesse avant les arrêts (recaler ne déplace plus rien) ; pas de saut à la
-  première image après une pause (`wakeScene` remet l'horloge) ; crédit OpenStreetMap de l'affiche pour l'eau.
-- **Interface et état** : ni ouverture, ni annulation, ni enregistrement pendant un export ou un lot ; la zone de
-  reconnaissance ne crée pas de pas d'annulation, est gardée par « Un film par trace », reste modifiable tant qu'il n'y a
-  pas de trace ; une trace loin de la zone a sa propre origine de repère (et retour à celle de la zone quand elle part) ;
-  brouillon d'itinéraire oublié à l'ouverture d'un projet ; vitesse de lecture d'un projet limitée à 0,5 / 1 / 2 / 4 ;
-  rapport de la ligne de commande écrit par la plateforme, nom de préréglage normalisé ; préréglages « sur cet
-  ordinateur » sur le bureau.
-- **Simplifications** : un seul `cyrb53` (`core/math.ts`), un seul cache des chemins (`trackPathOf`), `containerFor`,
-  `formatDegrees`, `mergeOverrides` ; `useTerrainEngine` (inutilisé), `public/icons.svg` (reste du modèle Vite) et la
-  dépendance directe `@takram/three-geospatial` (déjà tirée par Takram) retirés ; doc remise d'accord avec le code.
-- **Laissé de côté (proposé, non fait)** : unifier les curseurs (`RangeField`, `SliderField`, `range()`) et `Fold` /
-  `PanelSection` ; supprimer la réserve LRU jamais utilisée du moteur (`engine.ts`) ; exports utilisés seulement par les
-  tests (`parseTileKey`, `tileContains`, `gridMinMax`…) ; tests de `renderOnDemand` ; `cargo test` dans la CI ;
-  packs hors ligne OpenTopoMap enregistrés avant la correction : préfixe `https://` gardé, à refaire.
+- **Dette technique** : `cargo test` dans la CI ; tests de `renderOnDemand` (`sceneChanged`) ; réserve LRU jamais
+  utilisée du moteur de terrain retirée ; un seul curseur réglable (`RangeField`, habillage, trace, inspecteur).
+- **Trace** : figurines alpiniste, bikepacking, moto et avion léger ; couleur de chaque trace (pastille de la liste) et
+  trace survolée au choix (flèche : elle passe en tête, `flyTrack`).
+- **Lumière** : `settings.sunDate` (`YYYY-MM-DD`, vide = jour de la sortie) en heure fixe (`sunDayMs`).
+- **Textes du film** : `FilmText.color` et `FilmText.font` (inspecteur › « Couleur et police »).
+- **Étiquettes** : pictogramme des points d'intérêt (`FilmPoi.icon`, 9 tracés Lucide dans `Labels.tsx`) ; bornes
+  kilométriques (`labels.kmStep`, `kmLabels`) ; taille et portée communes (`labels.size`, `labels.rangeKm`, la portée
+  remplace la fin du fondu de 70 km). Anciens projets complétés par `withLabelDefaults`.
+- **Laissé de côté** : `Fold` / `PanelSection` gardés séparés (mise en page différente) ; exports utilisés seulement par
+  les tests ; packs hors ligne OpenTopoMap enregistrés avant la correction du préfixe : à refaire.
 
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
 
@@ -218,12 +206,11 @@ reste la source de chaque chantier.
 
 1. L'utilisateur : tests sur la machine avec GPU (`docs/tests-gpu.md`), premier lancement des workflows GitHub, certificat
    de signature s'il en veut un.
-2. Fusionner la PR de la vérification complète après relecture ; lancer une fois le rendu en ligne de commande sur une vraie machine.
+2. Fusionner la PR de cette branche après relecture ; lancer une fois le rendu en ligne de commande sur une vraie machine.
 3. Reste de la feuille de route (README, phase 4, lignes « à faire » ; à confirmer avant de construire) : « transitions
-   entre sections réglables » (sens à préciser avec l'utilisateur) ; couleur de trace au choix et choix de la trace
-   survolée (petits) ; choix de la date du soleil (petit) ; figurines manquantes (petit) ; icônes et types d'épingles des
-   points d'intérêt ; bornes kilométriques ; réglage commun d'apparition des étiquettes ; police et couleur par texte ;
-   thèmes enregistrables séparément ; onglets Contenu / Style / Visibilité ; prises de vue enregistrées (gros).
+   entre sections réglables » (sens à préciser avec l'utilisateur) ; étiquettes et marqueurs de départ et d'arrivée ;
+   curseur de brume ; figurines animées ; générique déroulant ; thèmes enregistrables séparément ; onglets Contenu /
+   Style / Visibilité ; prises de vue enregistrées (gros).
    Reconnaissance : l'utilisateur doute de son utilité, ne pas l'étendre (profils vélo / VTT écartés) ; la retirer s'il
    le demande.
 4. Petites suites : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version).
