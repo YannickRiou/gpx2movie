@@ -199,8 +199,8 @@ export function getSettingsHistory(): History {
     apply: applySettings,
     subscribe: (listener) =>
       useAppStore.subscribe((state, previous) => {
-        // settings changed together with the tracks are a side effect of the import (regional imagery), not a step
-        if (state.settings !== previous.settings && state.tracks === previous.tracks) {
+        // settings changed together with the tracks or the plan area are a side effect (regional imagery), not a step
+        if (state.settings !== previous.settings && state.tracks === previous.tracks && state.planArea === previous.planArea) {
           listener(state.settings, previous.settings)
         }
       }),
@@ -264,9 +264,9 @@ export function isTextEntry(target: EventTarget | null): boolean {
  * Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z and Ctrl+Y = redo, ignored while typing in a text field.
  * Returns the function that removes the listener.
  */
-export function installHistoryShortcuts(history: History, target: Window = window): () => void {
+export function installHistoryShortcuts(history: History, target: Window = window, enabled: () => boolean = () => true): () => void {
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.isComposing || isTextEntry(e.target)) return
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.isComposing || isTextEntry(e.target) || !enabled()) return
     const key = e.key.toLowerCase()
     if (key === 'z') {
       if (e.shiftKey) history.redo()

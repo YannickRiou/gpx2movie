@@ -2,6 +2,7 @@
  * Bridge between project data and the app store, through the store's public actions only.
  */
 import { useMediaStore } from '../film/media'
+import { useRouteStore } from '../route/planner'
 import { DEFAULT_SETTINGS, useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import type { LoadedProject } from './document'
@@ -62,6 +63,8 @@ export function applyProject(project: LoadedProject): void {
   // pictures first: the film that names them comes with the settings
   useMediaStore.getState().replace(project.media)
   store.clearTracks()
+  // a route being drawn belongs to the project left
+  useRouteStore.getState().clear()
   store.addTracks(project.tracks)
   // after addTracks, so that the project's imagery source wins over the automatic regional choice
   // (all synchronous: the scene never sees the intermediate source)
