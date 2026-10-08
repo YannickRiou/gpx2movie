@@ -1,173 +1,173 @@
-# Tests à faire sur une machine avec GPU
+# Tests to run on a machine with a GPU
 
-Ce qui n'a jamais été vu ni mesuré en vrai : la machine de développement n'a qu'un GPU simulé (SwiftShader), trop lent
-pour juger la fluidité, l'export ou le son. Cocher au fur et à mesure ; noter le problème et les étapes pour le
-reproduire à côté de la case.
+What has never been seen or measured for real: the development machine only has a simulated GPU (SwiftShader), too slow
+to judge smoothness, export or sound. Check items off as you go; write the problem and the steps to
+reproduce it next to the box.
 
-## Préparer
+## Preparation
 
-- Chrome ou Edge récent (WebCodecs), puis Firefox pour les replis. Haut-parleurs ou casque.
-- `npm ci`, puis `npm run dev` ; pour l'application de bureau (Windows) : prérequis Tauri du README, `npm run tauri:dev`.
-- Vérifications automatiques d'abord : `npm run typecheck`, `npm run lint`, `npx vitest run`, `npm run build`, puis
-  `npm run e2e` (tests de bout en bout ; plus rapides avec un vrai GPU).
-- Fichiers utiles : une trace GPX ou FIT **horodatée**, une trace sans heure, des photos JPEG avec GPS, une vidéo MP4 de
-  téléphone ou GoPro **filmée pendant cette sortie**, un WebM, un MOV, une musique MP3 de 3 min, un fichier de plus de
-  50 Mo.
-- Console du navigateur ouverte : aucune erreur rouge attendue. En fin d'export, la ligne `[export] …` donne les temps
-  (rendu, attente des tuiles, encodage) et le nombre de délais dépassés.
+- Recent Chrome or Edge (WebCodecs), then Firefox for the fallbacks. Speakers or headphones.
+- `npm ci`, then `npm run dev`; for the desktop application (Windows): Tauri prerequisites from the README, `npm run tauri:dev`.
+- Automated checks first: `npm run typecheck`, `npm run lint`, `npx vitest run`, `npm run build`, then
+  `npm run e2e` (end-to-end tests; faster with a real GPU).
+- Useful files: a **timestamped** GPX or FIT track, a track without times, JPEG photos with GPS, an MP4 video from a
+  phone or GoPro **shot during that outing**, a WebM, a MOV, a 3 min MP3 song, a file larger than
+  50 MB.
+- Browser console open: no red error expected. At the end of an export, the `[export] …` line gives the times
+  (rendering, waiting for tiles, encoding) and the number of exceeded timeouts.
 
-## 1. Priorité : export réel
+## 1. Priority: real export
 
-- [ ] Vitesse : film de 60 s en 1080p 30 i/s, temps total et ligne `[export]` ; comparer avec le commit `c8a00ed`
-      (avant optimisation) si utile.
-- [ ] 4K : même film, mémoire de l'onglet stable (Gestionnaire des tâches du navigateur), trace et étiquettes à la même
-      échelle qu'en 1080p.
-- [ ] 9:16 et 1:1 : rien de coupé, habillage et crédits bien placés.
-- [ ] Écriture directe sur le disque (Chrome / Edge) : fenêtre « Enregistrer » au clic, fichier qui grossit pendant
-      l'export, MP4 lu par VLC, le lecteur du système et un logiciel de montage (durée, recherche) ; « .webm » tapé → WebM.
-- [ ] Nom tapé en « .webm » : fichier WebM (VP9, Opus) lu par VLC et Firefox ; durée de l'encodage comparée au MP4.
-- [ ] Annuler pendant l'export, ou fermer la fenêtre « Enregistrer » : aucun fichier restant, vue et interface rétablies.
-- [ ] Firefox : export en mémoire, alerte au-delà de 1,5 Go estimés, téléchargement.
-- [ ] Nuages activés (réglage « Météo » ou « Manuel 50 % ») : coût de l'export, mêmes images d'un export à l'autre.
-- [ ] Image fixe PNG et JPEG, avec et sans habillage.
-- [ ] Habillage seul (fond transparent) : export rapide, sans attente des tuiles ; WebM lu avec sa transparence (Chrome
-      sur un fond coloré, Kdenlive ou Shotcut), posé sur la vidéo normale du même film : compteurs, profil, carte,
-      textes et photos tombent image pour image ; annuler ne laisse aucun fichier.
-- [ ] Rendu en lot : 16:9 1080p + 9:16 1080p + image fixe + affiche dans un dossier ; noms des fichiers, « Tout
-      annuler » pendant le 2ᵉ film (fichier commencé supprimé), format refusé par l'encodeur marqué en échec.
-- [ ] Un film par trace : dossier de 3 GPX / FIT + un fichier cassé, 16:9 720p ; un film par trace, nommé d'après son
-      fichier, arrêts et titres des repères refaits pour chaque trace, fichier cassé marqué en échec ; à la fin, les
-      traces et le film d'avant reviennent (« Enregistré » inchangé, Ctrl+Z sans effet du lot) ; « Tout annuler ».
-- [ ] Affiche A4 portrait puis A3 paysage : vue d'ensemble nord en haut, crédits lisibles à l'impression ; limite de taille
-      de la carte graphique en A3 (rendu de 17 Mpx).
-- [ ] Affiche de plusieurs traces (3 sorties, puis une course fantôme de 3 traces, puis 8 sorties) et « Carte à plat » :
-      toutes les traces cadrées, chacune dans sa couleur, liste lisible dans les 5 formats × 3 styles (8 sorties :
-      seulement les sommes) ; carte à plat nette, nord en haut, sans brume, trace bien placée sur l'image, annulation.
+- [ ] Speed: 60 s film in 1080p 30 fps, total time and `[export]` line; compare with commit `c8a00ed`
+      (before optimization) if useful.
+- [ ] 4K: same film, stable tab memory (browser Task Manager), track and labels at the same
+      scale as in 1080p.
+- [ ] 9:16 and 1:1: nothing cut off, overlay and credits well placed.
+- [ ] Direct write to disk (Chrome / Edge): "Save" dialog on click, file that grows during
+      the export, MP4 played by VLC, the system player and an editing program (duration, seeking); ".webm" typed → WebM.
+- [ ] Name typed with ".webm": WebM file (VP9, Opus) played by VLC and Firefox; encoding time compared with MP4.
+- [ ] Cancel during the export, or close the "Save" dialog: no file left behind, view and interface restored.
+- [ ] Firefox: in-memory export, warning above an estimated 1.5 GB, download.
+- [ ] Clouds enabled ("Météo" (weather) or "Manuel 50 %" (manual 50%) setting): export cost, same frames from one export to the next.
+- [ ] PNG and JPEG still image, with and without overlay.
+- [ ] Overlay only (transparent background): fast export, no waiting for tiles; WebM played with its transparency (Chrome
+      on a colored background, Kdenlive or Shotcut), laid over the normal video of the same film: counters, profile, map,
+      texts and photos match frame by frame; cancelling leaves no file.
+- [ ] Batch render: 16:9 1080p + 9:16 1080p + still image + poster into a folder; file names, "Tout
+      annuler" (cancel all) during the 2nd film (started file deleted), format rejected by the encoder marked as failed.
+- [ ] One film per track: folder of 3 GPX / FIT + one broken file, 16:9 720p; one film per track, named after its
+      file, stops and landmark titles redone for each track, broken file marked as failed; at the end, the
+      previous tracks and film come back ("Enregistré" (saved) unchanged, Ctrl+Z has no effect on the batch); "Tout annuler".
+- [ ] A4 portrait poster, then A3 landscape: overview with north up, credits readable when printed; graphics card
+      size limit in A3 (17 MP render).
+- [ ] Poster of several tracks (3 outings, then a ghost race of 3 tracks, then 8 outings) and "Carte à plat" (flat map):
+      all tracks framed, each in its color, list readable in the 5 formats × 3 styles (8 outings:
+      totals only); flat map sharp, north up, no haze, track correctly placed on the image, cancellation.
 
-## 2. Son (à écouter)
+## 2. Sound (listen)
 
-- [ ] Musique : ajout par « Options » et par dépôt (MP3, M4A, OGG, WAV, FLAC), forme d'onde, lecture synchronisée à ×1,
-      ×2, ×0,5, fondus audibles, bouton haut-parleur, « Caler la durée du film sur la musique ».
-- [ ] Export avec musique : son calé sur l'image du début à la fin, AAC dans le MP4 (Windows / macOS), Opus dans le WebM ;
-      lu partout.
-- [ ] « Caler sur le rythme » sur 3 vraies musiques (pop ou électro, acoustique, sans batterie) : tempo annoncé juste
-      (comparer à un compteur de BPM), marques du bloc sur les temps, arrêts et titres qui tombent sur le temps à
-      l'écoute (à ×1 et dans l'export) ; musique sans rythme net : message « trop incertain », rien ne bouge ; noter si
-      les débuts de mesure tombent sur le 1er temps.
-- [ ] Son des vidéos : son du clip à ×1, réglage du volume en direct, pas de clic au début ni à la fin d'un clip, musique baissée sous le clip si l'option est cochée,
-      clip qui suit la vitesse du survol muet ; export identique à l'aperçu.
+- [ ] Music: add through "Options" and by dropping a file (MP3, M4A, OGG, WAV, FLAC), waveform, playback in sync at ×1,
+      ×2, ×0.5, audible fades, speaker button, "Caler la durée du film sur la musique" (fit the film length to the music).
+- [ ] Export with music: sound in sync with the picture from start to end, AAC in the MP4 (Windows / macOS), Opus in the WebM;
+      plays everywhere.
+- [ ] "Caler sur le rythme" (sync to the beat) on 3 real songs (pop or electro, acoustic, no drums): announced tempo correct
+      (compare with a BPM counter), block marks on the beats, stops and titles that land on the beat when
+      listening (at ×1 and in the export); song without a clear beat: "trop incertain" (too uncertain) message, nothing moves; note whether
+      the bar starts fall on the 1st beat.
+- [ ] Video sound: clip sound at ×1, live volume adjustment, no click at the start or end of a clip, music lowered under the clip if the option is checked,
+      clip following the flyover speed is muted; export identical to the preview.
 
-## 3. Fluidité de l'aperçu
+## 3. Preview smoothness
 
-- [ ] Lecture de l'exemple dans les 5 styles de caméra : pas d'à-coup, pas de trou dans le relief, ralentis et arrêts
-      doux, ouverture et clôture (descente depuis la vue d'ensemble).
-- [ ] Ouverture et clôture « Depuis la région » (16:9 et 9:16, trace courte et longue) : relief chargé à temps pour la vue
-      de très haut (pas de bord du terrain ni de tuiles floues), plongée vers la trace et remontée sans à-coup.
-- [ ] Atmosphère, ombres, nuages (Météo / Manuel / Aucun) et eau : images par seconde acceptables ; nuages et eau au
-      soleil rasant (reflets, vaguelettes), pas de taches grises sur l'imagerie.
-- [ ] Étalonnage (onglet Carte › Couleurs) : préréglages Naturel → Noir et blanc, avec et sans atmosphère ; aucun
-      coût en « Naturel » ; sans atmosphère, ciel étalonné sans raccord visible avec le relief ; vignette en 16:9 et 9:16.
-- [ ] Lissage des bords (atmosphère activée) : pas de liseré clair ni d'escalier sur les crêtes et la trace.
-- [ ] Trace et marqueur (onglet Survol) : épaisseur, tirets et points pendant le vol, halo sur forêt et sur neige, trace
-      qui se dessine collée au marqueur, figurines lisibles et retournées dans les virages, avatar rond ; « Boule » par
-      défaut identique à avant.
-- [ ] Rendu à la demande : vue immobile → le GPU retombe à presque rien (gestionnaire des tâches, onglet GPU) ; rien
-      de figé après un changement : glisser un curseur, tourner la caméra (amortissement jusqu'au bout), tuiles qui
-      arrivent, nuages qui se stabilisent (~0,5 s), police des étiquettes, image du marqueur, eau, recadrage (animation
-      complète) ; lecture qui repart sans saut après une longue pause ; export inchangé.
-- [ ] Nuages de l'aperçu (moins de pas de calcul que le préréglage « bas ») : pas de bandes ni de trous visibles par
-      rapport à avant ; l'export garde sa qualité.
-- [ ] Reconnaissance : « Préparer une sortie » (« Chamonix », puis « 45.92, 6.87 »), relief sans trace, épingles
-      « Départ » / « Étape » / « Arrivée » au clic droit, « Calculer l'itinéraire » sur de vrais chemins (sentiers
-      préférés aux routes, point à plus de 500 m refusé), film monté, « Modifier » puis recalcul (même couleur), projet
-      enregistré puis rouvert (« Modifier » toujours proposé) ; bureau Windows (Nominatim sous la CSP).
-- [ ] Zones de sécurité : bouton sous « Recadrer » ou touche G, bandes des réseaux en 9:16 et 4:5, marges en 16:9,
-      absentes de l'export.
+- [ ] Playback of the sample in the 5 camera styles: no stutter, no hole in the terrain, smooth slow-downs and stops,
+      intro and outro (descent from the overview).
+- [ ] Intro and outro "Depuis la région" (from the region) (16:9 and 9:16, short and long track): terrain loaded in time for the
+      very high view (no terrain edge, no blurry tiles), dive toward the track and climb back without stutter.
+- [ ] Atmosphere, shadows, clouds ("Météo" / "Manuel" / "Aucun" (none)) and water: acceptable frames per second; clouds and water in
+      low sun (reflections, ripples), no gray patches on the imagery.
+- [ ] Color grading ("Carte" tab › "Couleurs" (colors)): presets "Naturel" → "Noir et blanc" (natural → black and white), with and without atmosphere; no
+      cost with "Naturel"; without atmosphere, graded sky with no visible seam with the terrain; vignette in 16:9 and 9:16.
+- [ ] Edge smoothing (atmosphere enabled): no light fringe and no staircase on the ridges and the track.
+- [ ] Track and marker ("Survol" tab): width, dashes and dots during the flight, halo over forest and over snow, track
+      drawn stuck to the marker, figures readable and flipped in turns, round avatar; default "Boule" (ball)
+      identical to before.
+- [ ] On-demand rendering: still view → the GPU drops to almost nothing (task manager, GPU tab); nothing
+      frozen after a change: drag a slider, rotate the camera (damping to the end), tiles that
+      arrive, clouds that settle (~0.5 s), label font, marker image, water, reframing (full
+      animation); playback resumes without a jump after a long pause; export unchanged.
+- [ ] Preview clouds (fewer computation steps than the "bas" (low) preset): no visible bands or holes compared
+      with before; the export keeps its quality.
+- [ ] Scouting: "Préparer une sortie" (plan an outing) ("Chamonix", then "45.92, 6.87"), terrain without a track, pins
+      "Départ" / "Étape" / "Arrivée" (start / waypoint / finish) on right-click, "Calculer l'itinéraire" (compute the route) on real paths (trails
+      preferred over roads, point more than 500 m away rejected), film assembled, "Modifier" (edit) then recompute (same color), project
+      saved then reopened ("Modifier" still offered); Windows desktop (Nominatim under the CSP).
+- [ ] Safe zones: button under "Recadrer" (reframe) or G key, social network bands in 9:16 and 4:5, margins in 16:9,
+      absent from the export.
 
-## 4. Montage dans la timeline
+## 4. Editing in the timeline
 
-- [ ] Glisser un arrêt (aimantation, Alt sans aimantation), étirer un texte des deux bords, bord de l'ouverture, un Ctrl+Z
-      par geste, Ctrl+molette, film long (défilement).
-- [ ] Vitesse par portion : bloc ×2 puis ×0,5, accélération sans à-coup aux bords, « garder la durée ».
-- [ ] Caméra des arrêts : « Tour lent » au sommet (le tour revient sans à-coup), « Vue large » (recul et montée
-      doux), « Fixe » avec le style Orbite (la caméra ralentit, s'arrête, repart), « Comme le film ».
-- [ ] Cadrages (« Garder ce cadrage ici », losanges de la piste « Plans ») : vue haute et large sur une longue portion,
-      passage doux d'un cadrage à l'autre et retour au réglage du film, sans à-coup aux bords ; losange glissé ; export
-      identique à l'aperçu.
-- [ ] Photos : ajout, miniatures, « Placer sur le parcours » (GPS), plein écran avec zoom lent, carte dans les 3 styles.
-- [ ] Vidéos : MP4, WebM, MOV ; refus au-delà de 50 Mo ; lecture synchronisée ×0,5 à ×4 ; bord gauche (début dans la
-      vidéo) ; vidéo pendant un arrêt ; export image par image.
-- [ ] Vidéo calée sur le parcours, avec les fichiers de la même sortie : iPhone, Android, GoPro (heure locale), DJI —
-      l'heure lue est-elle bien le **début** du tournage ? « Suivre la vitesse du survol » : image calée sur le lieu, figée
-      pendant un arrêt.
-- [ ] Vue 3D : clic sur la trace = tête de lecture ; clic droit = menu (arrêt, texte, vitesse ici) ; glisser la caméra ne
-      déclenche rien ; Firefox (menu du navigateur bien remplacé).
-- [ ] Points d'intérêt : clic droit sur le relief hors de la trace puis sur la trace › « Point d'intérêt ici », nom tapé ;
-      étiquette à épingle au bon endroit, cachée derrière une crête et sous les cartes d'ouverture, présente dans l'export ;
-      « Ajouter au marqueur », renommer, « Arrêt », ✕ et Ctrl+Z dans l'onglet Carte.
-- [ ] Ralentir et titrer aux repères : trace alpine neuve, repères chargés → titres « Col … · altitude » en haut au centre
-      au passage, ralenti doux sans à-coup, pas de ralenti sur un arrêt (titre seul) ; décocher / recocher, Ctrl+Z ;
-      déplacer un titre décoche la case ; ancien projet rouvert inchangé ; export identique à l'aperçu.
-- [ ] Projet avec textes, photos, vidéos et musique : enregistrer, recharger la page, rouvrir.
+- [ ] Drag a stop (snapping, Alt without snapping), stretch a text from both edges, intro edge, one Ctrl+Z
+      per gesture, Ctrl+mouse wheel, long film (scrolling).
+- [ ] Speed per section: ×2 block then ×0.5, acceleration without stutter at the edges, "garder la durée" (keep the duration).
+- [ ] Camera at stops: "Tour lent" (slow turn) at the summit (the turn comes back without stutter), "Vue large" (wide view) (smooth pull-back and
+      rise), "Fixe" (fixed) with the "Orbite" (orbit) style (the camera slows down, stops, starts again), "Comme le film" (same as the film).
+- [ ] Framings ("Garder ce cadrage ici" (keep this framing here), diamonds on the "Plans" (shots) track): high, wide view over a long section,
+      smooth transition from one framing to another and back to the film setting, without stutter at the edges; dragged diamond; export
+      identical to the preview.
+- [ ] Photos: adding, thumbnails, "Placer sur le parcours" (place on the route) (GPS), full screen with slow zoom, map in the 3 styles.
+- [ ] Videos: MP4, WebM, MOV; rejection above 50 MB; playback in sync from ×0.5 to ×4; left edge (start within the
+      video); video during a stop; frame-by-frame export.
+- [ ] Video placed on the route, with the files from the same outing: iPhone, Android, GoPro (local time), DJI —
+      is the time read really the **start** of the recording? "Suivre la vitesse du survol" (follow the flyover speed): picture matched to the place, frozen
+      during a stop.
+- [ ] 3D view: click on the track = playhead; right-click = menu (stop, text, speed here); dragging the camera
+      triggers nothing; Firefox (browser menu properly replaced).
+- [ ] Points of interest: right-click on the terrain off the track, then on the track › "Point d'intérêt ici" (point of interest here), typed name;
+      pin label at the right place, hidden behind a ridge and under the intro cards, present in the export;
+      "Ajouter au marqueur" (add to the marker), rename, "Arrêt" (stop), ✕ and Ctrl+Z in the "Carte" tab.
+- [ ] Slow down and show titles at landmarks: new Alpine track, landmarks loaded → titles "Col … · altitude" at the top center
+      when passing, smooth slow-down without stutter, no slow-down on a stop (title only); uncheck / recheck, Ctrl+Z;
+      moving a title unchecks the box; old project reopened unchanged; export identical to the preview.
+- [ ] Project with texts, photos, videos and music: save, reload the page, reopen.
 
 ## 5. Interface
 
-- [ ] Largeurs 1440, 1280 et 1000 px : panneau, inspecteur à droite, tiroir d'export, barre de la timeline sur une ligne,
-      panneau en tiroir sous 1024 px (fermé au départ, Échap ou clic à côté le ferment).
-- [ ] Pendant un export : bouton « 42 % · Annuler », interface verrouillée (aussi pendant tout un rendu en lot).
-- [ ] Messages éphémères (empilement, « Annuler » après « Par défaut »), dépôt d'un fichier n'importe où (voile),
-      infobulles jamais coupées, aide « ? ».
-- [ ] Heure du soleil : curseur aligné sur les repères lever / coucher, heure locale avec un FIT.
-- [ ] « Jour » du soleil (Heure fixe) : 21 décembre puis 21 juin à 10 h, lumière et ombres qui changent, lever et
-      coucher de la barre recalculés, « Jour de la sortie » ; export identique à l'aperçu.
-- [ ] Liste des traces : pastille de couleur (trace, profil et mini-carte recolorés, lecture non interrompue) ; flèche
-      d'une deuxième trace : elle passe en tête et est survolée (pas d'annulation : les traces sont hors historique).
-- [ ] Étiquettes dans la vue : bornes tous les 1, 2, 5, 10 km au bon endroit (comparées au compteur de distance),
-      cédant la place aux étiquettes nommées ; « Taille » ×0,6 à ×1,6 lisible, aussi en 4K ; « Portée » 10 km puis
+- [ ] Widths 1440, 1280 and 1000 px: panel, inspector on the right, export drawer, timeline bar on one line,
+      panel as a drawer below 1024 px (closed at start, Esc or a click outside closes it).
+- [ ] During an export: "42 % · Annuler" (cancel) button, interface locked (also during a whole batch render).
+- [ ] Toast messages (stacking, "Annuler" (undo) after "Par défaut" (default)), dropping a file anywhere (overlay),
+      tooltips never cut off, "?" help.
+- [ ] Sun time: slider aligned with the sunrise / sunset marks, local time with a FIT.
+- [ ] Sun "Jour" (day) ("Heure fixe" (fixed time)): December 21, then June 21 at 10:00, light and shadows that change, sunrise and
+      sunset in the bar recomputed, "Jour de la sortie" (day of the outing); export identical to the preview.
+- [ ] Track list: color dot (track, profile and mini-map recolored, playback not interrupted); arrow
+      of a second track: it moves to the top and is flown over (no undo: tracks are outside the history).
+- [ ] Labels in the view: markers every 1, 2, 5, 10 km at the right place (compared with the distance counter),
+      giving way to named labels; "Taille" (size) ×0.6 to ×1.6 readable, also in 4K; "Portée" (range) 10 km, then
       150 km.
-- [ ] Pictogrammes des points d'intérêt (refuge, bivouac, sommet…) nets dans la vue et à l'export ; couleur et police
-      d'un texte du film (inspecteur), appliquées à l'aperçu et à l'export.
-- [ ] Nouvelles figurines (alpiniste, bikepacking, moto, avion léger) lisibles et tournées dans les virages.
-- [ ] Course fantôme (deux traces), mini-carte dans les 3 styles d'habillage, étiquettes effacées sous les cartes.
-- [ ] Habillage › « Couleurs et polices » : nuanciers dans le panneau de 320 px, accent, texte et fond appliqués à
-      l'aperçu et à l'export, « Revenir au style » ; un seul Ctrl+Z après un glissé dans le sélecteur de couleur.
-- [ ] Classement de la course fantôme dans les 3 styles : points de couleur et écarts alignés, pas de saut de largeur,
-      « Tête » puis « Arrivée ».
+- [ ] Point of interest icons (hut, bivouac, summit…) sharp in the view and in the export; color and font
+      of a film text (inspector), applied to the preview and to the export.
+- [ ] New figures (mountaineer, bikepacking, motorcycle, light aircraft) readable and turned in the turns.
+- [ ] Ghost race (two tracks), mini-map in the 3 overlay styles, labels hidden under the cards.
+- [ ] "Habillage" › "Couleurs et polices" (colors and fonts): swatches in the 320 px panel, accent, text and background applied to
+      the preview and to the export, "Revenir au style" (back to the style); a single Ctrl+Z after a drag in the color picker.
+- [ ] Ghost race ranking in the 3 styles: color dots and gaps aligned, no width jump,
+      "Tête" (lead), then "Arrivée" (finish).
 
-- [ ] Enchaîner deux traces d'une randonnée de deux jours (onglet Trace, puis au dépôt des deux fichiers) : une seule
-      trace « J1 → J2 » ou au nom commun, aucun trait entre la fin du jour 1 et le départ du jour 2, marqueur qui saute
-      ce trou ; « Annuler » rend les deux traces.
+- [ ] Join two tracks of a two-day hike ("Trace" tab, then when dropping both files): a single
+      track "J1 → J2" (D1 → D2) or with the common name, no line between the end of day 1 and the start of day 2, marker that jumps
+      over this gap; "Annuler" (undo) restores both tracks.
 
-## 6. Hors ligne
+## 6. Offline
 
-- [ ] Préparer l'exemple en 2 km (avec IGN puis Esri) : estimation, progression, Pause / Reprendre / Annuler, pack listé.
-- [ ] Couper le réseau (DevTools › Network › Offline ou Wi-Fi) et recharger : vue et export sans trou dans le couloir.
-- [ ] Supprimer le pack : tuiles reprises du réseau. Firefox (stockage persistant), Safari (quota).
+- [ ] Prepare the sample at 2 km (with IGN, then Esri): estimate, progress, "Pause" / "Reprendre" (resume) / "Annuler" (cancel), pack listed.
+- [ ] Cut the network (DevTools › Network › Offline, or Wi-Fi) and reload: view and export without holes in the corridor.
+- [ ] Delete the pack: tiles fetched from the network again. Firefox (persistent storage), Safari (quota).
 
-## 7. Application de bureau (Windows, Linux)
+## 7. Desktop application (Windows, Linux)
 
-- [ ] `npm run tauri:dev` : fenêtre, carte, météo et repères chargés (règles de sécurité de la fenêtre).
-- [ ] Ouvrir / Enregistrer avec les fenêtres du système ; Annuler n'écrit rien.
-- [ ] Export vidéo écrit sur le disque, rendu en lot dans un dossier, affiche.
-- [ ] Pack hors ligne : dossier `%APPDATA%\io.github.yannickriou.openflyover\tiles` créé, relu au redémarrage sans
-      réseau, vidé par « Supprimer ».
-- [ ] Mes projets : « Garder dans Mes projets », fichiers dans `%APPDATA%\io.github.yannickriou.openflyover\projects`,
-      enregistrement automatique quelques secondes après un changement, liste relue au redémarrage, ouvrir, renommer,
-      supprimer.
-- [ ] `npm run tauri:build` : installeur produit, application installée qui démarre.
+- [ ] `npm run tauri:dev`: window, map, weather and landmarks loaded (window security rules).
+- [ ] "Ouvrir" / "Enregistrer" (open / save) with the system dialogs; "Annuler" (cancel) writes nothing.
+- [ ] Video export written to disk, batch render into a folder, poster.
+- [ ] Offline pack: folder `%APPDATA%\io.github.yannickriou.openflyover\tiles` created, read again on restart without
+      network, emptied by "Supprimer" (delete).
+- [ ] "Mes projets" (my projects): "Garder dans Mes projets" (keep in my projects), files in `%APPDATA%\io.github.yannickriou.openflyover\projects`,
+      automatic save a few seconds after a change, list read again on restart, open, rename,
+      delete.
+- [ ] `npm run tauri:build`: installer produced, installed application that starts.
 
-Sous Linux (Ubuntu 22.04 ou plus, WebKitGTK sans WebCodecs : export par le `ffmpeg` du système) :
+On Linux (Ubuntu 22.04 or later, WebKitGTK without WebCodecs: export through the system `ffmpeg`):
 
-- [ ] `cargo test` dans `src-tauri/` (arguments de ffmpeg, qualité → crf).
-- [ ] Sans ffmpeg : le tiroir « Exporter » dit « installez ffmpeg », bouton désactivé, l'image fixe marche.
-- [ ] `sudo apt install ffmpeg`, relancer : MP4 (H.264) annoncé ; export 1080p 30 i/s d'un film avec musique, fichier lu
-      par VLC et le lecteur du système, son présent et calé, couleurs identiques à l'aperçu.
-- [ ] Qualité standard / maximale : tailles différentes, aucune image manquante (nombre d'images = celui du tiroir).
-- [ ] Ligne de commande : `openflyover --rendu <dossier> --sortie <dossier> --formats 16:9@720p` (puis avec
-      `--prereglage`) : un film par trace, `rendu-en-lot.txt`, fenêtre fermée, code de sortie 0 (`echo $?`) ; option
-      inconnue ou dossier vide : message et code 2. Sous Windows aussi (`openflyover.exe` du dossier d'installation).
-- [ ] Annuler pendant l'export : fichier supprimé, plus de processus `ffmpeg`, rien de `openflyover-*.wav` dans `/tmp`.
-- [ ] Rendu en lot dans un dossier (plusieurs formats, dont 9:16) ; 4K si la machine le permet.
-- [ ] Échec simulé (`pkill ffmpeg` pendant l'export) : l'export s'arrête avec un message sur ffmpeg, pas de fichier
-      partiel.
-- [ ] Depuis l'AppImage et depuis le paquet deb : ffmpeg trouvé et lancé (variables d'environnement de l'AppImage).
+- [ ] `cargo test` in `src-tauri/` (ffmpeg arguments, quality → crf).
+- [ ] Without ffmpeg: the "Exporter" (export) drawer says "installez ffmpeg" (install ffmpeg), button disabled, the still image works.
+- [ ] `sudo apt install ffmpeg`, restart: MP4 (H.264) announced; 1080p 30 fps export of a film with music, file played
+      by VLC and the system player, sound present and in sync, colors identical to the preview.
+- [ ] Standard / maximum quality: different sizes, no missing frame (number of frames = the one in the drawer).
+- [ ] Command line: `openflyover --rendu <dossier> --sortie <dossier> --formats 16:9@720p` (then with
+      `--prereglage`): one film per track, `rendu-en-lot.txt`, window closed, exit code 0 (`echo $?`); unknown
+      option or empty folder: message and code 2. On Windows too (`openflyover.exe` in the installation folder).
+- [ ] Cancel during the export: file deleted, no `ffmpeg` process left, nothing from `openflyover-*.wav` in `/tmp`.
+- [ ] Batch render into a folder (several formats, including 9:16); 4K if the machine allows it.
+- [ ] Simulated failure (`pkill ffmpeg` during the export): the export stops with a message about ffmpeg, no partial
+      file.
+- [ ] From the AppImage and from the deb package: ffmpeg found and launched (AppImage environment variables).
