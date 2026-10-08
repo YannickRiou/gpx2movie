@@ -3,7 +3,7 @@
  * Pure functions (no DOM, no React) so everything is unit-testable under jsdom.
  */
 import type { LonLatBounds, Track, TrackPoint, TrackSegment, TrackStats } from '../core/types'
-import { haversineM } from '../geo/ellipsoid'
+import { haversineM } from '../geo/lonLat'
 
 /** Width (in points) of the centred moving average applied to elevations before counting D+/D-. */
 export const ELEVATION_SMOOTHING_WINDOW = 5

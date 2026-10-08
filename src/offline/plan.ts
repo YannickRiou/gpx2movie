@@ -15,7 +15,7 @@
  * It is the follow camera of the flyover: overview shots and high orbits need coarser tiles, already there.
  */
 import type { ImagerySource, LonLat, LonLatBounds, TerrainSource, TileKey } from '../core/types'
-import { expandBounds } from '../geo/ellipsoid'
+import { expandBounds } from '../geo/lonLat'
 import { childrenOf, tileBounds, tileGroundSizeM, tilesForBounds, zoomForTileBudget } from '../geo/mercator'
 import { DEFAULT_ERROR_TARGET_PX, DEFAULT_SEGMENTS, DEFAULT_TUNING } from '../terrain/engine'
 import { planImagerySubtiles } from '../terrain/imagery'
