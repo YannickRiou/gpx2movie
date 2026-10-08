@@ -411,6 +411,9 @@ Les icônes de `src-tauri/icons/` viennent de `public/favicon.svg`. Pour les ref
 La suite compte **environ 1 200 tests** (8 octobre 2026). Chaque fichier de test est rangé à côté de son module
 (`src/**/*.test.ts`). Les appels réseau et l'encodeur vidéo y sont simulés.
 
+Les vérifications à faire à la main sur une machine avec une vraie carte graphique sont listées dans
+[`docs/tests-gpu.md`](docs/tests-gpu.md).
+
 ### Tests de bout en bout
 
 `npm run e2e` lance l'application dans un Chromium sans fenêtre et la pilote comme un utilisateur (`e2e/run.mjs`,
