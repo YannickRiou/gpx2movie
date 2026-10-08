@@ -118,6 +118,16 @@ reproduire à côté de la case.
 - [ ] Messages éphémères (empilement, « Annuler » après « Par défaut »), dépôt d'un fichier n'importe où (voile),
       infobulles jamais coupées, aide « ? ».
 - [ ] Heure du soleil : curseur aligné sur les repères lever / coucher, heure locale avec un FIT.
+- [ ] « Jour » du soleil (Heure fixe) : 21 décembre puis 21 juin à 10 h, lumière et ombres qui changent, lever et
+      coucher de la barre recalculés, « Jour de la sortie » ; export identique à l'aperçu.
+- [ ] Liste des traces : pastille de couleur (trace, profil et mini-carte recolorés, lecture non interrompue) ; flèche
+      d'une deuxième trace : elle passe en tête et est survolée, Ctrl+Z.
+- [ ] Étiquettes dans la vue : bornes tous les 1, 2, 5, 10 km au bon endroit (comparées au compteur de distance),
+      cédant la place aux étiquettes nommées ; « Taille » ×0,6 à ×1,6 lisible, aussi en 4K ; « Portée » 10 km puis
+      150 km.
+- [ ] Pictogrammes des points d'intérêt (refuge, bivouac, sommet…) nets dans la vue et à l'export ; couleur et police
+      d'un texte du film (inspecteur), appliquées à l'aperçu et à l'export.
+- [ ] Nouvelles figurines (alpiniste, bikepacking, moto, avion léger) lisibles et tournées dans les virages.
 - [ ] Course fantôme (deux traces), mini-carte dans les 3 styles d'habillage, étiquettes effacées sous les cartes.
 - [ ] Habillage › « Couleurs et polices » : nuanciers dans le panneau de 320 px, accent, texte et fond appliqués à
       l'aperçu et à l'export, « Revenir au style » ; un seul Ctrl+Z après un glissé dans le sélecteur de couleur.

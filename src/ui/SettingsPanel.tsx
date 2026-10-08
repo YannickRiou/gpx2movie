@@ -540,7 +540,7 @@ export function SettingsPanel() {
         </MoreSettings>
       </PanelSection>
 
-      <PanelSection title="Lumière" keys={['sunFromTrack', 'sunHour']}>
+      <PanelSection title="Lumière" keys={['sunFromTrack', 'sunHour', 'sunDate']}>
         {settings.atmosphere ? (
           <SunTimeControl />
         ) : (

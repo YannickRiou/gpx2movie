@@ -56,7 +56,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses données par le film) ; `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
 | `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits (`removeFilmItem` passe un plan à « aucune »), `hasFilmItem`, `addMedia`, `updateMedia`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt` ; `model.ts` : `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE` ; `audio.ts` : musique et son des vidéos (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`) ; `beats.ts` : rythme de la musique (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`) ; `pois.ts` : points d'intérêt (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`) ; `exif.ts` : `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs` ; `media.ts` et `video.ts` (seuls modules non purs du dossier) : `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` ; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
 | `src/flyover/filmCamera.ts` | caméra du film | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `blendViews`, `shotBlend`, `stopOrbitRad`, `filmViewMovesWithTime` |
-| `src/flyover/sun.ts` | date du soleil, lever / coucher | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
+| `src/flyover/sun.ts` | date du soleil, lever / coucher | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
 | `src/weather/*` | météo historique de la sortie | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherAtTimes(series, timesMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
@@ -413,8 +413,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   s'ouvre quand le soleil descend : 0 IL au-dessus de 10°, +3 IL au crépuscule civil (−6°), +6 IL la nuit (−18°). Une faible
   lumière de ciel nocturne (`nightFillIntensity`) garde le relief lisible : l'atmosphère ne modélise que la lumière du soleil.
 - **Réglages** : `settings.atmosphere` (désactivable : retour à l'éclairage fixe sans tone mapping) et `settings.sunHour`
-  (heure **solaire** locale, 0 h–24 h, indépendante des fuseaux ; la nuit : étoiles et lune), le jour étant celui du début de la première trace
-  (aujourd'hui à défaut).
+  (heure **solaire** locale, 0 h–24 h, indépendante des fuseaux ; la nuit : étoiles et lune), le jour étant `settings.sunDate`
+  (`YYYY-MM-DD`, champ « Jour » en heure fixe, `isSunDate`) ou, vide, celui du début de la première trace (aujourd'hui à
+  défaut) : `sunDayMs`.
 - **Lever et coucher** (`sunTimes`, pur et testé) : équations solaires de la NOAA évaluées vers le midi local du jour UTC
   (déclinaison, équation du temps ; zénith 90,833° : réfraction et demi-disque), environ une minute d'écart hors des pôles ;
   jour ou nuit polaire signalés (`polar`, lever et coucher `null`). Converti en heure solaire par `solarHourOf` (inverse de
@@ -526,7 +527,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   trace, mêmes plages que `CAMERA_RANGES`, `isValidCameraKey` ; vide par défaut, un film enregistré avant reçoit `[]`) ;
   `speeds[]` `{ id, fromM, toM, factor (×0,25–×4) }` (portions de la première trace, en mètres, jamais chevauchantes,
   elles peuvent se toucher ; `isValidSpeed`, vide par défaut, un film enregistré avant reçoit `[]` par `withFilmDefaults`) ;
-  `texts[]` `{ id, startS, durationS, text, subtitle?, anchor, size }` (placement du widget texte de l'habillage) et
+  `texts[]` `{ id, startS, durationS, text, subtitle?, anchor, size, color?, font? }` (placement du widget texte de l'habillage ;
+  couleur et police propres, sinon celles de l'habillage) et
   `media[]` `{ id, startS, durationS, kind: 'image' | 'video', src, layout: 'plein-ecran' | 'carte', anchor, size, kenBurns,
   caption?, inS?, outS?, muted?, sync? }` (`src` = id de l'image ou de la vidéo dans la table des médias du document, voir
   « Photos » et « Vidéos » ; vidéo : `inS` / `outS` = début et fin du morceau dans le fichier, défaut son début et sa fin,
@@ -913,14 +915,18 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   du `localTimestamp` du message `activity` d'un FIT (au quart d'heure, `readUtcOffset`) ou du premier `<time>` d'un GPX
   écrit avec un décalage (`gpxUtcOffset` ; « Z » et « +00:00 » ne disent rien) ; le document de projet l'enregistre.
 - **`Labels`** (dans `TerrainLayer`) : sprites WebGL à texture canvas (taille constante à l'écran, panneau encre, texte blanc,
-  trait d'accent par type) pour le sommet de chaque montée, les waypoints, les points d'intérêt (`poiLabels`, épingle orange
-  clair à la place du trait, priorité 200 : au-dessus de tout) et toute source externe enregistrée par
+  trait d'accent par type) pour le sommet de chaque montée, les waypoints, les bornes kilométriques (`kmLabels`, une tous
+  les `labels.kmStep` km de la première trace, distances du compteur, priorité 20 : sous tout le reste), les points
+  d'intérêt (`poiLabels`, pictogramme orange clair à la place du trait, `FilmPoi.icon` parmi 9 tracés Lucide de
+  `Labels.tsx`, priorité 200 : au-dessus de tout) et toute source externe enregistrée par
   `setLabelSource(id, LandmarkLabel[])` (ex. `'osm'`). Hauteur = terrain (ou altitude enregistrée) × exagération, replaquée sur
   `engine.onChange` (même debounce que la trace). Fondu quand la ligne de visée passe sous le relief (24 échantillons, ±20 m) et
-  entre 35 et 70 km ; en cas de chevauchement, la priorité la plus haute l'emporte. Opacité fonction de la vue seule (pas de
+  entre la moitié de la portée et la portée (`labels.rangeKm`, 70 km par défaut : `distanceFade`) ; taille commune
+  `labels.size` (×0,6 à ×1,6) ; en cas de chevauchement, la priorité la plus haute l'emporte. Opacité fonction de la vue seule (pas de
   lissage temporel) : chaque image d'export est rendue isolément. Habillage actif : opacité multipliée par
   1 − `cardOpacityAt(progression, settings.overlay)` (`labelOpacity`), les étiquettes s'effacent derrière les cartes d'ouverture
-  et de clôture. Réglage `settings.labels { climbs, waypoints }`, section
+  et de clôture. Réglage `settings.labels { climbs, waypoints, kmStep, size, rangeKm }` (anciens projets complétés par
+  `withLabelDefaults`, valeurs vérifiées par `isValidLabelSettings`), section
   « Montées » (`ClimbList`, un clic place le survol au pied de la montée).
 
 ## Repères OpenStreetMap (phase 7)
@@ -949,7 +955,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 
 - **Usage** : nommer un lieu qu'OpenStreetMap ne connaît pas ou qui compte pour soi (« Pique-nique », « Le chalet de
   Paul »), affiché comme les repères dans la vue 3D et dans le film.
-- **Modèle** : `settings.film.pois` (`FilmPoi { id, lon, lat, name }`, ids `poi-<n>`), comme les arrêts : enregistré dans le
+- **Modèle** : `settings.film.pois` (`FilmPoi { id, lon, lat, name, icon? }`, ids `poi-<n>`, `icon` absent = épingle,
+  `setPoiIcon`), comme les arrêts : enregistré dans le
   projet, annulable, validé par `isValidFilm` (coordonnées dans les bornes, ids uniques dans tout le film), gardé par les
   préréglages comme le reste du film (il appartient à la trace). Dans le film plutôt qu'à part : les arrêts, qui sont aussi
   des lieux de la sortie, y sont, et un ancien projet reçoit `[]` de `withFilmDefaults` sans migration. Les repères OSM, eux,
@@ -1355,7 +1362,7 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - Nouvel id, stats et bornes recalculées (`buildTrack`), couleur, source, activité et décalage horaire de la première,
   waypoints de toutes ; nom = mots communs (« Tour du Mont-Blanc » pour « … J1 », « … J2 ») sinon « première → dernière ».
   La durée compte les nuits entre les jours.
-- Store : `replaceTracks(liste)` (même origine du repère, lecture au début). Les traces ne sont pas dans l'historique
+- Store : `replaceTracks(liste)` (même origine du repère, lecture au début) ; `setTrackColor(id, couleur)` (pastille de la liste, lecture non interrompue) ; `flyTrack(id)` (la trace passe en tête : c'est elle qui est survolée). Les traces ne sont pas dans l'historique
   (comme la suppression) : le message « Traces enchaînées » porte « Annuler », qui remet les traces séparées ; il
   disparaît au prochain changement des traces (`chainLoadedTracks`, `projectActions.ts`).
 - Import : quand un même import donne des traces horodatées qui se suivent (sans chevauchement, moins de 24 h d'écart,
@@ -1433,7 +1440,7 @@ diffère passe par `src/platform/`.
   empreinte écrite dans `src-tauri/tauri.windows.conf.json` (généré, jamais versionné ; horodatage et SHA-256 dans
   `tauri.conf.json`) ; macOS, variables `APPLE_*` de Tauri exportées seulement si présentes (vides, elles feraient
   échouer la construction), signature ad hoc (`signingIdentity: "-"`) sinon. Pas d'extension de mise à jour.
-  `.github/workflows/ci.yml` : types, lint, tests unitaires et build à chaque push.
+  `.github/workflows/ci.yml` : types, lint, tests unitaires, build et `cargo test` à chaque push.
 
 ### Export vidéo sans WebCodecs (Linux)
 
