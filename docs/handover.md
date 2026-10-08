@@ -54,7 +54,7 @@ then run `git status` and `npm run typecheck`.
   on a machine with a GPU. At the end of an export, the console shows `[export] N images … rendu … attente … encodage …`.
 - Sub-agents: git strictly forbidden (two ran `git stash` / `pop` despite the instruction, with no loss found).
 - Neutral commit messages, with no trailer or signature; nothing in the code or docs about the development tools. "Carte alpine" theme (`src/ui/theme.css`),
-  not the Vortex theme. Code licence: MIT (`LICENSE`).
+  not the Vortex theme. Code license: MIT (`LICENSE`).
 
 ## Decisions made by the user (do not ask again)
 
@@ -82,11 +82,11 @@ for lack of elevation tiles, as on `master`). Screen checks done in Chromium wit
 
 - **Technical debt**: `cargo test` in CI; tests for `renderOnDemand` (`sceneChanged`); never-used LRU reserve
   of the terrain engine removed; a single adjustable slider (`RangeField`, overlays, track, inspector).
-- **Track**: mountaineer, bikepacking, motorbike and light aircraft figures; colour of each track (swatch in the list) and
+- **Track**: mountaineer, bikepacking, motorbike and light aircraft figures; color of each track (swatch in the list) and
   choice of the flown track (arrow: it moves to the top, `flyTrack`).
 - **Light**: `settings.sunDate` (`YYYY-MM-DD`, empty = day of the outing) at a fixed time (`sunDayMs`).
-- **Film texts**: `FilmText.color` and `FilmText.font` (inspector › "Couleur et police" ("Colour and font")).
-- **Labels**: point-of-interest icon (`FilmPoi.icon`, 9 Lucide paths in `Labels.tsx`); kilometre
+- **Film texts**: `FilmText.color` and `FilmText.font` (inspector › "Couleur et police" ("Color and font")).
+- **Labels**: point-of-interest icon (`FilmPoi.icon`, 9 Lucide paths in `Labels.tsx`); kilometer
   markers (`labels.kmStep`, `kmLabels`); shared size and range (`labels.size`, `labels.rangeKm`; the range
   replaces the end of the 70 km fade). Old projects completed by `withLabelDefaults`.
 - **Left aside**: `Fold` / `PanelSection` kept separate (different layout); exports used only by
@@ -97,9 +97,9 @@ for lack of elevation tiles, as on `master`). Screen checks done in Chromium wit
 Checklist for the machine with a GPU, grouped by priority: [`docs/tests-gpu.md`](tests-gpu.md). The details below
 remain the source for each work item.
 
-- Colour grading: each preset with and without atmosphere (no visible change in "Naturel" ("Natural"); without atmosphere,
+- Color grading: each preset with and without atmosphere (no visible change in "Naturel" ("Natural"); without atmosphere,
   gradient sky graded too, no edge or band where it meets the terrain, SMAA aliasing comparable to MSAA),
-  "Noir et blanc" ("Black and white") truly grey (track and overlays included: the 2D overlay is **not** graded, by design), vignetting
+  "Noir et blanc" ("Black and white") truly gray (track and overlays included: the 2D overlay is **not** graded, by design), vignetting
   identical in 16:9 and 9:16, exported still image and video identical to the preview (compare a screenshot), no stutter
   when dragging a slider (only the first change away from "Naturel" compiles the shader). Also to check in the
   atmosphere chain: SMAA, merged into the same pass as tone mapping, reads the pass input (image before
@@ -217,10 +217,10 @@ remain the source for each work item.
 
 ## Limits and open points
 
-- Garmin FIT SDK licence (not free, redistribution "except in the cases provided for"): to decide before public release; personal
+- Garmin FIT SDK license (not free, redistribution "except in the cases provided for"): to decide before public release; personal
   use OK. Esri terms (no key) to re-read for online use. Open-Meteo and EOX non-commercial; OpenTopoMap,
   Esri and swisstopo allowed in offline packs for personal use, with a low daily limit (README,
-  "Sources"). Yale star catalogue: licence not stated.
+  "Sources"). Yale star catalog: license not stated.
 - HEIC photos refused (the browser does not decode them); EXIF read only in JPEG files.
 - Videos: 50 MB at most (the project contains them: ~1.33 × their size in the JSON file), not placed
   by GPS (synced only by time, the track must be timestamped); an old project edited by hand with a video missing from its table keeps it in the film without
