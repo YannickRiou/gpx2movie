@@ -10,14 +10,18 @@
  * (no turn during the transition). Transition between the overview and the flight view: target lerped,
  * direction nlerped, distance interpolated geometrically, eased by smootherstep, kept MIN_GROUND_CLEARANCE_M
  * above the ground. 'descente' eases over the whole shot; 'saut' holds the overview and moves in JUMP_S.
- * 'situation' eases over the whole shot like 'descente', from (or to) the region view: same target and side,
- * higher and steeper (`regionDistanceM`), in one move that passes the overview's distance on the way.
+ * 'situation' eases over the whole shot like 'descente', from (or to) the region view: the overview's side, much
+ * higher and steeper (`regionDistanceM`: tens to hundreds of kilometres), aimed at the highlighted administrative
+ * region when there is one, in one move that passes the overview's distance on the way.
+ * A shot whose transition cuts ('coupe', dips to black or white) holds its wide view and cuts at the boundary with
+ * the flight (`shotWeight`).
  */
 import { Vector3 } from 'three'
 import { clamp, smootherstep } from '../core/math'
-import type { LocalFrame } from '../core/types'
+import type { LocalFrame, LonLat } from '../core/types'
 import type { ClockStop, FilmClock, FilmState } from '../film/clock'
-import type { ShotStyle } from '../film/model'
+import { shotCuts } from '../film/model'
+import type { FilmShot, ShotStyle, StartHeight } from '../film/model'
 import type { HeightSampler } from '../scene/TrackLines'
 import { MIN_GROUND_CLEARANCE_M, computeCameraView, movesWithTime, type CameraView, type CameraViewOptions } from './camera'
 import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings, type CameraStyle } from './cameraSettings'
@@ -31,12 +35,26 @@ export { CAMERA_KEY_EASE_S, cameraKeyEaseM, keyedCamera } from './cameraKeys'
 export const OVERVIEW_DISTANCE_FACTOR = 1.6
 export const OVERVIEW_MIN_DISTANCE_M = 2_000
 export const OVERVIEW_PITCH_DEG = 40
-/** Region view of a 'situation' shot: at most this × box diagonal away, this much above the horizon. */
-export const REGION_DISTANCE_FACTOR = 5
+/**
+ * Region view of a 'situation' shot, this much above the horizon. Start height « Région »: this × the track's box
+ * diagonal away, within [REGION_MIN_DISTANCE_M, REGION_MAX_DISTANCE_M] (start altitude ~50–150 km); « Pays »:
+ * COUNTRY_DISTANCE_FACTOR × farther. A highlighted region is framed instead: its box fills the frame height (width
+ * in portrait) with REGION_FIT_MARGIN.
+ */
 export const REGION_PITCH_DEG = 65
-/** Terrain area around the tracks (same as scene/TerrainLayer.tsx) and vertical field of view (scene/FlyoverCanvas.tsx). */
-const TERRAIN_MARGIN_M = 25_000
-const TERRAIN_MIN_SIZE_M = 40_000
+export const REGION_DISTANCE_FACTOR = 8
+export const REGION_MIN_DISTANCE_M = 55_000
+export const REGION_MAX_DISTANCE_M = 165_000
+export const COUNTRY_DISTANCE_FACTOR = 2.5
+export const REGION_FIT_MARGIN = 1.15
+/**
+ * The frame of the region view reaches at most this far beyond the track's box (flat ground); the terrain area of a
+ * film with a region view (scene/TerrainLayer.tsx) has REGION_AREA_MARGIN_M around it: the round Earth makes the
+ * far corners reach a bit farther than flat ground.
+ */
+export const REGION_REACH_M = 400_000
+export const REGION_AREA_MARGIN_M = 500_000
+/** Vertical field of view (scene/FlyoverCanvas.tsx). */
 const CAMERA_FOV_DEG = 50
 /** Length of the quick move of a 'saut' shot (seconds). */
 export const JUMP_S = 0.6
@@ -55,6 +73,15 @@ export function shotBlend(style: ShotStyle, phase: 'opening' | 'closing', localS
   if (style !== 'saut') return smootherstep(localS / lengthS)
   const jump = Math.min(JUMP_S, lengthS)
   return smootherstep((phase === 'opening' ? localS - (lengthS - jump) : localS) / jump)
+}
+
+/**
+ * `shotBlend` of a shot joined to the flight by a continuous move; with a cut, its wide view over the whole shot:
+ * the weight jumps at the boundary with the flight (opening: 0 until it ends; closing: 1 from its start).
+ */
+export function shotWeight(shot: FilmShot, phase: 'opening' | 'closing', localS: number, lengthS: number): number {
+  if (shotCuts(shot)) return phase === 'opening' ? 0 : 1
+  return shotBlend(shot.style, phase, localS, lengthS)
 }
 
 /** 0 → 1 → 0 over a stop window `lengthS` long, `localS` seconds into it (raised cosine: still at both ends). */
@@ -173,17 +200,34 @@ export function groundReach(pitchDeg: number, aspect: number): number {
   return Math.max(corner(1), corner(-1))
 }
 
+/** Highlighted region a 'situation' shot frames: centre and size of its box (metres). */
+export interface RegionFrame {
+  centre: LonLat
+  widthM: number
+  heightM: number
+}
+
 /**
- * Distance of the region view of a 'situation' shot: REGION_DISTANCE_FACTOR × diagonal, but its frame reaches no
- * farther than the terrain area (`halfSideM` = smaller half side of the track box, plus the margin) or than the
- * overview already shows; never nearer than the overview.
+ * Distance of the region view of a 'situation' shot: from the track's box `diagonal` long, or fitting the `region`
+ * box; × COUNTRY_DISTANCE_FACTOR for « Pays ». Its frame reaches no farther than REGION_REACH_M beyond the track's
+ * box (`halfSideM` = its smaller half side, `offsetM` = distance from the region's centre to the track's); never
+ * nearer than the overview.
  */
-export function regionDistanceM(diagonal: number, halfSideM: number, aspect: number): number {
+export function regionDistanceM(
+  diagonal: number,
+  halfSideM: number,
+  aspect: number,
+  height: StartHeight = 'region',
+  region?: Pick<RegionFrame, 'widthM' | 'heightM'>,
+  offsetM = 0,
+): number {
   const overview = overviewDistanceM(diagonal, aspect)
-  const terrainM = Math.max(halfSideM + TERRAIN_MARGIN_M, TERRAIN_MIN_SIZE_M / 2)
-  const shownM = Math.max(terrainM, overview * groundReach(OVERVIEW_PITCH_DEG, aspect))
-  const wanted = REGION_DISTANCE_FACTOR * diagonal * portraitFactor(aspect)
-  return Math.max(overview, Math.min(wanted, shownM / groundReach(REGION_PITCH_DEG, aspect)))
+  const regional = region
+    ? (REGION_FIT_MARGIN * Math.max(region.widthM, region.heightM)) / (2 * Math.tan((CAMERA_FOV_DEG / 2) * DEG))
+    : clamp(REGION_DISTANCE_FACTOR * diagonal, REGION_MIN_DISTANCE_M, REGION_MAX_DISTANCE_M)
+  const wanted = regional * portraitFactor(aspect) * (height === 'pays' ? COUNTRY_DISTANCE_FACTOR : 1)
+  const reachM = halfSideM + REGION_REACH_M - offsetM
+  return Math.max(overview, Math.min(wanted, reachM / groundReach(REGION_PITCH_DEG, aspect)))
 }
 
 /** Centre of the track's box on the ground, the box diagonal (relief included) and its smaller half side. */
@@ -232,7 +276,10 @@ export function overviewView(
   return viewFromSide(target, joined, OVERVIEW_PITCH_DEG, overviewDistanceM(diagonal, aspect), frame, sample, exaggeration)
 }
 
-/** Region view of a 'situation' shot: the overview's target and side, higher and steeper. */
+/**
+ * Region view of a 'situation' shot: the overview's side, higher and steeper, aimed at the centre of the highlighted
+ * `region` when there is one (else at the overview's target).
+ */
 export function regionView(
   path: TrackPath,
   frame: LocalFrame,
@@ -240,9 +287,16 @@ export function regionView(
   exaggeration: number,
   aspect: number,
   joined: CameraView,
+  { height = 'region', region = null }: { height?: StartHeight; region?: RegionFrame | null } = {},
 ): CameraView {
-  const { target, diagonal, halfSideM } = trackFraming(path, frame, sample, exaggeration)
-  const distance = regionDistanceM(diagonal, halfSideM, aspect)
+  const framing = trackFraming(path, frame, sample, exaggeration)
+  let target = framing.target
+  if (region) {
+    const { lon, lat } = region.centre
+    target = frame.toLocal(lon, lat, (sample?.(lon, lat) ?? 0) * exaggeration)
+  }
+  const offsetM = Math.hypot(target.x - framing.target.x, target.z - framing.target.z)
+  const distance = regionDistanceM(framing.diagonal, framing.halfSideM, aspect, height, region ?? undefined, offsetM)
   return viewFromSide(target, joined, REGION_PITCH_DEG, distance, frame, sample, exaggeration)
 }
 
@@ -276,6 +330,8 @@ export function blendViews(
 export interface FilmViewOptions extends Omit<CameraViewOptions, 'timeS' | 'orbitRad'> {
   /** width / height of the frame (overview framing) */
   aspect: number
+  /** administrative region of the outing, framed by a 'situation' shot that highlights it (osm/region.ts) */
+  region?: RegionFrame | null
 }
 
 export interface FilmView extends CameraView {
@@ -298,7 +354,7 @@ export function computeFilmView(
   options: FilmViewOptions,
 ): FilmView {
   const state = clock.stateAt(timeS)
-  const { aspect, ...flightOptions } = options
+  const { aspect, region, ...flightOptions } = options
   const stop = state.stop
   const easeM = cameraKeyEaseM(path.lengthM, options.durationS ?? DEFAULT_FLYOVER_DURATION_S)
   const keyed = keyedCamera(options.camera ?? DEFAULT_CAMERA, clock.cameraKeys, progress * path.lengthM, easeM)
@@ -309,9 +365,14 @@ export function computeFilmView(
   if (state.phase !== 'opening' && state.phase !== 'closing') return { ...flight, marker: flight.target }
 
   const shot = state.phase === 'opening' ? clock.opening : clock.closing
-  const wideView = shot.style === 'situation' ? regionView : overviewView
-  const wide = wideView(path, frame, sample, options.exaggeration, aspect, flight)
-  const k = shotBlend(shot.style, state.phase, state.localS, state.lengthS)
+  const wide =
+    shot.style === 'situation'
+      ? regionView(path, frame, sample, options.exaggeration, aspect, flight, {
+          height: shot.startHeight,
+          region: shot.highlight ? region : null,
+        })
+      : overviewView(path, frame, sample, options.exaggeration, aspect, flight)
+  const k = shotWeight(shot, state.phase, state.localS, state.lengthS)
   const view =
     state.phase === 'opening'
       ? blendViews(wide, flight, k, frame, sample, options.exaggeration)

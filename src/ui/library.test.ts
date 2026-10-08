@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Track } from '../core/types'
-import { createAutosave, formatProjectSize, projectSummary } from './library'
+import { closeLoss, confirmClose, createAutosave, formatProjectSize, projectSummary, settleWithin } from './library'
+import type { CloseLoss, CloseSteps } from './library'
 
 const track = (name: string, distanceM: number) => ({ name, stats: { distanceM } }) as Track
 
@@ -100,5 +101,70 @@ describe('« Mes projets »: autosave', () => {
     await vi.advanceTimersByTimeAsync(10_000)
     expect(save).toHaveBeenCalledTimes(2)
     expect(overlapped).toBe(false)
+  })
+})
+
+describe('closing the window or tab', () => {
+  it('loses a running export first, else the changes not saved, else nothing', () => {
+    expect(closeLoss({ exporting: false, dirty: false })).toBeNull()
+    expect(closeLoss({ exporting: false, dirty: true })).toBe('changes')
+    expect(closeLoss({ exporting: true, dirty: false })).toBe('export')
+    expect(closeLoss({ exporting: true, dirty: true })).toBe('export')
+  })
+
+  describe('desktop window', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    /** `loss` after the flush; `afterSave` once « Enregistrer » ran */
+    function steps(loss: CloseLoss, answer: 'save' | 'close' | 'cancel' = 'cancel', afterSave: CloseLoss = null) {
+      let current = loss
+      return {
+        flush: vi.fn(async () => undefined),
+        loss: () => current,
+        ask: vi.fn(async () => answer),
+        save: vi.fn(async () => {
+          current = afterSave
+        }),
+      } satisfies CloseSteps
+    }
+
+    it('closes without a question once the last change is written', async () => {
+      const s = steps(null)
+      expect(await confirmClose(s)).toBe(true)
+      expect(s.flush).toHaveBeenCalledTimes(1)
+      expect(s.ask).not.toHaveBeenCalled()
+    })
+
+    it('asks when something would be lost: close, cancel, or save first', async () => {
+      const close = steps('changes', 'close')
+      expect(await confirmClose(close)).toBe(true)
+      expect(close.ask).toHaveBeenCalledWith('changes')
+      expect(await confirmClose(steps('export', 'cancel'))).toBe(false)
+      const saved = steps('changes', 'save', null)
+      expect(await confirmClose(saved)).toBe(true)
+      expect(saved.save).toHaveBeenCalledTimes(1)
+      // save dialog closed: still « Modifié »
+      expect(await confirmClose(steps('changes', 'save', 'changes'))).toBe(false)
+    })
+
+    it('waits for a slow write a few seconds at most', async () => {
+      const s = steps(null)
+      s.flush.mockReturnValue(new Promise(() => undefined))
+      const closing = confirmClose(s, 4000)
+      let closed: boolean | null = null
+      void closing.then((value) => (closed = value))
+      await vi.advanceTimersByTimeAsync(3999)
+      expect(closed).toBeNull()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(closed).toBe(true)
+    })
+
+    it('settleWithin: at once when the promise settles, failure included', async () => {
+      let settled = false
+      void settleWithin(Promise.reject(new Error('disque plein')), 4000).then(() => (settled = true))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(true)
+    })
   })
 })

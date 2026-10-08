@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { isValidSetting, parseProject, sanitizeSettings } from '../project/document'
 import { DEFAULT_SETTINGS } from '../state/store'
-import { AUDIO_DEFAULTS, DEFAULT_FILM, MEDIA_DEFAULTS, VIDEO_SOUND_DEFAULTS, clipHasSound, clipTimeS, isValidFilm, nextFilmId, shotDurationS } from './model'
+import {
+  AUDIO_DEFAULTS,
+  DEFAULT_FILM,
+  DIP_DEFAULT_S,
+  MEDIA_DEFAULTS,
+  VIDEO_SOUND_DEFAULTS,
+  clipHasSound,
+  clipTimeS,
+  dipAlpha,
+  isValidFilm,
+  nextFilmId,
+  shotCuts,
+  shotDurationS,
+  transitionDipAt,
+} from './model'
 import type { Film, FilmAudio, FilmCameraKey, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
 
 const stop = (id: string, patch: Partial<FilmStop> = {}): FilmStop => ({ id, atM: 1000, durationS: 3, camera: 'orbite', ...patch })
@@ -40,6 +54,53 @@ describe('film model', () => {
   it('shot duration: none for « aucune »', () => {
     expect(shotDurationS({ style: 'saut', durationS: 4 })).toBe(4)
     expect(shotDurationS({ style: 'aucune', durationS: 4 })).toBe(0)
+  })
+
+  it('shot transitions: continuous by default (old films unchanged), checked on load', () => {
+    expect(DEFAULT_FILM.opening.transition).toBeUndefined()
+    expect(shotCuts(DEFAULT_FILM.opening)).toBe(false)
+    expect(shotCuts({ style: 'descente', durationS: 6, transition: 'coupe' })).toBe(true)
+    const dipped = film({ opening: { style: 'descente', durationS: 6, transition: 'fondu-noir', dipS: 0.3 }, closing: { style: 'saut', durationS: 5, transition: 'fondu-blanc', dipS: 2 } })
+    expect(isValidFilm(dipped)).toBe(true)
+    expect(isValidSetting('film', dipped)).toBe(true)
+    // a film saved before the transitions loads as it was
+    expect(sanitizeSettings({ film: DEFAULT_FILM }).settings.film).toEqual(DEFAULT_FILM)
+    const bad: Film[] = [
+      film({ opening: { style: 'descente', durationS: 6, transition: 'fondu' as never } }),
+      film({ opening: { style: 'descente', durationS: 6, transition: 'fondu-noir', dipS: 0.2 } }),
+      film({ closing: { style: 'descente', durationS: 6, transition: 'fondu-noir', dipS: 2.5 } }),
+    ]
+    for (const f of bad) expect(isValidFilm(f)).toBe(false)
+  })
+
+  it('dip curve: 0 outside its window, symmetric, 1 at the cut', () => {
+    expect(dipAlpha(10, 10, 1)).toBe(1)
+    expect(dipAlpha(9.5, 10, 1)).toBe(0)
+    expect(dipAlpha(10.5, 10, 1)).toBe(0)
+    expect(dipAlpha(8, 10, 1)).toBe(0)
+    expect(dipAlpha(9.75, 10, 1)).toBeCloseTo(0.5, 12)
+    for (const d of [0.05, 0.2, 0.4]) expect(dipAlpha(10 - d, 10, 1)).toBeCloseTo(dipAlpha(10 + d, 10, 1), 12)
+    // rising towards the cut, flat at its top
+    expect(dipAlpha(9.8, 10, 1)).toBeLessThan(dipAlpha(9.9, 10, 1))
+    expect(dipAlpha(9.99, 10, 1)).toBeGreaterThan(0.999)
+    expect(dipAlpha(10, 10, 0)).toBe(0)
+  })
+
+  it('dip of the film: at the start of the flight for the opening, at its end for the closing, none for a cut or no shot', () => {
+    const time = (timeS: number) => ({ timeS, openingS: 6, flightS: 60 })
+    const shots = film({
+      opening: { style: 'descente', durationS: 6, transition: 'fondu-noir' },
+      closing: { style: 'descente', durationS: 5, transition: 'fondu-blanc', dipS: 2 },
+    })
+    expect(transitionDipAt(shots, time(6))).toEqual({ color: 'black', alpha: 1 })
+    expect(transitionDipAt(shots, time(6 - DIP_DEFAULT_S / 2))).toBeNull()
+    expect(transitionDipAt(shots, time(6.2))?.color).toBe('black')
+    expect(transitionDipAt(shots, time(30))).toBeNull()
+    expect(transitionDipAt(shots, time(66))).toEqual({ color: 'white', alpha: 1 })
+    expect(transitionDipAt(shots, time(65.5))?.alpha).toBeCloseTo(0.5, 12)
+    expect(transitionDipAt(film({ opening: { style: 'descente', durationS: 6, transition: 'coupe' } }), time(6))).toBeNull()
+    expect(transitionDipAt(film({ opening: { style: 'aucune', durationS: 6, transition: 'fondu-noir' } }), time(0))).toBeNull()
+    expect(transitionDipAt(DEFAULT_FILM, time(6))).toBeNull()
   })
 
   it('accepts complete lanes', () => {

@@ -62,6 +62,10 @@ reproduire à côté de la case.
       doux, ouverture et clôture (descente depuis la vue d'ensemble).
 - [ ] Ouverture et clôture « Depuis la région » (16:9 et 9:16, trace courte et longue) : relief chargé à temps pour la vue
       de très haut (pas de bord du terrain ni de tuiles floues), plongée vers la trace et remontée sans à-coup.
+- [ ] Transitions des plans (inspecteur Ouverture / Clôture) : « Coupe » nette au début et à la fin du vol ; « Fondu au
+      noir » et « Fondu au blanc » (0,3 s et 2 s) : l'image passe par la couleur, le saut de caméra caché au plus sombre,
+      crédits seuls visibles par-dessus, tuiles chargées au retour de l'image ; même rendu dans la vidéo exportée ;
+      « Enchaîné » identique à avant.
 - [ ] Atmosphère, ombres, nuages (Météo / Manuel / Aucun) et eau : images par seconde acceptables ; nuages et eau au
       soleil rasant (reflets, vaguelettes), pas de taches grises sur l'imagerie.
 - [ ] Étalonnage (onglet Carte › Couleurs) : préréglages Naturel → Noir et blanc, avec et sans atmosphère ; aucun
@@ -113,15 +117,42 @@ reproduire à côté de la case.
 - [ ] Classement de la course fantôme dans les 3 styles : points de couleur et écarts alignés, pas de saut de largeur,
       « Tête » puis « Arrivée ».
 
+- [ ] Fermer l'onglet (Chrome, Firefox) : rien demandé sans changement ni avec un projet de « Mes projets » modifié
+      il y a plus de 3 s ; « Quitter le site ? » avec « Modifié » hors « Mes projets », pendant un export, ou juste après
+      un changement d'un projet gardé (rouvert : le changement est là).
+
 - [ ] Enchaîner deux traces d'une randonnée de deux jours (onglet Trace, puis au dépôt des deux fichiers) : une seule
       trace « J1 → J2 » ou au nom commun, aucun trait entre la fin du jour 1 et le départ du jour 2, marqueur qui saute
       ce trou ; « Annuler » rend les deux traces.
+- [ ] Sortie prévue : GPX Komoot ou Visorando sans heures, « Prévoir la sortie » (après-demain 8 h, randonnée) ;
+      pastille « horaires estimés », heure d'arrivée plausible, soleil et heure de la timeline qui avancent, météo
+      « Prévision » dans le panneau et la scène, compteur « Temps » précédé de « ≈ » ; un départ à 20 jours n'a pas de
+      météo et le dit ; « Effacer les horaires » revient à la trace sans heures ; projet rouvert : horaires et pastille
+      conservés.
+- [ ] Feuille de route (onglet Trace) : itinéraire alpin, « Repères » allumé ; pentes raides et cols, refuges, points
+      d'eau dans l'ordre, sommet de montée confondu avec le col ; clic sur une ligne = marqueur et caméra au bon endroit ;
+      heures « ≈ » après « Prévoir la sortie » ; « Copier » puis coller dans un éditeur, « Enregistrer (.txt) » (site et
+      bureau) ; colonnes alignées dans le panneau de 320 px.
 
 ## 6. Hors ligne
 
 - [ ] Préparer l'exemple en 2 km (avec IGN puis Esri) : estimation, progression, Pause / Reprendre / Annuler, pack listé.
 - [ ] Couper le réseau (DevTools › Network › Offline ou Wi-Fi) et recharger : vue et export sans trou dans le couloir.
 - [ ] Supprimer le pack : tuiles reprises du réseau. Firefox (stockage persistant), Safari (quota).
+
+## 6 bis. Import Strava (application Strava personnelle créée sur strava.com/settings/api)
+
+- [ ] Site (`npm run dev`, domaine de rappel `localhost`) : « Importer depuis Strava », Client ID et Secret, « Se
+      connecter » : fenêtre Strava, « Autoriser », fenêtre refermée, liste des activités ; traces déjà chargées intactes.
+- [ ] Site : « Annuler » pendant l'attente, refus sur Strava (« Autorisation refusée »), mauvais Client Secret (message,
+      formulaire gardé), fenêtres surgissantes bloquées (message).
+- [ ] Site : « Plus », recherche par nom, import de deux activités (vélo avec puissance, randonnée) : noms, dates,
+      activité, D+, fréquence cardiaque dans les compteurs ; activité sans GPS refusée avec son nom.
+- [ ] Site : jeton expiré (mettre `expiresAt` à 0 dans `openflyover.strava.tokens.v1`) renouvelé sans rien demander ;
+      accès retiré sur strava.com/settings/apps → retour à « Se connecter » ; « Déconnecter », « Oublier ces identifiants ».
+- [ ] Site hébergé : domaine de rappel = l'hôte du site, même parcours.
+- [ ] Bureau (`npm run tauri:dev`, Windows) : « Se connecter » ouvre le navigateur du système sur Strava, la page
+      « Connexion transmise » s'affiche, l'application liste les activités ; import ; aucune erreur de CSP en console.
 
 ## 7. Application de bureau (Windows, Linux)
 
@@ -133,6 +164,9 @@ reproduire à côté de la case.
 - [ ] Mes projets : « Garder dans Mes projets », fichiers dans `%APPDATA%\io.github.yannickriou.openflyover\projects`,
       enregistrement automatique quelques secondes après un changement, liste relue au redémarrage, ouvrir, renommer,
       supprimer.
+- [ ] Fermer la fenêtre juste après un changement d'un projet de « Mes projets » : fermée sans question, changement là
+      au redémarrage ; hors « Mes projets » et « Modifié » : « Enregistrer » (fenêtre d'enregistrement, Annuler y laisse
+      la fenêtre ouverte), « Fermer sans enregistrer », « Annuler » ; pendant un export : « Fermer quand même ».
 - [ ] `npm run tauri:build` : installeur produit, application installée qui démarre.
 
 Sous Linux (Ubuntu 22.04 ou plus, WebKitGTK sans WebCodecs : export par le `ffmpeg` du système) :

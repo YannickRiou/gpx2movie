@@ -4,17 +4,22 @@ import { DUCK_DB, fitFilmToMusic, musicLengthS, snapFilmToMusic } from '../film/
 import { useMediaStore } from '../film/media'
 import {
   AUDIO_DURATION_RANGE,
+  DIP_DEFAULT_S,
+  DIP_DURATION_RANGE,
   FADE_RANGE,
   ITEM_DURATION_RANGE,
   MEDIA_LAYOUTS,
   SHOT_DURATION_RANGE,
   SHOT_STYLES,
+  SHOT_TRANSITIONS,
+  SHOT_TRANSITION_LABELS,
   STOP_CAMERAS,
   STOP_CAMERA_LABELS,
   STOP_DURATION_RANGE,
   SYNC_OFFSET_RANGE,
+  shotDipColor,
 } from '../film/model'
-import type { Film, MediaLayout, MediaSync, ShotStyle, StopCamera } from '../film/model'
+import type { Film, MediaLayout, MediaSync, ShotStyle, ShotTransition, StopCamera } from '../film/model'
 import {
   clipSyncOffsetS,
   formatFilmTime,
@@ -52,6 +57,12 @@ const SHOT_HINTS: Record<ShotStyle, string> = {
   descente: "La caméra glisse entre la vue d'ensemble de la trace et le survol.",
   saut: "La vue d'ensemble est tenue, puis la caméra rejoint vite le survol.",
   situation: 'La caméra glisse entre une vue de très haut sur la région et le survol.',
+}
+const TRANSITION_HINTS: Record<ShotTransition, string> = {
+  enchaine: 'La caméra passe du plan au survol en un seul mouvement.',
+  coupe: 'Le plan reste fixe ; l’image passe d’un coup entre le plan et le survol.',
+  'fondu-noir': 'Le plan reste fixe ; l’image passe par le noir entre le plan et le survol.',
+  'fondu-blanc': 'Le plan reste fixe ; l’image passe par le blanc entre le plan et le survol.',
 }
 const STOP_CAMERA_HINTS: Record<StopCamera, string> = {
   film: 'La caméra du survol continue, sans mouvement ajouté.',
@@ -243,6 +254,32 @@ export function FilmInspector() {
           (durationS) => change((f) => updateShot(f, item, { durationS }), false),
           shot.style === 'aucune',
         )}
+        <div className="field">
+          <label className="field__label" htmlFor={`${id}-transition`}>
+            Transition
+          </label>
+          <select
+            id={`${id}-transition`}
+            className="select"
+            value={shot.transition ?? 'enchaine'}
+            disabled={shot.style === 'aucune'}
+            aria-describedby={`${id}-transition-hint`}
+            onChange={(e) => change((f) => updateShot(f, item, { transition: e.currentTarget.value as ShotTransition }), false)}
+          >
+            {SHOT_TRANSITIONS.map((transition) => (
+              <option key={transition} value={transition}>
+                {SHOT_TRANSITION_LABELS[transition]}
+              </option>
+            ))}
+          </select>
+          <p id={`${id}-transition-hint`} className="field__hint">
+            {TRANSITION_HINTS[shot.transition ?? 'enchaine']}
+          </p>
+        </div>
+        {shotDipColor(shot) &&
+          range('dip', 'Durée du fondu', shot.dipS ?? DIP_DEFAULT_S, DIP_DURATION_RANGE, seconds, (dipS) =>
+            change((f) => updateShot(f, item, { dipS }), false),
+          )}
       </>
     )
   } else {

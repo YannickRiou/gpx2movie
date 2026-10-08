@@ -5,14 +5,17 @@
  * The engine is created in an effect, never in useMemo: React StrictMode double-invokes effects, and
  * "create in the effect body, dispose in its cleanup" is the only pattern that cannot leak GPU resources.
  *
- * The engine is recreated only when the local frame changes or when the tracks grow outside the area the
- * current engine was built for; settings changes are forwarded with `engine.setOptions`.
+ * The engine is recreated only when the local frame changes, when the tracks grow outside the area the current
+ * engine was built for or when a 'situation' shot is added or removed (its view from very high needs a much larger,
+ * coarse area: `engineAreaFor`); settings changes are forwarded with `engine.setOptions`.
  */
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { PerspectiveCamera } from 'three'
 import type { LocalFrame, LonLatBounds, TerrainEngine, TerrainEngineOptions, TerrainStats } from '../core/types'
 import { createLocalFrame, expandBounds } from '../geo/ellipsoid'
+import type { Film } from '../film/model'
+import { REGION_AREA_MARGIN_M } from '../flyover/filmCamera'
 import { createTerrainEngine } from '../terrain/engine'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
 import { useAppStore, type Settings } from '../state/store'
@@ -64,12 +67,34 @@ export function boundsContain(outer: LonLatBounds, inner: LonLatBounds): boolean
   )
 }
 
+/** Area of the engine; with a detail area, the rest of `area` stays coarse (`OUTER_MAX_ZOOM` of terrain/engine.ts). */
+export interface EngineArea {
+  area: LonLatBounds
+  detailArea?: LonLatBounds
+}
+
+/** The film opens or closes on the region view (a 'situation' shot). */
+export function usesRegionView(film: Pick<Film, 'opening' | 'closing'>): boolean {
+  return film.opening.style === 'situation' || film.closing.style === 'situation'
+}
+
 /**
- * Area the engine should be built for: keep the previous area while it still covers the desired one
- * (avoids tearing the whole terrain down for a nearby track), otherwise switch to the desired area.
+ * Area of the tracks `bounds`: AREA_MARGIN_M around them (at least AREA_MIN_SIZE_M across); for a region view,
+ * that becomes the detail area of a much larger one (REGION_AREA_MARGIN_M around them), coarse beyond it.
  */
-export function resolveEngineArea(previous: LonLatBounds | null, desired: LonLatBounds): LonLatBounds {
-  return previous && boundsContain(previous, desired) ? previous : desired
+export function engineAreaFor(bounds: LonLatBounds, regionView: boolean): EngineArea {
+  const area = expandBounds(bounds, AREA_MARGIN_M, AREA_MIN_SIZE_M)
+  return regionView ? { area: expandBounds(bounds, REGION_AREA_MARGIN_M), detailArea: area } : { area }
+}
+
+/**
+ * Area the engine should be built for: keep the previous area while it still covers the desired one and has the
+ * same kind (avoids tearing the whole terrain down for a nearby track), otherwise switch to the desired area.
+ */
+export function resolveEngineArea(previous: EngineArea | null, desired: EngineArea): EngineArea {
+  if (!previous || !boundsContain(previous.area, desired.area)) return desired
+  if (!previous.detailArea || !desired.detailArea) return previous.detailArea === desired.detailArea ? previous : desired
+  return boundsContain(previous.detailArea, desired.detailArea) ? previous : desired
 }
 
 export function statsEqual(a: TerrainStats, b: TerrainStats): boolean {
@@ -145,6 +170,7 @@ export function TerrainLayer({ children }: TerrainLayerProps) {
   const frameOrigin = useAppStore((s) => s.frameOrigin)
   const bounds = useAppStore((s) => s.bounds)
   const settings = useAppStore((s) => s.settings)
+  const regionView = useAppStore((s) => usesRegionView(s.settings.film))
   const setTerrainStats = useAppStore((s) => s.setTerrainStats)
 
   // Local frame: depends on the origin values only, so a store update that keeps the same origin
@@ -159,11 +185,11 @@ export function TerrainLayer({ children }: TerrainLayerProps) {
   // Area of interest: sticky while the previous area still covers the tracks. The previous area is
   // kept in state and adjusted during render (React's "store information from previous renders"
   // pattern): the extra render only happens when the area actually changes.
-  const desiredArea = useMemo<LonLatBounds | null>(
-    () => (bounds ? expandBounds(bounds, AREA_MARGIN_M, AREA_MIN_SIZE_M) : null),
-    [bounds],
+  const desiredArea = useMemo<EngineArea | null>(
+    () => (bounds ? engineAreaFor(bounds, regionView) : null),
+    [bounds, regionView],
   )
-  const [previousArea, setPreviousArea] = useState<LonLatBounds | null>(null)
+  const [previousArea, setPreviousArea] = useState<EngineArea | null>(null)
   const area = desiredArea ? resolveEngineArea(previousArea, desiredArea) : null
   if (area !== previousArea) setPreviousArea(area)
 
@@ -178,7 +204,7 @@ export function TerrainLayer({ children }: TerrainLayerProps) {
     // Read the settings imperatively: they are forwarded by the effect below, so they must not be a
     // dependency here (a settings change must never recreate the engine).
     const options = engineOptionsFromSettings(useAppStore.getState().settings)
-    const created = createTerrainEngine({ frame, area, errorTargetPx: ERROR_TARGET_PX, ...options })
+    const created = createTerrainEngine({ frame, ...area, errorTargetPx: ERROR_TARGET_PX, ...options })
     appliedRef.current = { engine: created, options }
     lastStatsRef.current = null
     statsClockRef.current = 0

@@ -38,6 +38,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/import/stats.ts` | stats & bounds, assemblage | `computeStats(segments): TrackStats`, `computeBounds(segments): LonLatBounds`, `densify(points, maxStepM): TrackPoint[]`, `buildTrack(init): Track`, `stripExtension(fileName)` (partagés par les deux parseurs) |
 | `src/import/chain.ts` | enchaînement de traces (voir « Enchaînement de traces ») | `chainTracks(tracks): Track`, `chainOrder`, `chainName`, `replaceByChain`, `followEachOther`, `CHAIN_OFFER_MAX_GAP_MS` |
 | `src/import/index.ts` | point d'entrée | `importFile(file: File, colorIndex?): Promise<Track[]>`, `importText(text, fileName, colorIndex?)`, `TRACK_COLORS`, `assignColors` |
+| `src/strava/*` | import Strava (voir « Import Strava ») | `api.ts` : purs, testés : `authorizeUrl`, `tokenRequestBody`, `activitiesUrl`, `streamsUrl`, `callbackDomain`, `parseCallback`, `needsRefresh`, `tokensFromResponse`, `stravaError`, `StravaAuthError` ; stockage et requêtes : `loadApp`, `saveApp`, `forgetApp`, `loadTokens`, `disconnect`, `connect`, `listActivities`, `fetchStreams` ; `track.ts` : `streamsToTrack`, `stravaActivityType`, `stravaSportLabel` |
 | `src/terrain/sources.ts` | catalogue de sources | `TERRAIN_SOURCES: TerrainSource[]`, `IMAGERY_SOURCES: ImagerySource[]`, `buildTileUrl(source, key): string`, `getTerrainSource(id)`, `getImagerySource(id)`, `sourceCovers(source, bounds \| point)` |
 | `src/terrain/fetch.ts` | fetch + cache bitmaps | `createTileFetcher(opts?: {concurrency?, maxEntries?, retryDelayMs?, storedTiles?}): TileFetcher`, `TileFetchError` (`status`, `url`), `isAbortError(e)`, `downloadTile(url, signal?, retryDelayMs?)` (même politique de réessais), `setStoredTileReader(reader)` + `StoredTileReader` (`covers`, `get` : packs hors ligne lus avant le réseau) |
 | `src/terrain/dem.ts` | décodage élévation | `decodeDem(bitmap, encoding): HeightGrid`, `sampleGrid(grid, u, v): number` (bilinéaire, NaN-safe) |
@@ -53,13 +54,15 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/climbs.ts` | montées détectées | `detectClimbs`, `climbsOf(track)` (cache par trace), seuils exportés, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
 | `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses données par le film) ; `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
-| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits (`removeFilmItem` passe un plan à « aucune »), `hasFilmItem`, `addMedia`, `updateMedia`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt` ; `model.ts` : `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE` ; `audio.ts` : musique et son des vidéos (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`) ; `beats.ts` : rythme de la musique (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`) ; `pois.ts` : points d'intérêt (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`) ; `exif.ts` : `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs` ; `media.ts` et `video.ts` (seuls modules non purs du dossier) : `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` ; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
-| `src/flyover/filmCamera.ts` | caméra du film | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `blendViews`, `shotBlend`, `stopOrbitRad`, `filmViewMovesWithTime` |
+| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits (`removeFilmItem` passe un plan à « aucune »), `hasFilmItem`, `addMedia`, `updateMedia`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt` ; `model.ts` : `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE` ; `audio.ts` : musique et son des vidéos (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`) ; `beats.ts` : rythme de la musique (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`) ; `pois.ts` : points d'intérêt (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`) ; `exif.ts` : `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs` ; `media.ts` et `video.ts` (seuls modules non purs du dossier) : `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` ; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
+| `src/flyover/filmCamera.ts` | caméra du film | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | date du soleil, lever / coucher | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
-| `src/weather/*` | météo historique de la sortie | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherAtTimes(series, timesMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
-| `src/osm/*` | repères OpenStreetMap | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures` ; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `LANDMARK_DISTANCE_RANGE` ; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
+| `src/weather/*` | météo de la sortie (archive, ou prévision d'une sortie prévue) | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays` (source et jours), `forecastCacheKey`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherAtTimes(series, timesMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
+| `src/plan/timing.ts` | horaires estimés d'une sortie prévue (voir « Reconnaissance d'itinéraire ») | `PLAN_ACTIVITIES`, `PLAN_ACTIVITY_LABELS`, `PACE_RANGE`, `OutingPlan`, `stretchHours`, `estimateElapsedS`, `withEstimatedTimes`, `withoutTimes`, `planActivityOf`, `localDepartureMs`, `localDayAndTime`, `localUtcOffsetMin` |
+| `src/plan/roadbook.ts` | feuille de route (voir « Reconnaissance d'itinéraire ») | `steepSections`, `roadbookLandmarks`, `buildRoadbook` → `Roadbook` (`rows`, `steep`, totaux), `formatPlaceClock`, `passageText`, `roadbookSummary`, `longestSteepText`, `roadbookText`, seuils `STEEP_PERCENT`, `VERY_STEEP_PERCENT`, `STEEP_MIN_LENGTH_M`, `STEEP_MERGE_GAP_M`, `SAME_PLACE_M`, `ROADBOOK_LANDMARKS` |
+| `src/osm/*` | repères OpenStreetMap | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures` ; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `withLandmarkDefaults`, `LANDMARK_DISTANCE_RANGE`, `KIND_LABELS`, `KIND_BADGES` ; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
 | `src/overlay/*` | habillage du film | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `withOverrides`, `resolveOverlayTheme`, `leaderboardRows`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (pont vers l'export), `OverlayCanvas` |
 | `src/export/*` | export vidéo | `buildFrameSchedule`, `VIDEO_ASPECTS`, `VIDEO_RESOLUTIONS`, `videoSize`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `nativeEncoder.ts` (ffmpeg du bureau) : `exportCodec`, `createExportEncoder`, `createNativeVideoEncoder`, `wavFile`, `settle`, `renderSettledFrame`, `composeFrame`, `composeOverlayFrame`, `fillSky` (ciel de l'export, repris par l'affiche), `useExportStore`, `videoFileName`, `overlayBaseName`, `ALPHA_CANDIDATES`, `chooseVideoDestination`, `warnsInMemory`, `filmRate`, `ExportController` ; `batch.ts` (rendu en lot) : purs, testés : `buildBatchJobs`, `formatKey`, `batchBaseName`, `estimateBatch`, `runBatch`, `batchProgressLabel`, `batchSummary` ; `exportJob`, `useBatchStore` |
 | `src/poster/*` | affiche (voir « Affiche ») | purs, testés : `PosterSettings`, `DEFAULT_POSTER`, `POSTER_FORMATS`, `posterSize`, `isValidPoster`, `withPosterDefaults` ; `posterContent`, `posterFigure`, `availableFigures`, `posterStats`, `totalStats`, `trackLine`, `POSTER_LIST_MAX` ; `posterLayout` (boîtes), `fitText`, `fitLines`, `fitTrackList`, `wrapText`, `truncate` ; `drawPoster`, `coverCrop`, `POSTER_THEMES`, `POSTER_FONTS` ; `framingPath`, `planFlatMap` (`view.ts`) ; non purs : `renderFlatMap` (`view.ts`), `currentPosterContent`, `startPoster`, `usePosterPreview`, `previewKey` (`export.ts`), `PosterPanel` |
@@ -69,10 +72,10 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | nuages volumétriques | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `cloudCoversAt`, `sceneCloudsFrom`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor` ; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
 | `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | étalonnage | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms` ; `GradingEffect` ; `useGradingEffect`, `GradingComposer` |
 | `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
-| `src/platform/*` | site / bureau (voir « Application de bureau ») | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint` ; purs, testés : `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf` ; `tileCache.ts` : `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache` ; `projectLibrary.ts` : `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry` ; `folder.ts` : `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath` |
+| `src/platform/*` | site / bureau (voir « Application de bureau ») | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint` ; purs, testés : `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf` ; `tileCache.ts` : `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache` ; `projectLibrary.ts` : `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry` ; `folder.ts` : `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath` ; `oauthRedirect.ts` : `authorizeInBrowser` (voir « Import Strava ») |
 | `src/offline/*` | packs de tuiles hors ligne (voir « Packs hors ligne ») | purs, testés : `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`) ; `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`) ; `startPackDownload`, `createDailyQuota` (`download.ts`) ; `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefix` (`packs.ts`) ; non purs : `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
-| `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `shellShortcut`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `loadSample`, `chainLoadedTracks`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
+| `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `shellShortcut`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `runImport`, `loadSample`, `chainLoadedTracks`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
 
 ### Règles de développement
 
@@ -493,7 +496,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   4 piste des médias (photos et vidéos faites, avec leur son : voir « Son des vidéos »).
 - **Modèle** (`src/film/model.ts`, `settings.film` : enregistré dans le document de projet, annulable, validé par
   `isValidFilm` dans `SETTING_CHECKS`, aucune migration : un ancien projet reçoit `DEFAULT_FILM`) :
-  `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut' | 'situation', durationS }` (1–30 s ; défaut descente 6 s / 5 s) ;
+  `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut' | 'situation', durationS, transition?, dipS? }` (1–30 s ; défaut
+  descente 6 s / 5 s ; `transition` `'enchaine'` par défaut, `'coupe'`, `'fondu-noir'`, `'fondu-blanc'`, `dipS` 0,3–2 s,
+  1 s par défaut : facultatifs, un ancien film reste enchaîné) ;
   `autoStops` (arrêts générés) et `autoMode` : `'temps-forts'` (défaut des nouveaux projets) ou `'rythme'` (projets
   antérieurs) ;
   `stops[]` `{ id, atM, durationS (0,5–60 s), camera: 'film' | 'orbite' | 'large' | 'fixe', label?, source?: { kind, ref? } }`
@@ -592,6 +597,15 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   en tangage, visée par le plus court chemin. Le style et le lissage restent ceux du film. Fonction de la progression
   seule : immobile pendant un arrêt, `filmViewMovesWithTime` inchangé.
   Le marqueur reste sur la trace (`view.marker`), la cible ne l'est que pendant le vol.
+- **Transitions des plans** (`transition` de l'ouverture, à sa fin, et de la clôture, à son début ; « Transition » dans
+  l'inspecteur du plan) : « Enchaîné » = le mouvement continu ci-dessus. « Coupe », « Fondu au noir », « Fondu au blanc » :
+  le plan tient sa vue large (vue d'ensemble, ou de la région) et la caméra coupe à la frontière avec le vol
+  (`shotWeight` : poids 0 pendant toute l'ouverture, 1 pendant toute la clôture ; le style ne choisit plus que la vue
+  large). Un fondu ajoute une couche pleine image noire ou blanche (`transitionDipAt`, `dipAlpha`, purs) centrée sur la
+  coupe, longue de `dipS` (moitié dans le plan, moitié dans le vol), opacité smootherstep de 0 au bord à 1 à la coupe :
+  la caméra saute pendant l'image la plus sombre, un seul rendu par image. Pas de vrai fondu enchaîné entre deux vues 3D
+  (deux rendus par image). Pas de transition propre aux arrêts : leur caméra part de la vue de vol et y revient
+  (`stopBump`), il n'y a pas d'autre vue où couper.
 - **Aperçu et export** : `FlyoverRig` et `ExportController` appellent le même `computeFilmView` avec la même horloge (le
   rapport largeur / hauteur vient de la taille du rendu, celle de la vidéo pendant l'export). La caméra est replacée en pause
   et une image d'export est recalculée quand la progression change **ou** quand le temps change alors que la vue en dépend
@@ -842,7 +856,14 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   écritures à la fois, un seul toast par série d'échecs) ; chaque écriture marque le projet enregistré (« Enregistré »
   dans la barre). Ouvrir une entrée passe par `openProject(file, entry)` (mêmes validations et avertissements, le nom de
   l'entrée l'emporte) ; `openProject` écrit d'abord un changement en attente (`flushAutosave`), et un projet ouvert depuis
-  un fichier n'a pas d'entrée. Renommer change l'entrée (et le nom du projet ouvert, son document suit au prochain
+  un fichier n'a pas d'entrée. **Fermeture** (`installCloseGuard`, installé par `App`) : `closeLoss` dit ce qui serait
+  perdu (l'export en cours, sinon un projet « Modifié »). Bureau : la fenêtre attend `confirmClose` (`guardClose`,
+  `onCloseRequested` puis `destroy`) : écriture en attente terminée (4 s au plus), puis question native si quelque chose
+  serait perdu (« Enregistrer » / « Fermer sans enregistrer » / « Annuler », ou « Fermer quand même » pendant un export ;
+  la fenêtre reste ouverte si l'enregistrement n'a pas eu lieu). Site : `pagehide` et page cachée lancent l'écriture
+  sans pouvoir l'attendre (une écriture Cache Storage commencée là finit d'ordinaire, sans garantie) ; `beforeunload`
+  affiche la question du navigateur (son texte, pas le nôtre) quand quelque chose serait perdu, écriture encore en
+  cours comprise. Renommer change l'entrée (et le nom du projet ouvert, son document suit au prochain
   enregistrement) ; supprimer demande une confirmation dans la ligne, le projet ouvert reste ouvert sans entrée.
 - **Préréglages** dans `getPlatform().storage` (`openflyover.presets.v1`, repli en mémoire) ; une clé absente d'un préréglage garde sa
   valeur courante. `save` répond false quand le stockage refuse (plein ou bloqué) : le préréglage reste utilisable pour la
@@ -857,8 +878,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - **Requête** (`src/weather/openMeteo.ts`) : 2 à 12 lieux le long de la première trace (un tous les ~10 km, départ et arrivée,
   arrondis à 0,01°, dédoublonnés par maille 0,05°), à l'**altitude enregistrée** (le paramètre `elevation` ramène la température
   à l'altitude de la trace : ~10 °C d'écart en montagne), sur les jours UTC de la sortie (±1 h) en une seule requête
-  (`timezone=GMT`, `timeformat=unixtime`). Refusé sans requête : trace non horodatée, date future ou antérieure à 1940, sortie de
-  plus de 31 jours. `visibility` est toujours nulle dans l'archive et n'est pas demandée.
+  (`timezone=GMT`, `timeformat=unixtime`). Refusé sans requête : trace non horodatée, départ au-delà de 16 jours ou avant
+  1940, sortie de plus de 31 jours. Une sortie qui finit après aujourd'hui passe par la **prévision** (voir « Reconnaissance
+  d'itinéraire »). `visibility` est toujours nulle dans l'archive et n'est pas demandée.
 - **Cache** : par lieu arrondi et jour UTC, en mémoire puis `getPlatform().storage` (`openflyover.weather.v1`, ≤ 300 jours-lieux, LRU,
   tout accès sous try/catch) ; les jours de moins de 7 jours ne sont pas persistés car l'archive les révise.
 - **Série** (`src/weather/series.ts`, pur) : 13 variables horaires par lieu (NaN si manquante). `weatherAt` interpole
@@ -870,6 +892,62 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   `syncWeather` est appelé par le panneau à chaque changement de première trace ou de `settings.weather.enabled` (vrai par
   défaut), annule la requête précédente et explique l'absence de données.
 - **À venir** : particules de pluie et de neige (scène pilotée : « Météo dans la scène » et « Nuages volumétriques »).
+
+## Reconnaissance d'itinéraire
+
+Avant une sortie : charger un itinéraire **prévu** (GPX de Komoot, Visorando, IGNrando…, en général sans heures), le
+survoler, savoir à quelle heure on passera à chaque point, où sera le soleil et quel temps il fera.
+
+- **Horaires estimés** (`src/plan/timing.ts`, pur, testé) : `estimateElapsedS(segments, activité, rythme)` donne les secondes
+  depuis le départ à chaque point, sans pauses, pas à pas sur l'altitude lissée comme pour le D+ (`smoothElevations` ;
+  segment sans altitude complète = plat ; le saut entre deux segments ne prend pas de temps). Modèles (`stretchHours`) :
+  randonnée **DIN 33466** (4 km/h à plat, 300 m/h en montée, 500 m/h en descente, le plus long des deux temps + la moitié de
+  l'autre) ; trail **km-effort ITRA** (1 km + 1 km par 100 m de D+) à 8 km-effort/h ; vélo additif à la Naismith (20 km/h +
+  1 h par 600 m de D+), descentes comptées à plat pour les deux derniers. Rythme : facteur sur toutes les durées (0,7 à 1,5).
+- **« Prévoir la sortie »** (carte de la trace, `OutingPlanForm` dans `TrackList`, pour une trace sans heure ou déjà
+  estimée) : date, heure de départ (horloge de l'appareil : tout l'affichage des heures suit le fuseau du navigateur),
+  activité (déduite de `activityType` par `planActivityOf`, randonnée sinon), rythme. `withEstimatedTimes` écrit les
+  `time` des points, recalcule les stats et pose `Track.timesEstimated: true` et `utcOffsetMin` (décalage de l'appareil à
+  cette date) ; la trace garde son id et remplace l'ancienne (`replaceTracks`, lecture au début). Tout ce qui lit des heures
+  marche tel quel : soleil, compteurs, horloge de la timeline, météo, course fantôme. Pastille « horaires estimés » ;
+  « Effacer les horaires » (`withoutTimes`) rend la trace sans heure. Le compteur « Temps » de l'habillage affiche
+  « ≈ » devant un temps estimé (`OverlayTrackStats.timesEstimated`). Une trace horodatée n'est pas réestimée (ses vraies
+  heures seraient perdues).
+- **Projet** : `timesEstimated: true` enregistré avec la trace, relu seulement sur une trace horodatée ; anciens projets
+  inchangés.
+- **Prévision météo** (`src/weather/openMeteo.ts`) : `outingDays` choisit la source, archive si la sortie finit au plus tard
+  aujourd'hui (UTC), sinon `api.open-meteo.com/v1/forecast` (mêmes paramètres et variables horaires, mêmes lieux, même
+  réponse), jusqu'au 16ᵉ jour (aujourd'hui compris, fin rognée à ce jour) ; au-delà : « Sortie dans plus de 16 jours : pas
+  encore de prévision météo. » Jours de prévision en mémoire seulement, sous une clé qui change toutes les 3 h
+  (`forecastCacheKey`), jamais dans le stockage. `WeatherSeries.forecast` vaut true : le panneau écrit « Prévision » et
+  rappelle que c'est à revoir la veille. `syncWeather` recharge quand l'heure de départ de la même trace change.
+
+### Feuille de route
+
+- **Usage** : avant de partir, les passages durs et les points clés de l'itinéraire, avec km, altitude, D+ et heure de
+  passage ; section « Feuille de route » de l'onglet Trace (`RoadbookPanel`), première trace.
+- **Pentes raides** (`steepSections`, `src/plan/roadbook.ts`, pur, testé) : pente de chaque point par `metricValues(…,
+  'slope')` (fenêtre ±50 m de la couleur de la trace, pas de second calcul) ; suites de points à ≥ 15 % en montée ou ≤ −15 %
+  en descente, deux suites du même sens à moins de 50 m fusionnées (deux points raides consécutifs se suivent quel que soit
+  leur écart), < 100 m écartées ; « très raide » si la pente maximale (sur la fenêtre) atteint 25 %. Pente moyenne = dénivelé
+  / longueur de la section.
+- **Points clés** (`buildRoadbook(track, landmarks, pois)`) : départ, arrivée, sommets des montées (`climbsOf`), repères OSM à
+  moins de 200 m (`roadbookLandmarks` : cols, sommets, refuges, points d'eau, sans plafond, refiltrés depuis les éléments du
+  couloir déjà chargés par `useLandmarkStore`, donc sans requête de plus ; rien si « Repères » est éteint), points d'intérêt
+  du film (point de la trace le plus proche) et début de chaque pente raide, triés par distance (départ en tête et arrivée
+  en fin à distance égale). Un sommet de montée avec un col ou un sommet OSM à moins de 300 m le long de la trace devient
+  ce repère (« Col · sommet de la montée 2 »).
+- **Lignes** : km, altitude de la trace, D+ depuis le départ (`computeElevationGain` sur les altitudes jusque-là, règle des
+  stats : la dernière ligne vaut `stats.ascentM`), heure de passage (`recordedTimeAt`) et temps depuis la ligne précédente
+  quand la trace a des heures, enregistrées ou estimées ; « ≈ » devant si `timesEstimated`. Heure à l'horloge du lieu si
+  `utcOffsetMin` est connu (`formatPlaceClock`), sinon au fuseau du navigateur.
+- **Panneau** : résumé (distance, D+ / D−, durée, plus longue pente raide), lignes cliquables (`setProgress`), rappel
+  « Couleur de la trace › Pente » (onglet Carte) pour voir les pentes dans la vue, « Copier » (`navigator.clipboard`, aussi
+  dans WebView2 et WebKitGTK ; message d'erreur sinon) et « Enregistrer (.txt) » (`getPlatform().saveFile`) du texte brut
+  `roadbookText`.
+- **Points d'eau** : type de repère `waterPoint` (Overpass `amenity=drinking_water`, nommé « Eau potable » s'il n'a pas de
+  nom, et `natural=spring` nommé), éteint par défaut pour le film et les étiquettes, toujours pris par la feuille de route ;
+  un ancien projet reçoit le nouveau type par `withLandmarkDefaults`. La requête change : chaque trace est redemandée une fois.
 
 ## Montées et étiquettes
 
@@ -901,8 +979,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   `docs/sources.md`. La requête doit rester « simple » (POST `application/x-www-form-urlencoded`) : la pré-vérification CORS
   répond 406.
 - **Une requête par trace** (`src/osm/overpass.ts`) : boîte englobante de la trace élargie de 3 km (plusieurs boîtes consécutives
-  au-delà de 40 km d'emprise), 8 instructions taguées et nommées (sommets / selles, cols, refuges, lacs, cascades, villages et
-  hameaux, points de vue, glaciers), `out center` pour ramener chemins et relations à un point. La forme `around:` sur une
+  au-delà de 40 km d'emprise), 10 instructions taguées et nommées (sommets / selles, cols, refuges, lacs, cascades, villages et
+  hameaux, points de vue, glaciers, sources ; l'eau potable même sans nom), `out center` pour ramener chemins et relations à un point. La forme `around:` sur une
   polyligne dépasse le délai du serveur public ; la distance à la trace est calculée localement, donc changer les types ou la
   distance ne refait jamais de requête. File d'attente (une requête à la fois), cache mémoire + `getPlatform().storage` 30 jours par
   empreinte de requête, un réessai sur 429 / 504 (`Retry-After`, sinon 15 s) puis l'autre instance ; une réponse 200 portant un
@@ -998,6 +1076,12 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   au plus, dans la zone sûre), passe-partout du style (`theme.photo` : tirage blanc ombré en Éditorial, verre sombre et
   barre d'accent en Diffusion, carte papier arrondie en Application), légende d'une ligne dessous (« … » si trop
   longue). Les crédits restent au-dessus de tout.
+- **Fondu d'une transition** (`extras.dip` = `transitionDipAt(settings.film, time)`, lu par `overlayExtras` pour l'aperçu
+  et l'export) : un rectangle plein image noir ou blanc à son opacité, dessiné même habillage désactivé (l'aperçu monte
+  `OverlayCanvas` dès qu'un plan a un fondu), après les widgets, textes et photos, sous les crédits seulement : c'est une
+  transition de toute l'image (des widgets restés sur un écran noir flotteraient), brève, et les crédits exigés par les
+  licences restent lisibles. L'export compte son opacité dans `overlayTimedState` (une image tenue n'est pas répétée
+  pendant un fondu) ; l'export de l'habillage seul le contient aussi.
 - **Crédits des sources** (`settings.overlay.credits { enabled, position }`, activés par défaut, quatre coins) : petite ligne
   le long du bord, hors des marges de sécurité, sur un fond discret propre à chaque style (`theme.credits` : encre translucide
   et texte blanc pour Éditorial et Diffusion, papier et encre pour Application, lisible sur neige comme sur forêt), repliée
@@ -1320,6 +1404,46 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   `followEachOther`), un message « Enchaîner ces N traces ? » propose l'action sur ces traces seulement.
 - Limite : arrêts, plans clés et repères calés en mètres sur l'ancienne première trace ne sont pas recalés.
 
+## Import Strava
+
+« Importer depuis Strava » (bouton « Strava » de la liste des traces, « Importer depuis Strava » de l'accueil ;
+`src/ui/StravaImport.tsx`) : connexion OAuth à Strava, liste des activités de l'athlète, import des cochées.
+
+- **Pas de PKCE chez Strava** (vérifié en octobre 2026, developers.strava.com/docs/authentication) : l'échange du code
+  et le renouvellement exigent le `client_secret`. Sans serveur, l'utilisateur **apporte sa propre application Strava**
+  (strava.com/settings/api, gratuite) ; son Client ID et son Client Secret sont saisis une fois et gardés dans
+  `getPlatform().storage` (`openflyover.strava.app.v1`), avec les jetons (`openflyover.strava.tokens.v1` : accès,
+  renouvellement, expiration en ms, nom de l'athlète). Ils ne partent que vers `www.strava.com`. **Politique des clés** :
+  OpenFlyover n'a toujours ni clé ni compte à lui ; aucun identifiant Strava n'est dans le dépôt.
+- **CORS** : Strava répond `Access-Control-Allow-Origin: *` sur `/oauth/token` (POST, corps `x-www-form-urlencoded`) et
+  sur `/api/v3` (en-tête `Authorization` autorisé) : le site et la vue web du bureau appellent Strava directement.
+- **Autorisation** (`src/platform/oauthRedirect.ts`, `authorizeInBrowser`) : portée `activity:read_all` (lecture seule,
+  activités privées comprises, trace entière y compris les zones de confidentialité ; le dialogue le dit), `state`
+  aléatoire vérifié au retour (`parseCallback` : état, refus `access_denied`, code, portée d'activités accordée).
+  - Site : Strava s'ouvre dans une fenêtre surgissante (ouverte dans le clic) et la renvoie vers
+    `/oauth-callback.html` (page statique de `public/`) qui passe sa requête à l'application par un `BroadcastChannel`,
+    efface le code de l'historique (`history.replaceState`) et se ferme. La fenêtre de l'application ne se recharge pas :
+    traces et réglages restent. Domaine de rappel à déclarer chez Strava : l'hôte du site (`localhost` en
+    développement ; Strava accepte toujours `localhost` et `127.0.0.1`).
+  - Bureau : `tauri-plugin-oauth` (communautaire, FabianLars) écoute une fois sur un port libre de `127.0.0.1`,
+    `tauri-plugin-opener` ouvre la page Strava dans le navigateur du système, l'URL du retour revient par l'événement
+    `oauth://url`. Rien à déclarer de plus que `localhost` chez Strava. Les commandes des deux extensions sont appelées
+    par `invoke` (pas de paquet npm). Les liens profonds (`openflyover://`) sont écartés : Strava n'accepte comme retour
+    que son domaine de rappel et `localhost`.
+- **Jetons** : renouvelés une minute avant l'expiration (`needsRefresh`, jetons de 6 h). Un 401 de l'API ou un
+  renouvellement refusé → `StravaAuthError`, jetons effacés, retour au formulaire « Se connecter ». Client ID / Secret
+  refusés (erreur `Application`) → message, formulaire gardé. 429 → « 100 par quart d'heure, 1 000 par jour ».
+  « Déconnecter » efface les jetons ; « Oublier ces identifiants » efface l'application.
+- **Activités** : `/athlete/activities`, 30 par page (« Plus »), recherche par nom parmi celles chargées (l'API n'en a
+  pas). Import : un `ImportJob` par activité (`runImport` de `projectActions.ts`, couleurs, messages et proposition
+  d'enchaînement comme les fichiers), flux `latlng,time,altitude,heartrate,cadence,watts` (`key_by_type`) →
+  `streamsToTrack` → `buildTrack` : un segment, heure = `start_date` + `time`, `Track.source = 'strava'`, nom de
+  l'activité, activité = nom de sport FIT (`stravaActivityType` : `Ride` → `cycling`, `TrailRun` → `trail_running`…,
+  sinon le type en snake_case), décalage horaire de `utc_offset`. Une activité sans position GPS est refusée.
+- **Conditions de l'API Strava** : usage personnel, données montrées au seul athlète connecté (rien n'est envoyé
+  ailleurs), limites 100 requêtes / 15 min et 1 000 / jour par application (une requête par page d'activités, une par
+  activité importée, plus le renouvellement).
+
 ## Application de bureau (phase 6, premier incrément)
 
 Deux cibles, un seul code : le site statique et l'application Tauri 2 (`src-tauri/`) qui charge le même `dist/`. Ce qui
@@ -1370,13 +1494,15 @@ diffère passe par `src/platform/`.
 - **Tauri** (`src-tauri/`) : `lib.rs` enregistre les extensions dialog et fs et les six commandes de l'encodeur natif
   (`video.rs`, déclarées dans `build.rs`, `AppManifest::commands`). Fenêtre `main`
   1440 × 900 (au moins 1024 × 700). `dragDropEnabled: false` : sinon Tauri intercepte les dépôts et le HTML ne reçoit plus
-  `drop`. Droits (`capabilities/default.json`) : `dialog:allow-open`, `dialog:allow-save`, `fs:allow-read-file`,
+  `drop`. Droits (`capabilities/default.json`) : `core:window:allow-destroy` et `dialog:allow-message` (fermeture, voir
+  « Mes projets »), `dialog:allow-open`, `dialog:allow-save`, `fs:allow-read-file`,
   `fs:allow-write-file`, `fs:allow-open`, `fs:allow-seek`, `fs:allow-write`, `fs:allow-remove` (film écrit au fil de
   l'eau), `fs:allow-mkdir`, `fs:allow-read-dir`, `fs:allow-exists` (packs hors ligne, « Mes projets »), `allow-video-available`, `allow-video-sound`, `allow-video-open`,
-  `allow-video-frame`, `allow-video-finish`, `allow-video-cancel` (encodeur natif) ; deux portées
+  `allow-video-frame`, `allow-video-finish`, `allow-video-cancel` (encodeur natif), `oauth:allow-start`, `oauth:allow-cancel` et
+  `opener:allow-open-url` limité à `https://www.strava.com/oauth/authorize*` (import Strava) ; deux portées
   fixes, `$APPDATA/tiles` et `$APPDATA/projects` avec ce qu'ils contiennent (`fs:scope`), en plus des chemins que l'extension dialog ajoute pour chaque
-  fichier choisi : rien d'autre n'est lisible. CSP : `connect-src` / `img-src` listent les hôtes de tuiles (`src/terrain/sources.ts`), Open-Meteo et les deux
-  serveurs Overpass, plus `ipc:` et `blob:` ; `style-src 'unsafe-inline'` avec `dangerousDisableAssetCspModification:
+  fichier choisi : rien d'autre n'est lisible. CSP : `connect-src` / `img-src` listent les hôtes de tuiles (`src/terrain/sources.ts`), Open-Meteo, les deux
+  serveurs Overpass et `https://www.strava.com` (`connect-src` seulement, import Strava), plus `ipc:` et `blob:` ; `style-src 'unsafe-inline'` avec `dangerousDisableAssetCspModification:
   ["style-src"]` (Tauri ajouterait sinon un nonce qui annule `unsafe-inline`). **Toute nouvelle source doit aussi entrer
   dans la CSP de `tauri.conf.json`.**
 - **Vérifié** : `cargo check --target x86_64-pc-windows-msvc` passe (configuration, droits, icônes, `generate_context!`),

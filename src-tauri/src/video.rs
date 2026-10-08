@@ -45,6 +45,16 @@ impl Videos {
         self.last_id += 1;
         self.last_id
     }
+
+    /// Stop every encoding and remove its partial file and soundtrack (the app is closing).
+    pub fn cancel_all(&mut self) {
+        for (_, session) in self.sessions.drain() {
+            let _ = session.end(false);
+        }
+        for (_, sound) in self.sounds.drain() {
+            remove_sound(&Some(sound));
+        }
+    }
 }
 
 /// Constant rate factor of libx264 for each export quality (lower: sharper and larger).

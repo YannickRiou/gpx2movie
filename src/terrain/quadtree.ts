@@ -9,7 +9,15 @@
 import { Frustum, Matrix4, Sphere, Vector3 } from 'three'
 import type { BufferGeometry, Mesh, MeshStandardMaterial, PerspectiveCamera, Texture } from 'three'
 import type { HeightGrid, LocalFrame, LonLatBounds, TileKey } from '../core/types'
-import { childrenOf, tileBounds, tileGroundSizeM, tileKeyString, tilesForBounds, zoomForTileBudget } from '../geo/mercator'
+import {
+  boundsIntersect,
+  childrenOf,
+  tileBounds,
+  tileGroundSizeM,
+  tileKeyString,
+  tilesForBounds,
+  zoomForTileBudget,
+} from '../geo/mercator'
 
 export type TileState = 'empty' | 'loading' | 'ready' | 'failed'
 
@@ -223,6 +231,9 @@ export interface SelectionParams {
   errorTargetPx: number
   /** never create nodes deeper than this zoom */
   maxZoom: number
+  /** outside this area, nodes stop at `outerMaxZoom` (when both are set) */
+  detailArea?: LonLatBounds
+  outerMaxZoom?: number
   /** current frame counter (stamps lastVisitedFrame, gates retries) */
   frame: number
   /** failed nodes are re-queued at most this many times; default 3 */
@@ -328,7 +339,7 @@ function visit(node: TileNode, ctx: SelectionContext): void {
   const sse = screenSpaceError(node.geometricError, node.boundingSphere, camera)
   node.sse = sse
 
-  const wantRefine = sse > params.errorTargetPx && node.key.z < params.maxZoom
+  const wantRefine = sse > params.errorTargetPx && node.key.z < zoomLimit(node, params)
   if (!wantRefine) {
     renderOrQueue(node, sse, ctx)
     return
@@ -362,6 +373,13 @@ function visit(node: TileNode, ctx: SelectionContext): void {
       queueLoad(child, culledPriority(child), ctx)
     }
   }
+}
+
+/** Deepest zoom `node` may refine to: `maxZoom`, or `outerMaxZoom` when it lies outside the detail area. */
+export function zoomLimit(node: TileNode, params: SelectionParams): number {
+  const { detailArea, outerMaxZoom } = params
+  if (!detailArea || outerMaxZoom === undefined || boundsIntersect(node.bounds, detailArea)) return params.maxZoom
+  return Math.min(params.maxZoom, outerMaxZoom)
 }
 
 /**

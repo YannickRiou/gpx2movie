@@ -51,7 +51,7 @@ function fakeContext() {
   const points: PointCall[] = []
   /** drawImage calls: arguments after the image, opacity */
   const images: { args: number[]; alpha: number }[] = []
-  /** order of the texts and images drawn */
+  /** order of the texts, images and filled rectangles (`rect <fill> <opacity>`) drawn */
   const order: string[] = []
   const state = { font: '10px sans-serif', globalAlpha: 1 }
   const stack: (typeof state)[] = []
@@ -79,6 +79,7 @@ function fakeContext() {
       return (...args: unknown[]) => {
         if (key === 'moveTo' || key === 'lineTo') points.push({ op: key, x: args[0] as number, y: args[1] as number })
         if (key === 'arc') points.push({ op: key, x: args[0] as number, y: args[1] as number, r: args[2] as number })
+        if (key === 'fillRect') order.push(`rect ${String(t.fillStyle)} ${state.globalAlpha}`)
         return calls.push(`${key}(${args.length})`)
       }
     },
@@ -173,6 +174,9 @@ describe('film time', () => {
     expect(overlayTimedState(enabled(), texts, at(12))).toEqual([0, 0, 1])
     expect(overlayTimedState(enabled(), texts, at(3))).toEqual([1, 0, 0])
     expect(overlayTimedState(DEFAULT_OVERLAY, texts, at(12))).toEqual([])
+    // the dip of a shot transition, while there is one
+    expect(overlayTimedState(DEFAULT_OVERLAY, texts, at(6), [], 0.8)).toEqual([0.8])
+    expect(overlayTimedState(enabled(), texts, at(12), [], 0.8)).toEqual([0, 0, 1, 0.8])
   })
 
   it('narrows the texts sharing a row with another anchor', () => {
@@ -195,6 +199,13 @@ describe('formatting', () => {
     expect(counterText('altitude', frame)?.unit).toBe('m')
     expect(counterText('heartRate', frame)?.unit).toBe('bpm')
     expect(counterText('altitude', { ...frame, ele: undefined })).toBeNull()
+  })
+
+  it('marks an estimated time', () => {
+    const frame = overlayFrameAt(track, 0.5)
+    expect(counterText('time', frame)?.value).toMatch(/^\d+:\d\d:\d\d$/)
+    const planned = { ...track, stats: { ...track.stats, timesEstimated: true } }
+    expect(counterText('time', { ...frame, track: planned })?.value).toMatch(/^≈ \d+:\d\d:\d\d$/)
   })
 })
 
@@ -548,6 +559,32 @@ describe('source credits', () => {
     const joined = texts.map((t) => t.text).join(' ')
     expect(joined.split(OPEN_METEO_ATTRIBUTION).length).toBe(2)
     expect(joined).toContain('Mapterhorn')
+  })
+})
+
+describe('dip of a shot transition', () => {
+  const credits = ['Relief : © Mapterhorn']
+  const render = (settings: OverlaySettings, extras: OverlayExtras) => {
+    const drawn = fakeContext()
+    drawOverlay(drawn.ctx, overlayFrameAt(track, 0.5), settings, SIZE, {}, extras)
+    return drawn
+  }
+
+  it('one full-frame layer at its opacity, even without the overlay, under the credits only', () => {
+    const { order, calls } = render(enabled({ text: { ...DEFAULT_OVERLAY.text, enabled: true, text: 'Bonjour' } }), {
+      credits,
+      dip: { color: 'black', alpha: 0.6 },
+    })
+    expect(calls.filter((c) => c === 'fillRect(4)').length).toBeGreaterThanOrEqual(1)
+    const dip = order.indexOf('rect black 0.6')
+    expect(dip).toBeGreaterThan(0)
+    // the overlay text under it, the credits line over it
+    expect(order.slice(0, dip)).toContain('text')
+    expect(order.slice(dip + 1)).toEqual(['text'])
+    const off = { ...DEFAULT_OVERLAY, credits: { ...DEFAULT_OVERLAY.credits, enabled: false } }
+    expect(render(off, { dip: { color: 'white', alpha: 1 } }).order).toEqual(['rect white 1'])
+    expect(render(off, { dip: { color: 'white', alpha: 0 } }).calls).toEqual([])
+    expect(render(off, { dip: null }).calls).toEqual([])
   })
 })
 

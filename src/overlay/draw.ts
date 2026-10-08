@@ -13,7 +13,7 @@
  * under everything, framed cards at their anchor (a clip shows its frame at its time in the file, without Ken Burns).
  */
 import { clipTimeS } from '../film/model'
-import type { FilmMedia, FilmText } from '../film/model'
+import type { FilmMedia, FilmText, TransitionDip } from '../film/model'
 import { formatDistance, formatDuration, formatNumber } from '../ui/format'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import type { WeatherSummary } from '../weather/series'
@@ -89,6 +89,8 @@ export interface OverlayExtras {
   credits?: readonly string[]
   /** ghost-race leaderboard at the frame's progress (`leaderboardRows`), drawn while `settings.leaderboard` is on */
   leaderboard?: readonly LeaderboardRow[]
+  /** dip to black or white of a shot transition at the frame's time (`transitionDipAt`), drawn even while the overlay is off */
+  dip?: TransitionDip | null
 }
 
 /** Safe area: 5 % of the frame on each side. */
@@ -169,24 +171,26 @@ export function filmTextOpacity(text: Pick<FilmText, 'startS' | 'durationS'>, ti
 
 /**
  * Opacities of what the overlay times in film seconds at `time` (opening and closing cards, timeline texts and
- * photos, plus the time itself while a full-screen photo moves or a video clip plays): two frames of one progress
- * with the same values draw the same overlay, so the export may repeat a held frame.
+ * photos, the dip of a shot transition, plus the time itself while a full-screen photo moves or a video clip plays):
+ * two frames of one progress with the same values draw the same overlay, so the export may repeat a held frame.
  */
 export function overlayTimedState(
   settings: OverlaySettings,
   texts: readonly FilmText[],
   time: OverlayTime,
   media: readonly FilmMedia[] = [],
+  dipAlpha = 0,
 ): number[] {
   const photos = media.flatMap((item) => {
     const opacity = filmTextOpacity(item, time.timeS)
     const moving = item.kind === 'video' || (item.layout === 'plein-ecran' && item.kenBurns)
     return opacity > 0 && moving ? [opacity, time.timeS] : [opacity]
   })
-  if (!settings.enabled) return photos
+  const dip = dipAlpha > 0 ? [dipAlpha] : []
+  if (!settings.enabled) return [...photos, ...dip]
   const title = settings.title.enabled ? titleCardOpacity(time, settings.title.end) : 0
   const end = settings.end.enabled ? endCardOpacity(time, settings.end.start) : 0
-  return [title, end, ...texts.map((text) => filmTextOpacity(text, time.timeS)), ...photos]
+  return [title, end, ...texts.map((text) => filmTextOpacity(text, time.timeS)), ...photos, ...dip]
 }
 
 /** Part of a picture drawn over the frame (source rectangle of `drawImage`). */
@@ -253,6 +257,11 @@ function splitUnit(text: string): CounterText {
   return i < 0 ? { value: text, unit: '' } : { value: text.slice(0, i), unit: text.slice(i + 1) }
 }
 
+/** "≈ " before a time estimated from a planned departure, nothing before a recorded one. */
+function estimatedMark(track: OverlayTrack): string {
+  return track.stats.timesEstimated ? '≈ ' : ''
+}
+
 /** Text of a counter at this frame; null when the track does not record what it needs. */
 export function counterText(id: CounterId, frame: OverlayFrame): CounterText | null {
   switch (id) {
@@ -263,7 +272,7 @@ export function counterText(id: CounterId, frame: OverlayFrame): CounterText | n
     case 'ascent':
       return frame.ascentM === undefined ? null : { value: formatNumber(frame.ascentM), unit: 'm' }
     case 'time':
-      return frame.elapsedS === undefined ? null : { value: formatElapsed(frame.elapsedS), unit: '' }
+      return frame.elapsedS === undefined ? null : { value: estimatedMark(frame.track) + formatElapsed(frame.elapsedS), unit: '' }
     case 'speed':
       return frame.speedKmh === undefined ? null : { value: formatNumber(frame.speedKmh, 1), unit: 'km/h' }
     case 'heartRate':
@@ -282,7 +291,7 @@ function counterTemplate(id: CounterId, track: OverlayTrack): CounterText {
     case 'ascent':
       return { value: formatNumber(s.ascentM ?? 0), unit: 'm' }
     case 'time':
-      return { value: formatElapsed(s.durationS ?? 0), unit: '' }
+      return { value: estimatedMark(track) + formatElapsed(s.durationS ?? 0), unit: '' }
     case 'speed':
       return { value: formatNumber(Math.max(10, s.maxSpeedKmh ?? 0), 1), unit: 'km/h' }
     case 'heartRate':
@@ -1185,6 +1194,15 @@ function photoCardWidget(p: Painter, item: FilmMedia, image: OverlayImage, opaci
   }
 }
 
+/** Full-frame layer of a dip to black or white. */
+function drawDip({ ctx, size }: Painter, dip: TransitionDip): void {
+  ctx.save()
+  ctx.globalAlpha = dip.alpha
+  ctx.fillStyle = dip.color
+  ctx.fillRect(0, 0, size.width, size.height)
+  ctx.restore()
+}
+
 function logoWidget(p: Painter, settings: OverlaySettings, assets: OverlayAssets): Widget | null {
   const logo = assets.logo
   if (!logo || !settings.logo.image || logo.width <= 0 || logo.height <= 0) return null
@@ -1216,8 +1234,10 @@ function logoWidget(p: Painter, settings: OverlaySettings, assets: OverlayAssets
 /**
  * Draw the overlay of one frame. The context's current transform maps `size` (user units) onto the canvas;
  * the caller clears the canvas first (the overlay only adds). Synchronous and deterministic: the same
- * arguments always give the same image. The source credits and the photos of the timeline are drawn even while
- * the rest of the overlay is off; the credits stay on top.
+ * arguments always give the same image. The source credits, the photos of the timeline and the dip of a shot
+ * transition are drawn even while the rest of the overlay is off. The dip covers everything but the credits: it is a
+ * transition of the whole picture (widgets left over a black frame would float), short, and the credits the
+ * licences require stay legible on top.
  */
 export function drawOverlay(
   ctx: OverlayContext2D,
@@ -1243,7 +1263,8 @@ export function drawOverlay(
         : assets.photo?.(item.src)
     return image ? [{ item, opacity, image }] : []
   })
-  if (!settings.enabled && credits.length === 0 && photos.length === 0) return
+  const dip = extras.dip && extras.dip.alpha > 0.001 ? extras.dip : null
+  if (!settings.enabled && credits.length === 0 && photos.length === 0 && !dip) return
   const transform = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null
   const p: Painter = {
     ctx,
@@ -1312,6 +1333,7 @@ export function drawOverlay(
     widget.draw(positions[i].x, positions[i].y)
     ctx.restore()
   })
+  if (dip) drawDip(p, dip)
   if ((weather && weather.opacity > 0.001) || (endOpacity > 0 && settings.end.showWeather && frame.track.stats.weather)) {
     // required by the Open-Meteo licence: with the other credits when they are drawn, else on its own
     if (!settings.credits.enabled) drawWeatherCredit(p)

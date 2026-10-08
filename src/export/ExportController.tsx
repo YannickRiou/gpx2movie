@@ -24,6 +24,7 @@ import type { LocalFrame, TerrainEngine } from '../core/types'
 import { mixFilmAudio } from '../film/audio'
 import type { FilmClock } from '../film/clock'
 import { useMediaStore } from '../film/media'
+import { transitionDipAt } from '../film/model'
 import { computeFilmView, filmViewMovesWithTime, overviewView, type FilmView } from '../flyover/filmCamera'
 import { buildTrackPath, type TrackPath } from '../flyover/path'
 import { loadOverlayFonts } from '../overlay/assets'
@@ -371,11 +372,13 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     if (isCanceled()) throw new ExportCanceledError()
     // WebCodecs, else the system's ffmpeg (desktop app on Linux)
     session = await createExportEncoder(compositor, { ...request, audio })
-    /** opacities of the timed overlay (cards, timeline texts, photos and clips) at a frame, '' without overlay */
-    const overlayKey = (progress: number, timeS: number) =>
-      deps.overlay()
-        ? overlayTimedState(settings.overlay, settings.film.texts, overlayTime(filmClock, progress, timeS), settings.film.media).join()
-        : ''
+    /** opacities of the timed overlay (cards, timeline texts, photos and clips, dip) at a frame, '' without overlay */
+    const overlayKey = (progress: number, timeS: number) => {
+      if (!deps.overlay()) return ''
+      const time = overlayTime(filmClock, progress, timeS)
+      const dip = transitionDipAt(settings.film, time)?.alpha
+      return overlayTimedState(settings.overlay, settings.film.texts, time, settings.film.media, dip).join()
+    }
     let previous = Number.NaN
     /** the view of the last rendered frame moved with time */
     let previousTimed = false

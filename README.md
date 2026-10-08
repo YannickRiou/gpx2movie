@@ -20,7 +20,8 @@ OpenFlyover fait un film de survol 3D à partir d'une trace GPX ou FIT, sur le v
 Vous importez la trace d'une sortie : randonnée, trail, vélo, ski de randonnée… OpenFlyover la pose sur un relief 3D
 couvert d'orthophotos (photos aériennes redressées). Une caméra la survole, et vous exportez le résultat en vidéo.
 
-Tout tourne dans le navigateur. Il n'y a ni compte, ni clé d'API, ni service payant, ni code côté serveur. Vos fichiers
+Tout tourne dans le navigateur. Il n'y a ni compte, ni clé d'API, ni service payant, ni code côté serveur (l'import
+Strava, facultatif, passe par votre propre application Strava). Vos fichiers
 restent sur votre machine : le navigateur télécharge seulement le relief, l'imagerie, la météo et les repères auprès de
 services ouverts.
 
@@ -33,17 +34,19 @@ Ce qui existe aujourd'hui :
 
 | Domaine | Fonctionnalités |
 |---|---|
-| Import | GPX et FIT, plusieurs traces à la fois ; fréquence cardiaque, cadence, puissance et température si présentes ; distance, D+ / D−, durée, altitudes |
+| Import | GPX et FIT, plusieurs traces à la fois, ou activités Strava ; fréquence cardiaque, cadence, puissance et température si présentes ; distance, D+ / D−, durée, altitudes |
 | Relief et imagerie | relief Mapterhorn ou AWS Terrain Tiles ; orthophotos IGN en France et swisstopo en Suisse, choisies automatiquement ; Esri et Sentinel-2 ailleurs ; cartes topographiques ; photos IGN anciennes (1950–2005) ; exagération du relief ; lacs et rivières d'OpenStreetMap en eau qui reflète le ciel et le soleil, avec vaguelettes |
 | Survol | cinq styles de caméra (poursuite, balancement, orbite, vue du dessus, plan cinématique), six préréglages, durée de 15 s à 10 min, profil altimétrique cliquable |
 | Rythme | ralentis et pauses aux temps forts : sommets des montées, cols, sommets proches |
 | Lumière | ciel et brume physiques, soleil à l'heure réelle de la sortie, ombres du relief, nuit étoilée, exposition automatique |
-| Météo | météo historique du jour de la sortie (Open-Meteo), visible dans un panneau et dans la scène ; nuages en volume tirés de la nébulosité basse, moyenne et haute (ou réglés à la main), poussés par le vent |
+| Météo | météo historique du jour de la sortie (Open-Meteo), ou prévision pour une sortie à venir (jusqu'à 16 jours), visible dans un panneau et dans la scène ; nuages en volume tirés de la nébulosité basse, moyenne et haute (ou réglés à la main), poussés par le vent |
 | Repères | sommets, cols, refuges, lacs… tirés d'OpenStreetMap ; montées détectées et classées (cat. 4 à HC) ; étiquettes 3D ; le film ralentit aux cols, sommets et refuges sur la trace et affiche leur nom |
 | Points d'intérêt | vos propres lieux (« Pique-nique », « Le chalet de Paul »), posés d'un clic droit sur le relief ou au marqueur, affichés comme les repères dans la vue et le film |
 | Trace | colorée selon la vitesse, la pente, l'altitude, le cardio, la cadence, la puissance ou la température ; épaisseur, tirets ou points, halo lumineux, trace qui se dessine au passage du marqueur |
 | Marqueur | boule, figurine (randonneur, coureur, cycliste, VTT, skieur, parapente, voiture) tournée dans le sens de la marche, ou votre photo en rond ; taille réglable |
 | Course fantôme | plusieurs traces rejouées ensemble, avec un classement en direct |
+| Sortie prévue | pour un itinéraire sans heures (Komoot, Visorando, IGNrando…) : date, heure de départ, activité et rythme donnent l'heure de passage estimée à chaque point, le soleil et la prévision météo du jour |
+| Feuille de route | avant de partir : les pentes raides (montées et descentes), les cols, sommets, refuges et points d'eau sur le chemin, avec le km, l'altitude, le D+ et l'heure de passage ; à copier ou à enregistrer en texte |
 | Enchaînement | plusieurs traces (une par jour, ou une sortie enregistrée en deux fichiers) réunies en un seul parcours, survolé d'un trait |
 | Habillage | titres, compteurs, profil, mini-carte, météo, logo, texte, classement de la course fantôme, textes, photos et vidéos de la timeline incrustés dans le film, crédits des sources ; trois styles, dont on peut changer les couleurs et les polices |
 | Musique | une ou plusieurs musiques sur la timeline (MP3, M4A, OGG, WAV, FLAC), avec volume et fondus ; jouées pendant la lecture et mixées dans la vidéo exportée, avec le son des vidéos ; musique baissée sous les vidéos au choix |
@@ -129,6 +132,29 @@ La liste des traces affiche vos traces ; le bouton × en supprime une. Le survol
 suivent la première trace. Dès deux traces, « Enchaîner en un seul parcours » les réunit en une seule (dans l'ordre des
 heures de départ) ; le message propose « Annuler ».
 
+Une trace sans heures (itinéraire préparé sur Komoot, Visorando…) a un volet « Prévoir la sortie » : choisissez la date,
+l'heure de départ, l'activité et le rythme, puis « Calculer les horaires ». Le soleil, les compteurs et la météo
+(prévision) suivent alors la sortie prévue ; « Effacer les horaires » revient à la trace sans heures.
+
+#### Importer depuis Strava
+
+Le bouton **« Strava »** de la liste des traces (ou **« Importer depuis Strava »** au premier lancement) importe vos
+activités Strava directement. Strava demande une « application » pour cela ; OpenFlyover n'a pas de serveur, vous créez
+donc la vôtre, une seule fois :
+
+1. Sur [strava.com/settings/api](https://www.strava.com/settings/api), créez une application (gratuite). Nom et site
+   au choix ; dans « Authorization Callback Domain », mettez `localhost` (site lancé sur votre machine, application de
+   bureau) ou l'adresse de votre site s'il est hébergé (par exemple `flyover.example.org`).
+2. Copiez son **Client ID** et son **Client Secret** dans OpenFlyover. Ils restent sur votre machine et ne sont envoyés
+   qu'à Strava.
+3. Cliquez sur **« Se connecter »** et autorisez la lecture de vos activités sur Strava.
+4. Cochez les activités voulues (« Plus » pour remonter plus loin), puis **« Importer »**.
+
+L'accès est en lecture seule, activités privées comprises, trace entière (zones de confidentialité comprises) :
+pensez-y avant de publier un film. Strava limite chaque application à 100 requêtes par quart d'heure et 1 000 par jour
+(une par page d'activités, une par activité importée). « Déconnecter » oublie la connexion ; l'accès se retire aussi sur
+strava.com/settings/apps.
+
 ### Naviguer et lire
 
 - Clic gauche glissé : tourner. Clic droit glissé : déplacer. Molette : zoomer.
@@ -163,6 +189,7 @@ heures de départ) ; le message propose « Annuler ».
   ralentir ici ») ; tirez les bords du bloc, choisissez de ×0,25 à ×4 dans le panneau.
 - Dans le panneau d'un arrêt, « Caméra pendant l'arrêt » : comme le film, tour lent autour du point, vue large ou fixe.
 - Dans le panneau de l'ouverture, le style « Depuis la région » part de très haut au-dessus de la région, puis plonge vers la trace ; en clôture, la caméra y remonte.
+- Dans le panneau de l'ouverture ou de la clôture, « Transition » : enchaîné (la caméra glisse), coupe nette, fondu au noir ou au blanc (avec sa durée).
 - Onglet Survol, « Garder ce cadrage ici » pose un cadrage au marqueur (losange de la piste « Plans ») : réglez sa distance,
   son inclinaison et sa visée dans son panneau. La caméra passe en douceur d'un cadrage à l'autre, le reste du film ne change pas.
 - Clic droit sur la trace, dans la vue 3D : « Ajouter un arrêt ici » ou « Ajouter un texte ici ».
@@ -282,7 +309,8 @@ Certaines sources interdisent le téléchargement en masse ; elles restent en li
   À côté du nom, « Modifié » signale des changements depuis le dernier enregistrement.
 - « Ouvrir » (Ctrl+O) le recharge. Un réglage invalide reprend sa valeur par défaut et un message vous le signale.
 - Les flèches d'annulation portent sur les réglages (Ctrl+Z, Ctrl+Maj+Z ou Ctrl+Y).
-- « Garder dans Mes projets » (onglet « Projet ») garde le projet dans l'appli : il s'enregistre tout seul et se rouvre en un clic.
+- « Garder dans Mes projets » (onglet « Projet ») garde le projet dans l'appli : il s'enregistre tout seul et se rouvre en un clic ; fermer
+  l'appli ou l'onglet avec des changements non enregistrés demande d'abord confirmation.
 - Les préréglages (onglet « Projet ») sont gardés dans le navigateur, sous le nom que vous leur donnez.
 
 ## Fonctionnement
@@ -495,7 +523,7 @@ Toutes les sources sont ouvertes et sans clé. Le code les déclare dans `src/te
 | Esri World Imagery | orthophotos du monde (imagerie par défaut) | `services.arcgisonline.com` | « Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community » |
 | EOX Sentinel-2 cloudless 2025 | images satellite du monde, 10 m | `tiles.maps.eox.at` | « EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0 » |
 | OpenTopoMap | carte topographique du monde | `tile.opentopomap.org` | « Données : © contributeurs OpenStreetMap, SRTM \| Rendu : © OpenTopoMap (CC BY-SA) » |
-| Open-Meteo | météo historique | `archive-api.open-meteo.com` | « Données météo : Open-Meteo.com (CC BY 4.0) » |
+| Open-Meteo | météo historique, prévision d'une sortie à venir | `archive-api.open-meteo.com`, `api.open-meteo.com` | « Données météo : Open-Meteo.com (CC BY 4.0) » |
 | OpenStreetMap (API Overpass) | repères, plans d'eau (lacs et rivières reflétants) | `overpass-api.de`, secours `maps.mail.ru` | « © contributeurs OpenStreetMap (ODbL) » |
 
 La bande d'état, en bas de l'écran, affiche les attributions du relief et de l'imagerie en cours. Celles d'Open-Meteo et d'OpenStreetMap

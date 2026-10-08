@@ -1,13 +1,15 @@
 # État du projet et reprise
 
-Mis à jour le 2026-10-08. Ce fichier suffit pour reprendre sans l'historique de conversation : lire
+Mis à jour le 2026-10-08 (soir). Ce fichier suffit pour reprendre sans l'historique de conversation : lire
 d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
 ## Branches, PR, dépôt
 
-- `master` : tout ce qui est fusionné (PR #1 à #6 ; #6 le 2026-10-08 : géoïde, hors ligne, rendu en lot, vagues 1 et 2).
-- `lot-vague3` (branche courante) : vagues 3 et 4 des fonctions restantes (voir « Travail en cours »). PR vers `master`
-  fusionnée dès que les vérifications sont vertes (fusion autorisée par l'utilisateur).
+- `master` : tout ce qui est fusionné (PR #1 à #7 ; #7 le 2026-10-08 : vagues 3 et 4).
+- `lot-suites` (branche courante, poussée) : reconnaissance d'itinéraire, transitions, enregistrement à la fermeture,
+  aides partagées, et **deux chantiers interrompus** (plan de situation très haut + région mise en avant, import
+  Strava ; voir « Travail en cours »). Pas encore de PR : terminer les deux chantiers, faire passer les 2 tests en
+  échec, puis PR et fusion (fusion autorisée par l'utilisateur). La CI GitHub (`ci.yml`) tourne à chaque push.
 - Méthode : une branche par lot, une PR avec procédure de test manuel, fusion (`gh pr merge N --merge`), puis nouvelle
   branche partie de `origin/master`.
 - **Pousser** : `git push` tout simplement. Le remote `origin` est `git@github-yannickriou:YannickRiou/gpx2movie.git`,
@@ -58,37 +60,55 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
 Voir `git log` et les PR #1 à #5 ; détail technique dans `ARCHITECTURE.md`, fonctionnalités dans `README.md`.
 
-## Travail en cours (branche `lot-vague3`)
+## Travail en cours (branche `lot-suites`, état au 2026-10-08 au soir)
 
-Vérifié pour tout le lot : typecheck, lint (0 erreur), `npx vitest run --maxWorkers=1` (89 fichiers, 1 426 tests),
-`npm run build` (premier écran toujours sans three.js). Vu en capture (SwiftShader, 1440 × 900) : liste « Points
-d'intérêt » et étiquette à épingle, « Mes projets » (carte du projet ouvert), « Un film par trace » dans le tiroir
-d'export, titres aux repères dans la piste Textes. Le reste est à voir, écouter ou lancer sur une machine avec GPU, sous
-Linux ou sur GitHub : [`docs/tests-gpu.md`](tests-gpu.md).
+État des vérifications au dernier commit : typecheck OK, lint OK (0 erreur), build OK, `cargo check --target
+x86_64-pc-windows-msvc` OK, **vitest : 2 tests en échec sur 1 487** (`src/flyover/filmCamera.test.ts`, « region view »,
+chantier interrompu ci-dessous). Rien de ce lot n'a été vu dans un navigateur.
 
-- **Plan de situation** : style d'ouverture / de clôture `'situation'` (« Depuis la région »), vue à 65° jusqu'à 5 ×
-  la diagonale de la trace, bornée par la zone de relief chargée (trace + 25 km) : pour une trace de 15 km, seulement
-  ~2,8 × plus haut que la vue d'ensemble. Aller plus haut demanderait d'élargir la zone (tuiles, packs hors ligne).
-- **Points d'intérêt à la main** : `film.pois`, clic droit sur le relief ou la trace, liste dans l'onglet Carte, « Arrêt ».
-- **Traces enchaînées** : « Enchaîner en un seul parcours » (onglet Trace), offre à l'import de traces qui se suivent,
-  « Annuler » dans le toast (`src/import/chain.ts`).
-- **Ralentis et titres aux repères** : `film.landmarkTitles` (neuf : oui ; anciens projets : non), ×0,5 sur 400 m et
-  carton du nom aux cols, sommets et refuges (titre seul là où un arrêt existe déjà), éléments `auto-…` refaits quand les
-  repères arrivent (une étape d'annulation), figés dès qu'on en retouche un.
-- **Calage sur la musique** : tempo et temps détectés (`src/film/beats.ts`, gardés dans la table des médias),
-  « Caler sur le rythme » (débuts de textes et d'arrêts sur la mesure à ±0,4 s), repères sur le bloc de musique. Seuil
-  de confiance réglé sur des signaux de synthèse seulement.
-- **Affiche** : plusieurs traces (cadrage commun, totaux, liste jusqu'à 6) et « Carte à plat » (carte 2D vue de dessus
-  depuis les tuiles d'imagerie).
-- **Un film par trace d'un dossier** : source « Un film par trace » du mode « Plusieurs formats » (Chrome / Edge /
-  bureau), état d'origine remis à la fin, `history.suspend()` pendant la série.
-- **Mes projets** : projets gardés par l'application (`<app data>/projects/` sur le bureau, Cache Storage sur le site),
-  enregistrés 3 s après chaque changement. Pas de vignette ; une modification faite moins de 3 s avant la fermeture est
-  perdue.
-- **Encodeur natif Linux** : `src-tauri/src/video.rs`, `ffmpeg` du système (H.264 + AAC), choisi quand WebCodecs manque ;
-  « installez ffmpeg » sinon. Jamais lancé ; `cargo test` à faire sous Linux.
-- **Installeurs** : `.github/workflows/desktop.yml` (Windows, macOS, Linux ; signature si les secrets existent) et
-  `ci.yml` (vérifications à chaque push). Jamais lancés sur GitHub. Guide : `docs/installeurs.md`.
+Terminé (tests verts, jamais vu à l'écran) :
+- **Reconnaissance d'itinéraire, horaires** : `src/plan/timing.ts` (DIN 33466 pour la marche, km-effort ITRA pour le
+  trail, règle de Naismith adaptée au vélo, facteur de rythme), « Prévoir la sortie » dans la carte d'une trace sans heure
+  (`TrackList.tsx`, `Track.timesEstimated`, badge « horaires estimés », « Effacer les horaires »), météo par la
+  **prévision** Open-Meteo (`api.open-meteo.com/v1/forecast`, 16 jours, cache mémoire de 3 h ; CSP du bureau élargie).
+  Limite : l'heure de départ est lue à l'heure de l'appareil (pas de fuseau tiré des coordonnées).
+- **Feuille de route** : `src/plan/roadbook.ts`, `src/ui/RoadbookPanel.tsx` (onglet Trace, sous « Montées ») : pentes
+  raides ≥ 15 % / ≥ 25 %, points clés (montées, cols, sommets, refuges, points d'eau, points d'intérêt), km / altitude /
+  D+ / heure, clic = tête de lecture, « Copier », « Enregistrer (.txt) ». Nouveau type de repère `waterPoint` (points
+  d'eau, hors film par défaut).
+- **Transitions des plans** : ouverture / clôture « Enchaîné » (défaut), « Coupe », « Fondu au noir / au blanc »
+  (0,3–2 s) ; `FilmShot.transition`, `dipS`, `transitionDipAt`, `shotWeight`. Pas aux arrêts (expliqué dans
+  `ARCHITECTURE.md`).
+- **Enregistrement à la fermeture** : bureau `onCloseRequested` (écriture en attente, 4 s au plus, puis question
+  « Fermer sans enregistrer ? » ou « Fermer pendant l'export ? »), site `pagehide` / `beforeunload`. À la sortie de
+  l'application, les encodages ffmpeg en cours sont arrêtés et leurs fichiers partiels supprimés (`lib.rs`,
+  `Videos::cancel_all`).
+- Aides partagées : `core/errors.ts` (`errorText`), `clamp` de `core/math.ts` partout.
+
+**Interrompu 1 — plan de situation très haut + région mise en avant** (demande de l'utilisateur : faire comme la vue
+« Valais/Wallis » de MapDirector : vue presque de dessus de toute la région administrative de la sortie, extérieur
+assombri, frontière blanche lumineuse, nom de la région au centre, point orange à la sortie, puis plongée) :
+- fait : `src/osm/region.ts` (Overpass `is_in` puis `out geom`, niveaux admin 4 à 6, choix de la plus petite région qui
+  contient la trace et la dépasse ×5, anneaux recousus avec `stitchRings`, simplifiés à 2 000 points, cache) ;
+  `regionDistanceM` / `regionView` réécrits dans `src/flyover/filmCamera.ts` (hauteur « région » / « pays »
+  `StartHeight`, cadrage sur la boîte de la région) ; moteur de relief : zone élargie et plafond de zoom hors du couloir
+  (`src/terrain/quadtree.ts`, `engine.ts`, `src/scene/TerrainLayer.tsx`, `REGION_AREA_MARGIN_M`).
+- reste : faire passer les 2 tests de `filmCamera.test.ts` (attentes de l'ancienne distance à revoir), le rendu
+  `src/scene/RegionHighlight.tsx` (cité dans `region.ts`, **pas encore écrit** : assombrir hors de la région, trait
+  lumineux, nom, point, fondu pendant la plongée, identique aperçu / export), le réglage dans l'inspecteur d'ouverture
+  (« Hauteur de départ », « Mettre en avant la région »), le crédit OpenStreetMap quand la région est affichée,
+  l'atmosphère vue de très haut (nuages coupés au-dessus d'une certaine hauteur ?), la doc (`ARCHITECTURE.md`
+  « Plan de situation », README, `docs/tests-gpu.md`).
+- **Interrompu 2 — import Strava** (presque fini) : `src/strava/api.ts` (autorisation, échange et renouvellement du
+  jeton, liste des activités, flux GPS / heure / altitude / capteurs), `src/strava/track.ts` (flux → `Track`),
+  `src/ui/StravaImport.tsx` (« Importer depuis Strava » à l'accueil et dans « Ajouter »), `src/platform/oauthRedirect.ts`
+  + `public/oauth-callback.html` (site : fenêtre de connexion qui revient sur `oauth-callback.html` ; bureau : plugins
+  `tauri-plugin-oauth` (écoute sur 127.0.0.1) et `tauri-plugin-opener`, ajoutés à `Cargo.toml` et `lib.rs`), CSP pour
+  `www.strava.com`. Choix : « votre propre application Strava » (Client ID / Secret collés une fois, gardés en local,
+  envoyés seulement à strava.com) car l'échange du jeton exige le secret et le projet n'a pas de serveur. README
+  (« Importer depuis Strava ») et `docs/tests-gpu.md` (section 6 bis) écrits. Reste : relire le tout (l'agent a été
+  arrêté pendant la doc), vérifier `ARCHITECTURE.md` (section « Import Strava »), droits des plugins dans
+  `capabilities/default.json`, essai réel (CORS de `www.strava.com/oauth/token` depuis le navigateur à confirmer).
 
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
 
@@ -202,14 +222,18 @@ reste la source de chaque chantier.
 
 ## Prochaines étapes proposées
 
-1. L'utilisateur : tests sur la machine avec GPU (`docs/tests-gpu.md`), premier lancement des workflows GitHub, certificat
-   de signature s'il en veut un.
-2. Reconnaissance d'itinéraire (vague 5) : à confirmer avec l'utilisateur avant de construire.
-3. Petites suites : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version) ;
-   e2e qui attend les morceaux chargés à part ; aide de message d'erreur répétée ~12 fois ; copies de `clamp` restantes
-   (`film/clock.ts`, `film/timeline.ts`, `film/audio.ts`, `terrain/dem.ts`) → `core/math.ts` ; passe de performance de la
-   scène (pas de rendu continu à l'arrêt, nuages moins chers en aperçu) ; un export « .webm » demandé sur le bureau Linux
-   sort en MP4.
+1. Finir les deux chantiers interrompus ci-dessus, puis vérifications complètes, captures, PR de `lot-suites`, fusion.
+2. Passe de performance de la scène (pas de rendu continu à l'arrêt, nuages moins chers en aperçu) — promise à
+   l'utilisateur.
+3. Mettre à jour la section « Feuille de route » du README (périmée : plusieurs lignes « à faire » sont faites :
+   couleurs et polices, classement dans l'habillage, habillage seul, ralentis et titres, affiche à plusieurs traces et
+   carte à plat, transitions, reconnaissance, stockage local des projets, installeurs) — promis à l'utilisateur.
+4. L'utilisateur : tests sur la machine avec GPU (`docs/tests-gpu.md`), premier lancement des workflows GitHub,
+   application Strava personnelle pour l'import.
+5. Extensions proposées et non retenues pour l'instant : caméra propre à une photo ou un texte, vignettes dans Mes
+   projets, heure GPS des GoPro (GPMF), habillage seul sur le bureau Linux, encodeur intégré openh264.
+6. Petites suites : avertissement `THREE.Clock` (émis par `@react-three/fiber`) ; un export « .webm » demandé sur le
+   bureau Linux sort en MP4 ; fuseau horaire tiré des coordonnées pour « Prévoir la sortie ».
 
 ## Limites et points ouverts
 

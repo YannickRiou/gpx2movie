@@ -5,14 +5,8 @@ import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import { summarizeOuting, weatherWidgetData } from '../weather/series'
 import { syncWeather, useWeatherStore } from '../weather/store'
 import { ModifiedMarker } from './ModifiedMarker'
-import { formatNumber } from './format'
+import { formatClock, formatNumber } from './format'
 import { Icon } from './icons'
-
-/** Recorded instant -> "14 h 32", in the browser time zone (as the timeline). */
-function formatClock(ms: number): string {
-  const date = new Date(ms)
-  return `${date.getHours()} h ${String(date.getMinutes()).padStart(2, '0')}`
-}
 
 function formatTemperature(c: number): string {
   return `${formatNumber(c)} °C`
@@ -22,8 +16,8 @@ function formatTemperature(c: number): string {
 const PROGRESS_STEPS = 1000
 
 /**
- * "Météo de la sortie": historical weather of the first track (Open-Meteo archive), outing summary and the
- * conditions under the flyover marker. Also drives the weather store (`syncWeather`).
+ * "Météo de la sortie": weather of the first track (Open-Meteo archive, or forecast for a planned outing), outing
+ * summary and the conditions under the flyover marker. Also drives the weather store (`syncWeather`).
  */
 export function WeatherPanel() {
   const id = useId()
@@ -44,6 +38,7 @@ export function WeatherPanel() {
   const ready = status === 'ready' && series !== null && path !== null && weatherTrackId === track?.id
   const summary = useMemo(() => (ready ? summarizeOuting(series, path) : undefined), [ready, series, path])
   const now = ready ? weatherWidgetData(series, path, progress) : undefined
+  const forecast = ready && series?.forecast === true
 
   if (!track) return null
 
@@ -78,7 +73,7 @@ export function WeatherPanel() {
 
       {summary && (
         <p className="weather__line">
-          <span className="weather__line-label">Sortie</span>
+          <span className="weather__line-label">{forecast ? 'Prévision' : 'Sortie'}</span>
           <span>
             {summary.dominant.label} · {formatNumber(summary.minTemperatureC)} à {formatTemperature(summary.maxTemperatureC)} ·{' '}
             {summary.precipitationMm < 0.05 ? 'sans pluie' : `${formatNumber(summary.precipitationMm, 1)} mm`} · vent{' '}
@@ -145,6 +140,7 @@ export function WeatherPanel() {
         </details>
       )}
 
+      {forecast && <p className="field__hint">Prévision, pas une mesure : à revoir la veille du départ.</p>}
       {ready && (
         <p className="field__hint">
           <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">

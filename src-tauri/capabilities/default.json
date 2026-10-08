@@ -1,12 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main window: open and save dialogs; reading and writing only the files picked in those dialogs (the dialog plugin adds each picked path to the fs scope). A film is written through a file handle (open, seek, write) and removed when its export does not finish. Offline tile packs and « Mes projets »: files under $APPDATA/tiles and $APPDATA/projects only (mkdir, read_dir, exists added, scope limited to those folders). Native video encoder (system ffmpeg, src/video.rs): its six commands, writing only a file picked in the save dialog.",
+  "description": "Main window: open and save dialogs; reading and writing only the files picked in those dialogs (the dialog plugin adds each picked path to the fs scope). A film is written through a file handle (open, seek, write) and removed when its export does not finish. Offline tile packs and « Mes projets »: files under $APPDATA/tiles and $APPDATA/projects only (mkdir, read_dir, exists added, scope limited to those folders). Native video encoder (system ffmpeg, src/video.rs): its six commands, writing only a file picked in the save dialog. Closing the window: a question (message dialog), then destroy once the last write is done (src/ui/library.ts, installCloseGuard). « Importer depuis Strava »: a one-shot listener on 127.0.0.1 for the redirect (oauth plugin), and the system browser opened on the Strava authorization page only (opener plugin).",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-destroy",
     "dialog:allow-open",
     "dialog:allow-save",
+    "dialog:allow-message",
     "fs:allow-read-file",
     "fs:allow-write-file",
     "fs:allow-open",
@@ -22,6 +24,12 @@
     "allow-video-frame",
     "allow-video-finish",
     "allow-video-cancel",
+    "oauth:allow-start",
+    "oauth:allow-cancel",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://www.strava.com/oauth/authorize*" }]
+    },
     {
       "identifier": "fs:scope",
       "allow": [

@@ -6,9 +6,10 @@
  * pictures of the photos and the frames of the video clips shown by a frame before it is composed
  * (`loadFrameMedia`, decoded at the frame's time: never real-time playback; `releaseFrameMedia` after the export).
  * `overlayExtras` reads what both draw beyond the track (timeline texts and photos, credits of the sources in use,
- * ghost-race leaderboard).
+ * ghost-race leaderboard, dip of a shot transition).
  */
 import type { Track } from '../core/types'
+import { transitionDipAt } from '../film/model'
 import type { FilmMedia } from '../film/model'
 import type { DrawOverlay } from '../export/capture'
 import { getMediaBitmaps, mediaToLoad, useMediaStore } from '../film/media'
@@ -39,7 +40,7 @@ function leaderboardAt(progress: number): LeaderboardRow[] | undefined {
 /**
  * What the overlay draws beyond the track at film time `time` and `progress`, from the stores: the texts and photos
  * of the timeline, the credits of the sources in use (as the status bar: relief, imagery, weather and landmarks once
- * loaded) and the ghost-race leaderboard.
+ * loaded), the ghost-race leaderboard and the dip of a shot transition.
  */
 export function overlayExtras(time: OverlayTime, progress: number): OverlayExtras {
   const { settings } = useAppStore.getState()
@@ -48,6 +49,7 @@ export function overlayExtras(time: OverlayTime, progress: number): OverlayExtra
     leaderboard: leaderboardAt(progress),
     texts: settings.film.texts,
     media: settings.film.media,
+    dip: transitionDipAt(settings.film, time),
     credits: overlayCredits({
       terrainSourceId: settings.terrainSourceId,
       imagerySourceId: settings.imagerySourceId,

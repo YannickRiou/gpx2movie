@@ -109,8 +109,8 @@ export async function chooseFilesToOpen(): Promise<void> {
 const SAMPLE_URL = '/samples/tour-du-mont-blanc-j1.gpx'
 const SAMPLE_NAME = 'tour-du-mont-blanc-j1.gpx'
 
-/** `importFiles` bound to the app store and the toasts. */
-async function runImport(jobs: ImportJob[]): Promise<void> {
+/** `importFiles` bound to the app store and the toasts (files, the sample, Strava activities). */
+export async function runImport(jobs: ImportJob[]): Promise<void> {
   const { setLoading, addTracks } = useAppStore.getState()
   const outcome = await importFiles(jobs, {
     trackCount: () => useAppStore.getState().tracks.length,

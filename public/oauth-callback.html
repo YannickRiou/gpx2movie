@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenFlyover</title>
+  </head>
+  <body style="font-family: system-ui, sans-serif; margin: 3rem; color: #000; background: #fff">
+    <p id="message">Connexion en cours…</p>
+    <script>
+      // Redirect of a connection (Strava…) opened by OpenFlyover in a popup: hand the query (?state=…&code=… or
+      // ?error=…) to the OpenFlyover window (src/platform/oauthRedirect.ts), keep the single-use code out of the
+      // history, then close. A window the browser will not let a script close says so instead.
+      const channel = new BroadcastChannel('openflyover-oauth')
+      channel.postMessage(location.search)
+      channel.close()
+      history.replaceState(null, '', location.pathname)
+      window.close()
+      document.getElementById('message').textContent =
+        'Connexion transmise à OpenFlyover : vous pouvez fermer cette fenêtre.'
+    </script>
+  </body>
+</html>

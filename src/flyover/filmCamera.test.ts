@@ -26,6 +26,7 @@ import {
   regionDistanceM,
   regionView,
   shotBlend,
+  shotWeight,
   smootherstep,
   stopOrbitRad,
   STOP_WIDE_DISTANCE_FACTOR,
@@ -81,6 +82,17 @@ describe('easing', () => {
     expect(shotBlend('saut', 'closing', JUMP_S / 2, 4)).toBeCloseTo(0.5, 12)
     expect(shotBlend('saut', 'closing', JUMP_S, 4)).toBe(1)
     expect(shotBlend('saut', 'opening', 0.25, 0.5)).toBe(0.5)
+  })
+
+  it('cut: the wide view over the whole shot, the weight jumping at the boundary; « Enchaîné » is the shot blend', () => {
+    for (const transition of ['coupe', 'fondu-noir', 'fondu-blanc'] as const) {
+      const shot: FilmShot = { style: 'descente', durationS: 6, transition }
+      for (const localS of [0, 3, 6 - 1e-9]) expect(shotWeight(shot, 'opening', localS, 6)).toBe(0)
+      for (const localS of [0, 2.5, 5]) expect(shotWeight(shot, 'closing', localS, 5)).toBe(1)
+    }
+    for (const shot of [{ style: 'saut', durationS: 6 }, { style: 'saut', durationS: 6, transition: 'enchaine' }] as FilmShot[]) {
+      for (const localS of [0, 5.6, 5.8, 6]) expect(shotWeight(shot, 'opening', localS, 6)).toBe(shotBlend('saut', 'opening', localS, 6))
+    }
   })
 
   it('stop orbit: still at both ends of the window, out at the middle, bounded', () => {
@@ -211,6 +223,17 @@ describe('computeFilmView', () => {
     expectSameView(computeFilmView(path, descent, t, 1, frame, flat, options), flightAt(1, descent.flightS))
     const end = computeFilmView(path, descent, descent.totalTime(), 1, frame, flat, options)
     expectSameView(end, overviewView(path, frame, flat, 1, 16 / 9, flightAt(1, descent.flightS)))
+  })
+
+  it('cut: the overview held until the flight starts, the flight view held until the closing, then the overview', () => {
+    const clock = clockOf({ style: 'descente', durationS: 6, transition: 'fondu-noir' }, { style: 'descente', durationS: 5, transition: 'coupe' })
+    const overview = overviewView(path, frame, flat, 1, 16 / 9, flightAt(0, 0))
+    for (const t of [0, 3, 6 - 1e-6]) expectSameView(computeFilmView(path, clock, t, 0, frame, flat, options), overview)
+    expectSameView(computeFilmView(path, clock, 6, 0, frame, flat, options), flightAt(0, 0))
+    const closingS = clock.openingS + clock.flightS
+    expectSameView(computeFilmView(path, clock, closingS - 1e-6, 1, frame, flat, options), flightAt(1, clock.flightS - 1e-6), 1e-2)
+    const end = overviewView(path, frame, flat, 1, 16 / 9, flightAt(1, clock.flightS))
+    for (const t of [closingS, closingS + 2.5, clock.totalTime()]) expectSameView(computeFilmView(path, clock, t, 1, frame, flat, options), end)
   })
 
   it('continuous over the whole film (no jump between frames at 30 i/s)', () => {

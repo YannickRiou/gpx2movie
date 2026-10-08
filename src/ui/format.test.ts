@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatAscent,
+  formatClock,
   formatDistance,
   formatDistanceGap,
   formatDuration,
@@ -85,5 +86,12 @@ describe('formatDistanceGap', () => {
     expect(formatDistanceGap(1234)).toBe('+1,2 km')
     expect(formatDistanceGap(0.3)).toBe('0 m')
     expect(formatDistanceGap(Number.POSITIVE_INFINITY)).toBe('–')
+  })
+})
+
+describe('formatClock', () => {
+  it('reads the browser clock, minutes zero-padded', () => {
+    expect(formatClock(new Date(2026, 9, 10, 8, 5).getTime())).toBe('8 h 05')
+    expect(formatClock(new Date(2026, 9, 10, 14, 32).getTime())).toBe('14 h 32')
   })
 })

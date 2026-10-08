@@ -40,6 +40,8 @@ export interface WeatherSeries {
   /** start of each hour (ms since epoch, UTC), ascending, consecutive hours */
   time: number[]
   stations: WeatherStation[]
+  /** true when the values are a forecast (outing still to come), not the archive */
+  forecast?: boolean
 }
 
 /** Every variable at one instant and place (NaN where unknown). */

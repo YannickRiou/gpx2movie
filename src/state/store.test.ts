@@ -183,7 +183,7 @@ describe('settings and misc', () => {
       },
       landmarks: {
         enabled: true,
-        kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false },
+        kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false, waterPoint: false },
         maxDistanceM: 1500,
       },
       race: { enabled: false, sync: 'elapsed' },

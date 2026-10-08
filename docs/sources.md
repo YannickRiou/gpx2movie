@@ -308,9 +308,16 @@ aucun en-tête de quota renvoyé). Attribution affichée : « Données météo :
 Journal (curl, 2026-10-07) : `start_date=end_date=2025-07-12`, 2 lieux (45,89/6,80 et 45,83/6,73) → 200, mailles 45,940/6,704 (1 021 m) et
 45,870/6,693 (1 109 m) ; `2026-10-07` (jour même) → 24 heures complètes ; `2026-10-10` → 400 hors plage ; `1939-12-31` → 400 hors plage.
 
+**Prévision** (sortie prévue, 2026-10-08) : `https://api.open-meteo.com/v1/forecast`, sans clé, mêmes conditions (CC BY 4.0, non
+commercial). Mêmes paramètres que l'archive (`start_date` / `end_date`, plusieurs lieux, `elevation`, `timezone=GMT`,
+`timeformat=unixtime`) et mêmes 13 variables horaires, même forme de réponse (24 heures par jour depuis 0 h UTC). Étendue :
+de 92 jours en arrière à aujourd'hui + 15 jours (le 8 octobre : `2026-10-23` → 200, `2026-10-24` → 400 « out of allowed
+range from 2026-07-07 to 2026-10-23 »). Gardée 3 h au plus, en mémoire seulement (la prévision change plusieurs fois par jour).
+
 ## Repères OpenStreetMap — Overpass API (2026-10-07)
 
-Sommets, cols, refuges, lacs, cascades, lieux habités, points de vue et glaciers autour de la trace, lus dans OpenStreetMap par
+Sommets, cols, refuges, lacs, cascades, lieux habités, points de vue, glaciers et points d'eau (eau potable, sources nommées ;
+non mesurés à part, ajoutés après le journal ci-dessous) autour de la trace, lus dans OpenStreetMap par
 l'instance publique Overpass `https://overpass-api.de/api/interpreter` (sans clé), avec repli sur `https://maps.mail.ru/osm/tools/overpass/api/interpreter`
 (VK Maps, listée sur le wiki OSM sans limite annoncée). Données **ODbL** : attribution affichée « © contributeurs OpenStreetMap (ODbL) »
 (panneau et barre d'état, lien vers openstreetmap.org/copyright). Code : `src/osm/overpass.ts`.
