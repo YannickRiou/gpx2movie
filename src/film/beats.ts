@@ -11,12 +11,15 @@
  *   sound the tempo is not confident (`MIN_TEMPO_CONFIDENCE`): no beats then.
  * - Snapping (`snapFilmToBeats`): the start of each title card (film time) and of each stop's hold (a stop is placed
  *   in metres: moved along the track through the film clock, `stopPositionAt`) onto the nearest bar start within
- *   `BEAT_SNAP_S`, else the nearest beat; never over another text, never past another stop.
+ *   `BEAT_SNAP_S`, else the nearest beat; never over another text, never past another stop. Then the start of each
+ *   speed portion (slow motion or fast forward, placed in metres like the stops): moved with its length kept, never
+ *   past a neighbouring portion.
  *
  * Pure module.
  */
-import type { Film, FilmAudio, FilmText } from './model'
-import { stopPositionAt } from './timeline'
+import type { FilmClock } from './clock'
+import type { Film, FilmAudio, FilmSpeed, FilmText } from './model'
+import { positionAtTime, stopPositionAt } from './timeline'
 import type { ClockOfStops } from './timeline'
 
 /** Tempo and beats of a sound file, as kept in its entry of the media table. */
@@ -279,10 +282,14 @@ function snapTexts(texts: readonly FilmText[], beats: readonly FilmBeat[]): { te
   return { texts: out, moved }
 }
 
-/** How a stop is placed: the clock of the film with other stops, the length of the first track (metres). */
+/**
+ * How a stop is placed: the clock of the film with other stops, the length of the first track (metres); and, to snap
+ * the speed portions too, the clock with other portions (the stops already snapped).
+ */
 export interface StopPlacement {
   clockOf: ClockOfStops
   lengthM: number
+  clockOfSpeeds?: (stops: Film['stops'], speeds: readonly FilmSpeed[]) => FilmClock
 }
 
 /**
@@ -310,13 +317,48 @@ function snapStops(film: Film, beats: readonly FilmBeat[], { clockOf, lengthM }:
 }
 
 /**
- * `film` (its stops written out) with its title cards and its stops moved onto the beats (`beatNear`); `moved`: how
+ * Speed portions with each start moved onto its beat, its length kept (whole metres), between its neighbours; a
+ * portion stays where it is when its start cannot land on the beat.
+ */
+function snapSpeeds(
+  film: Film,
+  stops: Film['stops'],
+  beats: readonly FilmBeat[],
+  clockOfSpeeds: NonNullable<StopPlacement['clockOfSpeeds']>,
+  lengthM: number,
+): { speeds: FilmSpeed[]; moved: number } {
+  let speeds = [...film.speeds].sort((a, b) => a.fromM - b.fromM)
+  let moved = 0
+  for (let i = 0; i < speeds.length; i++) {
+    const own = speeds[i]
+    const span = own.toM - own.fromM
+    const at = (fromM: number) => speeds.map((s) => (s.id === own.id ? { ...s, fromM, toM: fromM + span } : s))
+    const startS = (fromM: number) => clockOfSpeeds(stops, at(fromM)).timeAtProgress(fromM / lengthM)
+    const now = startS(own.fromM)
+    const target = beatNear(beats, now)
+    if (target === null || Math.abs(target - now) < ON_BEAT_S) continue
+    const lo = i > 0 ? speeds[i - 1].toM : 0
+    const hi = (i + 1 < speeds.length ? speeds[i + 1].fromM : lengthM) - span
+    if (!(hi > lo)) continue
+    const fromM = Math.round(positionAtTime(startS, target, lo, hi))
+    if (fromM === own.fromM || fromM < lo || fromM > hi || Math.abs(startS(fromM) - target) > BEAT_SNAP_S / 4) continue
+    speeds = at(fromM)
+    moved++
+  }
+  return { speeds, moved }
+}
+
+/**
+ * `film` (its stops written out) with its title cards, its stops and its speed portions moved onto the beats (`beatNear`); `moved`: how
  * many items moved (`film` itself when none did). The same film and beats always give the same result, and snapping
  * again moves nothing.
  */
 export function snapFilmToBeats(film: Film, beats: readonly FilmBeat[], placement: StopPlacement): { film: Film; moved: number } {
   const texts = snapTexts(film.texts, beats)
   const stops = snapStops(film, beats, placement)
-  const moved = texts.moved + stops.moved
-  return { film: moved > 0 ? { ...film, texts: texts.texts, stops: stops.stops } : film, moved }
+  const speeds = placement.clockOfSpeeds
+    ? snapSpeeds(film, stops.stops, beats, placement.clockOfSpeeds, placement.lengthM)
+    : { speeds: film.speeds, moved: 0 }
+  const moved = texts.moved + stops.moved + speeds.moved
+  return { film: moved > 0 ? { ...film, texts: texts.texts, stops: stops.stops, speeds: speeds.speeds } : film, moved }
 }

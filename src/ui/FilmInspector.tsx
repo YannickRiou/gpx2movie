@@ -500,8 +500,8 @@ export function FilmInspector() {
             Jouée de {formatFilmTime(music.startS)} à {formatFilmTime(music.startS + lengthS)} dans le film
             {fileS !== undefined && ` (fichier de ${formatFilmTime(fileS)})`}, pendant la lecture et dans le film exporté. Caler la durée
             change la durée du survol pour que le film finisse avec la musique. Baisser la musique : toutes les musiques
-            baissent de {-DUCK_DB} dB pendant les vidéos avec du son. Caler sur le rythme : les arrêts et les titres à moins
-            de 0,4 s d’un temps de la musique s’y posent, sur un début de mesure s’il y en a un aussi près
+            baissent de {-DUCK_DB} dB pendant les vidéos avec du son. Caler sur le rythme : les arrêts, les titres et les débuts
+            des portions de vitesse à moins de 0,4 s d’un temps de la musique s’y posent, sur un début de mesure s’il y en a un aussi près
             {sound?.beats && (sound.beats.times.length > 0 ? ` (≈ ${Math.round(sound.beats.bpm)} BPM)` : ' (tempo de ce fichier incertain)')}.
           </p>
         </>

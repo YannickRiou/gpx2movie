@@ -131,7 +131,7 @@ const BISECTION_STEPS = 32
  * Position in [lo, hi] at which `timeOf` (non-decreasing) reaches `targetS`, by bisection; the nearest end when the
  * target is out of reach.
  */
-function positionAtTime(timeOf: (m: number) => number, targetS: number, lo: number, hi: number): number {
+export function positionAtTime(timeOf: (m: number) => number, targetS: number, lo: number, hi: number): number {
   if (!(hi > lo) || targetS <= timeOf(lo)) return lo
   if (targetS >= timeOf(hi)) return hi
   for (let k = 0; k < BISECTION_STEPS; k++) {

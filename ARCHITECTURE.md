@@ -785,7 +785,10 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   moins de `BEAT_SNAP_S` (0,4 s), sinon sur le temps le plus proche (`beatNear`) ; déjà à moins de `ON_BEAT_S` (20 ms) :
   laissé. Jamais de chevauchement créé : un titre qui chevaucherait un autre titre reste, un arrêt qui passerait ou
   tomberait sur un autre arrêt reste, un arrêt dont la tenue ne peut pas tomber sur le temps (dans un autre arrêt, au
-  bout de la trace) reste. Un pas d'annulation (`editFilm`) ; les arrêts générés sont écrits (comme toute retouche
+  bout de la trace) reste. Puis chaque portion de vitesse (`snapSpeeds`, avec `clockOfSpeeds`) : son début (temps du
+  film où elle commence, horloge recalculée avec la portion déplacée) va sur le temps, sa longueur gardée, au mètre
+  près, entre ses voisines ; elle reste si son début tombe à plus de `BEAT_SNAP_S` / 4 du temps visé. Un pas
+  d'annulation (`editFilm`) ; les arrêts générés sont écrits (comme toute retouche
   d'arrêt), un titre de repère déplacé fige les titres de repères. Recaler ne déplace rien. Toast « N éléments calés
   sur le rythme (≈ 112 BPM) » ; tempo incertain : message, rien n'est fait.
 - **Son des vidéos** (`clipHasSound`, `clipSounds`, `duckEnvelope` dans `src/film/audio.ts`, purs et testés) : une vidéo

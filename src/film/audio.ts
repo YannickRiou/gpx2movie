@@ -36,7 +36,7 @@ import { buildFilmClock, filmClockFor, filmClockInputFor } from './clock'
 import { AUDIO_TYPES, MAX_AUDIO_BYTES, MAX_PEAKS, dataUrlToBlob, useMediaStore } from './media'
 import type { MediaAsset } from './media'
 import { clipHasSound } from './model'
-import type { Film, FilmAudio, FilmMedia, FilmStop } from './model'
+import type { Film, FilmAudio, FilmMedia, FilmSpeed, FilmStop } from './model'
 import { blobToDataUrl, decodeClipSound } from './video'
 
 type AudioType = (typeof AUDIO_TYPES)[number]
@@ -468,8 +468,9 @@ export async function snapFilmToMusic(): Promise<{ kind: 'success' | 'info'; tex
   const film = track ? materializeStops(source.film, { track, landmarks, pacing }) : source.film
   const input = filmClockInputFor({ ...source, film })
   const clockOf = (stops: readonly FilmStop[]) => buildFilmClock({ ...input, stops })
-  const snapped = snapFilmToBeats(film, beats, { clockOf, lengthM: input.lengthM })
-  if (snapped.moved === 0) return { kind: 'info', text: `Arrêts et titres déjà sur le rythme, ou trop loin d’un temps (${tempo}).` }
+  const clockOfSpeeds = (stops: readonly FilmStop[], speeds: readonly FilmSpeed[]) => buildFilmClock({ ...input, stops, speeds })
+  const snapped = snapFilmToBeats(film, beats, { clockOf, clockOfSpeeds, lengthM: input.lengthM })
+  if (snapped.moved === 0) return { kind: 'info', text: `Arrêts, titres et portions de vitesse déjà sur le rythme, ou trop loin d’un temps (${tempo}).` }
   editFilm(() => ({ film: snapped.film }))
   const n = snapped.moved
   return { kind: 'success', text: `${n} élément${n > 1 ? 's' : ''} calé${n > 1 ? 's' : ''} sur le rythme (${tempo}).` }
