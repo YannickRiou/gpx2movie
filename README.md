@@ -476,7 +476,7 @@ The icons in `src-tauri/icons/` come from `public/favicon.svg`. To regenerate th
   `ffmpeg`, which must be installed (`sudo apt install ffmpeg`): MP4 H.264, with AAC audio (WebM VP9 and Opus if the
   name ends with ".webm"). Without ffmpeg, the export panel
   says so and the still image works; overlay only (transparent WebM) is not possible yet
-  ([`ARCHITECTURE.md`](ARCHITECTURE.md), "Export vidéo sans WebCodecs (Linux)"; not verified yet). On Windows (Edge)
+  ([`ARCHITECTURE.md`](ARCHITECTURE.md), "Video export without WebCodecs (Linux)"; not verified yet). On Windows (Edge)
   and on macOS (WebKit, WebCodecs since Safari 16.4), video export should go through WebCodecs as in the
   browser (not verified yet).
 - Preferences and caches stay in the window storage (like `localStorage` in a browser), specific to the
