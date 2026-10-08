@@ -217,11 +217,10 @@ reste la source de chaque chantier.
 1. L'utilisateur : tests sur la machine avec GPU (`docs/tests-gpu.md`), premier lancement des workflows GitHub, certificat
    de signature s'il en veut un.
 2. Reconnaissance d'itinéraire (vague 5) : à confirmer avec l'utilisateur avant de construire.
-3. Petites suites (fait sur `ai-dev/confident-darwin-83rxik` : copies de `clamp` → `core/math.ts` ; bureau Linux, nom
-   en « .webm » → WebM VP9 + Opus par ffmpeg, vérifié par `cargo test` et un vrai ffmpeg) : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version) ;
-   e2e qui attend les morceaux chargés à part ; aide de message d'erreur répétée ~16 fois (`err instanceof Error ?
-   err.message : String(err)`, version la plus soignée : `errorMessage` de `ui/importFlow.ts`) → un seul module partagé ;
-   passe de performance de la scène (pas de rendu continu à l'arrêt, nuages moins chers en aperçu).
+3. Petites suites (fait sur `ai-dev/confident-darwin-83rxik`, PR #8 : copies de `clamp` → `core/math.ts` ; bureau Linux,
+   nom en « .webm » → WebM VP9 + Opus par ffmpeg, vérifié par `cargo test` et un vrai ffmpeg ; message d'erreur des
+   toasts → `errorMessage` de `core/errors.ts`, 16 copies retirées) : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version) ;
+   e2e qui attend les morceaux chargés à part ; passe de performance de la scène (pas de rendu continu à l'arrêt, nuages moins chers en aperçu).
 
 ## Limites et points ouverts
 

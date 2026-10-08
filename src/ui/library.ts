@@ -4,6 +4,7 @@
  * platform's `projectLibrary` (src/platform/projectLibrary.ts). Opening an entry goes through `openProject`.
  */
 import { create } from 'zustand'
+import { errorMessage } from '../core/errors'
 import type { Track } from '../core/types'
 import { useMediaStore } from '../film/media'
 import { getPlatform } from '../platform'
@@ -114,7 +115,6 @@ let kept: SavedProject | null = null
 let openedCount = 0
 
 const projectOf = (state: AppState): SavedProject => ({ settings: state.settings, tracks: state.tracks, name: state.projectName })
-const reasonOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 function putEntry(entry: ProjectEntry): void {
   const { entries } = useLibraryStore.getState()
@@ -155,7 +155,7 @@ export async function refreshLibrary(): Promise<void> {
   try {
     useLibraryStore.setState({ entries: await library.list() })
   } catch (err) {
-    showToast({ kind: 'error', text: `Impossible de lire « Mes projets » : ${reasonOf(err)}` })
+    showToast({ kind: 'error', text: `Impossible de lire « Mes projets » : ${errorMessage(err)}` })
   }
 }
 
@@ -171,7 +171,7 @@ export async function keepOpenProject(): Promise<void> {
     const entry = await writeOpenProject(library, null)
     showToast({ kind: 'success', text: `Projet « ${entry.name} » gardé dans Mes projets` })
   } catch (err) {
-    showToast({ kind: 'error', text: `Impossible de garder le projet : ${reasonOf(err)}` })
+    showToast({ kind: 'error', text: `Impossible de garder le projet : ${errorMessage(err)}` })
   } finally {
     keeping = false
   }
@@ -184,7 +184,7 @@ export async function libraryFile(entry: ProjectEntry): Promise<File | null> {
   try {
     return new File([await library.load(entry.id)], projectFileName(entry.name), { type: 'application/json' })
   } catch (err) {
-    showToast({ kind: 'error', text: `Impossible d'ouvrir « ${entry.name} » : ${reasonOf(err)}` })
+    showToast({ kind: 'error', text: `Impossible d'ouvrir « ${entry.name} » : ${errorMessage(err)}` })
     return null
   }
 }
@@ -198,7 +198,7 @@ export async function renameEntry(entry: ProjectEntry, name: string): Promise<vo
     putEntry(renamed)
     if (useLibraryStore.getState().currentId === entry.id) useAppStore.getState().setProjectName(renamed.name)
   } catch (err) {
-    showToast({ kind: 'error', text: `Impossible de renommer « ${entry.name} » : ${reasonOf(err)}` })
+    showToast({ kind: 'error', text: `Impossible de renommer « ${entry.name} » : ${errorMessage(err)}` })
   }
 }
 
@@ -216,7 +216,7 @@ export async function deleteEntry(entry: ProjectEntry): Promise<void> {
     useLibraryStore.setState({ entries: useLibraryStore.getState().entries.filter((e) => e.id !== entry.id) })
     showToast({ kind: 'success', text: `Projet « ${entry.name} » supprimé de Mes projets` })
   } catch (err) {
-    showToast({ kind: 'error', text: `Impossible de supprimer « ${entry.name} » : ${reasonOf(err)}` })
+    showToast({ kind: 'error', text: `Impossible de supprimer « ${entry.name} » : ${errorMessage(err)}` })
   }
 }
 
@@ -238,7 +238,7 @@ export function installLibraryAutosave(canSave: () => boolean): () => void {
       const id = useLibraryStore.getState().currentId
       if (id !== null && kept && isProjectDirty(projectOf(useAppStore.getState()), kept)) await writeOpenProject(library, id)
     },
-    onError: (err) => showToast({ kind: 'error', text: `Enregistrement automatique dans Mes projets impossible : ${reasonOf(err)}` }),
+    onError: (err) => showToast({ kind: 'error', text: `Enregistrement automatique dans Mes projets impossible : ${errorMessage(err)}` }),
   })
   autosave = saver
   const unsubscribe = useAppStore.subscribe((state, previous) => {

@@ -4,6 +4,7 @@
  * Jobs run one after the other so that every parsed track gets the next free colour index,
  * and a failing file never prevents the others from being imported.
  */
+import { errorMessage } from '../core/errors'
 import type { Track } from '../core/types'
 
 export interface ImportJob {
@@ -18,13 +19,6 @@ export interface ImportOutcome {
   tracks: Track[]
   /** One entry per failed job: "<label> : <message>". */
   failures: string[]
-}
-
-/** Human-readable message for anything thrown by a parser. */
-export function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message
-  if (typeof error === 'string' && error) return error
-  return 'erreur inconnue'
 }
 
 /**
