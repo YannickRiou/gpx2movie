@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest'
 import type { TrackPoint } from '../core/types'
 import { haversineM } from '../geo/ellipsoid'
 import { buildTrack } from '../import/stats'
-import { buildTrackPath, distanceAtTime, elevationProfile, nearestOnPath, pickProjectedPath, recordedTimeAt, samplePath } from './path'
+import {
+  buildTrackPath,
+  distanceAtTime,
+  elevationProfile,
+  nearestOnPath,
+  pickProjectedPath,
+  recordedTimeAt,
+  samplePath,
+  trackPathOf,
+} from './path'
 
 const A: TrackPoint = { lon: 6.8, lat: 45.9, ele: 1000 }
 const B: TrackPoint = { lon: 6.81, lat: 45.9, ele: 1100 }
@@ -22,6 +31,12 @@ describe('buildTrackPath', () => {
     expect(path.dist[3]).toBe(path.dist[2])
     expect(path.lengthM).toBeCloseTo(track.stats.distanceM, 6)
     expect(Number.isNaN(path.ele[2])).toBe(true)
+  })
+
+  it('trackPathOf builds the same path once per track object', () => {
+    const path = trackPathOf(track)
+    expect(path).toEqual(buildTrackPath(track))
+    expect(trackPathOf(track)).toBe(path)
   })
 })
 

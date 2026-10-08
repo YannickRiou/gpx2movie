@@ -15,7 +15,7 @@
  * 3. Moving time u(x) = c · ∫₀ˣ dx / (v0 · r(x)), tabulated on a grid that is regular inside every window
  *    (`WINDOW_SAMPLES` steps) and has the highlights as nodes; the speed is constant on each grid step, so
  *    u ↔ x is piecewise linear and exactly invertible.
- * 4. Pauses (stops of the film, `flightPacing`; `pacingFromHighlights` derives them as before): highlights
+ * 4. Pauses (the stops of the film, given to `flightPacing`; `pacingFromHighlights` derives them): highlights
  *    closer than `windowM` form one cluster, paused once at its highlight nearest its middle for `pauseS`. A
  *    pause of length P adds exactly P to the film: in film time, the moving clock du/dτ eases from 1 to 0 over E
  *    (raised cosine), holds 0 for P − E, eases back to 1 over E; E = min(`PAUSE_EASE_S`, P, room before / after
@@ -33,9 +33,9 @@
  * No highlight (or pacing disabled, or nothing to slow down nor pause) gives the identity pacing, exactly the
  * constant ground speed of `advanceProgress`. Pure functions (no DOM, no React, no Three, no store).
  */
+import { clamp, lastIndexAtOrBelow } from '../core/math'
 import type { Track } from '../core/types'
-import { CROSSED_PASS_M } from '../osm/landmarks'
-import type { Landmark } from '../osm/landmarks'
+import { CROSSED_PASS_M, type Landmark } from '../osm/landmarks'
 import { advanceProgress } from './cameraSettings'
 import { climbsOf } from './climbs'
 
@@ -202,8 +202,6 @@ export interface Pacing {
   advance(from: PacingPosition, dtS: number, speed: number): PacingPosition
 }
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
-
 /** Constant ground speed: the film lasts `durationS`, `advance` is `advanceProgress`. */
 function identityPacing(durationS: number): Pacing {
   const progressAtTime = (tS: number) => clamp(tS / durationS, 0, 1)
@@ -223,24 +221,12 @@ function identityPacing(durationS: number): Pacing {
   }
 }
 
-/** Index of the last element of the sorted `values` that is ≤ `v` (-1 when none). */
-function lastAtOrBelow(values: ArrayLike<number>, v: number): number {
-  let lo = 0
-  let hi = values.length
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if (values[mid] <= v) lo = mid + 1
-    else hi = mid
-  }
-  return lo - 1
-}
-
 /** Linear interpolation of the piecewise-linear table (from → to) at `v` (clamped to the table). */
 function interpolate(from: Float64Array, to: Float64Array, v: number): number {
   const n = from.length
   if (v <= from[0]) return to[0]
   if (v >= from[n - 1]) return to[n - 1]
-  const i = Math.min(n - 2, lastAtOrBelow(from, v))
+  const i = Math.min(n - 2, lastIndexAtOrBelow(from, v))
   const span = from[i + 1] - from[i]
   return span > 0 ? to[i] + ((to[i + 1] - to[i]) * (v - from[i])) / span : to[i]
 }
@@ -296,9 +282,53 @@ export function pacingFromHighlights(
   if (!settings.enabled || !(lengthM > 0) || !(durationS > 0) || highlightsM.length === 0) {
     return identityPacing(durationS > 0 ? durationS : 1)
   }
-  const highlights = [...new Set(highlightsM.map((h) => clamp(h, 0, lengthM)))].sort((a, b) => a - b)
+  const highlights = normalizeHighlights(highlightsM, lengthM)
   const stops = settings.pauseS > 0 ? pausePositions(highlights, settings.windowM).map((atM) => ({ atM, durationS: settings.pauseS })) : []
   return flightPacing(lengthM, highlights, durationS, settings, stops)
+}
+
+/** Highlights clamped to [0, lengthM], deduplicated and sorted. */
+function normalizeHighlights(highlightsM: readonly number[], lengthM: number): number[] {
+  return [...new Set(highlightsM.map((h) => clamp(h, 0, lengthM)))].sort((a, b) => a - b)
+}
+
+/** Speed portions clamped to the track, without the empty or neutral ones, with transitions of at most `easeM`. */
+function speedRamps(speeds: readonly FlightSpeed[], lengthM: number, easeM: number): SpeedRamp[] {
+  return speeds.flatMap(({ fromM, toM, factor }) => {
+    const from = clamp(fromM, 0, lengthM)
+    const to = clamp(toM, 0, lengthM)
+    return to > from && factor > 0 && factor !== 1 ? [{ fromM: from, toM: to, factor, rampM: Math.min(easeM, (to - from) / 2) }] : []
+  })
+}
+
+/**
+ * Distance grid (sorted, distinct): track ends, highlights, pauses, regular steps across every speed transition
+ * and, when slowing down, across every highlight window.
+ */
+function distanceGrid(
+  lengthM: number,
+  highlights: readonly number[],
+  pauseAt: readonly number[],
+  ramps: readonly SpeedRamp[],
+  slowWindowM: number | null,
+): number[] {
+  const nodes = [0, lengthM, ...highlights, ...pauseAt]
+  for (const { fromM, toM, rampM } of ramps) {
+    for (let j = 0; j <= SPEED_SAMPLES; j++) nodes.push(fromM + (j * rampM) / SPEED_SAMPLES, toM - (j * rampM) / SPEED_SAMPLES)
+  }
+  if (slowWindowM !== null) {
+    const half = WINDOW_SAMPLES / 2
+    for (const h of highlights) {
+      for (let j = -half; j <= half; j++) {
+        const x = h + (j * slowWindowM) / half
+        if (x > 0 && x < lengthM) nodes.push(x)
+      }
+    }
+  }
+  nodes.sort((a, b) => a - b)
+  const xs: number[] = []
+  for (const x of nodes) if (xs.length === 0 || x > xs[xs.length - 1]) xs.push(x)
+  return xs
 }
 
 /**
@@ -316,35 +346,13 @@ export function flightPacing(
 ): Pacing {
   const L = lengthM
   if (!(L > 0) || !(durationS > 0)) return identityPacing(durationS > 0 ? durationS : 1)
-  const highlights = settings.enabled ? [...new Set(highlightsM.map((h) => clamp(h, 0, L)))].sort((a, b) => a - b) : []
+  const highlights = settings.enabled ? normalizeHighlights(highlightsM, L) : []
   const slows = highlights.length > 0 && settings.slowFactor < 1
-  const easeM = (SPEED_EASE_S * L) / durationS
-  const ramps: SpeedRamp[] = speeds.flatMap(({ fromM, toM, factor }) => {
-    const from = clamp(fromM, 0, L)
-    const to = clamp(toM, 0, L)
-    return to > from && factor > 0 && factor !== 1 ? [{ fromM: from, toM: to, factor, rampM: Math.min(easeM, (to - from) / 2) }] : []
-  })
+  const ramps = speedRamps(speeds, L, (SPEED_EASE_S * L) / durationS)
   if (!slows && stops.length === 0 && ramps.length === 0) return identityPacing(durationS)
   const W = settings.windowM
   const pauseAt = stops.map((s) => clamp(s.atM, 0, L))
-
-  // grid: track ends, highlights, pauses, regular steps across every window and every speed transition
-  const nodes = [0, L, ...highlights, ...pauseAt]
-  for (const { fromM, toM, rampM } of ramps) {
-    for (let j = 0; j <= SPEED_SAMPLES; j++) nodes.push(fromM + (j * rampM) / SPEED_SAMPLES, toM - (j * rampM) / SPEED_SAMPLES)
-  }
-  if (slows) {
-    const half = WINDOW_SAMPLES / 2
-    for (const h of highlights) {
-      for (let j = -half; j <= half; j++) {
-        const x = h + (j * W) / half
-        if (x > 0 && x < L) nodes.push(x)
-      }
-    }
-  }
-  nodes.sort((a, b) => a - b)
-  const xs: number[] = []
-  for (const x of nodes) if (xs.length === 0 || x > xs[xs.length - 1]) xs.push(x)
+  const xs = distanceGrid(L, highlights, pauseAt, ramps, slows ? W : null)
 
   // moving time at ×1 before scaling: speed v0 · r · m (midpoint) on each step
   const n = xs.length
@@ -354,6 +362,8 @@ export function flightPacing(
     const r = (slows ? relativeSpeed(mid, highlights, settings.slowFactor, W) : 1) * speedMultiplier(mid, ramps)
     raw[i] = raw[i - 1] + ((xs[i] - xs[i - 1]) * durationS) / (L * r)
   }
+
+  // pause lengths (capped with keepDuration) and the scale of the moving time that keeps the film at durationS
   const moving = raw[n - 1]
   const wanted = stops.reduce((sum, s) => sum + s.durationS, 0)
   const share = settings.keepDuration && wanted > 0 ? Math.min(1, (MAX_PAUSE_SHARE * durationS) / wanted) : 1
@@ -368,7 +378,7 @@ export function flightPacing(
   const U = uTable[n - 1]
 
   // pauses: moving time of the paused node, eases limited by the neighbours and the ends
-  const pu = pauseAt.map((x) => uTable[lastAtOrBelow(xTable, x)])
+  const pu = pauseAt.map((x) => uTable[lastIndexAtOrBelow(xTable, x)])
   const ease = pu.map((u, k) =>
     Math.min(PAUSE_EASE_S, pauseS[k], 2 * u, 2 * (U - u), k > 0 ? u - pu[k - 1] : Infinity, k < pu.length - 1 ? pu[k + 1] - u : Infinity),
   )
@@ -380,9 +390,10 @@ export function flightPacing(
   const progressOfU = (u: number) => clamp(interpolate(uTable, xTable, u) / L, 0, 1)
   const uOfProgress = (progress: number) => interpolate(xTable, uTable, clamp(progress, 0, 1) * L)
 
+  /** moving time at film time `tS`: the film time minus the pauses passed, eased around each pause */
   const movingTimeAt = (tS: number): number => {
     const t = clamp(tS, 0, total)
-    const k = lastAtOrBelow(startT, t)
+    const k = lastIndexAtOrBelow(startT, t)
     if (k < 0) return t
     const e = ease[k]
     const hold = pauseS[k] - e
@@ -396,7 +407,7 @@ export function flightPacing(
   const timeAtProgress = (progress: number): number => {
     if (progress >= 1) return total
     const u = uOfProgress(progress)
-    let k = lastAtOrBelow(startU, u)
+    let k = lastIndexAtOrBelow(startU, u)
     if (k < 0) return u
     // pauses at the same place: the first one is reached first
     while (k > 0 && startU[k - 1] === u) k--

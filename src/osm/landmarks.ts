@@ -15,8 +15,7 @@
 import type { TrackPath } from '../flyover/path'
 import type { LandmarkKind as LabelKind, LandmarkLabel } from '../scene/labelModel'
 import { formatNumber } from '../ui/format'
-import { MAX_LANDMARK_DISTANCE_M } from './overpass'
-import type { OsmFeature, OsmKind } from './overpass'
+import { MAX_LANDMARK_DISTANCE_M, M_PER_DEG, planarDistanceM, type OsmFeature, type OsmKind } from './overpass'
 
 export interface LandmarkSettings {
   enabled: boolean
@@ -107,8 +106,6 @@ export function parseEle(raw: string | undefined): number | undefined {
 // Projection on the track
 // ---------------------------------------------------------------------------
 
-const M_PER_DEG = 111_320
-
 /** Distance (metres) from (lon, lat) to the path, and position along it of the nearest point. */
 export function projectOnPath(path: TrackPath, lon: number, lat: number): { distanceM: number; alongM: number } {
   if (path.count === 0) return { distanceM: Infinity, alongM: 0 }
@@ -187,11 +184,6 @@ function normaliseName(name: string): string {
     .trim()
 }
 
-function metresBetween(a: Landmark, b: Landmark): number {
-  const k = Math.cos((a.lat * Math.PI) / 180)
-  return Math.hypot((a.lon - b.lon) * k, a.lat - b.lat) * M_PER_DEG
-}
-
 // ---------------------------------------------------------------------------
 // Pipeline
 // ---------------------------------------------------------------------------
@@ -236,7 +228,7 @@ export function buildLandmarks(
   const names: string[] = []
   for (const c of candidates) {
     const name = normaliseName(c.name)
-    if (kept.some((k, i) => names[i] === name && metresBetween(k, c) < DEDUPE_RADIUS_M)) continue
+    if (kept.some((k, i) => names[i] === name && planarDistanceM(k, c) < DEDUPE_RADIUS_M)) continue
     kept.push(c)
     names.push(name)
     if (kept.length >= maxCount) break

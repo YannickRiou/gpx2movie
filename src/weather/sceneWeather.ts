@@ -8,7 +8,8 @@
  *
  * Pure functions (no DOM, no React, no Three).
  */
-import { weatherAt, type WeatherSeries } from './series'
+import { clamp } from '../core/math'
+import { lerpNaNSafe, weatherAtTimes, type WeatherSeries } from './series'
 
 /** Scene parameters applied by AtmosphereLayer (identity: CLEAR_SCENE_WEATHER). */
 export interface SceneWeather {
@@ -80,10 +81,6 @@ const HOUR_MS = 3_600_000
 
 const FOG_CODES: ReadonlySet<number> = new Set([45, 48])
 
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, v))
-}
-
 /** NaN-safe value in [0, 1] from a percentage (NaN → `fallback`). */
 function fraction(percent: number, fallback: number): number {
   return Number.isNaN(percent) ? fallback : clamp(percent / 100, 0, 1)
@@ -96,15 +93,14 @@ function fraction(percent: number, fallback: number): number {
  * the scene does not jump at the top of the hour. Undefined when the series is empty.
  */
 export function sceneConditionsAt(series: WeatherSeries, timeMs: number, lon: number, lat: number): SceneConditions | undefined {
-  const now = weatherAt(series, timeMs, lon, lat)
-  if (!now) return undefined
   // the value of hour k (ending at time[k]) stands at time[k] − 30 min
   const u = (timeMs - series.time[0]) / HOUR_MS + 0.5
   const k = Math.floor(u)
   const w = u - k
-  const a = weatherAt(series, series.time[0] + k * HOUR_MS, lon, lat)!
-  const b = weatherAt(series, series.time[0] + (k + 1) * HOUR_MS, lon, lat)!
-  const lerp = (x: number, y: number) => (Number.isNaN(x) ? y : Number.isNaN(y) ? x : x + (y - x) * w)
+  const samples = weatherAtTimes(series, [timeMs, series.time[0] + k * HOUR_MS, series.time[0] + (k + 1) * HOUR_MS], lon, lat)
+  if (!samples) return undefined
+  const [now, a, b] = samples
+  const lerp = (x: number, y: number) => lerpNaNSafe(x, y, w)
   const isFog = (code: number) => (Number.isNaN(code) ? Number.NaN : FOG_CODES.has(code) ? 1 : 0)
   return {
     cloudCover: now.cloudCover,

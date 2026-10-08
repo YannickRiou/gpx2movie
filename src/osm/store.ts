@@ -8,8 +8,7 @@
  */
 import { create } from 'zustand'
 import type { Track } from '../core/types'
-import { buildTrackPath } from '../flyover/path'
-import type { TrackPath } from '../flyover/path'
+import { trackPathOf } from '../flyover/path'
 import { setLabelSource, useLabelSources } from '../scene/labelSources'
 import { buildLandmarks, landmarkLabels } from './landmarks'
 import type { Landmark, LandmarkSettings } from './landmarks'
@@ -40,16 +39,6 @@ export interface SyncLandmarksDeps {
 const pending = new Map<string, AbortController>()
 /** Tracks whose last request failed (not retried until `retry`). */
 const failed = new Set<string>()
-const paths = new WeakMap<Track, TrackPath>()
-
-function pathOf(track: Track): TrackPath {
-  let path = paths.get(track)
-  if (!path) {
-    path = buildTrackPath(track)
-    paths.set(track, path)
-  }
-  return path
-}
 
 function errorMessage(e: unknown): string {
   if (e instanceof OverpassError && (e.status === 429 || e.status === 504)) {
@@ -64,7 +53,7 @@ function publish(tracks: readonly Track[], settings: LandmarkSettings, message: 
   const landmarks: Record<string, Landmark[]> = {}
   for (const track of tracks) {
     const list = features[track.id]
-    if (list) landmarks[track.id] = buildLandmarks(list, pathOf(track), settings)
+    if (list) landmarks[track.id] = buildLandmarks(list, trackPathOf(track), settings)
   }
   const status: LandmarkStatus = pending.size > 0 ? 'loading' : failed.size > 0 ? 'error' : 'ready'
   useLandmarkStore.setState({ status, message: status === 'error' ? message : null, landmarks })

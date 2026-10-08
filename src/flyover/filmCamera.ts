@@ -12,6 +12,7 @@
  * above the ground. 'descente' eases over the whole shot; 'saut' holds the overview and moves in JUMP_S.
  */
 import { Vector3 } from 'three'
+import { clamp } from '../core/math'
 import type { LocalFrame } from '../core/types'
 import type { FilmClock, FilmState } from '../film/clock'
 import type { ShotStyle } from '../film/model'
@@ -35,7 +36,7 @@ const UP = new Vector3(0, 1, 0)
 
 /** 0 → 1 with zero first and second derivatives at both ends. */
 export function smootherstep(x: number): number {
-  const t = Math.min(1, Math.max(0, x))
+  const t = clamp(x, 0, 1)
   return t * t * t * (t * (6 * t - 15) + 10)
 }
 
@@ -51,7 +52,7 @@ export function shotBlend(style: ShotStyle, phase: 'opening' | 'closing', localS
 export function stopOrbitRad(addedS: number, localS: number, lengthS: number): number {
   if (!(lengthS > 0)) return 0
   const amplitude = Math.min(STOP_ORBIT_MAX_DEG, STOP_ORBIT_DEG_PER_S * addedS) * DEG
-  return (amplitude * (1 - Math.cos((2 * Math.PI * Math.min(1, Math.max(0, localS / lengthS)))))) / 2
+  return (amplitude * (1 - Math.cos(2 * Math.PI * clamp(localS / lengthS, 0, 1)))) / 2
 }
 
 /** True when the view changes with the film time alone (progress unchanged): shots, orbiting stops, orbit / cinema. */
