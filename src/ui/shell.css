@@ -1422,3 +1422,32 @@
     box-shadow: var(--shadow-pop);
   }
 }
+
+/* Timeline bar labels: hidden when the timeline itself is narrow (side columns open), not only the window */
+.film-tl {
+  container: film-tl / inline-size;
+}
+
+@container film-tl (max-width: 1000px) {
+  .film-tl__bar .icon-btn--label .icon-btn__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .film-tl__bar .icon-btn--label {
+    padding: 0 6px;
+  }
+
+  /* distance / altitude / hour of the marker: shown again when the timeline is wide */
+  .film-tl__readout {
+    display: none;
+  }
+
+  .film-tl__zoom-range {
+    width: 64px;
+  }
+}

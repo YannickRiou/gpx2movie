@@ -53,14 +53,18 @@ film. Reste à faire : les vidéos de la piste des médias.
 
 ## Captures d'écran
 
-![L'interface : panneaux à gauche, vue 3D du Tour du Mont-Blanc, timeline de montage en bas](docs/images/interface.jpg)
+![L'interface : barre du haut, onglets à gauche, vue 3D du Tour du Mont-Blanc, timeline en bas](docs/images/interface.jpg)
 
-*L'interface avec la trace d'exemple : les repères OpenStreetMap sur le relief, la timeline avec ses plans, ses arrêts
-automatiques et sa piste de textes.*
+*L'interface avec la trace d'exemple : les onglets à gauche, la vue 3D cadrée au format de la vidéo, la timeline avec ses
+plans, ses arrêts automatiques et ses pistes de textes et de photos.*
 
-![Le film avec son habillage : titre, date, texte et crédits des sources](docs/images/habillage.jpg)
+![Un arrêt sélectionné dans la timeline, ses réglages dans le panneau de droite](docs/images/montage.jpg)
 
-*Le même film avec l'habillage : carton titre, texte de la timeline en bas, crédits des sources en bas à droite.*
+*Le montage : un clic sur un bloc de la timeline ouvre ses réglages à droite.*
+
+![Le film avec son habillage et le tiroir d'export ouvert](docs/images/habillage.jpg)
+
+*L'habillage (titre, date, crédits des sources) et le tiroir d'export : format, résolution, durée et taille estimées.*
 
 ## Démarrage rapide
 
