@@ -31,7 +31,7 @@
         "img-src": "'self' data: blob: https://tiles.mapterhorn.com https://s3.amazonaws.com https://data.geopf.fr https://wmts.geo.admin.ch https://services.arcgisonline.com https://tiles.maps.eox.at https://*.tile.opentopomap.org",
         "media-src": "'self' blob:",
         "worker-src": "'self' blob:",
-        "connect-src": "'self' ipc: http://ipc.localhost blob: data: https://tiles.mapterhorn.com https://s3.amazonaws.com https://data.geopf.fr https://wmts.geo.admin.ch https://services.arcgisonline.com https://tiles.maps.eox.at https://*.tile.opentopomap.org https://archive-api.open-meteo.com https://overpass-api.de https://maps.mail.ru"
+        "connect-src": "'self' ipc: http://ipc.localhost blob: data: https://tiles.mapterhorn.com https://s3.amazonaws.com https://data.geopf.fr https://wmts.geo.admin.ch https://services.arcgisonline.com https://tiles.maps.eox.at https://*.tile.opentopomap.org https://archive-api.open-meteo.com https://overpass-api.de https://maps.mail.ru https://nominatim.openstreetmap.org"
       },
       "dangerousDisableAssetCspModification": ["style-src"]
     }

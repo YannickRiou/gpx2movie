@@ -40,6 +40,7 @@ Ce qui existe aujourd'hui :
 | Lumière | ciel et brume physiques, soleil à l'heure réelle de la sortie, ombres du relief, nuit étoilée, exposition automatique |
 | Météo | météo historique du jour de la sortie (Open-Meteo), visible dans un panneau et dans la scène ; nuages en volume tirés de la nébulosité basse, moyenne et haute (ou réglés à la main), poussés par le vent |
 | Repères | sommets, cols, refuges, lacs… tirés d'OpenStreetMap ; montées détectées et classées (cat. 4 à HC) ; étiquettes 3D ; le film ralentit aux cols, sommets et refuges sur la trace et affiche leur nom |
+| Reconnaissance | une sortie pas encore faite, tracée en posant des points sur le relief : l'itinéraire suit les chemins d'OpenStreetMap, avec ses altitudes, et se survole comme une trace |
 | Points d'intérêt | vos propres lieux (« Pique-nique », « Le chalet de Paul »), posés d'un clic droit sur le relief ou au marqueur, affichés comme les repères dans la vue et le film |
 | Trace | colorée selon la vitesse, la pente, l'altitude, le cardio, la cadence, la puissance ou la température ; épaisseur, tirets ou points, halo lumineux, trace qui se dessine au passage du marqueur |
 | Marqueur | boule, figurine (randonneur, coureur, cycliste, VTT, skieur, parapente, voiture) tournée dans le sens de la marche, ou votre photo en rond ; taille réglable |
@@ -124,6 +125,15 @@ ajoute d'autres. « Ouvrir » (Ctrl+O), dans la barre du haut, accepte aussi bie
 vidéos se déposent, elles, sur la timeline.
 
 La vue se cadre sur la trace. Si la trace est entièrement en France ou en Suisse, l'imagerie passe à l'IGN ou à swisstopo, sauf si vous avez déjà choisi une source.
+
+### Préparer une sortie (reconnaissance)
+
+Pour survoler un itinéraire avant d'y aller, tapez un lieu (« Chamonix ») ou des coordonnées (« 45.92, 6.87 ») dans
+**« Préparer une sortie »** de l'accueil ou de l'onglet Trace : le relief s'affiche sans trace. Faites un clic droit sur
+le relief › **« Point de passage ici »** pour le départ, les étapes puis l'arrivée, dans l'ordre. **« Calculer
+l'itinéraire »** relie les points par les chemins d'OpenStreetMap (sentiers et pistes avant les routes) et ajoute une
+trace, sans heures, avec ses altitudes : le film se monte comme pour une sortie faite. « Modifier » reprend ses points
+pour la recalculer. Les points doivent tenir dans une trentaine de kilomètres et être à moins de 500 m d'un chemin.
 
 La liste des traces affiche vos traces ; le bouton × en supprime une. Le survol, la météo, les repères et les montées
 suivent la première trace. Dès deux traces, « Enchaîner en un seul parcours » les réunit en une seule (dans l'ordre des
@@ -456,13 +466,15 @@ Les vérifications à faire à la main sur une machine avec une vraie carte grap
 ### Tests de bout en bout
 
 `npm run e2e` lance l'application dans un Chromium sans fenêtre et la pilote comme un utilisateur (`e2e/run.mjs`,
-puppeteer-core). Le script démarre son propre serveur Vite sur un port libre. Cinq scénarios :
+puppeteer-core). Le script démarre son propre serveur Vite sur un port libre. Six scénarios :
 
 1. l'accueil vide, puis l'exemple chargé (plans Ouverture, Survol, Clôture) ;
 2. chaque onglet du rail, puis l'aide des raccourcis (bouton et touche « ? », fermée par Échap) ;
 3. la timeline : T ajoute un texte, Ctrl+Z le retire, S ajoute un arrêt ;
 4. le projet enregistré, puis rouvert dans une page neuve (mêmes arrêts et textes) ;
-5. l'export d'une petite vidéo (320 × 180, 2 s, 10 images par seconde) et d'une image fixe.
+5. l'export d'une petite vidéo (320 × 180, 2 s, 10 images par seconde) et d'une image fixe ;
+6. la reconnaissance : coordonnées tapées, relief sans trace, deux « Point de passage ici » au clic droit, itinéraire
+   calculé et film monté (la réponse d'Overpass est simulée dans la page : une grille de chemins).
 
 Un scénario échoue sur toute erreur de la console, sauf les erreurs réseau des tuiles, de la météo et d'OpenStreetMap.
 Les tests utilisent les vrais serveurs de tuiles : il faut Internet. Une image dont les tuiles manquent est acceptée.
@@ -474,7 +486,7 @@ Réglages par variables d'environnement :
 |---|---|
 | `OPENFLYOVER_CHROME` | chemin de Chromium ou Chrome (par défaut, le Chromium de Playwright s'il est installé) |
 | `OPENFLYOVER_E2E_SKIP_EXPORT=1` | saute l'export, le scénario le plus long |
-| `OPENFLYOVER_E2E_ONLY=accueil,export` | ne lance que ces scénarios (`accueil`, `onglets`, `timeline`, `projet`, `export`) |
+| `OPENFLYOVER_E2E_ONLY=accueil,export` | ne lance que ces scénarios (`accueil`, `onglets`, `timeline`, `projet`, `export`, `reconnaissance`) |
 
 Sans carte graphique, le rendu passe par SwiftShader. Sur la machine de développement (WSL, sans GPU), la suite dure
 environ 7 à 8 minutes, dont 5 à 6 pour l'export ; sans l'export, moins de 1 min 30. Les fichiers téléchargés et les captures des
@@ -497,7 +509,8 @@ Toutes les sources sont ouvertes et sans clé. Le code les déclare dans `src/te
 | EOX Sentinel-2 cloudless 2025 | images satellite du monde, 10 m | `tiles.maps.eox.at` | « EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0 » |
 | OpenTopoMap | carte topographique du monde | `tile.opentopomap.org` | « Données : © contributeurs OpenStreetMap, SRTM \| Rendu : © OpenTopoMap (CC BY-SA) » |
 | Open-Meteo | météo historique | `archive-api.open-meteo.com` | « Données météo : Open-Meteo.com (CC BY 4.0) » |
-| OpenStreetMap (API Overpass) | repères, plans d'eau (lacs et rivières reflétants) | `overpass-api.de`, secours `maps.mail.ru` | « © contributeurs OpenStreetMap (ODbL) » |
+| OpenStreetMap (API Overpass) | repères, plans d'eau (lacs et rivières reflétants), chemins de la reconnaissance | `overpass-api.de`, secours `maps.mail.ru` | « © contributeurs OpenStreetMap (ODbL) » |
+| OpenStreetMap (Nominatim) | lieu tapé dans « Préparer une sortie » (une recherche à la validation, jamais à la frappe) | `nominatim.openstreetmap.org` | « © contributeurs OpenStreetMap (ODbL) » |
 
 La bande d'état, en bas de l'écran, affiche les attributions du relief et de l'imagerie en cours. Celles d'Open-Meteo et d'OpenStreetMap
 s'ajoutent quand la météo ou les repères sont chargés. Les mêmes lignes sont incrustées dans les vidéos et images exportées
@@ -644,4 +657,4 @@ Ce qui distingue OpenFlyover : tout reste local, et les données de la sortie (h
 | Rendu en lot | le même film en plusieurs formats d'un coup ; un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface | plusieurs formats (format × résolution, image fixe, affiche) en une fois, dans un dossier choisi : fait ; une vidéo par trace d'un dossier, depuis l'interface : fait ; en ligne de commande à faire |
 | Affiche imprimable | la trace sur le relief en très haute résolution, avec titre et chiffres, pour un tirage | A4 / A3 à 300 dpi (portrait, paysage) et carré, vue d'ensemble 3D, titre, date, chiffres clés, profil, météo, crédits, trois styles : fait ; plusieurs traces, carte à plat à faire |
 | Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale | piste « Musique » (volume, fondus, forme d'onde), jouée dans l'aperçu, mixée à l'export, durée du film calée sur la musique, arrêts et titres calés sur le rythme : fait ; caler les ralentis sur le rythme à faire |
-| Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller | à faire |
+| Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller | points posés sur le relief, sans trace ; itinéraire calculé dans le navigateur sur les chemins OSM, altitudes du relief : fait ; profils (vélo, VTT) à faire |

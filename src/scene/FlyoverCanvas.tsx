@@ -70,6 +70,8 @@ export interface FlyoverCanvasProps {
 
 export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
+  // relief without a track: the area of a route being drawn (`planArea`)
+  const hasArea = useAppStore((s) => s.bounds !== null)
   const atmosphere = useAppStore((s) => s.settings.atmosphere)
   const graded = useAppStore((s) => !isIdentityGrading(s.settings.grading))
   // the video export draws the film overlay through the same code as the preview
@@ -85,13 +87,17 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
             <directionalLight position={SUN_POSITION} intensity={SUN_INTENSITY} />
           </>
         )}
-        {hasTracks && (
+        {hasArea && (
           <TerrainLayer>
-            <TrackLines />
-            <WaterLayer />
+            {hasTracks && (
+              <>
+                <TrackLines />
+                <WaterLayer />
+                <FlyoverRig />
+                <RaceMarkers />
+              </>
+            )}
             <CameraRig />
-            <FlyoverRig />
-            <RaceMarkers />
             <Labels />
             <TrackPicker />
             {atmosphere && (
@@ -105,11 +111,11 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
                 <GradingComposer skyTop={SKY_TOP_COLOR} skyHorizon={SKY_HORIZON_COLOR} />
               </Suspense>
             )}
-            <ExportController drawOverlay={overlayDrawer.draw} />
+            {hasTracks && <ExportController drawOverlay={overlayDrawer.draw} />}
           </TerrainLayer>
         )}
       </Canvas>
-      {hasTracks && <TrackMenu />}
+      {hasArea && <TrackMenu />}
     </div>
   )
 }
