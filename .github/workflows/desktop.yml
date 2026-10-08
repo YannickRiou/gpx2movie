@@ -1,7 +1,7 @@
 # Desktop installers (Tauri) for Windows, macOS and Linux.
 # Manual run: installers as workflow artifacts. Tag v*: the same, plus a draft GitHub Release.
-# Signing is optional: without the secrets (see docs/installeurs.md) the installers are built unsigned.
-name: Installeurs
+# Signing is optional: without the secrets (see docs/installers.md) the installers are built unsigned.
+name: Desktop installers
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Bibliothèques système (Linux)
+      - name: System libraries (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -54,7 +54,7 @@ jobs:
       # Windows signing (https://v2.tauri.app/distribute/sign/windows/): import the PFX into the user's certificate
       # store, then give its thumbprint to Tauri. src-tauri/tauri.windows.conf.json is merged into tauri.conf.json on
       # Windows only; it is written here and never committed. Skipped when the secret is absent.
-      - name: Certificat Windows (facultatif)
+      - name: Windows certificate (optional)
         if: runner.os == 'Windows'
         shell: pwsh
         env:
@@ -78,7 +78,7 @@ jobs:
 
       # macOS signing and notarization (https://v2.tauri.app/distribute/sign/macos/). Tauri reads these variables;
       # an empty one would still count as set and break the build, so they are exported only when the secrets exist.
-      - name: Certificat Apple (facultatif)
+      - name: Apple certificate (optional)
         if: runner.os == 'macOS'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -115,6 +115,6 @@ jobs:
           # tag push only: empty values build without a release
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: ${{ github.ref_type == 'tag' && format('OpenFlyover {0}', github.ref_name) || '' }}
-          releaseBody: 'Installeurs de bureau. Voir docs/installeurs.md pour les installer.'
+          releaseBody: 'Desktop installers. See docs/installers.md to install them.'
           releaseDraft: true
           prerelease: false
