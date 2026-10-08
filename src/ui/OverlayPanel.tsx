@@ -200,6 +200,33 @@ function FontField({
 }
 
 /**
+ * « Couleur et police » of one text of the timeline: the overlay's until changed (the picker shows the colour drawn),
+ * « Comme l'habillage » drops both.
+ */
+export function FilmTextStyleFields({
+  color,
+  font,
+  onChange,
+}: {
+  color: string | undefined
+  font: OverlayFontId | undefined
+  onChange(patch: { color?: string; font?: OverlayFontId }): void
+}) {
+  const style = useAppStore((s) => s.settings.overlay.style)
+  const overrides = useAppStore((s) => s.settings.overlay.overrides)
+  const shown = color ?? toHex(resolveOverlayTheme(style, overrides).text)
+  return (
+    <MoreSettings paths={[]} label="Couleur et police">
+      <ColorField label="Couleur" value={shown} onChange={(c) => onChange({ color: c, font })} />
+      <FontField label="Police" value={font} inherit="Celle de l'habillage" onChange={(f) => onChange({ color, font: f })} />
+      <button type="button" className="btn btn--secondary" disabled={!color && !font} onClick={() => onChange({})}>
+        Comme l'habillage
+      </button>
+    </MoreSettings>
+  )
+}
+
+/**
  * « Couleurs et polices »: accent, text, panel and fonts changed on top of the style; the pickers show the colours
  * drawn (the style's until changed). « Revenir au style » drops every change. For one widget (`widget`): the same,
  * on top of the overlay's own changes, and « Comme le reste de l'habillage » drops the widget's.
