@@ -1,4 +1,4 @@
-# OpenFlyover — architecture (phase 1 : visionneuse)
+# OpenFlyover — architecture
 
 Objectif phase 1 : importer un GPX / FIT, afficher le relief 3D (élévation Mapterhorn ou AWS Terrarium)
 habillé d'orthophotos, la trace plaquée sur le relief, et une caméra orbitale. 100 % local, aucune clé d'API.
@@ -74,7 +74,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/platform/*` | site / bureau (voir « Application de bureau ») | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint` ; purs, testés : `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf` ; `tileCache.ts` : `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache` ; `projectLibrary.ts` : `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry` ; `folder.ts` : `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath` |
 | `src/offline/*` | packs de tuiles hors ligne (voir « Packs hors ligne ») | purs, testés : `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`) ; `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`) ; `startPackDownload`, `createDailyQuota` (`download.ts`) ; `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefix` (`packs.ts`) ; non purs : `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
-| `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `shellShortcut`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `loadSample`, `chainLoadedTracks`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
+| `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `loadSample`, `chainLoadedTracks`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
 
 ### Règles de développement
 
@@ -179,7 +179,7 @@ Aperçu des nuages : préréglage « bas » allégé (`PREVIEW_MARCH` : 120 pas 
      Deuxième passe `depthTest: false`, opacité 0.25 pour laisser deviner les portions cachées par le relief.
      Sphères de départ (mousse `#3F6B4A`) et d'arrivée (encre `#1C2A33`).
    - `CameraRig` : `OrbitControls` (drei) avec amortissement, `maxPolarAngle = 85°`, `minDistance = 30`, `maxDistance = 400 km` ;
-     `fitToBounds(bounds)` : cible = centre, caméra au sud-est, pitch 40°, distance = 1.4 × diagonale de la boîte (min 2 km).
+     `computeFitView(bounds, frame, groundHeightM)` (`scene/CameraRig.tsx`) : cible = centre, caméra au sud-est, pitch 40°, distance = 1.4 × diagonale de la boîte (min 2 km).
 8. **État** (`store.ts`) : `tracks: Track[]`, `addTracks`, `removeTrack`, `clearTracks`, `settings { terrainSourceId, imagerySourceId,
    imageryZoomOffset, exaggeration, wireframe }`, `setSetting`, `terrainStats`, `bounds` (union des traces) et `frameOrigin` (centroïde du
    premier lot arrondi à 0,01°, fixe tant qu'il reste une trace) ; l'`area` du moteur est dérivée dans la scène (`TerrainLayer`).
@@ -1407,16 +1407,18 @@ diffère passe par `src/platform/`.
   par un adaptateur `getItem` / `setItem` vers le `KeyValueStore`, et cache Overpass (`overpass.ts`,
   `openflyover.osm.v1.<empreinte>`) : quand `set` répond false, il supprime ses propres entrées (`keys(CACHE_PREFIX)`,
   jamais les autres clés) et réessaie une fois ; sinon le cache mémoire évite les requêtes répétées dans la session.
-- **Tauri** (`src-tauri/`) : `lib.rs` enregistre les extensions dialog et fs et les six commandes de l'encodeur natif
-  (`video.rs`, déclarées dans `build.rs`, `AppManifest::commands`). Fenêtre `main`
+- **Tauri** (`src-tauri/`) : `lib.rs` enregistre les extensions dialog et fs, les six commandes de l'encodeur natif
+  (`video.rs`) et les deux de la ligne de commande (`cli.rs`), toutes déclarées dans `build.rs` (`AppManifest::commands`) :
+  une commande absente de cette liste ou de `capabilities/default.json` est refusée. Fenêtre `main`
   1440 × 900 (au moins 1024 × 700). `dragDropEnabled: false` : sinon Tauri intercepte les dépôts et le HTML ne reçoit plus
   `drop`. Droits (`capabilities/default.json`) : `dialog:allow-open`, `dialog:allow-save`, `fs:allow-read-file`,
   `fs:allow-write-file`, `fs:allow-open`, `fs:allow-seek`, `fs:allow-write`, `fs:allow-remove` (film écrit au fil de
   l'eau), `fs:allow-mkdir`, `fs:allow-read-dir`, `fs:allow-exists` (packs hors ligne, « Mes projets »), `allow-video-available`, `allow-video-sound`, `allow-video-open`,
-  `allow-video-frame`, `allow-video-finish`, `allow-video-cancel` (encodeur natif) ; deux portées
+  `allow-video-frame`, `allow-video-finish`, `allow-video-cancel` (encodeur natif), `allow-cli-render`, `allow-cli-exit`
+  (ligne de commande) ; deux portées
   fixes, `$APPDATA/tiles` et `$APPDATA/projects` avec ce qu'ils contiennent (`fs:scope`), en plus des chemins que l'extension dialog ajoute pour chaque
-  fichier choisi : rien d'autre n'est lisible. CSP : `connect-src` / `img-src` listent les hôtes de tuiles (`src/terrain/sources.ts`), Open-Meteo et les deux
-  serveurs Overpass, plus `ipc:` et `blob:` ; `style-src 'unsafe-inline'` avec `dangerousDisableAssetCspModification:
+  fichier choisi et des deux dossiers d'un rendu en ligne de commande : rien d'autre n'est lisible. CSP : `connect-src` /
+  `img-src` listent les hôtes de tuiles (`src/terrain/sources.ts`), Open-Meteo, les deux serveurs Overpass et Nominatim, plus `ipc:` et `blob:` ; `style-src 'unsafe-inline'` avec `dangerousDisableAssetCspModification:
   ["style-src"]` (Tauri ajouterait sinon un nonce qui annule `unsafe-inline`). **Toute nouvelle source doit aussi entrer
   dans la CSP de `tauri.conf.json`.**
 - **Vérifié** : `cargo check --target x86_64-pc-windows-msvc` passe (configuration, droits, icônes, `generate_context!`),

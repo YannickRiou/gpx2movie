@@ -277,7 +277,7 @@ Contrôle visuel (Chromium headless, trace d'exemple Les Houches → Les Contami
    est dans sa boîte) : une trace transfrontalière (Tour du Mont-Blanc complet, Genevois, Jura suisse, Bâle) sera rendue avec des zones blanches.
    Recommandation : quand la trace est dans la boîte IGN **et** dans la boîte swisstopo, préférer swisstopo (vraies tuiles partout, moins fines)
    ou Esri (uniforme) plutôt qu'IGN, sauf si la trace est entièrement à l'ouest de ~5.9° E ou au nord de ~47.6° N (donc sûrement en France) ;
-   ou laisser l'utilisateur basculer manuellement. `store.ts` possède sa propre copie de `boundsInside` ; `sourceCovers` peut la remplacer.
+   ou laisser l'utilisateur basculer manuellement.
 8. `sourceCovers(source, bounds | point)` (export de `sources.ts`) permet à l'UI de proposer par défaut la source d'imagerie la plus fine
    couvrant entièrement la trace ; `true` signifie « vaut la peine d'essayer », `false` « inutile ».
 9. **Sources datées / cartes jamais choisies automatiquement** : `AUTO_IMAGERY_IDS` de `store.ts` ne liste que `ign-ortho` et `swisstopo` ;

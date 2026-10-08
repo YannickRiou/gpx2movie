@@ -8,7 +8,8 @@ describe('command-line batch', () => {
   it('keeps the formats asked, known and once each, else the format of « Vidéo »', () => {
     expect(cliFormats([], '16:9@1080p')).toEqual(['16:9@1080p'])
     expect(cliFormats(['9:16@720p', '9:16@720p', '1:1@1080p'], '16:9@1080p')).toEqual(['9:16@720p', '1:1@1080p'])
-    expect(() => cliFormats(['16:9@8K'], '16:9@1080p')).toThrow(/Format inconnu : 16:9@8K/)
+    expect(cliFormats(['16:9@4K'], '16:9@1080p')).toEqual(['16:9@4k'])
+    expect(() => cliFormats(['16:9@8K'], '16:9@1080p')).toThrow(/Format inconnu : 16:9@8k/)
   })
 
   it('reports each track and exits with 0 only when every film was made', () => {
