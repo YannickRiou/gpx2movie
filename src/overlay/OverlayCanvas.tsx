@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 import type { Track } from '../core/types'
+import { isExportBusy, useExportStore } from '../export/store'
 import { getMediaBitmaps, mediaToLoad } from '../film/media'
+import type { FilmMedia } from '../film/model'
+import { getPreviewVideos } from '../film/video'
 import { useLandmarkStore } from '../osm/store'
 import { useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
@@ -16,8 +19,10 @@ import { overlayExtras, photoAssets } from './exportOverlay'
 /**
  * Preview of the film overlay: a 2D canvas stacked over the 3D view, redrawn by `drawOverlay` on the next
  * animation frame after the progress or film time, the settings, the film clock, the first track, its weather,
- * the landmarks, a decoded photo or the view size change (store subscriptions, no React render per frame).
- * Rendered while the overlay or the source credits are enabled, or the film has photos.
+ * the landmarks, a decoded photo, a video frame or the view size change (store subscriptions, no React render per
+ * frame). Video clips are video elements playing along during the playback, seeked to the film time when scrubbing
+ * (none during an export, which decodes its own frames). Rendered while the overlay or the source credits are
+ * enabled, or the film has photos or clips.
  */
 export function OverlayCanvas() {
   const enabled = useAppStore(
@@ -52,6 +57,7 @@ function OverlayPreview() {
     let logoSource = ''
     let assets: OverlayAssets = {}
     const bitmaps = getMediaBitmaps()
+    const videos = getPreviewVideos()
 
     const draw = () => {
       raf = 0
@@ -96,7 +102,12 @@ function OverlayPreview() {
       const time = overlayTime(clockRef.current, playback.progress, playback.timeS)
       // decode the photos coming up before they fade in
       for (const id of mediaToLoad(settings.film.media, time.timeS, PHOTO_AHEAD_S)) bitmaps.get(id)
-      drawOverlay(ctx, frame, overlay, { width, height }, { ...assets, ...photoAssets() }, overlayExtras(time))
+      const video = isExportBusy(useExportStore.getState().phase)
+        ? undefined
+        : (item: FilmMedia, clipS: number) => videos.frame(item, clipS, playback)
+      drawOverlay(ctx, frame, overlay, { width, height }, { ...assets, ...photoAssets(), video }, overlayExtras(time))
+      // clips not drawn by this frame are paused
+      videos.settle()
     }
     const schedule = () => {
       if (!raf && !disposed) raf = requestAnimationFrame(draw)
@@ -108,6 +119,8 @@ function OverlayPreview() {
       if (
         state.playback.progress !== prev.playback.progress ||
         state.playback.timeS !== prev.playback.timeS ||
+        state.playback.playing !== prev.playback.playing ||
+        state.playback.speed !== prev.playback.speed ||
         state.settings !== prev.settings ||
         state.tracks !== prev.tracks
       ) {
@@ -121,6 +134,7 @@ function OverlayPreview() {
       if (state.landmarks !== prev.landmarks) schedule()
     })
     const unsubscribePhotos = bitmaps.subscribe(schedule)
+    const unsubscribeVideos = videos.subscribe(schedule)
     // size changes, including a devicePixelRatio change (browser zoom, moving to another screen)
     const observer = new ResizeObserver(schedule)
     observer.observe(canvas)
@@ -139,6 +153,8 @@ function OverlayPreview() {
       unsubscribeWeather()
       unsubscribeLandmarks()
       unsubscribePhotos()
+      unsubscribeVideos()
+      videos.settle()
       observer.disconnect()
       window.removeEventListener('resize', schedule)
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '../state/store'
-import { PRESETS_STORAGE_KEY, createPresetStore, presetSettings } from './presets'
+import { PRESETS_STORAGE_KEY, createPresetStore, getPresetStore, presetSettings } from './presets'
 
 function memoryStorage(initial?: string) {
   const data = new Map<string, string>()
@@ -54,6 +54,16 @@ describe('createPresetStore', () => {
     expect(createPresetStore(memoryStorage('{"a":1}')).list()).toEqual([])
     const mixed = JSON.stringify([{ name: 'ok', settings: {} }, { name: 3 }, null, { name: 'x', settings: null }])
     expect(createPresetStore(memoryStorage(mixed)).list()).toEqual([{ name: 'ok', settings: {} }])
+  })
+
+  it('keeps the presets of the page in the platform storage, under the localStorage key of before', () => {
+    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify([{ name: 'Ancien', settings: {} }]))
+    const store = getPresetStore()
+    expect(store.list().map((p) => p.name)).toEqual(['Ancien'])
+    store.save('Nouveau', DEFAULT_SETTINGS)
+    const stored = JSON.parse(localStorage.getItem(PRESETS_STORAGE_KEY) ?? '[]') as { name: string }[]
+    expect(stored.map((p) => p.name)).toEqual(['Ancien', 'Nouveau'])
+    localStorage.removeItem(PRESETS_STORAGE_KEY)
   })
 })
 

@@ -1,9 +1,11 @@
 /**
  * File actions shared by the top bar, its keyboard shortcuts, the window drop and the panels: save / open the project
- * file, import GPX / FIT tracks and the sample. Outcomes are shown as toasts.
+ * file, import GPX / FIT tracks and the sample, save an export on the desktop (src/platform). Outcomes are shown as
+ * toasts.
  */
 import { useMediaStore } from '../film/media'
 import { importFile, importText } from '../import'
+import { getPlatform } from '../platform'
 import { applyProject } from '../project/apply'
 import { parseProject, projectFileName, serializeProject } from '../project/document'
 import { getSettingsHistory } from '../project/history'
@@ -13,26 +15,34 @@ import type { ImportJob } from './importFlow'
 import { effectiveProjectName, routeOpenedFiles } from './shell'
 import { showToast } from './toast'
 
-/** Start a download of `text` as `fileName` (object URL released once the click has been handled). */
-function downloadText(text: string, fileName: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = fileName
-  document.body.append(link)
-  link.click()
-  link.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-/** Download the project as `<nom>.openflyover.json` and mark it saved. */
-export function saveProject(): void {
+/** Save the project as `<nom>.openflyover.json` (download, or save dialog on the desktop) and mark it saved. */
+export async function saveProject(): Promise<void> {
   const state = useAppStore.getState()
   const name = effectiveProjectName(state.projectName, state.tracks[0]?.name)
-  const fileName = projectFileName(name)
-  downloadText(serializeProject(state, name, useMediaStore.getState().table), fileName)
-  state.markProjectSaved()
-  showToast({ kind: 'success', text: `Projet enregistré : ${fileName}` })
+  const text = serializeProject(state, name, useMediaStore.getState().table)
+  try {
+    const outcome = await getPlatform().saveFile(new Blob([text], { type: 'application/json' }), {
+      fileName: projectFileName(name),
+      filters: [{ name: 'Projet OpenFlyover', extensions: ['json'] }],
+    })
+    if (!outcome.saved) return
+    state.markProjectSaved()
+    showToast({ kind: 'success', text: `Projet enregistré : ${outcome.fileName}` })
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    showToast({ kind: 'error', text: `Impossible d'enregistrer le projet : ${reason}` })
+  }
+}
+
+/** Desktop: an export result (object URL) through the save dialog; says where it went, or why it failed. */
+export async function saveExportedFile(url: string, fileName: string): Promise<void> {
+  try {
+    const outcome = await getPlatform().saveUrl(url, { fileName })
+    if (outcome.saved) showToast({ kind: 'success', text: `Enregistré : ${outcome.fileName}` })
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    showToast({ kind: 'error', text: `Impossible d'enregistrer « ${fileName} » : ${reason}` })
+  }
 }
 
 /** Replace everything by the project in `file`; says so, with the warnings of the file, or why it failed. */
@@ -61,6 +71,26 @@ export async function openFiles(files: readonly File[]): Promise<void> {
   if (extraProjects.length > 0) {
     showToast({ kind: 'info', text: `Un seul projet à la fois : ${extraProjects.map((f) => `« ${f.name} »`).join(', ')} non ouvert(s).` })
   }
+}
+
+/** « Choisir un fichier », « Ajouter » : GPX / FIT files to import (dialog on the desktop). */
+export async function chooseTracksToImport(): Promise<void> {
+  importTrackFiles(await getPlatform().openFiles({ filters: [{ name: 'Traces GPX ou FIT', extensions: ['gpx', 'fit'] }], multiple: true }))
+}
+
+/** « Ouvrir un projet… » : one project file (dialog on the desktop). */
+export async function chooseProjectToOpen(): Promise<void> {
+  const files = await getPlatform().openFiles({ filters: [{ name: 'Projet OpenFlyover', extensions: ['json'] }] })
+  if (files.length > 0) await openFiles(files)
+}
+
+/** « Ouvrir » : file picker (dialog on the desktop) for tracks and a project. */
+export async function chooseFilesToOpen(): Promise<void> {
+  const files = await getPlatform().openFiles({
+    filters: [{ name: 'Traces et projets', extensions: ['gpx', 'fit', 'json'] }],
+    multiple: true,
+  })
+  if (files.length > 0) await openFiles(files)
 }
 
 const SAMPLE_URL = '/samples/tour-du-mont-blanc-j1.gpx'

@@ -3,12 +3,16 @@
  * `drawOverlay` as the preview (OverlayCanvas), so the movie shows exactly what the viewer sees.
  *
  * The export draws synchronously, so the logo is loaded ahead of time, whenever the setting changes, and the
- * pictures of the photos shown by a frame before it is composed (`loadFramePhotos`).
+ * pictures of the photos and the frames of the video clips shown by a frame before it is composed
+ * (`loadFrameMedia`, decoded at the frame's time: never real-time playback; `releaseFrameMedia` after the export).
  * `overlayExtras` reads what both draw beyond the track (timeline texts and photos, credits of the sources in use).
  */
 import type { Track } from '../core/types'
+import type { FilmMedia } from '../film/model'
 import type { DrawOverlay } from '../export/capture'
-import { getMediaBitmaps, mediaToLoad } from '../film/media'
+import { getMediaBitmaps, mediaToLoad, useMediaStore } from '../film/media'
+import { createExportVideos } from '../film/video'
+import type { ExportVideos } from '../film/video'
 import { useLandmarkStore } from '../osm/store'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
@@ -45,9 +49,23 @@ export function photoAssets(): Pick<OverlayAssets, 'photo'> {
   return { photo: (src) => bitmaps.get(src) }
 }
 
-/** Resolve once the pictures of the photos shown at film time `timeS` are decoded (export, before a frame). */
-export function loadFramePhotos(timeS: number): Promise<void> {
-  return getMediaBitmaps().load(mediaToLoad(useAppStore.getState().settings.film.media, timeS))
+/** Frames of the video clips for the export (opened at the first frame that shows one). */
+let exportVideos: ExportVideos | null = null
+
+/**
+ * Resolve once the pictures of the photos and the frames of the clips shown at film time `timeS` are decoded
+ * (export, before a frame).
+ */
+export async function loadFrameMedia(timeS: number): Promise<void> {
+  const { media } = useAppStore.getState().settings.film
+  if (media.some((m) => m.kind === 'video')) exportVideos ??= createExportVideos((id) => useMediaStore.getState().table[id])
+  await Promise.all([getMediaBitmaps().load(mediaToLoad(media, timeS)), exportVideos?.load(media, timeS)])
+}
+
+/** Close the clips opened for the export. */
+export function releaseFrameMedia(): void {
+  exportVideos?.dispose()
+  exportVideos = null
 }
 
 export interface OverlayDrawer {
@@ -90,7 +108,8 @@ export function createOverlayDrawer(): OverlayDrawer {
         series = weather
         data = prepareOverlayTrack(first, weather)
       }
-      drawOverlay(ctx, overlayFrameAt(data, at.progress), settings.overlay, { width, height }, { ...assets, ...photoAssets() }, overlayExtras(at.time))
+      const video = (item: FilmMedia, clipS: number) => exportVideos?.get(item, clipS)
+      drawOverlay(ctx, overlayFrameAt(data, at.progress), settings.overlay, { width, height }, { ...assets, ...photoAssets(), video }, overlayExtras(at.time))
     },
     dispose() {
       disposed = true

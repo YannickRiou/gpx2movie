@@ -4,8 +4,8 @@
  * give the same frame for the same time.
  *
  *   [0, O)          opening: overview shot, progress 0
- *   [O, O + F)      flight: pacing slow-downs, and the stops of the film inserted as eased holds
- *                   (`flightPacing`); inside a stop's window (ease-in, hold, ease-out) the phase is 'stop'
+ *   [O, O + F)      flight: pacing slow-downs, speed portions of the film, and its stops inserted as eased
+ *                   holds (`flightPacing`); inside a stop's window (ease-in, hold, ease-out) the phase is 'stop'
  *   [O + F, total]  closing: overview shot, progress 1
  *
  * O and C are the durations of the opening and closing shots (0 for 'aucune'), F the flight (the flyover
@@ -18,7 +18,7 @@ import type { Pacing, PacingPosition, PacingSettings } from '../flyover/pacing'
 import type { Landmark } from '../osm/landmarks'
 import { filmStops } from './assemble'
 import { shotDurationS } from './model'
-import type { Film, FilmShot, FilmStop } from './model'
+import type { Film, FilmShot, FilmSpeed, FilmStop } from './model'
 
 export type FilmPhase = 'opening' | 'flight' | 'stop' | 'closing'
 
@@ -32,6 +32,12 @@ export interface ClockStop extends FilmStop {
   endS: number
   /** time added to the film (after the `keepDuration` cap of the pacing) */
   addedS: number
+}
+
+/** A speed portion of the film placed on the clock: film times at which the marker enters and leaves it. */
+export interface ClockSpeed extends FilmSpeed {
+  startS: number
+  endS: number
 }
 
 /** What the film shows at a film time. */
@@ -62,6 +68,8 @@ export interface FilmClock {
   flightS: number
   closingS: number
   stops: readonly ClockStop[]
+  /** speed portions, by position */
+  speeds: readonly ClockSpeed[]
   /** film length at ×1 (seconds) */
   totalTime(): number
   /** progress at film time `tS` (0 during the opening, 1 during the closing); continuous and non-decreasing */
@@ -83,6 +91,8 @@ export interface FilmClockInput {
   opening: FilmShot
   closing: FilmShot
   stops: readonly FilmStop[]
+  /** speed portions (none by default) */
+  speeds?: readonly FilmSpeed[]
   /** length of the first track (metres), 0 without track */
   lengthM: number
   /** pacing highlights (metres along the track), slowed down when `pacing.enabled` */
@@ -95,7 +105,8 @@ export interface FilmClockInput {
 /** Clock of a film whose stops are known. */
 export function buildFilmClock(input: FilmClockInput): FilmClock {
   const sorted = [...input.stops].sort((a, b) => a.atM - b.atM)
-  const flight: Pacing = flightPacing(input.lengthM, input.highlightsM, input.durationS, input.pacing, sorted)
+  const speeds = [...(input.speeds ?? [])].sort((a, b) => a.fromM - b.fromM)
+  const flight: Pacing = flightPacing(input.lengthM, input.highlightsM, input.durationS, input.pacing, sorted, speeds)
   const openingS = shotDurationS(input.opening)
   const closingS = shotDurationS(input.closing)
   const flightS = flight.totalTime()
@@ -110,6 +121,11 @@ export function buildFilmClock(input: FilmClockInput): FilmClock {
     endS: openingS + pause.endS,
     addedS: pause.durationS,
   }))
+
+  // without track (no length) the portions have no place in the flight
+  const flightTimeOf = (atM: number) => openingS + flight.timeAtProgress(Math.min(1, atM / input.lengthM))
+  const clockSpeeds: ClockSpeed[] =
+    input.lengthM > 0 ? speeds.map((s) => ({ ...s, startS: flightTimeOf(s.fromM), endS: flightTimeOf(s.toM) })) : []
 
   const progressAtTime = (tS: number) => flight.progressAtTime(tS - openingS)
   const timeAtProgress = (progress: number) => (progress >= 1 ? total : openingS + flight.timeAtProgress(progress))
@@ -149,6 +165,7 @@ export function buildFilmClock(input: FilmClockInput): FilmClock {
     flightS,
     closingS,
     stops,
+    speeds: clockSpeeds,
     totalTime: () => total,
     progressAtTime,
     timeAtProgress,
@@ -177,6 +194,7 @@ export function filmClockInputFor({ track, film, durationS, pacing, landmarks = 
     opening: film.opening,
     closing: film.closing,
     stops: track ? filmStops(film, { track, landmarks, pacing }) : [],
+    speeds: track ? film.speeds : [],
     lengthM: track?.stats.distanceM ?? 0,
     highlightsM: track && pacing.enabled ? pacingHighlights(track, pacing, landmarks) : [],
     durationS,

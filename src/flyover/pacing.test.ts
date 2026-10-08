@@ -15,6 +15,7 @@ import {
   pacingFromHighlights,
   PAUSE_EASE_S,
   relativeSpeed,
+  SPEED_EASE_S,
 } from './pacing'
 import type { Pacing, PacingSettings } from './pacing'
 
@@ -320,6 +321,80 @@ describe('flight stops (pauses given by the film)', () => {
   it('no stop and no slow-down: the identity', () => {
     expect(flightPacing(L, [5000], D, off, []).active).toBe(false)
     expect(flightPacing(0, [], D, off, [{ atM: 0, durationS: 2 }]).active).toBe(false)
+  })
+})
+
+describe('speed portions (set by hand on the timeline)', () => {
+  const off: PacingSettings = { ...DEFAULT_PACING, keepDuration: false }
+  /** film seconds spent over [fromM, toM] flown `factor` times faster, transitions included (fine midpoint sum) */
+  const portionS = (fromM: number, toM: number, factor: number) => {
+    const ramp = Math.min((SPEED_EASE_S * L) / D, (toM - fromM) / 2)
+    const n = 100_000
+    let sum = 0
+    for (let i = 0; i < n; i++) {
+      const x = fromM + ((i + 0.5) * (toM - fromM)) / n
+      const edge = Math.min(x - fromM, toM - x)
+      const w = edge >= ramp ? 1 : (1 - Math.cos((Math.PI * edge) / ramp)) / 2
+      sum += (toM - fromM) / n / factor ** w
+    }
+    return (sum * D) / L
+  }
+  /** ground speed (progress per second) every 0.01 s */
+  const rates = (pacing: Pacing) => {
+    const p = sampleProgress(pacing, 0.01)
+    return p.slice(1).map((v, i) => (v - p[i]) / 0.01)
+  }
+
+  it('shorten the flight by the time saved over the portion, transitions included', () => {
+    const pacing = flightPacing(L, [], D, off, [], [{ fromM: 4000, toM: 6000, factor: 2 }])
+    expect(pacing.active).toBe(true)
+    expect(pacing.totalTime()).toBeCloseTo((D * 8000) / L + portionS(4000, 6000, 2), 3)
+    // twice as fast in the middle of the portion as before it
+    const middle = pacing.timeAtProgress(0.5)
+    expect(pacing.progressAtTime(middle + 0.1) - pacing.progressAtTime(middle)).toBeCloseTo((2 * 0.1) / D, 9)
+    expect(pacing.timeAtProgress(0.4)).toBeCloseTo(0.4 * D, 9)
+    expectWellFormed(pacing, 2 / D)
+  })
+
+  it('a slower portion lengthens it; keep the duration: the rest of the track adapts', () => {
+    const slow = flightPacing(L, [], D, off, [], [{ fromM: 2000, toM: 3000, factor: 0.5 }])
+    expect(slow.totalTime()).toBeCloseTo((D * 9000) / L + portionS(2000, 3000, 0.5), 3)
+    const kept = flightPacing(L, [], D, { ...off, keepDuration: true }, [], [{ fromM: 2000, toM: 3000, factor: 0.5 }])
+    expect(kept.totalTime()).toBeCloseTo(D, 9)
+    const scale = D / slow.totalTime()
+    expect(kept.progressAtTime(10.1) - kept.progressAtTime(10)).toBeCloseTo(0.1 / D / scale, 9)
+    expectWellFormed(kept, 1 / D / scale)
+  })
+
+  it('speed changes smoothly at both edges (no jump), even at ×4', () => {
+    for (const factor of [4, 0.25]) {
+      const v = rates(flightPacing(L, [], D, off, [], [{ fromM: 3000, toM: 7000, factor }]))
+      let worst = 1
+      for (let i = 1; i < v.length - 1; i++) if (v[i] > 0 && v[i - 1] > 0) worst = Math.max(worst, v[i] / v[i - 1], v[i - 1] / v[i])
+      expect(worst).toBeLessThan(1.08)
+      expect(Math.max(...v) / Math.min(...v.slice(0, -1))).toBeCloseTo(4, 1)
+    }
+  })
+
+  it('combine with the stops and the slow-downs at the highlights', () => {
+    const speeds = [{ fromM: 4000, toM: 6000, factor: 2 }]
+    const stopped = flightPacing(L, [], D, off, [{ atM: 5000, durationS: 3 }], speeds)
+    expect(stopped.totalTime()).toBeCloseTo(flightPacing(L, [], D, off, [], speeds).totalTime() + 3, 9)
+    const [pause] = stopped.pauses
+    expect(pause.durationS).toBe(3)
+    expect(stopped.progressAtTime((pause.holdStartS + pause.holdEndS) / 2)).toBe(0.5)
+    expectWellFormed(stopped, 2 / D)
+    const slowed = flightPacing(L, [5000], D, { ...ON, keepDuration: false }, [], speeds)
+    const highlightOnly = flightPacing(L, [5000], D, { ...ON, keepDuration: false }, [], [])
+    expect(slowed.totalTime()).toBeLessThan(highlightOnly.totalTime())
+    expectWellFormed(slowed, 2 / D)
+  })
+
+  it('×1, empty or off-track portions change nothing; portions are clipped to the track', () => {
+    expect(flightPacing(L, [], D, off, [], [{ fromM: 1000, toM: 2000, factor: 1 }]).active).toBe(false)
+    expect(flightPacing(L, [], D, off, [], [{ fromM: L + 10, toM: L + 500, factor: 2 }]).active).toBe(false)
+    const clipped = flightPacing(L, [], D, off, [], [{ fromM: 9000, toM: L + 5000, factor: 2 }])
+    expect(clipped.totalTime()).toBeCloseTo((D * 9000) / L + portionS(9000, L, 2), 3)
   })
 })
 

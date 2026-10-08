@@ -241,7 +241,8 @@
   gap: var(--space-1);
   padding: 0 var(--space-1);
   color: var(--color-glacier);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -1121,6 +1122,15 @@
   flex: none;
 }
 
+/* the tile count is background information: dimmed (5.5:1 on the ink), the errors in the accent */
+.status__tiles {
+  opacity: 0.75;
+}
+
+.status__failed {
+  color: var(--color-accent-light);
+}
+
 .status__line {
   display: flex;
   align-items: center;
@@ -1428,7 +1438,7 @@
   container: film-tl / inline-size;
 }
 
-@container film-tl (max-width: 1000px) {
+@container film-tl (max-width: 1200px) {
   .film-tl__bar .icon-btn--label .icon-btn__text {
     position: absolute;
     width: 1px;

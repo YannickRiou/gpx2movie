@@ -21,7 +21,7 @@ function FormatSwitcher({ disabled }: { disabled: boolean }) {
 
   return (
     <div className="format-switch" role="radiogroup" aria-label="Format de sortie">
-      <label className="format-switch__option" data-tip="Libre : la vue remplit l'écran (aperçu seulement)">
+      <label className="format-switch__option" data-tip="Libre : la vue remplit l'écran (aperçu)">
         <input type="radio" name="output-format" checked={free} disabled={disabled} onChange={() => pick(null)} />
         <Icon name="maximize" size={18} />
         <span className="visually-hidden">Libre</span>
@@ -73,10 +73,11 @@ export function TopBar({ onOpen, exportOpen, onToggleExport, onHelp }: TopBarPro
           placeholder={placeholder}
           maxLength={120}
           aria-label="Nom du projet"
+          title="Nom du projet : cliquez pour le modifier"
           onChange={(e) => useAppStore.getState().setProjectName(e.currentTarget.value)}
         />
         {hasTracks && (
-          <span className={dirty ? 'topbar__state topbar__state--dirty' : 'topbar__state'} title={dirty ? 'Modifié depuis le dernier enregistrement' : undefined}>
+          <span className={dirty ? 'topbar__state topbar__state--dirty' : 'topbar__state'} title={dirty ? 'Modifié depuis le dernier enregistrement (Ctrl+S pour enregistrer)' : 'Aucun changement depuis le dernier enregistrement'}>
             {dirty ? 'Modifié' : 'Enregistré'}
           </span>
         )}
@@ -87,11 +88,11 @@ export function TopBar({ onOpen, exportOpen, onToggleExport, onHelp }: TopBarPro
         <button type="button" className="icon-btn" onClick={history.redo} disabled={!canRedo || busy} aria-label="Rétablir" data-tip={withShortcut('Rétablir', 'redo')}>
           <Icon name="redo" />
         </button>
-        <button type="button" className="icon-btn icon-btn--label" onClick={onOpen} disabled={busy} data-tip={withShortcut('Trace GPX, FIT ou projet', 'open')}>
+        <button type="button" className="icon-btn icon-btn--label" onClick={onOpen} disabled={busy} data-tip={withShortcut('Ouvrir une trace ou un projet', 'open')}>
           <Icon name="folder-open" />
           <span className="icon-btn__text">Ouvrir</span>
         </button>
-        <button type="button" className="icon-btn icon-btn--label" onClick={saveProject} data-tip={withShortcut('Fichier .openflyover.json', 'save')}>
+        <button type="button" className="icon-btn icon-btn--label" onClick={saveProject} data-tip={withShortcut('Enregistrer le projet', 'save')}>
           <Icon name="save" />
           <span className="icon-btn__text">Enregistrer</span>
         </button>
@@ -120,7 +121,7 @@ export function TopBar({ onOpen, exportOpen, onToggleExport, onHelp }: TopBarPro
             onClick={onToggleExport}
             aria-expanded={exportOpen}
             aria-controls="export-dock"
-            data-tip={withShortcut('Exporter la vidéo ou une image', 'export')}
+            data-tip={withShortcut('Exporter une vidéo ou une image', 'export')}
           >
             <Icon name="download" size={18} />
             <span className="icon-btn__text">Exporter</span>

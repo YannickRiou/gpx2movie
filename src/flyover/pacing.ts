@@ -23,6 +23,12 @@
  * 5. Duration: `keepDuration` scales the base speed (factor c) so that the film lasts D at ×1 whatever the
  *    highlights; pauses then take at most `MAX_PAUSE_SHARE` of D (shortened in proportion beyond). Without it,
  *    c = 1: slow-downs and pauses lengthen the film.
+ * 6. Speed portions (`speeds` of `flightPacing`, set by hand on the timeline): the local speed is also multiplied
+ *    by m(x) = factor^w(x) over [fromM, toM], w rising from 0 to 1 as a raised cosine over the first
+ *    `SPEED_EASE_S` seconds at the base speed inside the portion (at most half of it) and falling back the same
+ *    way at its end, so the speed never jumps; `SPEED_SAMPLES` grid steps across each transition. Applied
+ *    whatever `settings.enabled`, combined with the slow-downs (product) and the pauses; `keepDuration` still
+ *    keeps D.
  *
  * No highlight (or pacing disabled, or nothing to slow down nor pause) gives the identity pacing, exactly the
  * constant ground speed of `advanceProgress`. Pure functions (no DOM, no React, no Three, no store).
@@ -75,6 +81,10 @@ export const PAUSE_EASE_S = 1.5
 export const MAX_PAUSE_SHARE = 0.5
 /** Grid steps across the window (±windowM) of each highlight. */
 export const WINDOW_SAMPLES = 64
+/** Longest transition into and out of a speed portion (film seconds at the base speed, ×1). */
+export const SPEED_EASE_S = 1.5
+/** Grid steps across each transition of a speed portion. */
+export const SPEED_SAMPLES = 32
 
 /** Every number inside its slider range. */
 export function isValidPacing(pacing: PacingSettings): boolean {
@@ -143,6 +153,32 @@ export interface PacingPause {
 export interface FlightStop {
   atM: number
   durationS: number
+}
+
+/** A portion of the track flown `factor` times faster (2) or slower (0.5), metres along it. */
+export interface FlightSpeed {
+  fromM: number
+  toM: number
+  factor: number
+}
+
+/** Speed portion clamped to the track, with the length of its transitions (metres). */
+interface SpeedRamp extends FlightSpeed {
+  rampM: number
+}
+
+/**
+ * Speed multiplier m(x) at `x` metres: `factor` inside a portion, eased from and back to 1 over `rampM` at both
+ * ends (geometric, raised cosine), 1 outside every portion.
+ */
+function speedMultiplier(x: number, ramps: readonly SpeedRamp[]): number {
+  for (const { fromM, toM, factor, rampM } of ramps) {
+    if (x <= fromM || x >= toM) continue
+    const edge = Math.min(x - fromM, toM - x)
+    const w = edge >= rampM ? 1 : (1 - Math.cos((Math.PI * edge) / rampM)) / 2
+    return factor ** w
+  }
+  return 1
 }
 
 export interface Pacing {
@@ -266,9 +302,9 @@ export function pacingFromHighlights(
 }
 
 /**
- * Pacing of the flight with the slow-downs at `highlightsM` (when `settings.enabled`) and the given pauses
- * (`stops`, sorted by position; applied whatever `settings.enabled`). The identity pacing without length, or
- * without slow-down nor pause.
+ * Pacing of the flight with the slow-downs at `highlightsM` (when `settings.enabled`), the given pauses
+ * (`stops`, sorted by position) and speed portions (`speeds`, not overlapping); pauses and portions apply whatever
+ * `settings.enabled`. The identity pacing without length, or without slow-down, pause nor portion.
  */
 export function flightPacing(
   lengthM: number,
@@ -276,17 +312,27 @@ export function flightPacing(
   durationS: number,
   settings: PacingSettings,
   stops: readonly FlightStop[],
+  speeds: readonly FlightSpeed[] = [],
 ): Pacing {
   const L = lengthM
   if (!(L > 0) || !(durationS > 0)) return identityPacing(durationS > 0 ? durationS : 1)
   const highlights = settings.enabled ? [...new Set(highlightsM.map((h) => clamp(h, 0, L)))].sort((a, b) => a - b) : []
   const slows = highlights.length > 0 && settings.slowFactor < 1
-  if (!slows && stops.length === 0) return identityPacing(durationS)
+  const easeM = (SPEED_EASE_S * L) / durationS
+  const ramps: SpeedRamp[] = speeds.flatMap(({ fromM, toM, factor }) => {
+    const from = clamp(fromM, 0, L)
+    const to = clamp(toM, 0, L)
+    return to > from && factor > 0 && factor !== 1 ? [{ fromM: from, toM: to, factor, rampM: Math.min(easeM, (to - from) / 2) }] : []
+  })
+  if (!slows && stops.length === 0 && ramps.length === 0) return identityPacing(durationS)
   const W = settings.windowM
   const pauseAt = stops.map((s) => clamp(s.atM, 0, L))
 
-  // grid: track ends, highlights, pauses, regular steps across every window
+  // grid: track ends, highlights, pauses, regular steps across every window and every speed transition
   const nodes = [0, L, ...highlights, ...pauseAt]
+  for (const { fromM, toM, rampM } of ramps) {
+    for (let j = 0; j <= SPEED_SAMPLES; j++) nodes.push(fromM + (j * rampM) / SPEED_SAMPLES, toM - (j * rampM) / SPEED_SAMPLES)
+  }
   if (slows) {
     const half = WINDOW_SAMPLES / 2
     for (const h of highlights) {
@@ -300,11 +346,12 @@ export function flightPacing(
   const xs: number[] = []
   for (const x of nodes) if (xs.length === 0 || x > xs[xs.length - 1]) xs.push(x)
 
-  // moving time at ×1 before scaling: speed v0 · r(midpoint) on each step
+  // moving time at ×1 before scaling: speed v0 · r · m (midpoint) on each step
   const n = xs.length
   const raw = new Float64Array(n)
   for (let i = 1; i < n; i++) {
-    const r = slows ? relativeSpeed((xs[i - 1] + xs[i]) / 2, highlights, settings.slowFactor, W) : 1
+    const mid = (xs[i - 1] + xs[i]) / 2
+    const r = (slows ? relativeSpeed(mid, highlights, settings.slowFactor, W) : 1) * speedMultiplier(mid, ramps)
     raw[i] = raw[i - 1] + ((xs[i] - xs[i - 1]) * durationS) / (L * r)
   }
   const moving = raw[n - 1]

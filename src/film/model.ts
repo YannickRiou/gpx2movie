@@ -6,8 +6,10 @@
  *   `autoStops` is set they are generated from the highlights (`autoStops` in `assemble.ts`, so they follow the
  *   OpenStreetMap landmarks loaded later), as `autoMode` says; the first edit on the timeline writes them into
  *   `stops` and clears the flag.
+ * - `speeds`: portions of the first track (metres) flown faster or slower by hand (`factor`), not overlapping;
+ *   the flight pacing eases into and out of each (`flightPacing`).
  * - `texts` and `media`: items anchored in film time (seconds at ×1 from the very start, opening included), on
- *   their own lanes, drawn by the overlay. A medium names its picture by id (`src`): the bytes live in the media
+ *   their own lanes, drawn by the overlay. A medium names its picture or video clip by id (`src`): the bytes live in the media
  *   table of the project document (`film/media.ts`), so the settings and the undo history stay light.
  *
  * Part of `Settings` (key `film`): saved in the project document, undone, read the same way by the preview and
@@ -66,7 +68,7 @@ export const AUTO_STOP_MODES = ['temps-forts', 'rythme'] as const
  */
 export type AutoStopMode = (typeof AUTO_STOP_MODES)[number]
 
-/** 'video' is reserved (not drawn yet). */
+/** 'image': a photo; 'video': a video clip (shown without its sound). */
 export const MEDIA_KINDS = ['image', 'video'] as const
 export type MediaKind = (typeof MEDIA_KINDS)[number]
 
@@ -86,10 +88,29 @@ export interface FilmMedia {
   /** card placement (one of the nine anchors) and size multiplier; the caption of a full-screen photo goes there too */
   anchor: OverlayAnchor
   size: number
-  /** slow zoom and pan over a full-screen photo */
+  /** slow zoom and pan over a full-screen photo (not used by a video) */
   kenBurns: boolean
   caption?: string
+  /** video: where the clip starts and ends in the file (seconds; default its start and its end) */
+  inS?: number
+  outS?: number
+  /** video: reserved, the sound of the clips is not handled yet */
+  muted?: boolean
 }
+
+export interface FilmSpeed {
+  id: string
+  /** portion of the first track (metres, `fromM` < `toM`) */
+  fromM: number
+  toM: number
+  /** local ground speed multiplied by this (2 = twice as fast, 0.5 = half as fast) */
+  factor: number
+}
+
+/** Range of the speed factor (also its validity range in a loaded project). */
+export const SPEED_FACTOR_RANGE = { min: 0.25, max: 4 } as const
+/** Shortest speed portion made on the timeline (metres). */
+export const MIN_SPEED_SPAN_M = 50
 
 /** Placement of a photo added on the timeline (and of a medium saved before these fields existed). */
 export const MEDIA_DEFAULTS: Pick<FilmMedia, 'layout' | 'anchor' | 'size' | 'kenBurns'> = {
@@ -106,6 +127,8 @@ export interface Film {
   autoStops: boolean
   autoMode: AutoStopMode
   stops: FilmStop[]
+  /** sorted by position or not, never overlapping */
+  speeds: FilmSpeed[]
   texts: FilmText[]
   media: FilmMedia[]
 }
@@ -123,8 +146,18 @@ export const DEFAULT_FILM: Film = {
   autoStops: true,
   autoMode: 'temps-forts',
   stops: [],
+  speeds: [],
   texts: [],
   media: [],
+}
+
+/**
+ * Time in the file of a video shown at film time `timeS`: its start in the file (`inS`) plus the time since the
+ * clip appeared, held at its end in the file (`outS`; past the end of the file, its last frame is held).
+ */
+export function clipTimeS(media: Pick<FilmMedia, 'startS' | 'inS' | 'outS'>, timeS: number): number {
+  const t = (media.inS ?? 0) + Math.max(0, timeS - media.startS)
+  return media.outS === undefined ? t : Math.min(t, media.outS)
 }
 
 /** Film time taken by an opening or closing shot. */
@@ -136,11 +169,12 @@ export function shotDurationS(shot: FilmShot): number {
 // Ids
 // ---------------------------------------------------------------------------
 
-export type FilmItemKind = 'stop' | 'text' | 'media'
+export type FilmItemKind = 'stop' | 'speed' | 'text' | 'media'
 
 /** Next free id `<kind>-<n>` of the film (one more than the highest number used by that kind). */
 export function nextFilmId(film: Film, kind: FilmItemKind): string {
-  const items: readonly { id: string }[] = kind === 'stop' ? film.stops : kind === 'text' ? film.texts : film.media
+  const lanes = { stop: film.stops, speed: film.speeds, text: film.texts, media: film.media }
+  const items: readonly { id: string }[] = lanes[kind]
   const pattern = new RegExp(`^${kind}-(\\d+)$`)
   let max = 0
   for (const { id } of items) {
@@ -177,6 +211,23 @@ export function isValidStop(stop: unknown): stop is FilmStop {
   )
 }
 
+export function isValidSpeed(speed: unknown): speed is FilmSpeed {
+  return (
+    isRecord(speed) &&
+    isId(speed.id) &&
+    within(speed.fromM, 0, Number.MAX_VALUE) &&
+    within(speed.toM, 0, Number.MAX_VALUE) &&
+    (speed.toM as number) > (speed.fromM as number) &&
+    within(speed.factor, SPEED_FACTOR_RANGE.min, SPEED_FACTOR_RANGE.max)
+  )
+}
+
+/** No two portions overlap (they may touch). */
+function apart(speeds: readonly FilmSpeed[]): boolean {
+  const sorted = [...speeds].sort((a, b) => a.fromM - b.fromM)
+  return sorted.every((s, i) => i === 0 || sorted[i - 1].toM <= s.fromM)
+}
+
 /** Shared by texts and media: id, start in film time, duration. */
 function isValidTimed(item: Record<string, unknown>): boolean {
   return isId(item.id) && within(item.startS, 0, Number.MAX_VALUE) && within(item.durationS, ITEM_DURATION_RANGE.min, ITEM_DURATION_RANGE.max)
@@ -194,8 +245,9 @@ export function isValidText(text: unknown): text is FilmText {
 }
 
 export function isValidMedia(media: unknown): media is FilmMedia {
+  if (!isRecord(media)) return false
+  const inS = media.inS ?? 0
   return (
-    isRecord(media) &&
     isValidTimed(media) &&
     oneOf(MEDIA_KINDS, media.kind) &&
     isId(media.src) &&
@@ -203,19 +255,23 @@ export function isValidMedia(media: unknown): media is FilmMedia {
     oneOf(OVERLAY_ANCHORS, media.anchor) &&
     within(media.size, WIDGET_SIZE_MIN, WIDGET_SIZE_MAX) &&
     typeof media.kenBurns === 'boolean' &&
-    optionalString(media.caption)
+    optionalString(media.caption) &&
+    within(inS, 0, Number.MAX_VALUE) &&
+    (media.outS === undefined || within(media.outS, (inS as number) + 0.01, Number.MAX_VALUE)) &&
+    (media.muted === undefined || typeof media.muted === 'boolean')
   )
 }
 
 /**
  * Value checks of a film whose top-level shape already matches `DEFAULT_FILM` (see `SETTING_CHECKS` in the
- * project document): shots, every item of every lane, ids unique across the film.
+ * project document): shots, every item of every lane, speed portions apart, ids unique across the film.
  */
 export function isValidFilm(film: Film): boolean {
   if (!isValidShot(film.opening) || !isValidShot(film.closing) || typeof film.autoStops !== 'boolean') return false
   if (!oneOf(AUTO_STOP_MODES, film.autoMode)) return false
   if (!film.stops.every(isValidStop) || !film.texts.every(isValidText) || !film.media.every(isValidMedia)) return false
-  const ids = [...film.stops, ...film.texts, ...film.media].map((item) => item.id)
+  if (!film.speeds.every(isValidSpeed) || !apart(film.speeds)) return false
+  const ids = [...film.stops, ...film.speeds, ...film.texts, ...film.media].map((item) => item.id)
   return new Set(ids).size === ids.length
 }
 

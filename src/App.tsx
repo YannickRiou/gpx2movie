@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { isExportBusy, useExportStore } from './export/store'
 import { addStop, addText } from './film/timeline'
+import { getPlatform } from './platform'
 import { getSettingsHistory, installHistoryShortcuts, installSliderGestures } from './project/history'
 import { editFilm, useFilmClock } from './scene/usePacing'
 import { useAppStore } from './state/store'
@@ -17,7 +18,7 @@ import type { IconName } from './ui/icons'
 import { LandmarkPanel } from './ui/LandmarkPanel'
 import { ModifiedMarker } from './ui/ModifiedMarker'
 import { OverlayPanel } from './ui/OverlayPanel'
-import { openFiles, saveProject } from './ui/projectActions'
+import { chooseFilesToOpen, openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
 import { ONE_SIDE_MAX_WIDTH, SHELL_TABS, isFileDrag, nextTabIndex, parseShellPrefs, shellReducer } from './ui/shell'
@@ -41,11 +42,14 @@ const TAB_LABELS: Record<ShellTab, { label: string; icon: IconName }> = {
   projet: { label: 'Projet', icon: 'folder' },
 }
 
+/** tabs that say, without a track, to add one first (Trace has its own empty list, Projet works without one) */
+const NO_TRACK_HINT_TABS: readonly ShellTab[] = ['carte', 'survol', 'habillage']
+
 const PREFS_KEY = 'openflyover.shell.v1'
 
 function loadPrefs() {
   try {
-    return parseShellPrefs(localStorage.getItem(PREFS_KEY))
+    return parseShellPrefs(getPlatform().storage.get(PREFS_KEY))
   } catch {
     return parseShellPrefs(null)
   }
@@ -132,7 +136,6 @@ export default function App() {
     inspecting: false,
   }))
   const [dragging, setDragging] = useState(false)
-  const openInput = useRef<HTMLInputElement>(null)
   const helpDialog = useRef<HTMLDialogElement>(null)
   const dockOpen = useRef(shell.dockOpen)
   const collapsedRef = useRef(shell.collapsed)
@@ -144,7 +147,7 @@ export default function App() {
     // the drawer of a narrow window opens and closes on its own: only the tab is worth keeping then
     if (isDrawer()) return
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ tab: shell.tab, collapsed: keptCollapsed }))
+      getPlatform().storage.set(PREFS_KEY, JSON.stringify({ tab: shell.tab, collapsed: keptCollapsed }))
     } catch {
       // storage unavailable: the choice lasts for the session
     }
@@ -236,7 +239,7 @@ export default function App() {
         helpDialog.current?.showModal()
       } else if (action === 'save') saveProject()
       else if (action === 'open') {
-        if (!isExporting()) openInput.current?.click()
+        if (!isExporting()) void chooseFilesToOpen()
       } else if (action === 'export') {
         if (!isExporting()) dispatch({ type: 'toggle-dock', narrow: isNarrow() })
       } else if (action === 'fit') {
@@ -274,7 +277,7 @@ export default function App() {
       setDragging(false)
       if (e.defaultPrevented || !isFileDrag(e.dataTransfer?.types)) return
       e.preventDefault()
-      const files = Array.from(e.dataTransfer?.files ?? [])
+      const files = getPlatform().droppedFiles(e.dataTransfer)
       if (files.length > 0 && !isExporting()) void openFiles(files)
     }
     const stop = () => setDragging(false)
@@ -300,6 +303,7 @@ export default function App() {
 
   const panel = (tab: ShellTab, children: ReactNode) => (
     <div key={tab} id={`tab-panel-${tab}`} className="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} hidden={shell.tab !== tab}>
+      {!hasTracks && NO_TRACK_HINT_TABS.includes(tab) && <p className="tab-hint">Ajoutez une trace (onglet Trace) pour voir l’effet de ces réglages.</p>}
       {children}
     </div>
   )
@@ -307,23 +311,10 @@ export default function App() {
   return (
     <div className="shell">
       <TopBar
-        onOpen={() => openInput.current?.click()}
+        onOpen={() => void chooseFilesToOpen()}
         exportOpen={shell.dockOpen}
         onToggleExport={() => dispatch({ type: 'toggle-dock', narrow: isNarrow() })}
         onHelp={() => helpDialog.current?.showModal()}
-      />
-      <input
-        ref={openInput}
-        className="visually-hidden"
-        type="file"
-        multiple
-        accept=".gpx,.fit,.json,application/json"
-        tabIndex={-1}
-        aria-hidden="true"
-        onChange={(e) => {
-          void openFiles(Array.from(e.currentTarget.files ?? []))
-          e.currentTarget.value = ''
-        }}
       />
 
       <div className={shell.collapsed ? 'shell__body shell__body--collapsed' : 'shell__body'}>

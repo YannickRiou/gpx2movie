@@ -1,0 +1,47 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "OpenFlyover",
+  "version": "0.1.0",
+  "identifier": "io.github.yannickriou.openflyover",
+  "build": {
+    "beforeDevCommand": "npm run dev -- --strictPort",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "OpenFlyover",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "center": true,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self' data:",
+        "img-src": "'self' data: blob: https://tiles.mapterhorn.com https://s3.amazonaws.com https://data.geopf.fr https://wmts.geo.admin.ch https://services.arcgisonline.com https://tiles.maps.eox.at https://*.tile.opentopomap.org",
+        "media-src": "'self' blob:",
+        "worker-src": "'self' blob:",
+        "connect-src": "'self' ipc: http://ipc.localhost blob: data: https://tiles.mapterhorn.com https://s3.amazonaws.com https://data.geopf.fr https://wmts.geo.admin.ch https://services.arcgisonline.com https://tiles.maps.eox.at https://*.tile.opentopomap.org https://archive-api.open-meteo.com https://overpass-api.de https://maps.mail.ru"
+      },
+      "dangerousDisableAssetCspModification": ["style-src"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Video",
+    "license": "MIT",
+    "shortDescription": "Films de survol 3D à partir de traces GPX et FIT",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+  }
+}

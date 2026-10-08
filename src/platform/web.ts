@@ -1,0 +1,98 @@
+/**
+ * Web platform: file input, download through an object URL, localStorage (the behaviour of the static site); files
+ * written while produced through `showSaveFilePicker` (File System Access, Chrome and Edge).
+ */
+import { acceptAttribute, droppedFiles, keyValueStore, pickerTypes, saveFilters } from './platform'
+import type { Capabilities, Platform, SaveFileOptions, WritableFile } from './platform'
+
+/** The part of File System Access used here (not in the DOM typings yet). */
+type SaveFilePicker = (options: {
+  suggestedName: string
+  types: ReturnType<typeof pickerTypes>
+}) => Promise<FileSystemFileHandle & { remove?: () => Promise<void> }>
+
+/** Save picker, then a writable stream: Chrome writes to a temporary file, moved in place on close. */
+async function createWritableFile(options: SaveFileOptions): Promise<WritableFile | null> {
+  const picker = (globalThis as { showSaveFilePicker?: SaveFilePicker }).showSaveFilePicker
+  if (!picker) throw new Error("Ce navigateur ne sait pas écrire directement sur le disque.")
+  let handle: Awaited<ReturnType<SaveFilePicker>>
+  try {
+    // called before any await: the picker needs the user's click
+    handle = await picker({ suggestedName: options.fileName, types: pickerTypes(saveFilters(options)) })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return null
+    throw error
+  }
+  const writable = await handle.createWritable()
+  let state: 'open' | 'closed' | 'discarded' = 'open'
+  return {
+    fileName: handle.name,
+    write: (data, position) => writable.write({ type: 'write', data: data as Uint8Array<ArrayBuffer>, position }),
+    async close() {
+      await writable.close()
+      state = 'closed'
+    },
+    async discard() {
+      if (state !== 'open') return
+      state = 'discarded'
+      await writable.abort().catch(() => undefined)
+      // the picker created the file: remove it (Chrome 110+)
+      await handle.remove?.().catch(() => undefined)
+    },
+  }
+}
+
+function localStorageOrNull(): Storage | null {
+  try {
+    return globalThis.localStorage ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Click a download link (the browser saves the file in its download folder). */
+function clickDownload(url: string, fileName: string): void {
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.append(link)
+  link.click()
+  link.remove()
+}
+
+export function createWebPlatform(capabilities: Capabilities): Platform {
+  return {
+    capabilities,
+    storage: keyValueStore(localStorageOrNull()),
+    // synchronous up to the click: the picker needs the user's gesture
+    openFiles: ({ filters, multiple = false }) =>
+      new Promise((resolve) => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.multiple = multiple
+        input.accept = acceptAttribute(filters)
+        input.style.display = 'none'
+        const done = (files: File[]) => {
+          input.remove()
+          resolve(files)
+        }
+        input.addEventListener('change', () => done(Array.from(input.files ?? [])), { once: true })
+        input.addEventListener('cancel', () => done([]), { once: true })
+        document.body.append(input)
+        input.click()
+      }),
+    async saveFile(data, { fileName }) {
+      const url = URL.createObjectURL(data)
+      clickDownload(url, fileName)
+      // released once the click has been handled
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return { saved: true, fileName }
+    },
+    async saveUrl(url, { fileName }) {
+      clickDownload(url, fileName)
+      return { saved: true, fileName }
+    },
+    createWritableFile,
+    droppedFiles,
+  }
+}

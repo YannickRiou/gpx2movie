@@ -1,14 +1,17 @@
 /**
- * Pictures of the film's media lane: the media table of the project document, file access and decoding.
+ * Pictures and video clips of the film's media lane: the media table of the project document, file access and
+ * decoding of the pictures (the clips: `video.ts`).
  *
- * The table maps a picture id (`film.media[].src`) to the picture, kept downscaled as a JPEG data URL with a
- * small thumbnail, so that a project stays one self-contained file (web and desktop app alike) while the settings
- * and their undo history only hold ids. A picture stays in the table when its photo leaves the film (undo brings
- * it back); a saved project keeps only the pictures its film uses (`usedMedia`).
+ * The table maps an id (`film.media[].src`) to the picture, kept downscaled as a JPEG data URL, or to the video
+ * clip, kept as is (its original bytes, `MAX_VIDEO_BYTES` at most), each with a small thumbnail, so that a project
+ * stays one self-contained file (web and desktop app alike) while the settings and their undo history only hold
+ * ids. An entry stays in the table when its medium leaves the film (undo brings it back); a saved project keeps
+ * only the entries its film uses (`usedMedia`).
  *
- * Files come in through `readPhoto(blob)`: the web file picker and drop give a File, the desktop app will give a
- * Blob read from disk. Drawing reads decoded pictures from `getMediaBitmaps()`: decoded on demand, cached by id,
- * released once the film no longer uses them, a few at most held at once.
+ * Files come in through `readMedia(blob)` (`video.ts`: `readPhoto` or `readVideo`): the web file picker and drop
+ * give a File, the desktop app will give a Blob read from disk. Drawing reads decoded pictures from
+ * `getMediaBitmaps()`: decoded on demand, cached by id, released once the film no longer uses them, a few at most
+ * held at once.
  *
  * Unlike the rest of `film/`, this module touches the browser (canvas, createImageBitmap) and holds a store;
  * the table checks, the data URL decoding and the cache (decoder injected) are pure and tested.
@@ -20,9 +23,9 @@ import { EXIF_SCAN_BYTES, parseExif } from './exif'
 import type { PhotoExif } from './exif'
 import type { Film, FilmMedia } from './model'
 
-/** A picture of the media table, as saved in the project document. */
+/** A picture or a video clip of the media table, as saved in the project document. */
 export interface MediaAsset {
-  /** JPEG data URL, at most `PHOTO_MAX_SIDE_PX` on its longest side */
+  /** JPEG data URL, at most `PHOTO_MAX_SIDE_PX` on its longest side; a video: the file as an MP4, WebM or QuickTime data URL */
   data: string
   /** JPEG data URL, at most `THUMB_MAX_SIDE_PX` (timeline blocks) */
   thumb: string
@@ -30,6 +33,8 @@ export interface MediaAsset {
   height: number
   /** file name it came from */
   name?: string
+  /** video: length of the file (seconds) */
+  durationS?: number
 }
 
 export type MediaTable = Record<string, MediaAsset>
@@ -37,7 +42,9 @@ export type MediaTable = Record<string, MediaAsset>
 export const PHOTO_MAX_SIDE_PX = 2560
 export const PHOTO_JPEG_QUALITY = 0.85
 export const THUMB_MAX_SIDE_PX = 160
-const THUMB_JPEG_QUALITY = 0.7
+export const THUMB_JPEG_QUALITY = 0.7
+/** Largest video file kept in a project (bytes): the project file holds the clip as it is. */
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024
 /** Decoded pictures kept at once (a 2560 px picture takes about 20 MB once decoded). */
 export const BITMAP_CACHE_LIMIT = 6
 
@@ -46,12 +53,25 @@ export const BITMAP_CACHE_LIMIT = 6
 // ---------------------------------------------------------------------------
 
 const isImageDataUrl = (v: unknown) => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(v)
+const isVideoDataUrl = (v: unknown) => typeof v === 'string' && /^data:video\/(mp4|webm|quicktime);base64,/.test(v)
 const isSide = (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= 16384
 
 export function isValidMediaAsset(v: unknown): v is MediaAsset {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return false
   const a = v as Record<string, unknown>
-  return isImageDataUrl(a.data) && isImageDataUrl(a.thumb) && isSide(a.width) && isSide(a.height) && (a.name === undefined || typeof a.name === 'string')
+  const video = isVideoDataUrl(a.data)
+  return (
+    (video ? typeof a.durationS === 'number' && a.durationS > 0 && Number.isFinite(a.durationS) : isImageDataUrl(a.data) && a.durationS === undefined) &&
+    isImageDataUrl(a.thumb) &&
+    isSide(a.width) &&
+    isSide(a.height) &&
+    (a.name === undefined || typeof a.name === 'string')
+  )
+}
+
+/** The entry is a video clip (else a picture). */
+export function isVideoAsset(asset: Pick<MediaAsset, 'data'>): boolean {
+  return asset.data.startsWith('data:video/')
 }
 
 /** Valid pictures of a loaded media table (the others are left out). */
@@ -69,14 +89,14 @@ export function usedMedia(film: Pick<Film, 'media'>, table: MediaTable): MediaTa
   return out
 }
 
-/** Next free picture id `photo-<n>` of the table. */
-export function nextMediaId(table: MediaTable): string {
+/** Next free id `photo-<n>` (or `video-<n>`) of the table. */
+export function nextMediaId(table: MediaTable, prefix: 'photo' | 'video' = 'photo'): string {
   let max = 0
   for (const id of Object.keys(table)) {
-    const match = /^photo-(\d+)$/.exec(id)
+    const match = new RegExp(`^${prefix}-(\\d+)$`).exec(id)
     if (match) max = Math.max(max, Number(match[1]))
   }
-  return `photo-${max + 1}`
+  return `${prefix}-${max + 1}`
 }
 
 /** Bytes of a base64 data URL as a Blob of its type. */
@@ -112,7 +132,7 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
   add(assets) {
     const table = { ...get().table }
     const ids = assets.map((asset) => {
-      const id = nextMediaId(table)
+      const id = nextMediaId(table, isVideoAsset(asset) ? 'video' : 'photo')
       table[id] = asset
       return id
     })
@@ -128,9 +148,9 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
 // Files
 // ---------------------------------------------------------------------------
 
-/** `image` drawn at most `max` px on its longest side as a JPEG data URL (white under transparent parts). */
-function encodeJpeg(image: ImageBitmap, max: number, quality: number): { data: string; width: number; height: number } {
-  const { width, height } = fitWithin(image.width, image.height, max)
+/** `image` (`iw` × `ih`) drawn at most `max` px on its longest side as a JPEG data URL (white under transparent parts). */
+export function encodeJpeg(image: CanvasImageSource, iw: number, ih: number, max: number, quality: number): { data: string; width: number; height: number } {
+  const { width, height } = fitWithin(iw, ih, max)
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -156,8 +176,8 @@ export async function readPhoto(file: Blob, name?: string): Promise<{ asset: Med
     throw new Error('image illisible ou format non pris en charge (JPEG, PNG ou WebP).')
   }
   try {
-    const photo = encodeJpeg(bitmap, PHOTO_MAX_SIDE_PX, PHOTO_JPEG_QUALITY)
-    const thumb = encodeJpeg(bitmap, THUMB_MAX_SIDE_PX, THUMB_JPEG_QUALITY)
+    const photo = encodeJpeg(bitmap, bitmap.width, bitmap.height, PHOTO_MAX_SIDE_PX, PHOTO_JPEG_QUALITY)
+    const thumb = encodeJpeg(bitmap, bitmap.width, bitmap.height, THUMB_MAX_SIDE_PX, THUMB_JPEG_QUALITY)
     return { asset: { data: photo.data, thumb: thumb.data, width: photo.width, height: photo.height, name }, exif }
   } finally {
     bitmap.close()

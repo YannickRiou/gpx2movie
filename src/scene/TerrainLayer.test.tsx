@@ -75,6 +75,7 @@ describe('engine options from settings', () => {
     labels: { climbs: true, waypoints: true },
     weather: { enabled: true },
     weatherScene: { enabled: true, strength: 1 },
+    clouds: { mode: 'meteo' as const, coverage: 0.4, altitudeM: 1200, quality: 'medium' as const },
     overlay: DEFAULT_OVERLAY,
     video: { aspect: '16:9' as const, resolution: '1080p' as const, fps: 30 as const, quality: 'high' as const },
     landmarks: {
