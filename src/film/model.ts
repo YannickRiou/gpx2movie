@@ -7,7 +7,7 @@
  *   OpenStreetMap landmarks loaded later), as `autoMode` says; the first edit on the timeline writes them into
  *   `stops` and clears the flag.
  * - `texts` and `media`: items anchored in film time (seconds at ×1 from the very start, opening included), on
- *   their own lanes, drawn by the overlay. A medium names its picture by id (`src`): the bytes live in the media
+ *   their own lanes, drawn by the overlay. A medium names its picture or video clip by id (`src`): the bytes live in the media
  *   table of the project document (`film/media.ts`), so the settings and the undo history stay light.
  *
  * Part of `Settings` (key `film`): saved in the project document, undone, read the same way by the preview and
@@ -66,7 +66,7 @@ export const AUTO_STOP_MODES = ['temps-forts', 'rythme'] as const
  */
 export type AutoStopMode = (typeof AUTO_STOP_MODES)[number]
 
-/** 'video' is reserved (not drawn yet). */
+/** 'image': a photo; 'video': a video clip (shown without its sound). */
 export const MEDIA_KINDS = ['image', 'video'] as const
 export type MediaKind = (typeof MEDIA_KINDS)[number]
 
@@ -86,9 +86,14 @@ export interface FilmMedia {
   /** card placement (one of the nine anchors) and size multiplier; the caption of a full-screen photo goes there too */
   anchor: OverlayAnchor
   size: number
-  /** slow zoom and pan over a full-screen photo */
+  /** slow zoom and pan over a full-screen photo (not used by a video) */
   kenBurns: boolean
   caption?: string
+  /** video: where the clip starts and ends in the file (seconds; default its start and its end) */
+  inS?: number
+  outS?: number
+  /** video: reserved, the sound of the clips is not handled yet */
+  muted?: boolean
 }
 
 /** Placement of a photo added on the timeline (and of a medium saved before these fields existed). */
@@ -125,6 +130,15 @@ export const DEFAULT_FILM: Film = {
   stops: [],
   texts: [],
   media: [],
+}
+
+/**
+ * Time in the file of a video shown at film time `timeS`: its start in the file (`inS`) plus the time since the
+ * clip appeared, held at its end in the file (`outS`; past the end of the file, its last frame is held).
+ */
+export function clipTimeS(media: Pick<FilmMedia, 'startS' | 'inS' | 'outS'>, timeS: number): number {
+  const t = (media.inS ?? 0) + Math.max(0, timeS - media.startS)
+  return media.outS === undefined ? t : Math.min(t, media.outS)
 }
 
 /** Film time taken by an opening or closing shot. */
@@ -194,8 +208,9 @@ export function isValidText(text: unknown): text is FilmText {
 }
 
 export function isValidMedia(media: unknown): media is FilmMedia {
+  if (!isRecord(media)) return false
+  const inS = media.inS ?? 0
   return (
-    isRecord(media) &&
     isValidTimed(media) &&
     oneOf(MEDIA_KINDS, media.kind) &&
     isId(media.src) &&
@@ -203,7 +218,10 @@ export function isValidMedia(media: unknown): media is FilmMedia {
     oneOf(OVERLAY_ANCHORS, media.anchor) &&
     within(media.size, WIDGET_SIZE_MIN, WIDGET_SIZE_MAX) &&
     typeof media.kenBurns === 'boolean' &&
-    optionalString(media.caption)
+    optionalString(media.caption) &&
+    within(inS, 0, Number.MAX_VALUE) &&
+    (media.outS === undefined || within(media.outS, (inS as number) + 0.01, Number.MAX_VALUE)) &&
+    (media.muted === undefined || typeof media.muted === 'boolean')
   )
 }
 

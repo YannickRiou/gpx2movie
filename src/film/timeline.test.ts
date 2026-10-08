@@ -8,7 +8,8 @@ import { AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, isValidFilm } from './model'
 import type { Film, FilmMedia, FilmStop, FilmText } from './model'
 import {
   NEW_MEDIA_S,
-  addPhotos,
+  NEW_VIDEO_MAX_S,
+  addMedia,
   addStop,
   addText,
   dragFilm,
@@ -169,6 +170,17 @@ describe('dragFilm', () => {
     expect(dragFilm(film, 'media-1', 'end', 1, { ...ctx, targets: [46.1], snapS: 0.3 }).media[0]).toMatchObject({ startS: 40, durationS: 6.1 })
     expect(dragFilm(film, 'media-1', 'move', 1, ctx).texts).toBe(film.texts)
   })
+
+  it('trims a video by its start edge: its start in the file follows, not before the start of the file', () => {
+    const clip: FilmMedia = { ...photo('media-1', 40, 10), kind: 'video', src: 'video-1', kenBurns: false, inS: 2 }
+    const f = { ...film, media: [clip] }
+    const ctx = contextOf(f)
+    expect(dragFilm(f, 'media-1', 'start', 1.5, ctx).media[0]).toMatchObject({ startS: 41.5, durationS: 8.5, inS: 3.5 })
+    expect(dragFilm(f, 'media-1', 'start', -5, ctx).media[0]).toMatchObject({ startS: 38, durationS: 12, inS: 0 })
+    // moving or stretching the end keeps the start in the file
+    expect(dragFilm(f, 'media-1', 'move', 3, ctx).media[0]).toMatchObject({ startS: 43, inS: 2 })
+    expect(dragFilm(f, 'media-1', 'end', 3, ctx).media[0]).toMatchObject({ durationS: 13, inS: 2 })
+  })
 })
 
 describe('edits', () => {
@@ -192,7 +204,7 @@ describe('edits', () => {
   })
 
   it('adds photos one after the other from the playhead, valid', () => {
-    const { film: next, ids } = addPhotos(film, 12.346, ['photo-4', 'photo-5'])
+    const { film: next, ids } = addMedia(film, 12.346, [{ src: 'photo-4' }, { src: 'photo-5' }])
     expect(ids).toEqual(['media-2', 'media-3'])
     expect(next.media.slice(1)).toEqual([
       { id: 'media-2', startS: 12.35, durationS: NEW_MEDIA_S, kind: 'image', src: 'photo-4', ...MEDIA_DEFAULTS },
@@ -207,6 +219,19 @@ describe('edits', () => {
       layout: 'carte',
       caption: 'Lac',
     })
+  })
+
+  it('adds videos at their natural length, capped, without Ken Burns, after the photos', () => {
+    const { film: next, ids } = addMedia(film, 10, [{ src: 'video-1', videoS: 12.345 }, { src: 'photo-2' }, { src: 'video-2', videoS: 95 }])
+    expect(ids).toEqual(['media-2', 'media-3', 'media-4'])
+    expect(next.media.slice(1)).toEqual([
+      { id: 'media-2', startS: 10, durationS: 12.35, kind: 'video', src: 'video-1', ...MEDIA_DEFAULTS, kenBurns: false },
+      { id: 'media-3', startS: 22.35, durationS: NEW_MEDIA_S, kind: 'image', src: 'photo-2', ...MEDIA_DEFAULTS },
+      { id: 'media-4', startS: 27.35, durationS: NEW_VIDEO_MAX_S, kind: 'video', src: 'video-2', ...MEDIA_DEFAULTS, kenBurns: false },
+    ])
+    expect(isValidFilm(next)).toBe(true)
+    expect(updateMedia(next, 'media-2', { inS: -3 }).media[1].inS).toBe(0)
+    expect(updateMedia(next, 'media-2', { inS: 4.567 }).media[1].inS).toBe(4.57)
   })
 
   it('removes a stop or a text; updates clamp to the model ranges', () => {

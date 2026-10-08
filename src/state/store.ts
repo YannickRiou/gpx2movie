@@ -23,6 +23,8 @@ import type { LandmarkSettings } from '../osm/landmarks'
 import { DEFAULT_OVERLAY } from '../overlay/settings'
 import type { OverlaySettings } from '../overlay/settings'
 import { IMAGERY_SOURCES, sourceCovers } from '../terrain/sources'
+import { DEFAULT_CLOUDS } from '../weather/sceneClouds'
+import type { CloudSettings } from '../weather/sceneClouds'
 import { DEFAULT_WEATHER_SCENE } from '../weather/sceneWeather'
 import type { WeatherSceneSettings } from '../weather/sceneWeather'
 
@@ -58,6 +60,8 @@ export interface Settings {
   weather: { enabled: boolean }
   /** the weather of the outing drives the scene (clouds dim the sun, haze, veiled sky), strength 0..1 (atmosphere only) */
   weatherScene: WeatherSceneSettings
+  /** volumetric clouds: from the weather of the outing, manual or none; export quality (atmosphere only) */
+  clouds: CloudSettings
   /** film overlay (« habillage »): style and widgets, drawn by src/overlay/draw.ts */
   overlay: OverlaySettings
   /** exported film: size, frame rate, encoding quality */
@@ -143,6 +147,7 @@ export const DEFAULT_SETTINGS: Settings = {
   labels: { climbs: true, waypoints: true },
   weather: { enabled: true },
   weatherScene: DEFAULT_WEATHER_SCENE,
+  clouds: DEFAULT_CLOUDS,
   overlay: DEFAULT_OVERLAY,
   video: DEFAULT_VIDEO_SETTINGS,
   landmarks: DEFAULT_LANDMARK_SETTINGS,
