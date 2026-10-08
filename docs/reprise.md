@@ -87,6 +87,13 @@ de relief AWS, Mapterhorn étant bloqué par le réseau de la session). Le reste
   heures avec les points en waypoints ; « Modifier » reprend les points et recalcule (même couleur). Vu en capture :
   points, trace, montées et film monté sur une grille de chemins simulée. Jamais essayé sur de vrais chemins OSM
   (Overpass et Nominatim bloqués ici). Un seul profil (à pied).
+- **Suite de la feuille de route** : « Caler sur le rythme » pose aussi les débuts des portions de vitesse (`snapSpeeds`) ;
+  ouverture / clôture « Balayage » (`turnedView`, `sweepRad`) ; couleurs et polices par élément de l'habillage
+  (`overrides` sur l'élément, `widgetOverrides`) ; « Cadrer la caméra pendant cet élément » pour un texte ou une photo
+  (`addItemCamera` : cadrage au début, cadrage d'avant rendu à la fin) ; rendu en lot en ligne de commande sur le bureau
+  (`src-tauri/src/cli.rs`, `src/export/cliRender.ts`, `cargo test` 9 tests ; jamais lancé dans une vraie fenêtre).
+- **Documentation** : `docs/fonctionnement.html` (explication technique du projet, autonome, charte du projet) ;
+  feuille de route du README auditée ligne par ligne (phase 4 : fait / partiel / à faire).
 - **Rendu à la demande** : `frameloop="demand"` (`scene/renderOnDemand.ts`) ; mesuré en rendu logiciel : plus aucune
   image demandée une fois la marge de 30 images écoulée, lecture et recadrage sans saut. Aperçu des nuages allégé
   (`PREVIEW_MARCH`), jamais vu à l'écran.
@@ -206,11 +213,13 @@ reste la source de chaque chantier.
 1. L'utilisateur : tests sur la machine avec GPU (`docs/tests-gpu.md`), premier lancement des workflows GitHub, certificat
    de signature s'il en veut un.
 2. Fusionner la PR #8 après relecture.
-3. Reste de la feuille de route (README, « Feuille de route »), à confirmer avant de construire : ouverture / clôture
-   « balayage » et transitions réglables ; caméra propre à une photo ou une note ; couleurs et polices par widget ; ralentis
-   calés sur le rythme de la musique ; rendu en lot en ligne de commande (sans Node à l'exécution : par l'application de
-   bureau) ; profils de reconnaissance (vélo, VTT). Les lignes « Titres et textes », « Trace », « Points d'intérêt »,
-   « Rendu », « Format », « Thèmes », « Éditeur » de la phase 4 sont des cahiers des charges sans état : à auditer.
+3. Reste de la feuille de route (README, phase 4, lignes « à faire » ; à confirmer avant de construire) : « transitions
+   entre sections réglables » (sens à préciser avec l'utilisateur) ; couleur de trace au choix et choix de la trace
+   survolée (petits) ; choix de la date du soleil (petit) ; figurines manquantes (petit) ; icônes et types d'épingles des
+   points d'intérêt ; bornes kilométriques ; réglage commun d'apparition des étiquettes ; police et couleur par texte ;
+   thèmes enregistrables séparément ; onglets Contenu / Style / Visibilité ; prises de vue enregistrées (gros).
+   Reconnaissance : l'utilisateur doute de son utilité, ne pas l'étendre (profils vélo / VTT écartés) ; la retirer s'il
+   le demande.
 4. Petites suites : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version).
 
 ## Limites et points ouverts
