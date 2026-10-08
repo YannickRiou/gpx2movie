@@ -14,6 +14,7 @@ import {
   KM_PRIORITY,
   kmLabels,
   withLabelDefaults,
+  isValidLabelSettings,
   labelOpacity,
   lineOfSightClearance,
   occlusionFade,
@@ -62,8 +63,12 @@ describe('label texts and sources', () => {
     expect(kmLabels(east, 0)).toEqual([])
   })
 
-  it('older projects get no kilometre markers', () => {
-    expect(withLabelDefaults({ climbs: false, waypoints: true })).toEqual({ climbs: false, waypoints: true, kmStep: 0 })
+  it('older projects get no kilometre markers; size and range stay within their bounds', () => {
+    expect(isValidLabelSettings({ kmStep: 5, size: 1.2, rangeKm: 30 })).toBe(true)
+    expect(isValidLabelSettings({ kmStep: 3, size: 1, rangeKm: 70 })).toBe(false)
+    expect(isValidLabelSettings({ kmStep: 0, size: 3, rangeKm: 70 })).toBe(false)
+    expect(isValidLabelSettings({ kmStep: 0, size: 1, rangeKm: 500 })).toBe(false)
+    expect(withLabelDefaults({ climbs: false, waypoints: true })).toEqual({ climbs: false, waypoints: true, kmStep: 0, size: 1, rangeKm: 70 })
     expect(withLabelDefaults({ climbs: true, waypoints: true, kmStep: 5 })).toMatchObject({ kmStep: 5 })
   })
 
@@ -129,6 +134,9 @@ describe('screen-space rules', () => {
     expect(distanceFade(LABEL_FADE_START_M)).toBe(1)
     expect(distanceFade(LABEL_FADE_END_M)).toBe(0)
     expect(distanceFade((LABEL_FADE_START_M + LABEL_FADE_END_M) / 2)).toBeCloseTo(0.5, 6)
+    // a shorter range: opaque up to its half
+    expect(distanceFade(10_000, 20_000)).toBe(1)
+    expect(distanceFade(20_000, 20_000)).toBe(0)
     expect(occlusionFade(Infinity)).toBe(1)
     expect(occlusionFade(0)).toBeCloseTo(0.5, 6)
     expect(occlusionFade(-100)).toBe(0)

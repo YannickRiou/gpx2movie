@@ -217,13 +217,16 @@ function updateLabelSet(
   exaggeration: number,
   cardOpacity: number,
   renderScale = 1,
+  /** common size and range of the labels (`settings.labels`) */
+  look: { size: number; rangeKm: number } = { size: 1, rangeKm: 70 },
 ): void {
   if (labelOpacity(1, cardOpacity) < MIN_OPACITY) {
     for (const entry of set.entries) entry.sprite.visible = false
     return
   }
   camera.getWorldPosition(cameraPosition)
-  const pixel = spriteScaleForPixels(1, size.height, camera.projectionMatrix.elements[5]) * renderScale
+  const scale = renderScale * look.size
+  const pixel = spriteScaleForPixels(1, size.height, camera.projectionMatrix.elements[5]) * scale
   const clearanceAt =
     engine && frame
       ? (x: number, y: number, z: number) => {
@@ -238,7 +241,7 @@ function updateLabelSet(
   for (const entry of set.entries) {
     const { sprite, tex } = entry
     sprite.visible = false
-    let opacity = distanceFade(cameraPosition.distanceTo(sprite.position))
+    let opacity = distanceFade(cameraPosition.distanceTo(sprite.position), look.rangeKm * 1000)
     if (opacity < MIN_OPACITY) continue
     projected.copy(sprite.position).project(camera)
     if (projected.z > 1 || Math.abs(projected.x) > 1.2 || Math.abs(projected.y) > 1.2) continue
@@ -246,8 +249,8 @@ function updateLabelSet(
     if (opacity < MIN_OPACITY) continue
     const x = ((projected.x + 1) / 2) * size.width
     const y = ((1 - projected.y) / 2) * size.height
-    const w = tex.width * renderScale
-    const h = tex.height * renderScale
+    const w = tex.width * scale
+    const h = tex.height * scale
     const below = h * tex.anchorY
     candidates.push({
       rect: { left: x - w / 2, right: x + w / 2, top: y - h + below, bottom: y + below },
@@ -406,7 +409,7 @@ export function Labels() {
     const { playback, settings } = useAppStore.getState()
     const card = cardOpacityAt(overlayTime(clockRef.current, playback.progress, playback.timeS), settings.overlay)
     const { renderScale } = useExportStore.getState()
-    updateLabelSet(setRef.current, camera, size, gl.toneMappingExposure, engine, frame, exaggeration, card, renderScale)
+    updateLabelSet(setRef.current, camera, size, gl.toneMappingExposure, engine, frame, exaggeration, card, renderScale, settings.labels)
   })
 
   return <group ref={groupRef} name="labels" />

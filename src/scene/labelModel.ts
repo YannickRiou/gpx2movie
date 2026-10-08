@@ -94,9 +94,15 @@ export function kmLabels(track: Track, stepKm: number): LandmarkLabel[] {
   return out
 }
 
-/** Labels settings of an older project, without the kilometre markers: none. */
+/** Labels settings of an older project: no kilometre markers, the usual size and range. */
 export function withLabelDefaults(raw: unknown): unknown {
-  return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? { kmStep: 0, ...raw } : raw
+  return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? { kmStep: 0, size: 1, rangeKm: LABEL_FADE_END_M / 1000, ...raw } : raw
+}
+
+/** Value checks of the labels settings (shape already checked). */
+export function isValidLabelSettings(v: { kmStep: number; size: number; rangeKm: number }): boolean {
+  const within = (x: number, r: { min: number; max: number }) => x >= r.min && x <= r.max
+  return (KM_MARKER_STEPS as readonly number[]).includes(v.kmStep) && within(v.size, LABEL_SIZE_RANGE) && within(v.rangeKm, LABEL_RANGE_KM)
 }
 
 /** One label per GPX waypoint of every track. */
@@ -132,8 +138,11 @@ export function poiLabels(pois: readonly FilmPoi[]): LandmarkLabel[] {
 
 /** Labels are fully opaque up to this camera distance (metres)… */
 export const LABEL_FADE_START_M = 35_000
-/** …and gone beyond this one. */
+/** …and gone beyond this one (the default « Portée »: half of it fully opaque, see `distanceFade`). */
 export const LABEL_FADE_END_M = 70_000
+/** Common size (multiplier) and range (km, where they are gone) of every label, « Étiquettes dans la vue ». */
+export const LABEL_SIZE_RANGE = { min: 0.6, max: 1.6, step: 0.1 } as const
+export const LABEL_RANGE_KM = { min: 10, max: 150, step: 5 } as const
 /** A label whose line of sight passes this far below the relief is hidden; as far above, fully shown (metres). */
 export const LABEL_OCCLUSION_SOFTNESS_M = 20
 
@@ -142,9 +151,9 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t)
 }
 
-/** Opacity factor of a label at `distanceM` from the camera. */
-export function distanceFade(distanceM: number): number {
-  return 1 - smoothstep(LABEL_FADE_START_M, LABEL_FADE_END_M, distanceM)
+/** Opacity factor of a label at `distanceM` from the camera: opaque up to half of `endM`, gone beyond it. */
+export function distanceFade(distanceM: number, endM = LABEL_FADE_END_M): number {
+  return 1 - smoothstep(endM / 2, endM, distanceM)
 }
 
 /** Opacity factor from the smallest clearance (metres) of the line of sight above the relief. */

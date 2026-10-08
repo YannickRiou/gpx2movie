@@ -1,8 +1,9 @@
 import { useId, useMemo } from 'react'
 import { climbsOf } from '../flyover/climbs'
-import { KM_MARKER_STEPS } from '../scene/labelModel'
+import { KM_MARKER_STEPS, LABEL_RANGE_KM, LABEL_SIZE_RANGE } from '../scene/labelModel'
 import { useAppStore } from '../state/store'
 import { formatAscent, formatDistance, formatNumber } from './format'
+import { RangeField } from './PanelSection'
 
 /** « Montées » section: climbs detected on the first track (click = seek the flyover) and the label toggles. */
 export function ClimbList() {
@@ -82,6 +83,20 @@ export function ClimbList() {
             ))}
           </select>
         </label>
+        <RangeField
+          label="Taille"
+          {...LABEL_SIZE_RANGE}
+          value={labels.size}
+          format={(v) => `×${formatNumber(v, 1)}`}
+          onChange={(size) => setSetting('labels', { ...labels, size })}
+        />
+        <RangeField
+          label="Portée"
+          {...LABEL_RANGE_KM}
+          value={labels.rangeKm}
+          format={(v) => `${formatNumber(v)} km`}
+          onChange={(rangeKm) => setSetting('labels', { ...labels, rangeKm })}
+        />
       </fieldset>
     </section>
   )

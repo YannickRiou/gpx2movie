@@ -70,8 +70,11 @@ export interface Settings {
   pacing: PacingSettings
   /** the film arranged on the timeline: opening and closing shots, stops, texts, media (see film/model.ts) */
   film: Film
-  /** 3D labels on the relief: tops of the detected climbs of the first track, GPX waypoints, a marker every `kmStep` km (0: none) */
-  labels: { climbs: boolean; waypoints: boolean; kmStep: number }
+  /**
+   * 3D labels on the relief: tops of the detected climbs of the first track, GPX waypoints, a marker every `kmStep` km
+   * (0: none); common size (multiplier) and range (km from the camera) of every label
+   */
+  labels: { climbs: boolean; waypoints: boolean; kmStep: number; size: number; rangeKm: number }
   /** historical weather of the first timed track (Open-Meteo archive, network) */
   weather: { enabled: boolean }
   /** the weather of the outing drives the scene (clouds dim the sun, haze, veiled sky), strength 0..1 (atmosphere only) */
@@ -184,7 +187,7 @@ export const DEFAULT_SETTINGS: Settings = {
   flyoverDurationS: DEFAULT_FLYOVER_DURATION_S,
   pacing: DEFAULT_PACING,
   film: DEFAULT_FILM,
-  labels: { climbs: true, waypoints: true, kmStep: 0 },
+  labels: { climbs: true, waypoints: true, kmStep: 0, size: 1, rangeKm: 70 },
   weather: { enabled: true },
   weatherScene: DEFAULT_WEATHER_SCENE,
   clouds: DEFAULT_CLOUDS,
