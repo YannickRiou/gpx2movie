@@ -23,6 +23,7 @@ import { LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { isValidOverlay, withOverlayDefaults } from '../overlay/settings'
 import { isValidPoster, withPosterDefaults } from '../poster/settings'
 import { isValidGrading } from '../scene/grading'
+import { KM_MARKER_STEPS, withLabelDefaults } from '../scene/labelModel'
 import { TRACK_COLOR_MODES } from '../flyover/trackColor'
 import { isValidMarker, isValidTrackStyle, withMarkerDefaults, withTrackStyleDefaults } from '../scene/markerSettings'
 import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS, PLAYBACK_SPEEDS } from '../state/store'
@@ -123,6 +124,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   race: isValidRace,
   trackStyle: isValidTrackStyle,
   marker: isValidMarker,
+  labels: (v) => (KM_MARKER_STEPS as readonly number[]).includes(v.kmStep),
 }
 
 /**
@@ -136,6 +138,7 @@ export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unkno
   trackStyle: withTrackStyleDefaults,
   marker: withMarkerDefaults,
   poster: withPosterDefaults,
+  labels: withLabelDefaults,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

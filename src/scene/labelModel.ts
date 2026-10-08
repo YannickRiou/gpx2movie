@@ -7,10 +7,11 @@
 import type { Track } from '../core/types'
 import type { FilmPoi, PoiIcon } from '../film/model'
 import type { Climb, ClimbCategory } from '../flyover/climbs'
+import { samplePath, trackPathOf } from '../flyover/path'
 import { formatNumber } from '../ui/format'
 
-/** 'poi': a point of interest placed by hand (drawn with a pin instead of the stripe). */
-export type LandmarkKind = 'climb' | 'waypoint' | 'peak' | 'pass' | 'hut' | 'water' | 'place' | 'other' | 'poi'
+/** 'poi': a point of interest placed by hand (drawn with a pin instead of the stripe); 'km': a kilometre marker. */
+export type LandmarkKind = 'climb' | 'waypoint' | 'peak' | 'pass' | 'hut' | 'water' | 'place' | 'other' | 'poi' | 'km'
 
 export interface LandmarkLabel {
   /** unique across every source (prefix it with the source id) */
@@ -41,12 +42,17 @@ export const LABEL_KIND_ACCENTS: Readonly<Record<LandmarkKind, string>> = {
   place: '#D6CDBB', // --color-line
   other: '#D6CDBB', // --color-line
   poi: '#FF8A5C', // --color-accent-light
+  km: '#EAE4D6', // --color-card
 }
 export const LABEL_PANEL_COLOR = '#1C2A33' // --color-ink
 export const LABEL_TEXT_COLOR = '#FFFFFF' // --color-white
 
 /** Priority of waypoint labels; climbs come above them, hardest first (`climbPriority`). */
 export const WAYPOINT_PRIORITY = 50
+/** Kilometre markers give way to every named label. */
+export const KM_PRIORITY = 20
+/** Spacing of the kilometre markers (km) the user can pick; 0 = none. */
+export const KM_MARKER_STEPS = [0, 1, 2, 5, 10] as const
 /** Points of interest placed by hand come above every other label: the user named them. */
 export const POI_PRIORITY = 200
 const CATEGORY_RANK: Readonly<Record<ClimbCategory, number>> = { '4': 1, '3': 2, '2': 3, '1': 4, HC: 5 }
@@ -74,6 +80,23 @@ export function climbLabels(track: Track, climbs: readonly Climb[]): LandmarkLab
     kind: 'climb',
     priority: climbPriority(climb.category),
   }))
+}
+
+/** A marker every `stepKm` along `track` (« 5 km », « 10 km »…), none at the start; same distances as the counters. */
+export function kmLabels(track: Track, stepKm: number): LandmarkLabel[] {
+  if (!(stepKm > 0)) return []
+  const path = trackPathOf(track)
+  const out: LandmarkLabel[] = []
+  for (let km = stepKm; km * 1000 <= path.lengthM; km += stepKm) {
+    const at = samplePath(path, km * 1000)
+    out.push({ id: `km:${track.id}:${km}`, lon: at.lon, lat: at.lat, ele: at.ele, text: `${km} km`, kind: 'km', priority: KM_PRIORITY })
+  }
+  return out
+}
+
+/** Labels settings of an older project, without the kilometre markers: none. */
+export function withLabelDefaults(raw: unknown): unknown {
+  return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? { kmStep: 0, ...raw } : raw
 }
 
 /** One label per GPX waypoint of every track. */

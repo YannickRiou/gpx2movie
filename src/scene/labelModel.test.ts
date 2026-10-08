@@ -11,6 +11,9 @@ import {
   climbLabelText,
   climbLabels,
   distanceFade,
+  KM_PRIORITY,
+  kmLabels,
+  withLabelDefaults,
   labelOpacity,
   lineOfSightClearance,
   occlusionFade,
@@ -48,6 +51,22 @@ function track(id: string, waypoints?: Track['waypoints']): Track {
 }
 
 describe('label texts and sources', () => {
+  it('puts a kilometre marker every step along the track, none at the start, below the named labels', () => {
+    // about 7.7 km due east
+    const east = buildTrack({ name: 'est', source: 'gpx', segments: [{ points: [6.8, 6.85, 6.9].map((lon) => ({ lon, lat: 45.9, ele: 1000 })) }] })
+    const labels = kmLabels(east, 2)
+    expect(labels.map((l) => l.text)).toEqual(['2 km', '4 km', '6 km'])
+    expect(labels[0]).toMatchObject({ kind: 'km', priority: KM_PRIORITY, ele: 1000 })
+    expect(labels[1].lon).toBeGreaterThan(labels[0].lon)
+    expect(KM_PRIORITY).toBeLessThan(WAYPOINT_PRIORITY)
+    expect(kmLabels(east, 0)).toEqual([])
+  })
+
+  it('older projects get no kilometre markers', () => {
+    expect(withLabelDefaults({ climbs: false, waypoints: true })).toEqual({ climbs: false, waypoints: true, kmStep: 0 })
+    expect(withLabelDefaults({ climbs: true, waypoints: true, kmStep: 5 })).toMatchObject({ kmStep: 5 })
+  })
+
   it('formats climb labels in French', () => {
     expect(climbLabelText(climb('3', 1653.4), 1)).toBe('Montée 2 · cat. 3 · 1\u202f653 m')
     expect(climbLabelText(climb('HC', 2642), 0)).toBe('Montée 1 · HC · 2\u202f642 m')
