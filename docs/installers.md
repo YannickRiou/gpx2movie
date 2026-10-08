@@ -1,89 +1,89 @@
-# Installeurs de l'application de bureau
+# Desktop application installers
 
-GitHub construit les installeurs de l'application de bureau (workflow `.github/workflows/desktop.yml`, « Installeurs ») :
+GitHub builds the desktop application installers (workflow `.github/workflows/desktop.yml`, "Desktop installers"):
 
-| Système | Fichiers |
+| System | Files |
 |---|---|
-| Windows | `OpenFlyover_<version>_x64-setup.exe` (NSIS) et `OpenFlyover_<version>_x64_en-US.msi` |
-| macOS | `OpenFlyover_<version>_universal.dmg` (Apple Silicon et Intel) |
-| Linux | `OpenFlyover_<version>_amd64.AppImage` et `OpenFlyover_<version>_amd64.deb` (Ubuntu 22.04, Debian 12 ou plus récent) |
+| Windows | `OpenFlyover_<version>_x64-setup.exe` (NSIS) and `OpenFlyover_<version>_x64_en-US.msi` |
+| macOS | `OpenFlyover_<version>_universal.dmg` (Apple Silicon and Intel) |
+| Linux | `OpenFlyover_<version>_amd64.AppImage` and `OpenFlyover_<version>_amd64.deb` (Ubuntu 22.04, Debian 12 or newer) |
 
-Compter 15 à 30 minutes par système (le cache Rust raccourcit les suivants).
+Allow 15 to 30 minutes per system (the Rust cache shortens later runs).
 
-## Produire les installeurs
+## Building the installers
 
-**Pour essayer** : sur GitHub, onglet *Actions* › « Installeurs » › *Run workflow* (branche au choix) › *Run workflow*.
+**To try them out**: on GitHub, *Actions* tab › "Desktop installers" › *Run workflow* (any branch) › *Run workflow*.
 
-**Pour une version** :
+**For a release**:
 
-1. Mettre le même numéro dans `src-tauri/tauri.conf.json` (`version`) et `src-tauri/Cargo.toml` (`version`), par exemple
-   `0.2.0`. C'est ce numéro qui figure dans le nom des fichiers.
-2. Créer et pousser l'étiquette : `git tag v0.2.0` puis `git push origin v0.2.0`.
+1. Put the same number in `src-tauri/tauri.conf.json` (`version`) and `src-tauri/Cargo.toml` (`version`), for example
+   `0.2.0`. This is the number that appears in the file names.
+2. Create and push the tag: `git tag v0.2.0`, then `git push origin v0.2.0`.
 
-## Où les télécharger
+## Where to download them
 
-- Après *Run workflow* ou une étiquette : *Actions* › le passage du workflow › en bas, *Artifacts* (un fichier zip par
-  installeur, gardé 90 jours).
-- Après une étiquette, en plus : *Releases*, une version **brouillon** `OpenFlyover v0.2.0` avec tous les installeurs.
-  Elle n'est visible que par le propriétaire du dépôt tant qu'elle n'est pas publiée (*Edit* › *Publish release*). Si
-  deux brouillons apparaissent pour la même étiquette (les trois systèmes finissent en même temps), garder celui qui a
-  tous les fichiers et supprimer l'autre.
+- After *Run workflow* or a tag: *Actions* › the workflow run › at the bottom, *Artifacts* (one zip file per
+  installer, kept 90 days).
+- After a tag, in addition: *Releases*, a **draft** release `OpenFlyover v0.2.0` with all the installers.
+  Only the repository owner can see it until it is published (*Edit* › *Publish release*). If
+  two drafts appear for the same tag (the three systems finish at the same time), keep the one that has
+  all the files and delete the other.
 
-## Sans certificat (situation actuelle)
+## Without a certificate (current situation)
 
-Les installeurs fonctionnent, mais le système prévient au premier lancement :
+The installers work, but the system warns at first launch:
 
-- **Windows** (SmartScreen, « Windows a protégé votre ordinateur ») : cliquer **Informations complémentaires**, puis
-  **Exécuter quand même**.
-- **macOS** : l'application est signée « ad hoc » seulement (`signingIdentity: "-"` dans `tauri.conf.json`, sans quoi
-  un Mac Apple Silicon la dit « endommagée »). Au premier lancement : clic droit sur l'application › **Ouvrir** ›
-  **Ouvrir**. Depuis macOS 15, si ce n'est pas proposé : *Réglages Système* › *Confidentialité et sécurité* › en bas,
-  **Ouvrir quand même**.
-- **Linux** : rien à signer. AppImage : la rendre exécutable (`chmod +x OpenFlyover_*.AppImage`) puis la lancer. Paquet
-  Debian : `sudo apt install ./OpenFlyover_*.deb`.
+- **Windows** (SmartScreen, "Windows protected your PC"): click **More info**, then
+  **Run anyway**.
+- **macOS**: the application is only signed "ad hoc" (`signingIdentity: "-"` in `tauri.conf.json`; without it,
+  an Apple Silicon Mac reports it as "damaged"). At first launch: right-click the application › **Open** ›
+  **Open**. Since macOS 15, if this is not offered: *System Settings* › *Privacy & Security* › at the bottom,
+  **Open Anyway**.
+- **Linux**: nothing to sign. AppImage: make it executable (`chmod +x OpenFlyover_*.AppImage`), then run it. Debian
+  package: `sudo apt install ./OpenFlyover_*.deb`.
 
-## Ajouter les certificats plus tard
+## Adding the certificates later
 
-Les certificats restent dans les **secrets** du dépôt, jamais dans un fichier : *Settings* › *Secrets and variables* ›
-*Actions* › *New repository secret*. Dès qu'ils sont présents, le workflow signe ; sinon il construit sans signer.
+The certificates stay in the repository **secrets**, never in a file: *Settings* › *Secrets and variables* ›
+*Actions* › *New repository secret*. As soon as they are present, the workflow signs; otherwise it builds unsigned.
 
 ### Windows (Authenticode)
 
-Il faut un certificat de signature de code (fichier `.pfx` avec sa clé privée et son mot de passe). Méthode suivie :
-<https://v2.tauri.app/distribute/sign/windows/> (le certificat est importé dans le magasin de l'utilisateur, puis Tauri
-signe avec son empreinte, horodatage DigiCert, SHA-256).
+You need a code signing certificate (`.pfx` file with its private key and its password). Method followed:
+<https://v2.tauri.app/distribute/sign/windows/> (the certificate is imported into the user store, then Tauri
+signs with its thumbprint, DigiCert timestamp, SHA-256).
 
-| Secret | Contenu |
+| Secret | Content |
 |---|---|
-| `WINDOWS_CERTIFICATE` | le fichier `.pfx` en base64 |
-| `WINDOWS_CERTIFICATE_PASSWORD` | le mot de passe du `.pfx` |
+| `WINDOWS_CERTIFICATE` | the `.pfx` file in base64 |
+| `WINDOWS_CERTIFICATE_PASSWORD` | the `.pfx` password |
 
-Convertir le `.pfx` en base64, sous Windows : `certutil -encode certificat.pfx certificat-base64.txt`, puis coller tout
-le contenu du fichier texte dans le secret (les lignes `-----BEGIN…` et `-----END…` peuvent rester). Sous Linux ou
-macOS : `openssl base64 -A -in certificat.pfx -out certificat-base64.txt`.
+Convert the `.pfx` to base64, on Windows: `certutil -encode certificat.pfx certificat-base64.txt`, then paste the whole
+content of the text file into the secret (the `-----BEGIN…` and `-----END…` lines can stay). On Linux or
+macOS: `openssl base64 -A -in certificat.pfx -out certificat-base64.txt`.
 
-Un certificat neuf n'efface pas tout de suite l'alerte SmartScreen : Windows la retire quand l'application a acquis
-une réputation (nombre de téléchargements). Les certificats sur clé matérielle ou dans le cloud (Azure Trusted Signing…)
-ne s'exportent pas en `.pfx` : ils demandent une commande de signature (`bundle.windows.signCommand`), à ajouter alors.
+A new certificate does not remove the SmartScreen warning right away: Windows removes it once the application has gained
+a reputation (number of downloads). Certificates on a hardware key or in the cloud (Azure Trusted Signing…)
+cannot be exported as `.pfx`: they need a signing command (`bundle.windows.signCommand`), to be added in that case.
 
-### macOS (Developer ID et notarisation)
+### macOS (Developer ID and notarization)
 
-Il faut un compte Apple Developer et un certificat **Developer ID Application**, exporté du Trousseau en `.p12`. Méthode
-suivie : <https://v2.tauri.app/distribute/sign/macos/>.
+You need an Apple Developer account and a **Developer ID Application** certificate, exported from Keychain as `.p12`. Method
+followed: <https://v2.tauri.app/distribute/sign/macos/>.
 
-| Secret | Contenu |
+| Secret | Content |
 |---|---|
-| `APPLE_CERTIFICATE` | le fichier `.p12` en base64 : `openssl base64 -A -in certificat.p12 -out certificat-base64.txt` |
-| `APPLE_CERTIFICATE_PASSWORD` | le mot de passe choisi à l'export du `.p12` |
-| `APPLE_SIGNING_IDENTITY` | le nom du certificat, par exemple `Developer ID Application: Prénom Nom (ABCDE12345)` (`security find-identity -v -p codesigning`) |
-| `APPLE_ID` | l'adresse du compte Apple (notarisation) |
-| `APPLE_PASSWORD` | un **mot de passe pour app** créé sur <https://account.apple.com> (pas le mot de passe du compte) |
-| `APPLE_TEAM_ID` | l'identifiant d'équipe (10 caractères, page *Membership* du compte développeur) |
+| `APPLE_CERTIFICATE` | the `.p12` file in base64: `openssl base64 -A -in certificat.p12 -out certificat-base64.txt` |
+| `APPLE_CERTIFICATE_PASSWORD` | the password chosen when exporting the `.p12` |
+| `APPLE_SIGNING_IDENTITY` | the certificate name, for example `Developer ID Application: First Last (ABCDE12345)` (`security find-identity -v -p codesigning`) |
+| `APPLE_ID` | the Apple account email address (notarization) |
+| `APPLE_PASSWORD` | an **app-specific password** created on <https://account.apple.com> (not the account password) |
+| `APPLE_TEAM_ID` | the team ID (10 characters, *Membership* page of the developer account) |
 
-Les trois premiers suffisent pour signer ; les trois derniers ajoutent la notarisation, qui supprime l'alerte de
-Gatekeeper.
+The first three are enough to sign; the last three add notarization, which removes the
+Gatekeeper warning.
 
-### Mise à jour automatique
+### Automatic updates
 
-L'application n'utilise pas l'extension de mise à jour de Tauri : aucune clé de signature de mise à jour n'est
-nécessaire.
+The application does not use the Tauri updater plugin: no update signing key is
+needed.
