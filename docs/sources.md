@@ -283,7 +283,7 @@ Contrôle visuel (Chromium headless, trace d'exemple Les Houches → Les Contami
 9. **Sources datées / cartes jamais choisies automatiquement** : `AUTO_IMAGERY_IDS` de `store.ts` ne liste que `ign-ortho` et `swisstopo` ;
    les nouvelles entrées partagent pourtant leurs boîtes de couverture, il ne faut donc pas remplacer cette liste par « toute source avec `coverage` ».
 10. **`minZoom` > 0** (`ign-ortho-2000-2005` : 6, `ign-ortho-1965-1980` : 3) : les tuiles de relief plus grossières restent grises (comportement documenté d'`imagery.ts`), invisible en pratique dans un survol.
-11. **OpenTopoMap** : serveur bénévole ; ne pas l'utiliser pour des téléchargements massifs (packs hors ligne, rendu vidéo pré-chargé) sans accord.
+11. **OpenTopoMap** : serveur bénévole ; pas de téléchargement massif. Les packs hors ligne le permettent en usage personnel seulement, avec une mise en garde et un plafond de 2 000 tuiles par jour (`src/offline/policy.ts`).
 12. **CC BY-SA (OpenTopoMap)** : une vidéo exportée avec ce fond doit porter l'attribution et peut être considérée comme une adaptation (partage dans les mêmes conditions) : à signaler à l'export.
 
 ## Météo historique — Open-Meteo (2026-10-07)

@@ -129,8 +129,8 @@ Aperçu des nuages : préréglage « bas » allégé (`PREVIEW_MARCH` : 120 pas 
    Imagerie : IGN BD ORTHO (Géoplateforme WMTS, PM), EOX Sentinel-2 cloudless, ArcGIS World Imagery, swisstopo SWISSIMAGE.
    Le catalogue contient aussi des fonds non photographiques et datés, jamais choisis automatiquement (`AUTO_IMAGERY_IDS` =
    `ign-ortho`, `swisstopo`) : cartes topographiques `ign-plan` (Plan IGN, France, z19), `swisstopo-carte` (carte nationale
-   suisse, z19 ; blanche hors Suisse au-delà de z15) et `opentopomap` (mondial, z17, CC BY-SA, serveur bénévole : pas de
-   téléchargement massif, donc exclu des futurs packs hors ligne) ; orthophotos IGN datées :
+   suisse, z19 ; blanche hors Suisse au-delà de z15) et `opentopomap` (mondial, z17, CC BY-SA, serveur bénévole : packs hors
+   ligne permis en usage personnel seulement, plafonnés à 2 000 tuiles par jour, voir « Packs hors ligne ») ; orthophotos IGN datées :
    `ign-ortho-1950-1965` (France complète, niveaux de gris), `ign-ortho-1965-1980` (partiel, style `BDORTHOHISTORIQUE`, z3–18)
    et `ign-ortho-2000-2005` (z6–18), sur la boîte `FRANCE_BOX` (sur-approximation). Sources écartées (clé requise : Stadia,
    Thunderforest, SCAN 25) : `docs/sources.md`.
