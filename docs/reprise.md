@@ -1,15 +1,14 @@
 # État du projet et reprise
 
-Mis à jour le 2026-10-07 (fin de journée). Ce fichier suffit pour reprendre sans l'historique de conversation : lire
+Mis à jour le 2026-10-08. Ce fichier suffit pour reprendre sans l'historique de conversation : lire
 d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
 ## Branches, PR, dépôt
 
 - `master` : phases 1–2, historique réécrit sans trailers (poussé).
-- `phase3-atmosphere` : phases 2 à 5 + début de la phase 7. PR #1 → `master` :
-  https://github.com/YannickRiou/gpx2movie/pull/1 (**à fusionner par l'utilisateur**, la fusion automatique est refusée).
-- `timeline` (branche de travail courante, partie de `phase3-atmosphere`) : timeline de montage + nouvelle interface.
-  PR #2 → `phase3-atmosphere`, en brouillon : https://github.com/YannickRiou/gpx2movie/pull/2. À fusionner après la #1.
+- PR #1 (`phase3-atmosphere`, phases 2 à 5 + début de la phase 7) **fusionnée** dans `master` le 2026-10-07.
+- `timeline` (branche de travail courante) : timeline de montage + nouvelle interface. PR #2 → `master` :
+  https://github.com/YannickRiou/gpx2movie/pull/2 (**à fusionner par l'utilisateur**, la fusion automatique est refusée).
 - Règle demandée : une branche et une PR par fonctionnalité, description à jour + procédure de test manuel ; l'utilisateur
   fusionne.
 - **Pousser** : `git push` tout simplement. Le remote `origin` est `git@github-yannickriou:YannickRiou/gpx2movie.git`,
@@ -50,7 +49,7 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
 | Commit | Contenu |
 |---|---|
-| *(aucun)* | **fait, non commité** (arbre vert : typecheck, lint, 63 fichiers / 853 tests, build) — interface : inspecteur de la timeline dans le panneau de droite (sélection `filmSelection` dans le store, le tiroir d'export passe devant, repli du panneau sous 1360 px, position en grille 3 × 3) ; Échap : boîte → tiroir → sélection, un menu ouvert se ferme d'abord ; timeline : barre à boutons-icônes avec infobulles, ■ retour au début, zoom − / curseur / + / « Ajuster », menu « Options » (arrêts automatiques, « Par défaut »), arrêts marqués sur la barre du survol, message des photos en toast, raccourcis S / T ; vue 3D : clic sur la trace = tête de lecture, clic droit = « Ajouter un arrêt / un texte ici » (`src/scene/TrackPicker.tsx`, `pickProjectedPath`) |
+| `f6e2784` + suivant | inspecteur de la timeline dans le panneau de droite, grille de position 3 × 3, barre de la timeline à icônes (■, zoom + « Ajuster », menu « Options »), arrêts marqués sur la barre du survol, raccourcis S / T, clic / clic droit sur la trace dans la vue 3D (`TrackPicker`) ; libellés de la barre masqués quand la timeline est étroite ; captures du README refaites |
 | `6ce6085` | Survol : nombre d'arrêts dans la durée du film |
 | `a215704` | messages éphémères (toasts), dépôt n'importe où, écran d'accueil, aide des raccourcis « ? », infobulles ; onglets Carte et Survol en sections, « Plus de réglages », heure du soleil (lever / coucher, boutons rapides) |
 | `46b6b39` | le tiroir d'export réduit la vue (bug : la fenêtre s'élargissait) |
@@ -65,14 +64,10 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 Détail technique : `ARCHITECTURE.md` (sections « Interface », « Film et timeline », « Habillage », « Export vidéo »…).
 Feuille de route et fonctionnalités : `README.md`.
 
-## Travail en cours, probablement NON commité à la reprise
+## Travail en cours
 
-Le dernier chantier d'interface est fait (première ligne du tableau) mais pas commité : vérifier avec `git status`, puis
-commiter (fichiers : `src/App.tsx`, `src/ui/Timeline.tsx`, `src/ui/FilmInspector.tsx`, `src/ui/shell.ts`, `shell.css`,
-`app.css`, `src/ui/shortcuts.ts`, `src/ui/icons.tsx`, `src/state/store.ts`, `src/film/timeline.ts`, `src/flyover/path.ts`,
-`src/scene/usePacing.ts`, `src/scene/FlyoverCanvas.tsx`, nouveau `src/scene/TrackPicker.tsx`, tests de `shell`,
-`shortcuts`, `film/timeline`, `flyover/path`, `ARCHITECTURE.md`, `README.md`, ce fichier), pousser, mettre à jour la
-description de la PR #2 (étape « interface » cochée, procédure de test manuel), refaire les captures 1440 / 1280 / 1000.
+Rien de non commité. Vu à l'écran le 2026-10-08 (1440 × 900) : inspecteur ancré, menu du clic droit sur la trace, barre
+de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'habillage.
 
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
 
@@ -103,9 +98,8 @@ description de la PR #2 (étape « interface » cochée, procédure de test manu
 
 ## Prochaines étapes proposées
 
-1. Finir le chantier ci-dessus, puis **refaire les captures du README** (`docs/images/*.jpg`, 1440×900, JPEG ~85) :
-   interface complète, habillage, timeline avec photos, tiroir d'export.
-2. Fusion des PR #1 puis #2 par l'utilisateur ; ensuite repartir de `master` avec une branche par fonctionnalité.
+1. Fusion de la PR #2 par l'utilisateur ; ensuite repartir de `master` avec une branche par fonctionnalité.
+2. Contrôles visuels ci-dessus (surtout 1280 / 1000 px, glisser dans la timeline, photos, export réel).
 3. Timeline : vidéos dans la piste Médias (modèle déjà prêt, `kind: 'video'`), photo attachée à un arrêt, défilement
    automatique pendant un glisser au bord, textes ancrés à un arrêt, mémoriser l'état ouvert / fermé des sections.
 4. Restes d'interface : Échap ferme le panneau-tiroir en écran étroit ; `importError` encore dans le store (plus affiché) ;
