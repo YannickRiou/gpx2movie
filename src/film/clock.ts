@@ -12,6 +12,7 @@
  * duration with `keepDuration`, stops included). Everything is a pure function of the film time: any frame can
  * be computed alone.
  */
+import { clamp } from '../core/math'
 import type { Track } from '../core/types'
 import { flightPacing, pacingHighlights } from '../flyover/pacing'
 import type { Pacing, PacingPosition, PacingSettings } from '../flyover/pacing'
@@ -91,8 +92,6 @@ export interface FilmClock {
   advance(from: PacingPosition, dtS: number, speed: number): PacingPosition
   stateAt(tS: number): FilmState
 }
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 export interface FilmClockInput {
   opening: FilmShot
