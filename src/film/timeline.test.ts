@@ -4,31 +4,38 @@ import { DEFAULT_PACING } from '../flyover/pacing'
 import { buildTrack } from '../import/stats'
 import { buildFilmClock } from './clock'
 import type { FilmClockInput } from './clock'
-import { AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, MIN_SPEED_SPAN_M, isValidFilm } from './model'
-import type { Film, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
+import { AUDIO_DEFAULTS, AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, MIN_SPEED_SPAN_M, clipTimeS, isValidFilm } from './model'
+import type { Film, FilmAudio, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
 import {
   NEW_MEDIA_S,
   NEW_VIDEO_MAX_S,
   addMedia,
+  addMusic,
   addSpeed,
   addStop,
   addText,
+  clipRateAt,
+  clipSyncOffsetS,
   dragFilm,
   fitPxPerS,
   formatFilmTime,
   formatSpeedFactor,
   hasFilmItem,
   photoFilmTime,
+  recordedAtFilmTime,
   removeFilmItem,
   rulerStep,
   rulerTicks,
   snapTargets,
   snapTime,
   stopPositionAt,
+  syncClip,
+  syncClipPlacement,
   updateShot,
   updateSpeed,
   updateStop,
   updateMedia,
+  updateMusic,
   updateText,
   zoomAt,
 } from './timeline'
@@ -386,5 +393,143 @@ describe('placing a photo on the track', () => {
     expect(photoFilmTime(path, clock, { timeMs: T0 - 10 * MIN })).toBe(at(0))
     expect(photoFilmTime(path, clock, { timeMs: T0 + 3 * 3_600_000 })).toBeUndefined()
     expect(photoFilmTime(path, clock, {})).toBeUndefined()
+  })
+})
+
+describe('syncing a video clip with the recorded track', () => {
+  const T0 = Date.UTC(2025, 6, 12, 6)
+  const MIN = 60_000
+  const HOUR = 3_600_000
+  // 4 equal legs of 5 min: the recorded time is linear in distance, 20 min over a 40 s flight (30 s per second)
+  const lons = [6.8, 6.81, 6.82, 6.83, 6.84]
+  const track = buildTrack({
+    name: 'montée',
+    source: 'gpx',
+    segments: [{ points: lons.map((lon, i) => ({ lon, lat: 45.9, time: T0 + 5 * i * MIN })) }],
+  })
+  const path = buildTrackPath(track)
+  const untimed = buildTrackPath(buildTrack({ name: 'sans heure', source: 'gpx', segments: [{ points: lons.map((lon) => ({ lon, lat: 45.9 })) }] }))
+  const input: FilmClockInput = {
+    opening: { style: 'descente', durationS: 6 },
+    closing: { style: 'aucune', durationS: 5 },
+    stops: [],
+    lengthM: path.lengthM,
+    highlightsM: [],
+    durationS: 40,
+    pacing: { ...DEFAULT_PACING, enabled: false },
+  }
+  const clock = buildFilmClock(input)
+  const clip = (startMs: number, follow = false, patch: Partial<FilmMedia> = {}): FilmMedia => ({
+    ...photo('media-1', 0, 30),
+    kind: 'video',
+    src: 'video-1',
+    kenBurns: false,
+    sync: { startMs, offsetS: 0, follow },
+    ...patch,
+  })
+
+  it('finds the clock correction that puts the clip within the outing: none, else whole hours', () => {
+    expect(clipSyncOffsetS(path, T0 + 2 * MIN, 60)).toBe(0)
+    // started a little before the outing, still overlapping
+    expect(clipSyncOffsetS(path, T0 - 30_000, 60)).toBe(0)
+    // camera set to local time (UTC+2) written as UTC
+    expect(clipSyncOffsetS(path, T0 + 2 * HOUR + 3 * MIN, 60)).toBe(-7200)
+    expect(clipSyncOffsetS(path, T0 - 3 * HOUR, 60)).toBe(3 * 3600)
+    expect(clipSyncOffsetS(path, T0 + 20 * HOUR, 60)).toBeUndefined()
+    expect(clipSyncOffsetS(untimed, T0, 60)).toBeUndefined()
+  })
+
+  it('places the clip where the marker passes the point recorded at its start', () => {
+    // recorded at the second point: 10 s into the 40 s flight, after the 6 s opening
+    expect(syncClipPlacement(clip(T0 + 5 * MIN), path, clock, 120)).toEqual({ startS: 16, durationS: 30, inS: 0 })
+    // a clip shorter than its block is cut to its length
+    expect(syncClipPlacement(clip(T0 + 5 * MIN), path, clock, 12)?.durationS).toBe(12)
+    // following the flight: until the marker passes the point recorded at its end (2 min = 4 s of film)
+    expect(syncClipPlacement(clip(T0 + 5 * MIN, true), path, clock, 120)).toEqual({ startS: 16, durationS: 4, inS: 0 })
+    // started 1 min before the outing: at the start of the flight, the first minute skipped
+    expect(syncClipPlacement(clip(T0 - MIN, true), path, clock, 180)).toEqual({ startS: 6, durationS: 4, inS: 60 })
+    // the clock correction moves it: 5 min later
+    expect(syncClipPlacement(clip(T0, false, { sync: { startMs: T0, offsetS: 300, follow: false } }), path, clock, 120)?.startS).toBe(16)
+    // outside the outing, without time, not synced
+    expect(syncClipPlacement(clip(T0 + 2 * HOUR), path, clock, 120)).toBeUndefined()
+    expect(syncClipPlacement(clip(T0 + 5 * MIN), untimed, clock, 120)).toBeUndefined()
+    expect(syncClipPlacement({ ...clip(T0), sync: undefined }, path, clock, 120)).toBeUndefined()
+  })
+
+  it('syncs a clip of the film in one edit, nothing outside the outing', () => {
+    const f: Film = { ...film, media: [{ ...clip(0), sync: undefined }] }
+    const synced = syncClip(f, 'media-1', { startMs: T0 + 5 * MIN, offsetS: 0, follow: true }, path, clock, 120)!
+    expect(synced.media[0]).toMatchObject({ startS: 16, durationS: 4, inS: 0, sync: { startMs: T0 + 5 * MIN, follow: true } })
+    expect(isValidFilm(synced)).toBe(true)
+    expect(syncClip(f, 'media-1', { startMs: T0 + 5 * HOUR, offsetS: 0, follow: true }, path, clock, 120)).toBeUndefined()
+    expect(syncClip(f, 'media-9', { startMs: T0, offsetS: 0, follow: true }, path, clock, 120)).toBeUndefined()
+  })
+
+  it('following the flight, the clip time is the recorded time under the marker: faster when the flight is, held at a stop', () => {
+    const following = clip(T0 + 5 * MIN, true, { startS: 16, durationS: 4 })
+    const at = (t: number) => clipTimeS(following, t, recordedAtFilmTime(path, clock, t))
+    expect(at(16)).toBeCloseTo(0, 6)
+    expect(at(18)).toBeCloseTo(60, 6)
+    expect(clipRateAt(following, path, clock, 17)).toBeCloseTo(30, 6)
+    expect(clipRateAt({ ...following, sync: { ...following.sync!, follow: false } }, path, clock, 17)).toBe(1)
+    expect(recordedAtFilmTime(untimed, clock, 17)).toBeUndefined()
+    expect(clipRateAt(following, untimed, clock, 17)).toBe(1)
+    // a stop at the third point: the frame holds during its hold
+    const withStop = buildFilmClock({ ...input, stops: [{ id: 'stop-1', atM: path.dist[2], durationS: 8, camera: 'fixe' }] })
+    const hold = withStop.stops[0]
+    expect(hold.holdEndS - hold.holdStartS).toBeGreaterThan(1)
+    const middle = (hold.holdStartS + hold.holdEndS) / 2 - 0.1
+    expect(clipRateAt(following, path, withStop, middle)).toBe(0)
+    expect(clipTimeS(following, middle, recordedAtFilmTime(path, withStop, middle))).toBeCloseTo(300, 6)
+  })
+})
+
+describe('music', () => {
+  const music = (id: string, startS: number, durationS: number, inS = 0): FilmAudio => ({ id, src: 'audio-1', startS, durationS, inS, ...AUDIO_DEFAULTS })
+  const withMusic: Film = { ...film, audio: [music('music-1', 5, 20, 10)] }
+  /** the file of audio-1 lasts 60 s */
+  const ctx = (patch: Partial<DragContext> = {}) => contextOf(withMusic, { audioFileS: (src) => (src === 'audio-1' ? 60 : undefined), ...patch })
+
+  it('adds whole files one after the other, after the music already there, valid', () => {
+    const first = addMusic(film, [{ src: 'audio-1', fileS: 95.5 }, { src: 'audio-2', fileS: 30 }])
+    expect(first.ids).toEqual(['music-1', 'music-2'])
+    expect(first.film.audio).toEqual([
+      { id: 'music-1', src: 'audio-1', startS: 0, durationS: 95.5, inS: 0, ...AUDIO_DEFAULTS },
+      { id: 'music-2', src: 'audio-2', startS: 95.5, durationS: 30, inS: 0, ...AUDIO_DEFAULTS },
+    ])
+    expect(isValidFilm(first.film)).toBe(true)
+    const next = addMusic(first.film, [{ src: 'audio-3', fileS: 10 }])
+    expect(next.film.audio[2]).toMatchObject({ id: 'music-3', startS: 125.5 })
+  })
+
+  it('moves a clip; its end never goes past the end of the file; its start edge moves its start in the file', () => {
+    expect(dragFilm(withMusic, 'music-1', 'move', 3, ctx()).audio[0]).toMatchObject({ startS: 8, durationS: 20, inS: 10 })
+    expect(dragFilm(withMusic, 'music-1', 'move', -10, ctx()).audio[0].startS).toBe(0)
+    // 10 s in the file + 20 s played: 30 s left at most
+    expect(dragFilm(withMusic, 'music-1', 'end', 100, ctx()).audio[0].durationS).toBe(50)
+    expect(dragFilm(withMusic, 'music-1', 'end', -100, ctx()).audio[0].durationS).toBe(0.5)
+    expect(dragFilm(withMusic, 'music-1', 'start', 2, ctx()).audio[0]).toMatchObject({ startS: 7, durationS: 18, inS: 12 })
+    // not before the start of the file (10 s earlier) nor of the film
+    expect(dragFilm(withMusic, 'music-1', 'start', -20, ctx()).audio[0]).toMatchObject({ startS: 0, durationS: 25, inS: 5 })
+    expect(dragFilm({ ...withMusic, audio: [music('music-1', 15, 20, 10)] }, 'music-1', 'start', -20, ctx()).audio[0]).toMatchObject({
+      startS: 5,
+      durationS: 30,
+      inS: 0,
+    })
+    // snaps to the other blocks, which also snap to it
+    expect(dragFilm(withMusic, 'music-1', 'move', 4.6, ctx({ targets: [10], snapS: 0.5 })).audio[0].startS).toBe(10)
+    expect(snapTargets(ctx().clock, withMusic, [], 0)).toEqual(expect.arrayContaining([5, 25]))
+  })
+
+  it('updates clamp volume, fades, start in the file and duration; removed like any block', () => {
+    const f = updateMusic(withMusic, 'music-1', { volume: 1.5, fadeInS: -2, fadeOutS: 40, inS: 70 }, 60)
+    expect(f.audio[0]).toMatchObject({ volume: 1, fadeInS: 0, fadeOutS: 30, inS: 59.5, durationS: 0.5 })
+    expect(updateMusic(withMusic, 'music-1', { durationS: 100 }, 60).audio[0].durationS).toBe(50)
+    expect(updateMusic(withMusic, 'music-1', { durationS: 100 }).audio[0].durationS).toBe(100)
+    expect(updateMusic(withMusic, 'music-1', { volume: 0.333 }, 60).audio[0].volume).toBe(0.33)
+    expect(hasFilmItem(withMusic, [], 'music-1')).toBe(true)
+    const removed = removeFilmItem(withMusic, 'music-1')
+    expect(removed.audio).toEqual([])
+    expect(hasFilmItem(removed, [], 'music-1')).toBe(false)
   })
 })

@@ -1,11 +1,12 @@
 /**
- * Pictures and video clips of the film's media lane: the media table of the project document, file access and
- * decoding of the pictures (the clips: `video.ts`).
+ * Pictures and video clips of the film's media lane, and the sound files of its music lane: the media table of the
+ * project document, file access and decoding of the pictures (the clips: `video.ts`; the music: `audio.ts`).
  *
  * The table maps an id (`film.media[].src`) to the picture, kept downscaled as a JPEG data URL, or to the video
  * clip, kept as is (its original bytes, `MAX_VIDEO_BYTES` at most), each with a small thumbnail, so that a project
  * stays one self-contained file (web and desktop app alike) while the settings and their undo history only hold
- * ids. An entry stays in the table when its medium leaves the film (undo brings it back); a saved project keeps
+ * ids. A sound file is kept as is too (`MAX_AUDIO_BYTES` at most), with a small waveform (`peaks`) instead of a
+ * thumbnail. An entry stays in the table when its medium leaves the film (undo brings it back); a saved project keeps
  * only the entries its film uses (`usedMedia`).
  *
  * Files come in through `readMedia(blob)` (`video.ts`: `readPhoto` or `readVideo`): the web file picker and drop
@@ -23,18 +24,28 @@ import { EXIF_SCAN_BYTES, parseExif } from './exif'
 import type { PhotoExif } from './exif'
 import type { Film, FilmMedia } from './model'
 
-/** A picture or a video clip of the media table, as saved in the project document. */
+/** A picture, a video clip or a sound file of the media table, as saved in the project document. */
 export interface MediaAsset {
-  /** JPEG data URL, at most `PHOTO_MAX_SIDE_PX` on its longest side; a video: the file as an MP4, WebM or QuickTime data URL */
+  /**
+   * JPEG data URL, at most `PHOTO_MAX_SIDE_PX` on its longest side; a video: the file as an MP4, WebM or QuickTime
+   * data URL; a sound: the file as an audio data URL (`AUDIO_TYPES`)
+   */
   data: string
-  /** JPEG data URL, at most `THUMB_MAX_SIDE_PX` (timeline blocks) */
-  thumb: string
-  width: number
-  height: number
+  /** JPEG data URL, at most `THUMB_MAX_SIDE_PX` (timeline blocks); none for a sound */
+  thumb?: string
+  /** picture and video size (none for a sound) */
+  width?: number
+  height?: number
   /** file name it came from */
   name?: string
-  /** video: length of the file (seconds) */
+  /** video and sound: length of the file (seconds) */
   durationS?: number
+  /** sound: loudest level (0–1) of each slice of the file, evenly spread over it (the waveform of the timeline) */
+  peaks?: number[]
+  /** video: recording start read from the file (ms since epoch), to sync it with the track */
+  recordedMs?: number
+  /** video: `recordedMs` is only guessed from the date of the file (its last change minus its length) */
+  recordedApprox?: boolean
 }
 
 export type MediaTable = Record<string, MediaAsset>
@@ -45,6 +56,12 @@ export const THUMB_MAX_SIDE_PX = 160
 export const THUMB_JPEG_QUALITY = 0.7
 /** Largest video file kept in a project (bytes): the project file holds the clip as it is. */
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024
+/** Largest sound file kept in a project (bytes): the project file holds it as it is. */
+export const MAX_AUDIO_BYTES = 30 * 1024 * 1024
+/** Most values of a waveform (`peaks`). */
+export const MAX_PEAKS = 4000
+/** Types of the sound files kept in the table (`data:audio/<type>`). */
+export const AUDIO_TYPES = ['mpeg', 'mp4', 'aac', 'ogg', 'wav', 'flac', 'webm'] as const
 /** Decoded pictures kept at once (a 2560 px picture takes about 20 MB once decoded). */
 export const BITMAP_CACHE_LIMIT = 6
 
@@ -54,14 +71,22 @@ export const BITMAP_CACHE_LIMIT = 6
 
 const isImageDataUrl = (v: unknown) => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(v)
 const isVideoDataUrl = (v: unknown) => typeof v === 'string' && /^data:video\/(mp4|webm|quicktime);base64,/.test(v)
+const isAudioDataUrl = (v: unknown) => typeof v === 'string' && new RegExp(`^data:audio/(${AUDIO_TYPES.join('|')});base64,`).test(v)
 const isSide = (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= 16384
+const isLength = (v: unknown) => typeof v === 'number' && v > 0 && Number.isFinite(v)
+const isPeaks = (v: unknown) =>
+  Array.isArray(v) && v.length > 0 && v.length <= MAX_PEAKS && v.every((p) => typeof p === 'number' && p >= 0 && p <= 1)
 
 export function isValidMediaAsset(v: unknown): v is MediaAsset {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return false
   const a = v as Record<string, unknown>
+  if (isAudioDataUrl(a.data)) return isLength(a.durationS) && isPeaks(a.peaks) && (a.name === undefined || typeof a.name === 'string')
   const video = isVideoDataUrl(a.data)
+  const recorded = a.recordedMs === undefined || (video && typeof a.recordedMs === 'number' && Number.isFinite(a.recordedMs))
   return (
-    (video ? typeof a.durationS === 'number' && a.durationS > 0 && Number.isFinite(a.durationS) : isImageDataUrl(a.data) && a.durationS === undefined) &&
+    (video ? isLength(a.durationS) : isImageDataUrl(a.data) && a.durationS === undefined) &&
+    recorded &&
+    (a.recordedApprox === undefined || typeof a.recordedApprox === 'boolean') &&
     isImageDataUrl(a.thumb) &&
     isSide(a.width) &&
     isSide(a.height) &&
@@ -74,6 +99,11 @@ export function isVideoAsset(asset: Pick<MediaAsset, 'data'>): boolean {
   return asset.data.startsWith('data:video/')
 }
 
+/** The entry is a sound file (music lane). */
+export function isAudioAsset(asset: Pick<MediaAsset, 'data'>): boolean {
+  return asset.data.startsWith('data:audio/')
+}
+
 /** Valid pictures of a loaded media table (the others are left out). */
 export function sanitizeMediaTable(raw: unknown): MediaTable {
   const media: MediaTable = {}
@@ -82,15 +112,15 @@ export function sanitizeMediaTable(raw: unknown): MediaTable {
   return media
 }
 
-/** The pictures of `table` used by the film (what a saved project keeps). */
-export function usedMedia(film: Pick<Film, 'media'>, table: MediaTable): MediaTable {
+/** The entries of `table` used by the film, media and music (what a saved project keeps). */
+export function usedMedia(film: Pick<Film, 'media'> & Partial<Pick<Film, 'audio'>>, table: MediaTable): MediaTable {
   const out: MediaTable = {}
-  for (const { src } of film.media) if (table[src]) out[src] = table[src]
+  for (const { src } of [...film.media, ...(film.audio ?? [])]) if (table[src]) out[src] = table[src]
   return out
 }
 
-/** Next free id `photo-<n>` (or `video-<n>`) of the table. */
-export function nextMediaId(table: MediaTable, prefix: 'photo' | 'video' = 'photo'): string {
+/** Next free id `photo-<n>` (or `video-<n>`, `audio-<n>`) of the table. */
+export function nextMediaId(table: MediaTable, prefix: 'photo' | 'video' | 'audio' = 'photo'): string {
   let max = 0
   for (const id of Object.keys(table)) {
     const match = new RegExp(`^${prefix}-(\\d+)$`).exec(id)
@@ -132,7 +162,7 @@ export const useMediaStore = create<MediaState>()((set, get) => ({
   add(assets) {
     const table = { ...get().table }
     const ids = assets.map((asset) => {
-      const id = nextMediaId(table, isVideoAsset(asset) ? 'video' : 'photo')
+      const id = nextMediaId(table, isVideoAsset(asset) ? 'video' : isAudioAsset(asset) ? 'audio' : 'photo')
       table[id] = asset
       return id
     })

@@ -49,6 +49,20 @@ describe('media table', () => {
     expect(isValidMediaAsset({ ...clip, data: 'data:video/x-msvideo;base64,AAAA' })).toBe(false)
     expect(isValidMediaAsset({ ...clip, thumb: clip.data })).toBe(false)
     expect(isValidMediaAsset(asset('a', { durationS: 3 }))).toBe(false)
+    // its recording start (to sync it with the track), approximate or not; not on a photo
+    expect(isValidMediaAsset({ ...clip, recordedMs: 1_718_179_200_000, recordedApprox: true })).toBe(true)
+    expect(isValidMediaAsset({ ...clip, recordedMs: Number.NaN })).toBe(false)
+    expect(isValidMediaAsset({ ...clip, recordedApprox: 'oui' })).toBe(false)
+    expect(isValidMediaAsset(asset('a.jpg', { recordedMs: 1_718_179_200_000 }))).toBe(false)
+    // a sound file: its file, its length and its waveform, no thumbnail needed
+    const sound: MediaAsset = { data: 'data:audio/mpeg;base64,AAAA', name: 'a.mp3', durationS: 180, peaks: [0, 0.5, 1] }
+    expect(isValidMediaAsset(sound)).toBe(true)
+    expect(isValidMediaAsset({ ...sound, data: 'data:audio/flac;base64,AAAA' })).toBe(true)
+    expect(isValidMediaAsset({ ...sound, data: 'data:audio/x-ms-wma;base64,AAAA' })).toBe(false)
+    expect(isValidMediaAsset({ ...sound, durationS: undefined })).toBe(false)
+    expect(isValidMediaAsset({ ...sound, peaks: [] })).toBe(false)
+    expect(isValidMediaAsset({ ...sound, peaks: [1.2] })).toBe(false)
+    expect(isValidMediaAsset({ ...sound, peaks: undefined })).toBe(false)
     expect(sanitizeMediaTable({ 'photo-1': asset('a'), 'photo-2': { data: 1 } })).toEqual({ 'photo-1': asset('a') })
     expect(sanitizeMediaTable(undefined)).toEqual({})
     expect(sanitizeMediaTable([asset('a')])).toEqual({})
@@ -57,6 +71,9 @@ describe('media table', () => {
   it('keeps the pictures the film uses; fresh ids', () => {
     const table = { 'photo-1': asset('a'), 'photo-2': asset('b'), 'photo-7': asset('c') }
     expect(usedMedia({ media: [photo('media-1', 'photo-2', 0), photo('media-2', 'photo-9', 5)] }, table)).toEqual({ 'photo-2': asset('b') })
+    // the sound files of the music lane are kept too
+    const music = { id: 'music-1', src: 'photo-7', startS: 0, durationS: 10, inS: 0, volume: 1, fadeInS: 0, fadeOutS: 0 }
+    expect(usedMedia({ media: [], audio: [music] }, table)).toEqual({ 'photo-7': asset('c') })
     expect(nextMediaId(table)).toBe('photo-8')
     expect(nextMediaId({})).toBe('photo-1')
   })
@@ -83,6 +100,7 @@ describe('media table', () => {
       expect(useMediaStore.getState().add([asset('c')])).toEqual(['photo-3'])
       const clip = asset('d.mp4', { data: 'data:video/mp4;base64,AAAA', durationS: 4 })
       expect(useMediaStore.getState().add([clip, asset('e'), clip])).toEqual(['video-1', 'photo-4', 'video-2'])
+      expect(useMediaStore.getState().add([{ data: 'data:audio/ogg;base64,AAAA', durationS: 3, peaks: [1] }])).toEqual(['audio-1'])
       useMediaStore.getState().replace({ 'photo-1': asset('z') })
       expect(useMediaStore.getState().table).toEqual({ 'photo-1': asset('z') })
     })
@@ -97,7 +115,7 @@ describe('decoded pictures', () => {
     const decode = (a: MediaAsset): Promise<DecodedPicture> => {
       decoded.push(a.name!)
       if (a.name === 'bad') return Promise.reject(new Error('illisible'))
-      return Promise.resolve({ image: {} as CanvasImageSource, width: a.width, height: a.height, close: () => closed.push(a.name!) })
+      return Promise.resolve({ image: {} as CanvasImageSource, width: a.width ?? 0, height: a.height ?? 0, close: () => closed.push(a.name!) })
     }
     const bitmaps = createMediaBitmaps((id) => table[id], decode, limit)
     return { bitmaps, decoded, closed, setTable: (t: typeof table) => (table = t) }
@@ -276,5 +294,30 @@ describe('video clips', () => {
     expect(el.paused).toBe(true)
     videos.retain([])
     expect(released).toBe(1)
+  })
+
+  it('preview: a clip following the flight plays at its rate, is held at a stop, kept closer in time', () => {
+    const el = fakeVideo()
+    const table: Record<string, MediaAsset> = { 'video-1': asset('v1', { data: 'data:video/mp4;base64,AAAA', durationS: 8 }) }
+    const videos = createPreviewVideos(
+      (id) => table[id],
+      () => ({ el: el as PreviewElement, snapshot: () => null, release: () => undefined }),
+    )
+    const clip: FilmMedia = { ...photo('media-1', 'video-1', 10, 5), kind: 'video', sync: { startMs: 0, offsetS: 0, follow: true } }
+    const playing = { playing: true, speed: 2 }
+    videos.frame(clip, 2, playing, 1.5)
+    expect(el.paused).toBe(false)
+    expect(el.playbackRate).toBe(3)
+    // drift beyond 0.2 s: seeked
+    el.currentTime = 2.25
+    videos.frame(clip, 2, playing, 1.5)
+    expect(el.currentTime).toBe(2)
+    // faster than a video element plays: its highest rate, kept in place by seeking
+    videos.frame(clip, 2, playing, 30)
+    expect(el.playbackRate).toBe(16)
+    // a stop: held on its frame
+    videos.frame(clip, 2.5, playing, 0)
+    expect(el.paused).toBe(true)
+    expect(el.currentTime).toBe(2.5)
   })
 })

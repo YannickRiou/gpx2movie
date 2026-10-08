@@ -134,3 +134,6 @@ export function resetLandmarkStore(): void {
   if (state.status !== 'idle' || Object.keys(state.features).length > 0) useLandmarkStore.setState({ ...INITIAL })
   if (useLabelSources.getState().sources.osm) setLabelSource('osm', [])
 }
+
+/** Water polygons of OpenStreetMap shown in the scene (scene/WaterLayer.tsx), for the source credits. */
+export const useWaterStore = create<{ polygons: number }>()(() => ({ polygons: 0 }))
