@@ -52,6 +52,9 @@ function loadPrefs() {
 }
 
 const isNarrow = () => window.innerWidth < ONE_SIDE_MAX_WIDTH
+/** below this width the panel is a drawer over the view (shell.css): it starts closed and closes on Escape or outside */
+const DRAWER_MAX_WIDTH = 1024
+const isDrawer = () => window.innerWidth < DRAWER_MAX_WIDTH
 const isExporting = () => isExportBusy(useExportStore.getState().phase)
 /** a modal dialog (help, sources) is open: it takes the keyboard, Escape closes it */
 const isDialogOpen = () => document.querySelector('dialog[open]') !== null
@@ -123,6 +126,7 @@ export default function App() {
   const selected = useAppStore((s) => s.filmSelection !== null && s.tracks.length > 0)
   const [shell, dispatch] = useReducer(shellReducer, undefined, () => ({
     ...loadPrefs(),
+    ...(isDrawer() && { collapsed: true }),
     dockOpen: false,
     collapsedByDock: false,
     inspecting: false,
@@ -131,11 +135,14 @@ export default function App() {
   const openInput = useRef<HTMLInputElement>(null)
   const helpDialog = useRef<HTMLDialogElement>(null)
   const dockOpen = useRef(shell.dockOpen)
+  const collapsedRef = useRef(shell.collapsed)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   // remember the tab and the folded panel chosen by the user (not a fold caused by the export drawer)
   const keptCollapsed = shell.collapsed && !shell.collapsedByDock
   useEffect(() => {
+    // the drawer of a narrow window opens and closes on its own: only the tab is worth keeping then
+    if (isDrawer()) return
     try {
       localStorage.setItem(PREFS_KEY, JSON.stringify({ tab: shell.tab, collapsed: keptCollapsed }))
     } catch {
@@ -146,6 +153,19 @@ export default function App() {
   useEffect(() => {
     dockOpen.current = shell.dockOpen
   }, [shell.dockOpen])
+
+  useEffect(() => {
+    collapsedRef.current = shell.collapsed
+    if (shell.collapsed) return
+    // drawer mode: a press outside the panel and its rail closes it
+    const onPointerDown = (e: PointerEvent) => {
+      if (!isDrawer() || !(e.target instanceof Element)) return
+      if (e.target.closest('#side-panel, .rail')) return
+      dispatch({ type: 'toggle-panel', narrow: true })
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [shell.collapsed])
 
   useEffect(() => installHistoryShortcuts(getSettingsHistory()), [])
 
@@ -208,6 +228,7 @@ export default function App() {
         const store = useAppStore.getState()
         if (dockOpen.current && !isExporting()) dispatch({ type: 'close-dock' })
         else if (store.filmSelection !== null) store.setFilmSelection(null)
+        else if (isDrawer() && !collapsedRef.current) dispatch({ type: 'toggle-panel', narrow: true })
         else return
         e.stopPropagation()
       } else if (action === 'help') {

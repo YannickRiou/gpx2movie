@@ -102,7 +102,7 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
 2. Contrôles visuels ci-dessus (surtout 1280 / 1000 px, glisser dans la timeline, photos, export réel).
 3. Timeline : vidéos dans la piste Médias (modèle déjà prêt, `kind: 'video'`), photo attachée à un arrêt, défilement
    automatique pendant un glisser au bord, textes ancrés à un arrêt, mémoriser l'état ouvert / fermé des sections.
-4. Restes d'interface : Échap ferme le panneau-tiroir en écran étroit ; `importError` encore dans le store (plus affiché) ;
+4. Restes d'interface : `importError` encore dans le store (plus affiché) ;
    toast « Préréglage appliqué » / « Export annulé » ; section « Repères » repliable ; glisser lent de curseur = plusieurs
    pas d'annulation (> 400 ms) ; lever / coucher affichés en heure solaire, pas en heure légale.
 5. Phase 6 (bureau, Tauri) : WebCodecs absent sous Linux (WebKitGTK) → encodeur natif ; `dragDropEnabled` intercepte les
