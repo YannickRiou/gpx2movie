@@ -425,7 +425,8 @@ Les icônes de `src-tauri/icons/` viennent de `public/favicon.svg`. Pour les ref
 ### Limites actuelles
 
 - **Export vidéo sous Linux** : WebKitGTK n'a pas WebCodecs ; l'application encode alors le film avec le `ffmpeg` du
-  système, à installer (`sudo apt install ffmpeg`) : MP4 H.264, avec le son en AAC. Sans ffmpeg, le panneau d'export
+  système, à installer (`sudo apt install ffmpeg`) : MP4 H.264, avec le son en AAC (WebM VP9 et Opus si le nom finit
+  par « .webm »). Sans ffmpeg, le panneau d'export
   le dit et l'image fixe fonctionne ; l'habillage seul (WebM transparent) n'est pas encore possible
   ([`ARCHITECTURE.md`](ARCHITECTURE.md), « Export vidéo sans WebCodecs (Linux) » ; pas encore vérifié). Sous Windows (Edge)
   et sous macOS (WebKit, WebCodecs depuis Safari 16.4), l'export vidéo devrait passer par WebCodecs comme dans le

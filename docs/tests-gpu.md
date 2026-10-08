@@ -25,6 +25,7 @@ reproduire à côté de la case.
 - [ ] 9:16 et 1:1 : rien de coupé, habillage et crédits bien placés.
 - [ ] Écriture directe sur le disque (Chrome / Edge) : fenêtre « Enregistrer » au clic, fichier qui grossit pendant
       l'export, MP4 lu par VLC, le lecteur du système et un logiciel de montage (durée, recherche) ; « .webm » tapé → WebM.
+- [ ] Nom tapé en « .webm » : fichier WebM (VP9, Opus) lu par VLC et Firefox ; durée de l'encodage comparée au MP4.
 - [ ] Annuler pendant l'export, ou fermer la fenêtre « Enregistrer » : aucun fichier restant, vue et interface rétablies.
 - [ ] Firefox : export en mémoire, alerte au-delà de 1,5 Go estimés, téléchargement.
 - [ ] Nuages activés (réglage « Météo » ou « Manuel 50 % ») : coût de l'export, mêmes images d'un export à l'autre.

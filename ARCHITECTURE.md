@@ -1406,8 +1406,10 @@ JavaScript.
   [`-i son.wav`] `-c:v libx264 -preset medium -crf <qualité> -pix_fmt yuv420p`, couleurs converties et marquées BT.709
   (`-vf scale=out_color_matrix=bt709`, `-colorspace` / `-color_primaries` / `-color_trc bt709`) [`-c:a aac -b:a 192k`]
   `-movflags +faststart -f mp4 -y chemin`. Qualité → `crf` : standard 23, haute 20, maximale 17 (qualité constante, pas
-  de débit visé : l'estimation de taille du tiroir reste celle du H.264 de WebCodecs). Toujours du MP4, quel que soit le
-  nom tapé.
+  de débit visé : l'estimation de taille du tiroir reste celle du H.264 de WebCodecs). Nom tapé en `.webm` (`is_webm`,
+  `nativeCodecFor` côté JavaScript) : `-c:v libvpx-vp9 -crf <qualité> -b:v 0 -deadline good -cpu-used 4 -row-mt 1`,
+  son `-c:a libopus`, `-f webm` ; `crf` standard 34, haute 31, maximale 26 (essayé avec le ffmpeg d'une Ubuntu : VP9 +
+  Opus lus par `ffprobe`, WAV 44,1 kHz rééchantillonné seul).
 - **Chemin** : celui du fichier choisi dans la fenêtre « Enregistrer » au début de l'export (`WritableFile.path`, posé
   par `openWritablePath` ; dossier du rendu en lot compris). `video_open` refuse un chemin relatif ou hors de la portée
   fs (où l'extension dialog ajoute chaque fichier choisi). La poignée ouverte par la fenêtre n'écrit rien ; elle est
@@ -1417,7 +1419,7 @@ JavaScript.
   binaire d'`invoke` (pas de JSON ; 8,3 Mo en 1080p, négligeable devant le rendu). Contre-pression : `video_frame`
   écrit sur l'entrée standard de ffmpeg et ne répond que quand le tube a pris l'image ; taille vérifiée.
 - **Son** : le mixage du film (`mixFilmAudio`, voir « Export vidéo ») est converti en WAV 16 bits entrelacé (`wavFile`)
-  et passé avant l'ouverture (`video_sound`), seconde entrée de ffmpeg, encodée en AAC 192 kbit/s ; fichier temporaire
+  et passé avant l'ouverture (`video_sound`), seconde entrée de ffmpeg, encodée en AAC 192 kbit/s (Opus en WebM) ; fichier temporaire
   supprimé en fin de session (réussite, échec, annulation) ou si `video_open` échoue.
 - **Erreurs** : ffmpeg tourne avec `-loglevel error` ; s'il s'arrête (écriture refusée sur son entrée) ou finit en
   échec, la commande renvoie « ffmpeg a échoué : » et ses trois dernières lignes d'erreur, et supprime le fichier
