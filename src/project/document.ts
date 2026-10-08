@@ -15,6 +15,7 @@ import { isValidFilm, withFilmDefaults } from '../film/model'
 import { FLYOVER_DURATION_RANGE, isValidCamera } from '../flyover/cameraSettings'
 import { isValidPacing } from '../flyover/pacing'
 import { isValidRace } from '../flyover/race'
+import { isSunDate } from '../flyover/sun'
 import { TRACK_COLORS } from '../import'
 import { buildTrack, isUtcOffsetMin } from '../import/stats'
 import { isValidVideoSettings, withVideoDefaults } from '../export/schedule'
@@ -104,6 +105,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   imageryZoomOffset: (v) => v === 0 || v === 1 || v === 2,
   exaggeration: (v) => v > 0,
   sunHour: (v) => v >= 0 && v <= 24,
+  sunDate: isSunDate,
   camera: isValidCamera,
   flyoverDurationS: (v) => v >= FLYOVER_DURATION_RANGE.min && v <= FLYOVER_DURATION_RANGE.max,
   pacing: isValidPacing,

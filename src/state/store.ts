@@ -48,6 +48,8 @@ export interface Settings {
   shadows: boolean
   /** local mean solar time (hours, 12 = solar noon) on the day of the first track */
   sunHour: number
+  /** day of the fixed solar hour, `YYYY-MM-DD` ('' = the day of the first track, today without time) */
+  sunDate: string
   /** the sun follows the recorded time under the flyover marker when the first track has one (else sunHour) */
   sunFromTrack: boolean
   /** exposure compensation in stops, on top of the automatic exposure (atmosphere only) */
@@ -171,6 +173,7 @@ export const DEFAULT_SETTINGS: Settings = {
   atmosphere: true,
   shadows: true,
   sunHour: 10,
+  sunDate: '',
   sunFromTrack: true,
   exposureEv: 0,
   grading: DEFAULT_GRADING,

@@ -191,6 +191,7 @@ describe('settings and misc', () => {
       atmosphere: true,
       shadows: true,
       sunHour: 10,
+      sunDate: '',
       sunFromTrack: true,
       exposureEv: 0,
       grading: { preset: 'naturel', contrast: 0, saturation: 0, warmth: 0, vignette: 0 },

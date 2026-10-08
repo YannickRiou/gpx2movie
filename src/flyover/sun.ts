@@ -9,6 +9,16 @@ import { recordedTimeAt, type TrackPath } from './path'
 const DAY_MS = 86_400_000
 const HOUR_MS = 3_600_000
 
+/** A day typed by the user, `YYYY-MM-DD`; '' stands for the day of the track. */
+export function isSunDate(value: string): boolean {
+  return value === '' || (/^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`)))
+}
+
+/** The day lit at a fixed solar hour: the one chosen (`sunDate`), else the start of the track, else `today`. */
+export function sunDayMs(sunDate: string, startTime: number | undefined, today: number): number {
+  return sunDate ? Date.parse(`${sunDate}T00:00:00Z`) : (startTime ?? today)
+}
+
 /**
  * Instant at which the local mean solar time at `lon` is `solarHour`, on the UTC day containing `dayMs`.
  * Solar time keeps the setting independent of time zones: 12 h is always the sun near its highest.

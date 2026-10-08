@@ -67,6 +67,7 @@ describe('engine options from settings', () => {
     atmosphere: true,
     shadows: true,
     sunHour: 10,
+    sunDate: '',
     sunFromTrack: true,
     exposureEv: 0,
     grading: DEFAULT_GRADING,
