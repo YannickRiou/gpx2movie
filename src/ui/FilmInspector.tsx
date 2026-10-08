@@ -220,7 +220,8 @@ export function FilmInspector() {
             startS,
             startS + durationS,
             (t) => clock.progressAtTime(t) * lengthM,
-            (atM) => keyedCamera(camera, f.cameraKeys, atM, easeM),
+            // keyedCamera reads the keys in order along the track; the film keeps them in any order
+            (atM) => keyedCamera(camera, [...f.cameraKeys].sort((a, b) => a.atM - b.atM), atM, easeM),
           ),
         )
       }}

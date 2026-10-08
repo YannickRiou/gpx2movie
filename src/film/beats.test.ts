@@ -191,4 +191,15 @@ describe('snapping the film onto the beats', () => {
     // without the clock of the portions, they stay where they are
     expect(snapFilmToBeats(slow, beats, base).moved).toBe(0)
   })
+
+  it('places a stop inside a moved portion on the clock with the portion moved: snapping again moves nothing', () => {
+    const clockOfSpeeds = (stops: readonly FilmStop[], speeds: readonly FilmSpeed[]) =>
+      buildFilmClock({ opening: film.opening, closing: film.closing, stops, speeds, lengthM: L, highlightsM: [], durationS: 60, pacing: { ...DEFAULT_PACING, keepDuration: false } })
+    const inside: Film = { ...film, texts: [], stops: [stop('stop-1', 3700)], speeds: [{ id: 'speed-1', fromM: 3420, toM: 3920, factor: 0.25 }] }
+    const placementWith = (f: Film) => ({ clockOf: (s: readonly FilmStop[]) => clockOfSpeeds(s, f.speeds), clockOfSpeeds, lengthM: L })
+    const { film: snapped } = snapFilmToBeats(inside, beats, placementWith(inside))
+    const hold = clockOfSpeeds(snapped.stops, snapped.speeds).stops[0].holdStartS
+    expect(nearest(beats.map((b) => b.timeS), hold)).toBeLessThanOrEqual(ON_BEAT_S)
+    expect(snapFilmToBeats(snapped, beats, placementWith(snapped)).moved).toBe(0)
+  })
 })

@@ -9,7 +9,7 @@ import type { Track } from '../core/types'
 import { useExportStore } from '../export/store'
 import { climbsOf } from '../flyover/climbs'
 import { buildTrackPath } from '../flyover/path'
-import { useLandmarkStore } from '../osm/store'
+import { useLandmarkStore, useWaterStore } from '../osm/store'
 import { loadOverlayFonts } from '../overlay/assets'
 import { overlayCredits } from '../overlay/data'
 import { useAppStore } from '../state/store'
@@ -69,7 +69,10 @@ export function currentPosterContent(): PosterContent | null {
       terrainSourceId: settings.terrainSourceId,
       imagerySourceId: settings.imagerySourceId,
       weather: series !== null,
-      landmarks: Object.values(useLandmarkStore.getState().landmarks).some((list) => list.length > 0),
+      // OpenStreetMap credited for its landmarks and, on the 3D view, its lakes and rivers
+      landmarks:
+        Object.values(useLandmarkStore.getState().landmarks).some((list) => list.length > 0) ||
+        (!settings.poster.flat && useWaterStore.getState().polygons > 0),
     }),
   })
 }

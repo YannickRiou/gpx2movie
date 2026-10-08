@@ -113,7 +113,8 @@ changement des stores lus par la scène (application hors `terrainStats` et `loa
 un drapé (trace, eau, étiquettes), le chargement de la police des étiquettes ou de l'image du marqueur, et pour chaque
 texture des chargeurs de three (ciel, nuages) : le temps que le suréchantillonnage temporel des nuages converge
 (~16 images). OrbitControls (drei) demande lui-même ses images, amortissement compris. Le pas de temps d'une image est
-borné à `MAX_FRAME_DELTA_S` = 0,25 s (`frameDelta`) : la lecture et le recadrage ne sautent pas après une pause.
+borné à `MAX_FRAME_DELTA_S` = 0,25 s (`frameDelta`), et `wakeScene` remet l'horloge à zéro quand la scène dormait
+(`clock.getDelta()`) : la lecture et le recadrage ne sautent pas après une pause.
 L'export garde `frameloop 'never'` et dessine lui-même ses images. Mesuré en rendu logiciel : plus aucune demande d'image
 une fois la marge écoulée (~30 s là-bas, une image par seconde ; ~0,5 s sur une vraie carte graphique). Les délais du
 moteur comptés en images (nouvel essai d'une tuile en échec, déchargement) attendent la prochaine image.
@@ -361,7 +362,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   timeline s'y ajoute. Onglet « Survol » (`src/ui/CameraPanel.tsx`, sections « Caméra » et « Durée et rythme »). En pause, un changement de réglage caméra replace la caméra.
   « Cadrer la caméra pendant cet élément » (inspecteur d'un texte ou d'un média) : `addItemCamera` pose un cadrage là où
   est le marqueur au début de l'élément (sélectionné, à régler) et, si le marqueur avance pendant l'élément, un second à
-  sa fin qui garde le cadrage qui y était : le reste du film ne change pas.
+  sa fin qui garde le cadrage qui y était : les cadrages voisins gardent leurs valeurs (entre la fin de l'élément et le
+  cadrage suivant, la transition est recalculée sur le nouvel intervalle).
   « Garder ce cadrage ici » (section « Caméra ») pose un cadrage du film au marqueur (`addCameraKey`, avec le cadrage vu
   là : `keyedCamera` ; un cadrage déjà à ce mètre le reprend), un pas d'annulation, sélectionné pour l'inspecteur (voir
   « Film et timeline », « Caméra »).

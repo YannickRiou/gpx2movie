@@ -447,7 +447,7 @@ async function musicBeats(src: string): Promise<MusicBeats | undefined> {
 
 /**
  * « Caler sur le rythme »: the title cards and the stops of the film moved onto the beats of its music
- * (`snapFilmToBeats`, one undo step, the generated stops written out); nothing done when no music has a confident
+ * (`snapFilmToBeats`: titles, stops and speed portions; one undo step, the generated stops written out); nothing done when no music has a confident
  * tempo. The message saying what was done.
  */
 export async function snapFilmToMusic(): Promise<{ kind: 'success' | 'info'; text: string }> {

@@ -11,14 +11,14 @@
  *   sound the tempo is not confident (`MIN_TEMPO_CONFIDENCE`): no beats then.
  * - Snapping (`snapFilmToBeats`): the start of each title card (film time) and of each stop's hold (a stop is placed
  *   in metres: moved along the track through the film clock, `stopPositionAt`) onto the nearest bar start within
- *   `BEAT_SNAP_S`, else the nearest beat; never over another text, never past another stop. Then the start of each
- *   speed portion (slow motion or fast forward, placed in metres like the stops): moved with its length kept, never
- *   past a neighbouring portion.
+ *   `BEAT_SNAP_S`, else the nearest beat; never over another text, never past another stop. The start of each speed
+ *   portion (slow motion or fast forward, placed in metres like the stops) is moved first, its length kept, never
+ *   past a neighbouring portion: it shifts the times of what follows it.
  *
  * Pure module.
  */
 import type { FilmClock } from './clock'
-import type { Film, FilmAudio, FilmSpeed, FilmText } from './model'
+import type { Film, FilmAudio, FilmSpeed, FilmStop, FilmText } from './model'
 import { positionAtTime, stopPositionAt } from './timeline'
 import type { ClockOfStops } from './timeline'
 
@@ -355,10 +355,12 @@ function snapSpeeds(
  */
 export function snapFilmToBeats(film: Film, beats: readonly FilmBeat[], placement: StopPlacement): { film: Film; moved: number } {
   const texts = snapTexts(film.texts, beats)
-  const stops = snapStops(film, beats, placement)
-  const speeds = placement.clockOfSpeeds
-    ? snapSpeeds(film, stops.stops, beats, placement.clockOfSpeeds, placement.lengthM)
-    : { speeds: film.speeds, moved: 0 }
+  // the speed portions first: moving one moves the times of what follows it, stops included, which are then placed on
+  // the clock with the portions where they now are
+  const { clockOfSpeeds } = placement
+  const speeds = clockOfSpeeds ? snapSpeeds(film, film.stops, beats, clockOfSpeeds, placement.lengthM) : { speeds: film.speeds, moved: 0 }
+  const clockOf = clockOfSpeeds ? (s: readonly FilmStop[]) => clockOfSpeeds([...s], speeds.speeds) : placement.clockOf
+  const stops = snapStops(film, beats, { ...placement, clockOf })
   const moved = texts.moved + stops.moved + speeds.moved
   return { film: moved > 0 ? { ...film, texts: texts.texts, stops: stops.stops, speeds: speeds.speeds } : film, moved }
 }
