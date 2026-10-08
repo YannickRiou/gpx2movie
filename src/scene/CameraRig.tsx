@@ -6,13 +6,14 @@
  * animate position and target over ~800 ms with ease-in-out. Any user interaction cancels the animation.
  */
 import { useCallback, useEffect, useRef, type ComponentRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { invalidate, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Box3, Vector3 } from 'three'
 import type { LocalFrame, LonLatBounds, Track } from '../core/types'
 import { centroid } from '../geo/ellipsoid'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
+import { frameDelta } from './renderOnDemand'
 
 type OrbitControlsImpl = ComponentRef<typeof OrbitControls>
 
@@ -152,7 +153,9 @@ export function CameraRig() {
     const animation = animationRef.current
     const controls = controlsRef.current
     if (!animation || !controls) return
-    animation.elapsedMs += delta * 1000
+    // first frame after an idle canvas: a bounded step, then one frame after another until the end
+    animation.elapsedMs += frameDelta(delta) * 1000
+    invalidate()
     const t = Math.min(1, animation.elapsedMs / FIT_DURATION_MS)
     const k = easeInOutCubic(t)
     controls.object.position.lerpVectors(animation.fromPosition, animation.toPosition, k)
