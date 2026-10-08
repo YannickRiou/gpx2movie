@@ -28,6 +28,18 @@ export const MARKER_FIGURE_PATHS: Record<MarkerFigure, readonly string[]> = {
     'M11 13 13.4 17.2 13.6 22',
     'M11 13 9.6 17.5 7.5 21.6',
   ],
+  alpiniste: [
+    circlePath(11.5, 4.3, 2),
+    'M11 7 9.8 12.6',
+    // ice axe planted ahead: arm, shaft, head
+    'M10.8 8.4 15.4 8.8',
+    'M15.4 8.8 17.4 4.6',
+    'M16 3.6 19.4 5',
+    // legs on a steep slope
+    'M9.8 12.6 13 15 14.4 19.6',
+    'M9.8 12.6 8.6 17 6.8 20.9',
+    'M2 22 22 18.4',
+  ],
   coureur: [
     circlePath(15, 4, 2),
     'M14 7 11.5 12.5',
@@ -37,6 +49,16 @@ export const MARKER_FIGURE_PATHS: Record<MarkerFigure, readonly string[]> = {
     'M11.5 12.5 9.8 16.6 6 17.6',
   ],
   cycliste: [circlePath(18.5, 17.5, 3.5), circlePath(5.5, 17.5, 3.5), circlePath(15, 5, 1), 'M12 17.5V14l-3-3 4-3 2 3h2'],
+  bikepacking: [
+    circlePath(18.5, 17.5, 3.5),
+    circlePath(5.5, 17.5, 3.5),
+    circlePath(15, 5, 1),
+    'M12 17.5V14l-3-3 4-3 2 3h2',
+    // bags: under the saddle, in the frame, on the handlebar
+    'M8.6 9.8 5.2 10.6 6.2 12.4 9.4 11.6',
+    'M10 11.6 12 13.4 12.6 10.2',
+    'M17.4 9.6h2.6',
+  ],
   vtt: [
     circlePath(18.5, 16.5, 3.5),
     circlePath(5.5, 16.5, 3.5),
@@ -63,10 +85,27 @@ export const MARKER_FIGURE_PATHS: Record<MarkerFigure, readonly string[]> = {
     circlePath(12, 17.3, 1.4),
     'M10.2 20.2h3.6l1.2 1.6',
   ],
+  moto: [
+    circlePath(5, 17.5, 3),
+    circlePath(19, 17.5, 3),
+    // body: tank and seat, engine block, fork; the rider bent over the tank
+    'M6 12.5h5l1.5-2h4l2.5 7',
+    'M8.5 13.5h5.5v4H8.5Z',
+    'M16.5 10.5 15.8 7.8h2.4',
+    circlePath(11, 4.6, 1.6),
+    'M10.4 6.4 8.6 10.4',
+    'M10 7.6 15 8.8',
+  ],
   voiture: [
     'M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2',
     circlePath(7, 17, 2),
     'M9 17h6',
     circlePath(17, 17, 2),
+  ],
+  avion: [
+    // fuselage nose to the right, tail fin, wing under the body, propeller
+    'M2.5 12.5h15.5a2.5 1.6 0 0 0 0-3.2H6.2L3.6 5.6H2l.5 6.9Z',
+    'M8.5 12.5 11 19.5h2.2l-.8-7',
+    'M21.6 7v7.4',
   ],
 }

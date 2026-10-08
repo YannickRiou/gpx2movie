@@ -117,6 +117,10 @@ export interface AppState {
   /** the whole list at once (chaining tracks and its « Annuler »): same frame origin, playback back to the start */
   replaceTracks(tracks: Track[]): void
   clearTracks(): void
+  /** the colour of a track (`#rrggbb`), nothing else changes */
+  setTrackColor(id: string, color: string): void
+  /** the track flown over (the first one): `id` moved first, playback back to the start */
+  flyTrack(id: string): void
   /**
    * area shown without any track (a route to draw on the relief, « Préparer une sortie »); cleared with the tracks
    */
@@ -305,6 +309,19 @@ export const useAppStore = create<AppState>()((set, get) => ({
       frameOrigin: tracks.length > 0 ? state.frameOrigin : state.planArea ? computeFrameOrigin(state.planArea) : null,
       playback: { ...state.playback, playing: false, progress: 0, timeS: null },
     })
+  },
+
+  setTrackColor(id, color) {
+    const tracks = get().tracks
+    if (!tracks.some((t) => t.id === id && t.color !== color)) return
+    set({ tracks: tracks.map((t) => (t.id === id ? { ...t, color } : t)) })
+  },
+
+  flyTrack(id) {
+    const state = get()
+    const track = state.tracks.find((t) => t.id === id)
+    if (!track || state.tracks[0] === track) return
+    state.replaceTracks([track, ...state.tracks.filter((t) => t !== track)])
   },
 
   clearTracks() {
