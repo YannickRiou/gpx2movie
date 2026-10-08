@@ -7,8 +7,9 @@
  *
  * Coordinate conventions
  * ----------------------
- * - lon/lat are WGS84 decimal degrees, heights are metres above the WGS84 ellipsoid
- *   (GPX elevations are treated as ellipsoid heights for now; geoid offset is a later refinement).
+ * - lon/lat are WGS84 decimal degrees. Scene heights are metres above mean sea level (elevation tiles, GPX / FIT),
+ *   placed by the local frame as if they were ellipsoid heights: the whole scene sits N (geoid undulation) too low,
+ *   which only matters to what reads it in true ECEF (atmosphere, clouds: `mslLocalToEcef` in src/geo/geoid.ts).
  * - ECEF is Earth-Centred Earth-Fixed (metres), right-handed, X through lon=0/lat=0, Z through the north pole.
  * - The Three.js scene lives in a LOCAL FRAME tangent to the ellipsoid at the trip centroid.
  *   Local axes (Three.js Y-up): +X = east, +Y = up, +Z = south. Origin = frame.origin at height 0.

@@ -20,6 +20,7 @@ import type { CloudsEffect } from '@takram/three-clouds'
 import { Clouds, type CloudsProps } from '@takram/three-clouds/r3f'
 import { isExportBusy, useExportStore } from '../export/store'
 import { samplePath, type TrackPath } from '../flyover/path'
+import { geoidUndulation } from '../geo/geoid'
 import { useAppStore } from '../state/store'
 import { cloudCoversAt, cloudDrift, filmWind, sceneCloudsFrom, weatherOffsetFor, type CloudQuality } from '../weather/sceneClouds'
 import { sceneConditionsAt } from '../weather/sceneWeather'
@@ -45,6 +46,8 @@ export function CloudsLayer({ date, path, noise }: { date: RefObject<Date | null
   const series = useWeatherStore((s) => (track && s.trackId === track.id ? s.series : null))
   const clock = useFilmClock()
   const ref = useRef<CloudsEffect>(null)
+  /** cloud altitudes are above the ellipsoid, the scene heights above sea level (geo/geoid.ts) */
+  const undulation = useMemo(() => (frame ? geoidUndulation(frame.origin.lon, frame.origin.lat) : 0), [frame])
   const startTime = track?.stats.startTime
   const start = path && path.count > 0 ? samplePath(path, 0) : null
   const wind = useMemo(
@@ -101,7 +104,7 @@ export function CloudsLayer({ date, path, noise }: { date: RefObject<Date | null
     for (let i = 0; i < 3; i++) {
       const layer = effect.cloudLayers[i]
       const params = clouds?.layers[i]
-      layer.altitude = params?.altitudeM ?? 0
+      layer.altitude = (params?.altitudeM ?? 0) + undulation
       layer.height = params?.heightM ?? 0
       layer.densityScale = params?.densityScale ?? 0
       layer.weatherExponent = params?.weatherExponent ?? 1

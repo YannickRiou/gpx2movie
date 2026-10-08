@@ -1,6 +1,7 @@
 /**
  * AtmosphereLayer — physically based sky, sun / sky lighting and aerial perspective (Takram's precomputed
- * atmospheric scattering). Rendered inside TerrainLayer: the local frame gives the world → ECEF matrix.
+ * atmospheric scattering). Rendered inside TerrainLayer: the local frame gives the world → ECEF matrix, raised by the
+ * geoid undulation at its origin (scene heights are above sea level, Takram expects ellipsoid heights: geo/geoid.ts).
  *
  * Lighting uses light sources (SunLight + SkyLight) so the terrain keeps its MeshStandardMaterial; the
  * aerial perspective post-process adds the distance haze, and the composer tone-maps the HDR result (Khronos
@@ -26,6 +27,7 @@ import { ToneMappingMode } from 'postprocessing'
 import type { AerialPerspectiveEffect, SkyLightProbe, SunDirectionalLight } from '@takram/three-atmosphere'
 import { AerialPerspective, Atmosphere, Sky, SkyLight, Stars, SunLight, type AtmosphereApi } from '@takram/three-atmosphere/r3f'
 import { buildTrackPath, samplePath } from '../flyover/path'
+import { mslLocalToEcef } from '../geo/geoid'
 import { sunDateAt } from '../flyover/sun'
 import { useAppStore } from '../state/store'
 import { CLEAR_SCENE_WEATHER, hazeExtinction, sceneWeatherAt } from '../weather/sceneWeather'
@@ -170,7 +172,7 @@ export function AtmosphereLayer() {
   }, 0.5)
 
   useLayoutEffect(() => {
-    if (frame) atmosphereRef.current?.worldToECEFMatrix.copy(frame.localToEcef)
+    if (frame && atmosphereRef.current) mslLocalToEcef(frame, atmosphereRef.current.worldToECEFMatrix)
   }, [frame])
 
   // postprocessing flags a logarithmic depth buffer as LOG_DEPTH, Takram's shader expects this define:
