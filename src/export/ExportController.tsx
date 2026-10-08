@@ -14,11 +14,15 @@ import { useEffect, useRef } from 'react'
 import { useThree, type RootState } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
 import type { LocalFrame, TerrainEngine } from '../core/types'
-import { computeCameraView, movesWithTime, type CameraView } from '../flyover/camera'
+import type { FilmClock } from '../film/clock'
+import { computeFilmView, filmViewMovesWithTime, type FilmView } from '../flyover/filmCamera'
 import { buildTrackPath, type TrackPath } from '../flyover/path'
 import { loadOverlayFonts } from '../overlay/assets'
+import { overlayTime, overlayTimedState } from '../overlay/draw'
+import { loadFramePhotos } from '../overlay/exportOverlay'
 import { useTerrainContext } from '../scene/TerrainLayer'
 import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
+import { useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { REPLACE_EPSILON, composeFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
 import { ExportCanceledError, createVideoEncoder, type VideoEncodeSession } from './encoder'
@@ -49,6 +53,8 @@ interface RunDeps {
   engine: () => TerrainEngine | null
   frame: () => LocalFrame | null
   overlay: () => DrawOverlay | undefined
+  /** film clock of the preview (the request's schedule was built from it) */
+  clock: () => FilmClock
   signal: AbortSignal
 }
 
@@ -59,19 +65,21 @@ function errorMessage(error: unknown): string {
 /** Camera placement of FlyoverRig at `progress` and film time `timeS` with the terrain loaded now (same inputs as the rig). */
 function viewAt(
   path: TrackPath,
+  clock: FilmClock,
   progress: number,
   timeS: number | null,
   frame: LocalFrame,
   engine: TerrainEngine | null,
-): CameraView {
+  aspect: number,
+): FilmView {
   const { settings } = useAppStore.getState()
   const sampler: HeightSampler | null = engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null
-  return computeCameraView(path, progress, frame, sampler, {
+  return computeFilmView(path, clock, timeS ?? clock.timeAtProgress(progress), progress, frame, sampler, {
     exaggeration: settings.exaggeration,
     liftM: LINE_LIFT_M,
     camera: settings.camera,
     durationS: settings.flyoverDurationS,
-    timeS: timeS ?? undefined,
+    aspect,
   })
 }
 
@@ -91,10 +99,11 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     return
   }
   if (!exportStore().begin(request.id, schedule.length, performance.now())) return
-  // film time of every frame: the time-based camera styles keep moving during the pauses of the pacing
+  // film time of every frame: the shots, the orbiting stops and the time-based styles move while the progress holds
   const times = request.still ? [] : buildFrameTimes(request)
 
   const { width, height, fps } = request
+  const filmClock = deps.clock()
   const three = deps.get()
   const canvas = three.gl.domElement
   const saved = {
@@ -147,7 +156,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     if (!path || path.count === 0 || !frame) return 0
     const camera = deps.get().camera
     const { progress, timeS } = useAppStore.getState().playback
-    const view = viewAt(path, progress, timeS, frame, deps.engine())
+    const view = viewAt(path, filmClock, progress, timeS, frame, deps.engine(), width / height)
     camera.getWorldDirection(direction)
     toTarget.subVectors(view.target, camera.position)
     const offAxis = toTarget.addScaledVector(direction, -toTarget.dot(direction)).length()
@@ -165,7 +174,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     for (const ahead of PREFETCH_AHEAD) {
       const j = i + ahead
       if (j >= schedule.length) break
-      const view = viewAt(path, schedule[j], times[j], frame, engine)
+      const view = viewAt(path, filmClock, schedule[j], times[j], frame, engine, width / height)
       prefetchCamera.position.copy(view.position)
       prefetchCamera.lookAt(view.target)
       engine.prefetch(prefetchCamera, height)
@@ -203,8 +212,12 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     }
 
     if (request.still) {
+      const { progress } = request.still
+      const time = overlayTime(filmClock, progress, saved.timeS)
+      // pictures decoded before the render: composing must follow it in the same task
+      await loadFramePhotos(time.timeS)
       const complete = await renderSettledFrame(schedule[0], frameDeps)
-      composeFrame(ctx, canvas, request.still.progress, width, height, deps.overlay())
+      composeFrame(ctx, canvas, { progress, time }, width, height, deps.overlay())
       exportStore().reportFrame(1, performance.now())
       exportStore().finalizing()
       const blob = await compositor.convertToBlob({ type: request.still.type, quality: STILL_JPEG_QUALITY })
@@ -222,18 +235,32 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     }
 
     session = await createVideoEncoder(compositor, request)
-    const moving = movesWithTime(useAppStore.getState().settings.camera.style)
+    const settings = useAppStore.getState().settings
+    /** opacities of the timed overlay (cards, timeline texts and photos) at a frame, '' without overlay */
+    const overlayKey = (progress: number, timeS: number) =>
+      deps.overlay()
+        ? overlayTimedState(settings.overlay, settings.film.texts, overlayTime(filmClock, progress, timeS), settings.film.media).join()
+        : ''
     let previous = Number.NaN
+    /** the view of the last rendered frame moved with time */
+    let previousTimed = false
+    let previousOverlay = ''
     for (let i = 0; i < schedule.length; i++) {
       if (isCanceled()) throw new ExportCanceledError()
       const progress = schedule[i]
-      // held frames (holds, pauses of the pacing) repeat the composed image as is, unless the camera moves with time
-      if (progress !== previous || (moving && times[i] !== frameTimeS)) {
+      // held frames (holds, stops) repeat the composed image as is, unless the view or the overlay moves with time
+      const timed = filmViewMovesWithTime(filmClock.stateAt(times[i]), settings.camera.style)
+      const overlayNow = overlayKey(progress, times[i])
+      if (progress !== previous || ((timed || previousTimed) && times[i] !== frameTimeS) || overlayNow !== previousOverlay) {
         frameTimeS = times[i]
+        previousTimed = timed
+        previousOverlay = overlayNow
+        // pictures decoded before the render: composing must follow it in the same task
+        await loadFramePhotos(frameTimeS)
         const complete = await renderSettledFrame(progress, frameDeps)
         // same task as the last render: the drawing buffer still holds the frame
         const t0 = performance.now()
-        composeFrame(ctx, canvas, progress, width, height, deps.overlay())
+        composeFrame(ctx, canvas, { progress, time: overlayTime(filmClock, progress, frameTimeS) }, width, height, deps.overlay())
         timings.encodeMs += performance.now() - t0
         timings.rendered++
         if (!complete) timings.timeouts++
@@ -290,13 +317,17 @@ export function ExportController({ drawOverlay }: ExportControllerProps) {
   const get = useThree((s) => s.get)
   const requestId = useExportStore((s) => s.request?.id)
 
+  const clock = useFilmClock()
+
   const engineRef = useRef(engine)
   const frameRef = useRef(frame)
   const overlayRef = useRef(drawOverlay)
+  const clockRef = useRef(clock)
   useEffect(() => {
     engineRef.current = engine
     frameRef.current = frame
     overlayRef.current = drawOverlay
+    clockRef.current = clock
   })
 
   useEffect(() => {
@@ -310,6 +341,7 @@ export function ExportController({ drawOverlay }: ExportControllerProps) {
         engine: () => engineRef.current,
         frame: () => frameRef.current,
         overlay: () => overlayRef.current,
+        clock: () => clockRef.current,
         signal: abort.signal,
       })
     }, 0)

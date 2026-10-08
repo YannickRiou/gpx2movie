@@ -4,7 +4,7 @@
  *
  * Pure functions (no DOM, no React, no Three).
  */
-import type { Track } from '../core/types'
+import type { LonLat, Track } from '../core/types'
 import { haversineM } from '../geo/ellipsoid'
 
 export interface TrackPath {
@@ -140,4 +140,83 @@ export function elevationProfile(path: TrackPath, samples: number): ElevationPro
     maxEle = Math.max(maxEle, h)
   }
   return minEle <= maxEle ? { ele, minEle, maxEle } : undefined
+}
+
+/**
+ * Point of the path nearest to `at`: its distance along the path and how far `at` is from it (metres). With a
+ * recorded instant `timeMs`, the timed point recorded closest to it among those about as near (within 50 m or
+ * 1.5 × the nearest distance: an out-and-back passes twice). Undefined for an empty path.
+ */
+export function nearestOnPath(path: TrackPath, at: LonLat, timeMs?: number): { distanceM: number; offM: number } | undefined {
+  const { count, lon, lat, time, dist } = path
+  if (count === 0) return undefined
+  const off = new Float64Array(count)
+  let best = 0
+  for (let i = 0; i < count; i++) {
+    off[i] = haversineM(at, { lon: lon[i], lat: lat[i] })
+    if (off[i] < off[best]) best = i
+  }
+  if (timeMs !== undefined) {
+    const near = Math.max(50, 1.5 * off[best])
+    let closest = -1
+    for (let i = 0; i < count; i++) {
+      if (off[i] > near || Number.isNaN(time[i])) continue
+      if (closest < 0 || Math.abs(time[i] - timeMs) < Math.abs(time[closest] - timeMs)) closest = i
+    }
+    if (closest >= 0) best = closest
+  }
+  return { distanceM: dist[best], offM: off[best] }
+}
+
+/**
+ * Distance along the path at which the recorded time reaches `timeMs` (interpolated between timed points; during a
+ * pause, where it stopped). Instants up to `toleranceMs` before the first or after the last recorded time give the
+ * ends; undefined further out or without time.
+ */
+export function distanceAtTime(path: TrackPath, timeMs: number, toleranceMs = 0): number | undefined {
+  const { count, time, dist } = path
+  let previous = -1
+  for (let i = 0; i < count; i++) {
+    if (Number.isNaN(time[i])) continue
+    if (previous < 0 && timeMs < time[i]) return timeMs >= time[i] - toleranceMs ? dist[i] : undefined
+    if (time[i] >= timeMs && previous >= 0) {
+      const span = time[i] - time[previous]
+      return span > 0 ? dist[previous] + (dist[i] - dist[previous]) * ((timeMs - time[previous]) / span) : dist[i]
+    }
+    if (time[i] === timeMs) return dist[i]
+    previous = i
+  }
+  return previous >= 0 && timeMs <= time[previous] + toleranceMs ? dist[previous] : undefined
+}
+
+/**
+ * Distance along the path (metres) of the point of its on-screen polyline nearest to the pointer (`px`, `py`), within
+ * `maxPx`; undefined when none (click on the track in the 3D view). `screen` holds x, y per sample in pixels (NaN for a
+ * sample behind the camera), `distM` the distance of each sample along the path. The segments between two visible
+ * samples are tested, so a click between two samples gives an interpolated distance.
+ */
+export function pickProjectedPath(screen: ArrayLike<number>, distM: ArrayLike<number>, px: number, py: number, maxPx: number): number | undefined {
+  const visible = (i: number) => i < distM.length && !Number.isNaN(screen[2 * i]) && !Number.isNaN(screen[2 * i + 1])
+  let best: number | undefined
+  let bestD2 = maxPx * maxPx
+  for (let i = 0; i < distM.length; i++) {
+    if (!visible(i)) continue
+    const ax = screen[2 * i]
+    const ay = screen[2 * i + 1]
+    let t = 0
+    let bx = ax
+    let by = ay
+    if (visible(i + 1)) {
+      bx = screen[2 * i + 2]
+      by = screen[2 * i + 3]
+      const len2 = (bx - ax) ** 2 + (by - ay) ** 2
+      t = len2 > 0 ? Math.min(1, Math.max(0, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / len2)) : 0
+    }
+    const d2 = (ax + t * (bx - ax) - px) ** 2 + (ay + t * (by - ay) - py) ** 2
+    if (d2 <= bestD2) {
+      bestD2 = d2
+      best = t > 0 ? distM[i] + t * (distM[i + 1] - distM[i]) : distM[i]
+    }
+  }
+  return best
 }

@@ -1,117 +1,14 @@
-/* Layout and sidebar components. Colours come from theme.css only. */
+/* Components of the panels and the view (layout of the shell: shell.css). Colours come from theme.css only. */
 
-.app {
-  display: flex;
-  flex-direction: row;
-  height: 100%;
-  overflow: hidden;
-}
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 var(--sidebar-width);
-  width: var(--sidebar-width);
-  height: 100%;
-  overflow: hidden;
-  background: var(--color-paper);
-  color: var(--color-ink);
-  border-right: 1px solid var(--color-line);
-}
-
-/* Scrollable part of the sidebar; the status bar below it never scrolls out of view. */
-.sidebar__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: var(--space-4);
-  overflow-y: auto;
-}
-
-.view {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  /* pale sky behind the transparent canvas */
-  background: linear-gradient(180deg, var(--color-glacier) 0%, var(--color-paper) 100%);
-}
-
-.view > * {
+/* 3D view and its overlays (the stage is laid out by shell.css) */
+.view__stage > * {
   position: absolute;
   inset: 0;
-}
-
-/* Header ------------------------------------------------------------------ */
-.header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.header__logo {
-  width: 40px;
-  height: 40px;
-  flex: none;
-}
-
-.header__title {
-  font-size: 22px;
-  color: var(--color-ink);
-}
-
-.header__tagline {
-  font-size: 12px;
-  color: var(--color-ink-soft);
 }
 
 .section-title {
   font-size: 15px;
   margin-bottom: var(--space-2);
-}
-
-/* Drop zone --------------------------------------------------------------- */
-.dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
-  min-height: 108px;
-  padding: var(--space-4);
-  border: 2px dashed var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-white);
-  text-align: center;
-  cursor: pointer;
-  transition:
-    background-color 120ms ease,
-    border-color 120ms ease;
-}
-
-.dropzone:hover,
-.dropzone--active {
-  background: var(--color-card);
-  border-color: var(--color-accent);
-}
-
-.dropzone--busy {
-  cursor: progress;
-  opacity: 0.7;
-}
-
-.dropzone__title {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--color-ink);
-}
-
-.dropzone__hint {
-  font-size: 12px;
-  color: var(--color-ink-soft);
 }
 
 .visually-hidden {
@@ -124,42 +21,6 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
-}
-
-/* Error banner ------------------------------------------------------------ */
-.alert {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-3);
-  border-left: 4px solid var(--color-accent-light);
-  border-radius: var(--radius-sm);
-  background: var(--color-ink);
-  color: var(--color-white);
-  font-size: 13px;
-  word-break: break-word;
-}
-
-.alert__text {
-  flex: 1 1 auto;
-  white-space: pre-line;
-}
-
-.alert__close {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-white);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.alert__close:hover {
-  background: var(--color-ink-soft);
 }
 
 /* Track list -------------------------------------------------------------- */
@@ -522,54 +383,9 @@
   flex: none;
 }
 
-/* Status bar -------------------------------------------------------------- */
-.status {
-  flex: none;
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--color-line);
-  background: var(--color-paper);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: 12px;
-  color: var(--color-ink-soft);
-}
-
-.status__line {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.status__line[hidden] {
-  display: none;
-}
-
-.status__spinner {
-  width: 12px;
-  height: 12px;
-  flex: none;
-  border: 2px solid var(--color-line);
-  border-top-color: var(--color-accent);
-  border-radius: 50%;
-  animation: status-spin 0.8s linear infinite;
-}
-
-@keyframes status-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.status__attribution {
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--color-ink-soft);
-}
-
 /* Film overlay (« habillage ») ------------------------------------------- */
-/* 2D canvas over the 3D view, under the timeline; never catches the pointer */
-.view > .overlay-canvas {
+/* 2D canvas over the 3D view; never catches the pointer */
+.view__stage > .overlay-canvas {
   width: 100%;
   height: 100%;
   pointer-events: none;
@@ -596,82 +412,343 @@
   outline-offset: 2px;
 }
 
-/* Flyover timeline (overlay at the bottom of the 3D view) ----------------- */
-.view > .timeline {
-  inset: auto var(--space-4) var(--space-4) var(--space-4);
+/* Film timeline (under the 3D view) --------------------------------------- */
+.film-tl {
+  position: relative;
+  flex: none;
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
+  flex-direction: column;
   background: var(--color-ink);
   color: var(--color-white);
-  font-size: 13px;
+  font-size: 12px;
 }
 
-.timeline__play {
+.film-tl__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+
+.film-tl__play {
   flex: none;
-  width: 40px;
+  width: 32px;
+  min-height: 28px;
   padding: 0;
 }
 
-.timeline__scrub {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-/* inset by half the slider thumb so that x matches the thumb position */
-.timeline__profile {
-  display: block;
-  width: calc(100% - 16px);
-  height: 44px;
-  margin: 0 8px;
-  cursor: pointer;
-  touch-action: none;
-}
-
-.timeline__profile-area {
-  fill: var(--color-glacier);
-  opacity: 0.35;
-}
-
-.timeline__profile-played {
-  fill: var(--color-accent-light);
-}
-
-.timeline__profile-cursor {
-  stroke: var(--color-white);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
-}
-
-.timeline__range {
-  accent-color: var(--color-accent-light);
-}
-
-.timeline__distance {
-  flex: none;
-  text-align: right;
+.film-tl__time,
+.film-tl__readout {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.timeline__distance strong {
+.film-tl__time {
+  font-size: 13px;
+}
+
+.film-tl__time strong {
   color: var(--color-accent-light);
 }
 
-.timeline__speed {
-  flex: none;
-  width: auto;
+.film-tl__readout {
+  color: var(--color-glacier);
 }
 
-/* Track colour legend (overlay above the timeline) ----------------------- */
-.view > .track-legend {
-  /* the timeline is ~88 px high, 16 px above the bottom edge */
-  inset: auto auto calc(var(--space-4) + 96px) var(--space-4);
+.film-tl__spacer {
+  flex: 1 1 0;
+}
+
+.film-tl__select {
+  min-height: 26px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-ink-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-ink);
+  color: var(--color-white);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.film-tl__select {
+  max-width: 190px;
+  padding: 0 var(--space-1);
+}
+
+.film-tl__select:hover {
+  border-color: var(--color-white);
+}
+
+.film-tl__check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.film-tl__check input {
+  margin: 0;
+  accent-color: var(--color-accent-light);
+}
+
+/* « modifié » marker of the film, inline in the bar, light on ink */
+.film-tl .modified {
+  position: static;
+}
+
+.film-tl .modified__badge {
+  border-color: var(--color-accent-light);
+  color: var(--color-accent-light);
+}
+
+.film-tl__body {
+  display: flex;
+  border-top: 1px solid var(--color-ink-soft);
+}
+
+.film-tl__heads {
+  flex: none;
+  width: 64px;
+  border-right: 1px solid var(--color-ink-soft);
+}
+
+.film-tl__head {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 var(--space-2);
+  color: var(--color-glacier);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.film-tl__head--ruler {
+  height: 20px;
+}
+
+.film-tl__scroller {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.film-tl__content {
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.film-tl__ruler {
+  position: relative;
+  height: 20px;
+  border-bottom: 1px solid var(--color-ink-soft);
+  cursor: pointer;
+}
+
+.film-tl__ruler:focus-visible {
+  outline: 2px solid var(--color-white);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.film-tl__tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  padding-left: 3px;
+  border-left: 1px solid var(--color-ink-soft);
+  color: var(--color-glacier);
+  font-size: 10px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.film-tl__lane {
+  position: relative;
+  height: 28px;
+  background: rgb(255 255 255 / 0.04);
+  border-bottom: 1px solid var(--color-ink);
+}
+
+.film-tl__block,
+.film-tl__flight {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.film-tl__block {
+  min-width: 6px;
+  padding: 0 6px;
+  cursor: grab;
+}
+
+.film-tl__block:focus-visible {
+  outline: 2px solid var(--color-white);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.film-tl__block--selected {
+  z-index: 1;
+  box-shadow: 0 0 0 2px var(--color-white);
+}
+
+.film-tl__block--shot {
+  background: var(--color-glacier);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+/* shot « aucune »: a stub that can still be selected */
+.film-tl__block--none {
+  min-width: 10px;
+  border: 1px dashed var(--color-glacier);
+  background: transparent;
+}
+
+.film-tl__block--stop {
+  background: var(--color-accent-light);
+  color: var(--color-ink);
+}
+
+/* generated stops: dashed until they are edited */
+.film-tl__block--auto {
+  border: 1px dashed var(--color-ink);
+}
+
+.film-tl__block--text {
+  background: var(--color-moss);
+  color: var(--color-white);
+}
+
+/* photos: paper block, thumbnail at its start */
+.film-tl__block--media {
+  gap: 4px;
+  padding-left: 2px;
+  background: var(--color-card);
+  color: var(--color-ink);
+}
+
+.film-tl__thumb {
+  flex: none;
+  height: 18px;
+  max-width: 32px;
+  border-radius: 2px;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.film-tl__label {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.film-tl__grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.film-tl__grip:hover {
+  background: var(--color-ink);
+  opacity: 0.3;
+}
+
+.film-tl__grip--start {
+  left: 0;
+}
+
+.film-tl__grip--end {
+  right: 0;
+}
+
+.film-tl__flight {
+  padding: 0 6px;
+  background: rgb(255 255 255 / 0.08);
+  cursor: pointer;
+}
+
+.film-tl__flight svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.film-tl__profile-area {
+  fill: var(--color-glacier);
+  opacity: 0.35;
+}
+
+.film-tl__profile-played {
+  fill: var(--color-accent-light);
+  opacity: 0.8;
+}
+
+.film-tl__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-white);
+  pointer-events: none;
+}
+
+.film-tl__playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  border: 5px solid transparent;
+  border-top: 6px solid var(--color-accent-light);
+}
+
+/* settings of the selected item, in the right dock (header: `.dock > .settings` in shell.css) */
+.film-inspector__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.film-inspector__thumb {
+  justify-self: start;
+  max-width: 100%;
+  max-height: 96px;
+  border-radius: var(--radius-sm);
+}
+
+.film-inspector__remove {
+  justify-self: start;
+  min-height: 32px;
+}
+
+/* Track colour legend (bottom left of the 3D view) ----------------------- */
+.view__stage > .track-legend {
+  inset: auto auto var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -729,32 +806,6 @@
   width: 100%;
   height: 10px;
   accent-color: var(--color-accent);
-}
-
-/* Responsive: sidebar becomes a top panel ---------------------------------- */
-@media (max-width: 900px) {
-  .app {
-    flex-direction: column;
-  }
-
-  .sidebar {
-    flex: 0 1 auto;
-    width: 100%;
-    height: auto;
-    max-height: 55vh;
-    border-right: 0;
-    border-bottom: 1px solid var(--color-line);
-  }
-
-  .view {
-    flex: 1 1 auto;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .status__spinner {
-    animation: none;
-  }
 }
 
 /* Weather of the outing --------------------------------------------------- */
@@ -850,3 +901,184 @@
   font-size: 12px;
   color: var(--color-ink-soft);
 }
+
+/* ==========================================================================
+ * Carte et Survol : sections repliables, « Plus de réglages », ⓘ, journée du soleil, moments, tuiles de style
+ * ========================================================================== */
+.panel-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.more-settings {
+  border-top: 1px solid var(--line);
+}
+
+.more-settings__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  padding-top: var(--space-2);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+.more-settings__summary::-webkit-details-marker {
+  display: none;
+}
+
+.more-settings__summary:hover,
+.more-settings[open] > .more-settings__summary {
+  color: var(--text-1);
+}
+
+.more-settings__summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.more-settings__label {
+  flex: 1 1 auto;
+}
+
+.more-settings:not([open]) > .more-settings__summary > .icon:last-child {
+  transform: rotate(-90deg);
+}
+
+.more-settings__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* label + ⓘ on one line */
+.field__label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.info-tip {
+  display: inline-flex;
+  flex: none;
+  border-radius: 50%;
+  color: var(--text-2);
+  cursor: help;
+}
+
+.info-tip:hover,
+.info-tip:focus-visible {
+  color: var(--text-1);
+}
+
+.info-tip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* one sentence: wraps inside the panel */
+.info-tip[data-tip]:hover::after,
+.info-tip[data-tip]:focus-visible::after {
+  width: max-content;
+  max-width: 200px;
+  white-space: normal;
+}
+
+.segmented__option:has(input:disabled) {
+  background: var(--surface-card);
+  color: var(--text-2);
+  cursor: not-allowed;
+}
+
+/* solar hour slider over the night / day bar (marks: sunrise and sunset) */
+.sun-day {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.sun-day > .range {
+  width: 100%;
+}
+
+/* inset by half a slider thumb: the bar lines up with the thumb's centre */
+.sun-day__bar {
+  position: relative;
+  height: 8px;
+  margin: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.sun-day__mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--color-accent-strong);
+}
+
+.sun-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--space-2);
+}
+
+.sun-chip {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--color-white);
+  color: var(--text-1);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sun-chip:hover:not(:disabled) {
+  border-color: var(--color-ink);
+}
+
+.sun-chip[aria-pressed='true'] {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-white);
+}
+
+.sun-chip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.sun-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* camera style tiles (look of the export format tiles) */
+.style-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.style-tile .format-tile__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* ======================== fin Carte et Survol ============================ */

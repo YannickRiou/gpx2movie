@@ -12,8 +12,10 @@ import { PACING_RANGES } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
 import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
-import { ModifiedMarker } from './ModifiedMarker'
 import { formatDistance, formatNumber } from './format'
+import { Icon } from './icons'
+import type { IconName } from './icons'
+import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
 
 /** Value of the preset select when the camera matches no preset. */
 const CUSTOM = ''
@@ -65,7 +67,16 @@ const PACING_SLIDERS: PacingSlider[] = [
   { key: 'pauseS', label: 'Pause', format: (v) => (v === 0 ? 'Aucune' : `${formatNumber(v, 1)} s`) },
 ]
 
-/** One-line description of each style (hint under the style select). */
+/** Style tiles: short label and icon. */
+const STYLE_TILES: Record<CameraStyle, { label: string; icon: IconName }> = {
+  chase: { label: 'Poursuite', icon: 'navigation' },
+  sway: { label: 'Balancement', icon: 'spline' },
+  orbit: { label: 'Orbite', icon: 'orbit' },
+  top: { label: 'Dessus', icon: 'locate-fixed' },
+  cinematic: { label: 'Cinéma', icon: 'clapperboard' },
+}
+
+/** One-line description of each style (hint under the style tiles). */
 const STYLE_HINTS: Record<CameraStyle, string> = {
   chase: 'Derrière le marqueur, dans la direction du trajet.',
   sway: 'Se balance vers l’extérieur des virages, comme un hélicoptère.',
@@ -74,13 +85,16 @@ const STYLE_HINTS: Record<CameraStyle, string> = {
   cinematic: 'Plus loin et plus bas, avec un lent mouvement latéral.',
 }
 
-/** "Caméra" section: camera preset, style and parameters of the flyover, flyover duration and pacing. */
+/**
+ * « Survol » tab: sections Caméra (preset, style tiles; fine parameters under « Plus de réglages ») and Durée et rythme
+ * (flyover duration, slow-downs on/off; their details under « Plus de réglages »).
+ */
 export function CameraPanel() {
   const camera = useAppStore((s) => s.settings.camera)
   const durationS = useAppStore((s) => s.settings.flyoverDurationS)
   const pacing = useAppStore((s) => s.settings.pacing)
   const film = usePacing()
-  const highlightCount = film.highlights.length
+  const stopCount = film.stops.length
   const setSetting = useAppStore((s) => s.setSetting)
   const id = useId()
   const preset = findCameraPreset(camera)
@@ -88,132 +102,139 @@ export function CameraPanel() {
   const updatePacing = (patch: Partial<PacingSettings>) => setSetting('pacing', { ...pacing, ...patch })
 
   return (
-    <section className="settings" aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} className="section-title settings__title">
-        Caméra
-      </h2>
-      <ModifiedMarker keys={['camera', 'flyoverDurationS', 'pacing']} label="Caméra" />
-
-      <div className="field">
-        <label className="field__label" htmlFor={`${id}-preset`}>
-          Préréglage
-        </label>
-        <select
-          id={`${id}-preset`}
-          className="select"
-          value={preset?.name ?? CUSTOM}
-          onChange={(e) => {
-            const next = CAMERA_PRESETS.find((p) => p.name === e.currentTarget.value)
-            if (next) setSetting('camera', { ...next.camera })
-          }}
-        >
-          {!preset && (
-            <option value={CUSTOM} disabled>
-              Personnalisé
-            </option>
-          )}
-          {CAMERA_PRESETS.map((p) => (
-            <option key={p.name} value={p.name}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field">
-        <label className="field__label" htmlFor={`${id}-style`}>
-          Style
-        </label>
-        <select
-          id={`${id}-style`}
-          className="select"
-          value={camera.style}
-          aria-describedby={`${id}-style-hint`}
-          onChange={(e) => update({ style: e.currentTarget.value as CameraStyle })}
-        >
-          {CAMERA_STYLES.map((style) => (
-            <option key={style} value={style}>
-              {CAMERA_STYLE_LABELS[style]}
-            </option>
-          ))}
-        </select>
-        <p id={`${id}-style-hint`} className="field__hint">
-          {STYLE_HINTS[camera.style]}
-        </p>
-      </div>
-
-      {camera.style === 'top' && (
-        <label className="checkbox" htmlFor={`${id}-north-up`}>
-          <input
-            id={`${id}-north-up`}
-            type="checkbox"
-            checked={camera.northUp}
-            onChange={(e) => update({ northUp: e.currentTarget.checked })}
-          />
-          Nord en haut
-        </label>
-      )}
-
-      {SLIDERS.map(({ key, label, format }) => {
-        const range = CAMERA_RANGES[key]
-        const inputId = `${id}-${key}`
-        return (
-          <div key={key} className="field">
-            <label className="field__label" htmlFor={inputId}>
-              {label}
-            </label>
-            <div className="range-row">
-              <input
-                id={inputId}
-                className="range"
-                type="range"
-                min={range.min}
-                max={range.max}
-                step={range.step}
-                value={camera[key]}
-                onChange={(e) => update({ [key]: Number(e.currentTarget.value) })}
-                aria-valuetext={format(camera[key])}
-              />
-              <output className="range-row__value range-row__value--wide" htmlFor={inputId}>
-                {format(camera[key])}
-              </output>
-            </div>
-          </div>
-        )
-      })}
-
-      <div className="field">
-        <label className="field__label" htmlFor={`${id}-duration`}>
-          Durée du survol (à ×1)
-        </label>
-        <div className="range-row">
-          <input
-            id={`${id}-duration`}
-            className="range"
-            type="range"
-            min={FLYOVER_DURATION_RANGE.min}
-            max={FLYOVER_DURATION_RANGE.max}
-            step={FLYOVER_DURATION_RANGE.step}
-            value={durationS}
-            onChange={(e) => setSetting('flyoverDurationS', Number(e.currentTarget.value))}
-            aria-valuetext={formatSeconds(durationS)}
-          />
-          <output className="range-row__value range-row__value--wide" htmlFor={`${id}-duration`}>
-            {formatSeconds(durationS)}
-          </output>
+    <>
+      <PanelSection title="Caméra" keys={['camera']}>
+        <div className="field">
+          <label className="field__label" htmlFor={`${id}-preset`}>
+            Préréglage
+          </label>
+          <select
+            id={`${id}-preset`}
+            className="select"
+            value={preset?.name ?? CUSTOM}
+            onChange={(e) => {
+              const next = CAMERA_PRESETS.find((p) => p.name === e.currentTarget.value)
+              if (next) setSetting('camera', { ...next.camera })
+            }}
+          >
+            {!preset && (
+              <option value={CUSTOM} disabled>
+                Personnalisé
+              </option>
+            )}
+            {CAMERA_PRESETS.map((p) => (
+              <option key={p.name} value={p.name}>
+                {p.name}
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
 
-      <div className="overlay-widget" role="group" aria-labelledby={`${id}-pacing`}>
-        <p id={`${id}-pacing`} className="field__label">
-          Rythme
-        </p>
-        <label className="checkbox">
-          <input type="checkbox" checked={pacing.enabled} onChange={(e) => updatePacing({ enabled: e.currentTarget.checked })} />
-          Ralentir aux temps forts
-        </label>
+        <fieldset className="field fieldset">
+          <legend className="field__label">Style</legend>
+          <div className="style-tiles">
+            {CAMERA_STYLES.map((style) => (
+              <label key={style} className="format-tile style-tile" title={CAMERA_STYLE_LABELS[style]}>
+                <input
+                  type="radio"
+                  name={`${id}-style`}
+                  value={style}
+                  checked={camera.style === style}
+                  aria-describedby={`${id}-style-hint`}
+                  onChange={() => update({ style })}
+                />
+                <Icon name={STYLE_TILES[style].icon} size={20} />
+                <span className="format-tile__label">{STYLE_TILES[style].label}</span>
+              </label>
+            ))}
+          </div>
+          <p id={`${id}-style-hint`} className="field__hint">
+            {STYLE_HINTS[camera.style]}
+          </p>
+        </fieldset>
+
+        {camera.style === 'top' && (
+          <label className="checkbox" htmlFor={`${id}-north-up`}>
+            <input
+              id={`${id}-north-up`}
+              type="checkbox"
+              checked={camera.northUp}
+              onChange={(e) => update({ northUp: e.currentTarget.checked })}
+            />
+            Nord en haut
+          </label>
+        )}
+
+        <MoreSettings paths={['camera.distance', 'camera.pitchDeg', 'camera.headingOffsetDeg', 'camera.smoothing']}>
+          {SLIDERS.map(({ key, label, format }) => {
+            const range = CAMERA_RANGES[key]
+            const inputId = `${id}-${key}`
+            return (
+              <div key={key} className="field">
+                <label className="field__label" htmlFor={inputId}>
+                  {label}
+                </label>
+                <div className="range-row">
+                  <input
+                    id={inputId}
+                    className="range"
+                    type="range"
+                    min={range.min}
+                    max={range.max}
+                    step={range.step}
+                    value={camera[key]}
+                    onChange={(e) => update({ [key]: Number(e.currentTarget.value) })}
+                    aria-valuetext={format(camera[key])}
+                  />
+                  <output className="range-row__value range-row__value--wide" htmlFor={inputId}>
+                    {format(camera[key])}
+                  </output>
+                </div>
+              </div>
+            )
+          })}
+        </MoreSettings>
+      </PanelSection>
+
+      <PanelSection title="Durée et rythme" keys={['flyoverDurationS', 'pacing']}>
+        <div className="field">
+          <label className="field__label" htmlFor={`${id}-duration`}>
+            Durée du survol (à ×1)
+          </label>
+          <div className="range-row">
+            <input
+              id={`${id}-duration`}
+              className="range"
+              type="range"
+              min={FLYOVER_DURATION_RANGE.min}
+              max={FLYOVER_DURATION_RANGE.max}
+              step={FLYOVER_DURATION_RANGE.step}
+              value={durationS}
+              onChange={(e) => setSetting('flyoverDurationS', Number(e.currentTarget.value))}
+              aria-valuetext={formatSeconds(durationS)}
+            />
+            <output className="range-row__value range-row__value--wide" htmlFor={`${id}-duration`}>
+              {formatSeconds(durationS)}
+            </output>
+          </div>
+          <p className="field__hint">
+            Durée du film : {formatSeconds(Math.round(film.totalTime()))} ·{' '}
+            {stopCount === 0 ? 'aucun arrêt' : `${stopCount} arrêt${stopCount > 1 ? 's' : ''}`}
+          </p>
+        </div>
+
+        <div className="field__label-row">
+          <label className="checkbox">
+            <input type="checkbox" checked={pacing.enabled} onChange={(e) => updatePacing({ enabled: e.currentTarget.checked })} />
+            Ralentir aux temps forts
+          </label>
+          <InfoTip text="Temps forts : sommets des montées, cols franchis et sommets proches de la trace." />
+        </div>
+
         {pacing.enabled && (
-          <div className="overlay-widget__body">
+          <MoreSettings
+            paths={['pacing.climbs', 'pacing.landmarks', 'pacing.slowFactor', 'pacing.windowM', 'pacing.pauseS', 'pacing.keepDuration']}
+          >
             <fieldset className="field fieldset">
               <legend className="field__label">Temps forts</legend>
               <label className="checkbox">
@@ -262,15 +283,9 @@ export function CameraPanel() {
               />
               Garder la durée du survol
             </label>
-            <p className="field__hint">
-              Durée du film : {formatSeconds(Math.round(film.totalTime()))} ·{' '}
-              {highlightCount === 0
-                ? 'aucun temps fort détecté'
-                : `${highlightCount} temps fort${highlightCount > 1 ? 's' : ''}`}
-            </p>
-          </div>
+          </MoreSettings>
         )}
-      </div>
-    </section>
+      </PanelSection>
+    </>
   )
 }

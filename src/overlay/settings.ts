@@ -2,7 +2,8 @@
  * Film overlay ("habillage") settings: style, widgets and their options. Part of `Settings` (key `overlay`),
  * so they are saved in the project document, undone, and read the same way by the preview and the export.
  *
- * Timings are fractions of the flyover (0 = start, 1 = end) so the cards keep their place at any duration.
+ * Card timings are fractions of the flight (0 = start, 1 = end) so the cards keep their place at any duration;
+ * the opening card starts with the film (opening shot included) and the closing card lasts until its end.
  * Pure module (no DOM, no React).
  */
 
@@ -58,6 +59,9 @@ export const PROFILE_WIDTH_MIN = 0.1
 export const PROFILE_WIDTH_MAX = 0.6
 export const PROFILE_HEIGHT_MIN = 0.05
 export const PROFILE_HEIGHT_MAX = 0.3
+/** Corners where the source credits can sit (along the edge, outside the safe area). */
+export const CREDITS_POSITIONS = ['bottom-right', 'bottom-left', 'top-right', 'top-left'] as const
+export type CreditsPosition = (typeof CREDITS_POSITIONS)[number]
 /** Longest side of the logo kept in the settings (pixels). */
 export const LOGO_MAX_SIZE_PX = 512
 
@@ -77,14 +81,14 @@ export interface TitleCardSettings extends Sized {
   subtitle: string
   /** prefix the subtitle with the date of the track (when it has one) */
   showDate: boolean
-  /** end of the card, fraction of the flyover */
+  /** end of the card, fraction of the flight after the opening shot */
   end: number
 }
 
 export interface EndCardSettings extends Sized {
   /** '' = name of the track */
   title: string
-  /** start of the card, fraction of the flyover */
+  /** start of the card, fraction of the flight (shown until the end of the film, closing shot included) */
   start: number
   /** weather summary line of the outing (when known) */
   showWeather: boolean
@@ -115,6 +119,15 @@ export interface MiniMapSettings extends Sized {
   northArrow: boolean
 }
 
+/**
+ * Credits of the map, relief, weather and OpenStreetMap sources burned into every frame (their licences require
+ * attribution in the published film). Independent of `enabled`: drawn even without the rest of the overlay.
+ */
+export interface CreditsSettings {
+  enabled: boolean
+  position: CreditsPosition
+}
+
 export interface OverlaySettings {
   enabled: boolean
   style: OverlayStyleId
@@ -128,6 +141,7 @@ export interface OverlaySettings {
   weather: Sized
   /** plan view of the whole track, covered part and marker */
   minimap: MiniMapSettings
+  credits: CreditsSettings
 }
 
 export const DEFAULT_OVERLAY: OverlaySettings = {
@@ -146,10 +160,11 @@ export const DEFAULT_OVERLAY: OverlaySettings = {
   text: { enabled: false, anchor: 'bottom-left', size: 1, text: '' },
   weather: { enabled: false, anchor: 'top-left', size: 1 },
   minimap: { enabled: false, anchor: 'bottom-right', size: 1, northArrow: true },
+  credits: { enabled: true, position: 'bottom-right' },
 }
 
 /** Widgets added after the first saved format: missing from older projects and presets. */
-const OVERLAY_ADDED_KEYS: readonly (keyof OverlaySettings)[] = ['minimap']
+const OVERLAY_ADDED_KEYS: readonly (keyof OverlaySettings)[] = ['minimap', 'credits']
 
 /**
  * Raw overlay settings of an older project or preset with the widgets added since filled in with their
@@ -185,6 +200,7 @@ export function isValidOverlay(o: OverlaySettings): boolean {
     (o.logo.image === '' || /^data:image\/(png|jpeg|webp);base64,/.test(o.logo.image)) &&
     validSized(o.text) &&
     validSized(o.weather) &&
-    validSized(o.minimap)
+    validSized(o.minimap) &&
+    (CREDITS_POSITIONS as readonly string[]).includes(o.credits.position)
   )
 }

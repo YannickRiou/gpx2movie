@@ -56,6 +56,19 @@ describe('overlay settings', () => {
     expect(sanitizeSettings({ overlay: missingCounters }).invalid).toEqual(['overlay'])
   })
 
+  it('loads an overlay saved before the credits with the credits on', () => {
+    const { credits: _credits, ...old } = withPatch((o) => (o.enabled = true))
+    const { settings, invalid } = sanitizeSettings({ overlay: old })
+    expect(invalid).toEqual([])
+    expect(settings.overlay.credits).toEqual({ enabled: true, position: 'bottom-right' })
+  })
+
+  it('validates the credits', () => {
+    expect(isValidOverlay(withPatch((o) => (o.credits.position = 'top-left')))).toBe(true)
+    expect(isValidOverlay(withPatch((o) => (o.credits.position = 'center' as OverlaySettings['credits']['position'])))).toBe(false)
+    expect(sanitizeSettings({ overlay: { ...DEFAULT_OVERLAY, credits: { enabled: 'yes', position: 'top-left' } } }).invalid).toEqual(['overlay'])
+  })
+
   it('validates the mini-map', () => {
     expect(isValidOverlay(withPatch((o) => (o.minimap.anchor = 'nowhere' as OverlaySettings['minimap']['anchor'])))).toBe(false)
     expect(isValidOverlay(withPatch((o) => (o.minimap.size = 3)))).toBe(false)

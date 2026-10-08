@@ -2,10 +2,17 @@
  * Frame capture helpers of the video export (no React): render a progress until the terrain is complete,
  * then compose the WebGL image and the optional 2D overlay into the encoder canvas.
  */
+import type { OverlayTime } from '../overlay/draw'
 import { ExportCanceledError } from './encoder'
 
-/** 2D film overlay (titles, widgets) drawn over each frame, at the video resolution. */
-export type DrawOverlay = (ctx: OffscreenCanvasRenderingContext2D, progress: number, width: number, height: number) => void
+/** Where a composed frame is: its progress and its place in the film (film time, clock lengths). */
+export interface FrameAt {
+  progress: number
+  time: OverlayTime
+}
+
+/** 2D film overlay (titles, widgets, texts, credits) drawn over each frame, at the video resolution. */
+export type DrawOverlay = (ctx: OffscreenCanvasRenderingContext2D, at: FrameAt, width: number, height: number) => void
 
 export interface SettleOptions {
   /**
@@ -92,7 +99,7 @@ export const SKY_GRADIENT: readonly [string, string] = ['#A9CCD9', '#F5F2EA']
 export function composeFrame(
   ctx: OffscreenCanvasRenderingContext2D,
   source: CanvasImageSource,
-  progress: number,
+  at: FrameAt,
   width: number,
   height: number,
   drawOverlay?: DrawOverlay,
@@ -106,7 +113,7 @@ export function composeFrame(
   if (!drawOverlay) return
   ctx.save()
   try {
-    drawOverlay(ctx, progress, width, height)
+    drawOverlay(ctx, at, width, height)
   } finally {
     ctx.restore()
   }

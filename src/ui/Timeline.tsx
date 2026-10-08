@@ -1,16 +1,83 @@
-import { useId, useMemo, type PointerEvent } from 'react'
+/**
+ * Film timeline under the 3D view, in film time (opening and closing included).
+ *
+ * Bar (icon buttons with tooltips): play / pause, stop (back to the first frame), film time, distance, altitude and
+ * recorded time at the marker, add a stop (at the playhead or at a highlight), a text or photos, speed, zoom (− / slider
+ * / + / « Ajuster »), « Options » menu (automatic stops, « modifié » marker of the film), fold. Ruler: click or drag to
+ * scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile and its stops, closing),
+ * « Arrêts », « Textes », « Médias » (photos also dropped onto the timeline; those taken along the track can then be
+ * placed where they were taken): drag a block to move it, an edge to stretch it, snapping to the other edges, the
+ * highlights and the playhead (Alt: no snapping); Ctrl+wheel zooms. Keyboard on a block: arrows nudge (Shift:
+ * finer), Delete removes (Escape deselects: `App`); Space plays / pauses anywhere outside a control. The selection
+ * lives in the store (`filmSelection`): the inspector of the selected block is in the right dock (`FilmInspector`).
+ *
+ * A gesture is previewed on the timeline only and committed on release as one undo step. Edits are the pure
+ * functions of `film/timeline.ts`; editing a stop writes the generated stops out first (`materializeStops`).
+ */
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { KeyboardEvent, PointerEvent } from 'react'
+import { materializeStops, stopCandidates } from '../film/assemble'
+import { buildFilmClock, filmClockInputFor } from '../film/clock'
+import { photoTimeMs } from '../film/exif'
+import { readPhoto, useMediaStore } from '../film/media'
+import type { Film, FilmMedia, FilmStop } from '../film/model'
+import {
+  ZOOM_RANGE,
+  addPhotos,
+  addStop,
+  addText,
+  dragFilm,
+  fitPxPerS,
+  formatFilmTime,
+  hasFilmItem,
+  photoFilmTime,
+  removeFilmItem,
+  rulerTicks,
+  snapTargets,
+  updateMedia,
+  zoomAt,
+} from '../film/timeline'
+import type { DragContext, Grip, TimelineItem } from '../film/timeline'
 import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath, type ElevationProfile } from '../flyover/path'
+import { modifiedSettings } from '../project/apply'
+import { getSettingsHistory } from '../project/history'
+import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatDistance, formatNumber } from './format'
+import { Icon } from './icons'
+import type { IconName } from './icons'
+import { ModifiedMarker } from './ModifiedMarker'
+import { withShortcut } from './shortcuts'
+import { showToast } from './toast'
 
 const SPEEDS = [0.5, 1, 2, 4]
-/** Slider resolution: 1000 steps over the track. */
-const PROGRESS_STEPS = 1000
 /** Profile resolution (samples over the track) and drawing height in viewBox units. */
 const PROFILE_SAMPLES = 400
 const PROFILE_HEIGHT = 100
 /** Smallest elevation range drawn full height: a flat track stays flat instead of magnifying GPS noise. */
 const PROFILE_MIN_SPAN_M = 100
+/** Blank space at both ends of the lanes, so that the edges of the first and last blocks can be grabbed. */
+const PAD_PX = 10
+const SNAP_PX = 8
+/** Pointer travel before a press on a block becomes a drag (a shorter one only selects). */
+const DRAG_THRESHOLD_PX = 3
+const NUDGE_S = 1
+const FINE_NUDGE_S = 0.1
+const WHEEL_ZOOM = 1.2
+const BUTTON_ZOOM = 1.5
+/** Zoom slider: position 0..ZOOM_SLIDER_STEPS on a logarithmic scale of ZOOM_RANGE. */
+const ZOOM_SLIDER_STEPS = 100
+const zoomToSlider = (zoom: number) => Math.round((ZOOM_SLIDER_STEPS * Math.log(zoom / ZOOM_RANGE.min)) / Math.log(ZOOM_RANGE.max / ZOOM_RANGE.min))
+const sliderToZoom = (v: number) => ZOOM_RANGE.min * (ZOOM_RANGE.max / ZOOM_RANGE.min) ** (v / ZOOM_SLIDER_STEPS)
+
+/** Photos that can be placed where they were taken (offered by the message after adding them). */
+type Placements = { id: string; startS: number }[]
+
+const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`
+
+type Gesture =
+  | { kind: 'scrub' }
+  | { kind: 'edit'; item: TimelineItem; grip: Grip; x0: number; start: Film; ctx: DragContext; result: Film | null }
 
 /** Recorded instant -> "14 h 32", in the browser time zone. */
 function formatClock(ms: number): string {
@@ -18,8 +85,8 @@ function formatClock(ms: number): string {
   return `${date.getHours()} h ${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-/** Closed SVG area under the profile, one sub-path per run of known elevations. */
-function profileAreaPath(profile: ElevationProfile): string {
+/** Closed SVG area under the profile at abscissas `xs`, one sub-path per run of known elevations. */
+function profileAreaPath(profile: ElevationProfile, xs: readonly number[]): string {
   const { ele, minEle, maxEle } = profile
   const span = Math.max(maxEle - minEle, PROFILE_MIN_SPAN_M)
   let d = ''
@@ -27,132 +94,712 @@ function profileAreaPath(profile: ElevationProfile): string {
   for (let i = 0; i <= ele.length; i++) {
     const known = i < ele.length && !Number.isNaN(ele[i])
     if (known) {
-      const y = PROFILE_HEIGHT * (1 - 0.9 * ((ele[i] - minEle) / span))
-      d += runStart < 0 ? `M${i} ${PROFILE_HEIGHT}L${i} ${y.toFixed(1)}` : `L${i} ${y.toFixed(1)}`
+      const x = xs[i].toFixed(2)
+      const y = (PROFILE_HEIGHT * (1 - 0.9 * ((ele[i] - minEle) / span))).toFixed(1)
+      d += runStart < 0 ? `M${x} ${PROFILE_HEIGHT}L${x} ${y}` : `L${x} ${y}`
       if (runStart < 0) runStart = i
     } else if (runStart >= 0) {
-      d += `L${i - 1} ${PROFILE_HEIGHT}Z`
+      d += `L${xs[i - 1].toFixed(2)} ${PROFILE_HEIGHT}Z`
       runStart = -1
     }
   }
   return d
 }
 
+interface BarButtonProps {
+  icon: IconName
+  /** accessible name, also the tooltip unless `tip` is given (with the shortcut) */
+  name: string
+  tip?: string
+  /** short visible label (hidden on narrow windows) */
+  label?: string
+  onClick(): void
+  disabled?: boolean
+}
+
+/** Icon button of the bar: icon, optional short label, tooltip. */
+function BarButton({ icon, name, tip = name, label, onClick, disabled }: BarButtonProps) {
+  return (
+    <button
+      type="button"
+      className={label ? 'icon-btn icon-btn--label' : 'icon-btn'}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={name}
+      data-tip={tip}
+      data-tip-side="top"
+    >
+      <Icon name={icon} size={18} />
+      {label && <span className="icon-btn__text">{label}</span>}
+    </button>
+  )
+}
+
 /**
- * Flyover controls over the 3D view: play / pause, elevation profile (click or drag to seek) above the
- * progress slider, distance covered, current elevation and recorded time, speed.
+ * « Options » of the film, in a small menu over the bar: automatic stops, « modifié » marker of the film. Closes on
+ * Escape (before the shell deselects anything), on a click outside and when the focus leaves it.
  */
+function FilmOptions({ autoStops, onAutoStops }: { autoStops: boolean; onAutoStops(on: boolean): void }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const id = useId()
+  const modified = useAppStore((s) => modifiedSettings(s.settings, ['film']).length > 0)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: globalThis.PointerEvent) => {
+      if (!(e.target instanceof Node) || !wrapRef.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [open])
+  return (
+    <div
+      ref={wrapRef}
+      className="film-tl__options"
+      data-local-escape={open ? '' : undefined}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || !open) return
+        e.stopPropagation()
+        setOpen(false)
+        toggleRef.current?.focus()
+      }}
+      onBlur={(e) => {
+        // the focus went elsewhere (Tab); a click outside is caught by the pointer listener
+        if (open && e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) setOpen(false)
+      }}
+    >
+      <button
+        ref={toggleRef}
+        type="button"
+        className="icon-btn icon-btn--label"
+        aria-expanded={open}
+        aria-controls={`${id}-menu`}
+        data-tip="Options du film"
+        data-tip-side="top"
+        data-tip-align="end"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="icon-btn__text">Options</span>
+        <Icon name="chevron-down" size={16} />
+        {modified && (
+          <>
+            <span className="film-tl__dot" />
+            <span className="visually-hidden"> (modifié)</span>
+          </>
+        )}
+      </button>
+      {open && (
+        <div id={`${id}-menu`} className="film-tl__menu" role="group" aria-label="Options du film">
+          <p className="film-tl__menu-title">Options du film</p>
+          <label className="film-tl__check">
+            <input type="checkbox" checked={autoStops} onChange={(e) => onAutoStops(e.currentTarget.checked)} />
+            Arrêts automatiques
+          </label>
+          <p className="film-tl__menu-hint">
+            Un arrêt à chaque temps fort : sommets des montées, cols, sommets. Retoucher un arrêt les fige.
+          </p>
+          <ModifiedMarker keys={['film']} label="Film" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Timeline() {
-  const track = useAppStore((s) => s.tracks[0])
-  const { playing, progress, speed } = useAppStore((s) => s.playback)
+  const source = useFilmSource()
+  const { track, film, durationS, pacing, landmarks } = source
+  const clock = useFilmClock()
+  const { playing, progress, timeS: storedTimeS, speed } = useAppStore((s) => s.playback)
   const setPlaying = useAppStore((s) => s.setPlaying)
   const setProgress = useAppStore((s) => s.setProgress)
   const setSpeed = useAppStore((s) => s.setSpeed)
+  const setSetting = useAppStore((s) => s.setSetting)
+  const pictures = useMediaStore((s) => s.table)
   const id = useId()
   const clipId = `profile-played-${id.replace(/[^\w-]/g, '')}`
+
   const path = useMemo(() => (track ? buildTrackPath(track) : null), [track])
   const profile = useMemo(() => (path ? elevationProfile(path, PROFILE_SAMPLES) : undefined), [path])
-  const area = useMemo(() => (profile ? profileAreaPath(profile) : ''), [profile])
+  const input = useMemo(
+    () => filmClockInputFor({ track, film, durationS, pacing, landmarks }),
+    [track, film, durationS, pacing, landmarks],
+  )
+  const candidates = useMemo(() => (track ? stopCandidates({ track, landmarks, pacing }) : []), [track, landmarks, pacing])
+
+  const selected = useAppStore((s) => s.filmSelection)
+  const setSelected = useAppStore((s) => s.setFilmSelection)
+  /** film being dragged (shown on the timeline only), committed on release */
+  const [draft, setDraft] = useState<Film | null>(null)
+  const [zoom, setZoom] = useState<number>(ZOOM_RANGE.min)
+  const [collapsed, setCollapsed] = useState(false)
+  const [width, setWidth] = useState(0)
+  const [reading, setReading] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const gestureRef = useRef<Gesture | null>(null)
+  /** zoom for the wheel listener */
+  const zoomRef = useRef(zoom)
+  /** scroll to apply once the zoomed content is laid out */
+  const pendingScrollRef = useRef<number | null>(null)
+
+  const shownFilm = draft ?? film
+  const shownClock = useMemo(
+    () =>
+      draft
+        ? buildFilmClock({ ...input, opening: draft.opening, closing: draft.closing, stops: draft.autoStops ? input.stops : draft.stops })
+        : clock,
+    [draft, input, clock],
+  )
+  const flightXs = useMemo(() => {
+    const n = profile?.ele.length ?? 0
+    return Array.from({ length: n }, (_, i) => shownClock.timeAtProgress(i / Math.max(1, n - 1)) - shownClock.openingS)
+  }, [profile, shownClock])
+  const area = useMemo(() => (profile ? profileAreaPath(profile, flightXs) : ''), [profile, flightXs])
+
+  const hasTrack = track !== undefined
+  // the selected block went away (undo, other track, generated stops moved): nothing selected
+  useEffect(() => {
+    if (selected !== null && (!track || !hasFilmItem(film, clock.stops, selected))) setSelected(null)
+  }, [selected, track, film, clock, setSelected])
+
+  useEffect(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => setWidth(el.clientWidth))
+    observer.observe(el)
+    setWidth(el.clientWidth)
+    // Ctrl+wheel zooms around the pointer (a passive React listener could not prevent the page zoom)
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey || e.deltaY === 0) return
+      e.preventDefault()
+      const next = zoomAt(zoomRef.current, e.deltaY < 0 ? WHEEL_ZOOM : 1 / WHEEL_ZOOM, e.clientX - el.getBoundingClientRect().left, el.scrollLeft)
+      pendingScrollRef.current = next.scrollLeft
+      setZoom(next.zoom)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      observer.disconnect()
+      el.removeEventListener('wheel', onWheel)
+    }
+  }, [collapsed, hasTrack])
+
+  useLayoutEffect(() => {
+    zoomRef.current = zoom
+    if (pendingScrollRef.current !== null && scrollerRef.current) scrollerRef.current.scrollLeft = pendingScrollRef.current
+    pendingScrollRef.current = null
+  }, [zoom])
+
+  useEffect(() => {
+    // Space plays / pauses, except in a control that uses it
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return
+      const target = e.target
+      const control = 'input, textarea, select, button, a[href], [role="slider"]'
+      if (target instanceof HTMLElement && (target.isContentEditable || target.closest(control))) return
+      const store = useAppStore.getState()
+      if (store.tracks.length === 0) return
+      e.preventDefault()
+      store.setPlaying(!store.playback.playing)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   if (!track || !path) return null
-  const total = track.stats.distanceM
+
+  const lengthM = track.stats.distanceM
+  const total = shownClock.totalTime()
+  // the scale follows the committed film: it does not change while an edge is dragged
+  const pxPerS = fitPxPerS(Math.max(0, width - 2 * PAD_PX), clock.totalTime()) * zoom
+  const xOf = (t: number) => PAD_PX + t * pxPerS
+  const contentWidth = Math.max(width, Math.ceil(xOf(total) + PAD_PX))
+  const playheadS = Math.min(storedTimeS ?? clock.timeAtProgress(progress), clock.totalTime())
   const ele = profile && path.count > 0 ? samplePath(path, progress * path.lengthM).ele : undefined
   // startTime is set as soon as one point has a time: skips the scan of an untimed track
-  const time =
-    track.stats.startTime !== undefined && path.count > 0 ? recordedTimeAt(path, progress * path.lengthM) : undefined
-  const width = PROFILE_SAMPLES - 1
+  const time = track.stats.startTime !== undefined && path.count > 0 ? recordedTimeAt(path, progress * path.lengthM) : undefined
+  const stoppedAt = (atM: number) => shownClock.stops.some((s) => Math.abs(s.atM - atM) < 1)
+  const freeCandidates = candidates.filter((c) => !stoppedAt(c.atM))
 
-  const seek = (e: PointerEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    if (rect.width > 0) setProgress((e.clientX - rect.left) / rect.width)
+  // --- edits -------------------------------------------------------------------------------------------------
+  const isStop = (item: TimelineItem) => clock.stops.some((s) => s.id === item)
+  const withOwnStops = (f: Film) => materializeStops(f, { track, landmarks, pacing })
+  /** one undo step */
+  const commit = (next: Film) => {
+    if (next !== film) getSettingsHistory().transaction(() => setSetting('film', next))
+  }
+  /** nudges with the arrows (quick changes of the film are merged into one undo step) */
+  const change = (fn: (f: Film) => Film, stops: boolean) => {
+    const next = fn(stops ? withOwnStops(film) : film)
+    if (next !== film) setSetting('film', next)
+  }
+  const dragContext = (item: TimelineItem): DragContext => ({
+    clock,
+    clockOf: (stops: readonly FilmStop[]) => buildFilmClock({ ...input, stops }),
+    lengthM,
+    targets: snapTargets(clock, film, candidates.map((c) => c.atM / lengthM), playheadS, item),
+    targetsM: candidates.map((c) => c.atM),
+    snapS: SNAP_PX / pxPerS,
+  })
+  const remove = (item: TimelineItem) => editFilm((f) => ({ film: removeFilmItem(f, item), id: null }), { stops: isStop(item) })
+  const addStopAt = (atM: number, patch?: Parameters<typeof addStop>[2]) => editFilm((f) => addStop(f, atM, patch), { stops: true })
+  /** photos added at the playhead, one after the other (one undo step); offers to place them on the track */
+  const addPhotoFiles = async (files: readonly File[]) => {
+    const images = files.filter((f) => f.type.startsWith('image/'))
+    const others = files.length - images.length
+    const unsupported = others > 0 ? ` ${plural(others, 'fichier ignoré', 'fichiers ignorés')} : seules les photos sont prises en charge (vidéos : bientôt).` : ''
+    if (images.length === 0) {
+      showToast({ kind: 'error', text: unsupported.trim() })
+      return
+    }
+    const startS = playheadS
+    setReading(true)
+    const read: Awaited<ReturnType<typeof readPhoto>>[] = []
+    const failed: string[] = []
+    for (const file of images) {
+      try {
+        read.push(await readPhoto(file, file.name))
+      } catch (err) {
+        failed.push(`« ${file.name} » : ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    setReading(false)
+    const errors = failed.length > 0 ? ` Non ajoutées : ${failed.join(' ; ')}` : ''
+    if (read.length === 0) {
+      showToast({ kind: 'error', text: `${errors}${unsupported}`.trim() })
+      return
+    }
+    const srcs = useMediaStore.getState().add(read.map((r) => r.asset))
+    const added = addPhotos(useAppStore.getState().settings.film, startS, srcs)
+    commit(added.film)
+    setSelected(added.ids[0])
+    const placements = added.ids.flatMap((photoId, k) => {
+      const t = photoFilmTime(path, clock, { lon: read[k].exif.lon, lat: read[k].exif.lat, timeMs: photoTimeMs(read[k].exif) })
+      return t === undefined ? [] : [{ id: photoId, startS: t }]
+    })
+    const n = placements.length
+    const located =
+      n === 0
+        ? ''
+        : n === 1
+          ? ` ${read.length === 1 ? 'Elle' : "L'une d'elles"} a été prise le long du parcours : la placer au moment où le marqueur y passe ?`
+          : ` ${n} ont été prises le long du parcours : les placer au moment où le marqueur y passe ?`
+    showToast({
+      kind: errors || unsupported ? 'info' : 'success',
+      text: `${plural(read.length, 'photo ajoutée', 'photos ajoutées')} à la tête de lecture.${located}${errors}${unsupported}`,
+      action: n > 0 ? { label: 'Placer sur le parcours', run: () => placePhotos(placements) } : undefined,
+    })
+  }
+  const placePhotos = (placements: Placements) =>
+    editFilm((f) => ({ film: placements.reduce((g, p) => updateMedia(g, p.id, { startS: p.startS }), f) }))
+  const toggleAutoStops = (on: boolean) =>
+    commit(on ? { ...film, autoStops: true, autoMode: 'temps-forts', stops: [] } : withOwnStops(film))
+
+  // --- pointer -----------------------------------------------------------------------------------------------
+  const timeAt = (clientX: number) => (clientX - (contentRef.current?.getBoundingClientRect().left ?? 0) - PAD_PX) / pxPerS
+  const seek = (t: number) => {
+    const end = clock.totalTime()
+    const c = Math.min(end, Math.max(0, t))
+    setProgress(clock.progressAtTime(c), c < end ? c : null)
+  }
+  const onContentPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    gestureRef.current = { kind: 'scrub' }
+    seek(timeAt(e.clientX))
+  }
+  const startEdit = (e: PointerEvent<HTMLElement>, item: TimelineItem, grip: Grip) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    setSelected(item)
+    contentRef.current?.setPointerCapture(e.pointerId)
+    const start = isStop(item) ? withOwnStops(film) : film
+    gestureRef.current = { kind: 'edit', item, grip, x0: e.clientX, start, ctx: dragContext(item), result: null }
+  }
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const g = gestureRef.current
+    if (!g) return
+    if (g.kind === 'scrub') return seek(timeAt(e.clientX))
+    const dx = e.clientX - g.x0
+    if (!g.result && Math.abs(dx) < DRAG_THRESHOLD_PX) return
+    g.result = dragFilm(g.start, g.item, g.grip, dx / pxPerS, e.altKey ? { ...g.ctx, snapS: 0 } : g.ctx)
+    setDraft(g.result)
+  }
+  const endGesture = (e: PointerEvent<HTMLDivElement>) => {
+    const g = gestureRef.current
+    gestureRef.current = null
+    if (g?.kind === 'edit' && g.result && e.type === 'pointerup') commit(g.result)
+    setDraft(null)
   }
 
+  // --- keyboard ----------------------------------------------------------------------------------------------
+  const onBlockKeyDown = (e: KeyboardEvent<HTMLElement>, item: TimelineItem) => {
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      remove(item)
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      const step = (e.shiftKey ? FINE_NUDGE_S : NUDGE_S) * (e.key === 'ArrowLeft' ? -1 : 1)
+      const grip: Grip = item === 'closing' ? 'start' : item === 'opening' ? 'end' : 'move'
+      change((f) => dragFilm(f, item, grip, step, { ...dragContext(item), snapS: 0 }), isStop(item))
+    } else {
+      return
+    }
+    e.preventDefault()
+  }
+  const onRulerKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const steps: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, PageDown: -10, PageUp: 10 }
+    if (e.key === 'Home') seek(0)
+    else if (e.key === 'End') seek(clock.totalTime())
+    else if (e.key in steps) seek(playheadS + steps[e.key] * (e.shiftKey ? 5 : 1))
+    else return
+    e.preventDefault()
+  }
+  const zoomBy = (factor: number) => {
+    const el = scrollerRef.current
+    // keep the playhead in place
+    const next = zoomAt(zoom, factor, el ? xOf(playheadS) - el.scrollLeft : 0, el?.scrollLeft ?? 0)
+    pendingScrollRef.current = next.scrollLeft
+    setZoom(next.zoom)
+  }
+  /** the whole film in the width of the timeline */
+  const fitZoom = () => {
+    pendingScrollRef.current = 0
+    setZoom(ZOOM_RANGE.min)
+  }
+
+  // --- blocks ------------------------------------------------------------------------------------------------
+  const block = (
+    item: TimelineItem,
+    startS: number,
+    endS: number,
+    label: string,
+    description: string,
+    className: string,
+    grips: Grip[],
+    thumb?: string,
+  ) => (
+    <div
+      key={item}
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected === item}
+      aria-label={`${description}, de ${formatFilmTime(startS)} à ${formatFilmTime(endS)}`}
+      title={label}
+      className={`film-tl__block ${className}${selected === item ? ' film-tl__block--selected' : ''}`}
+      style={{ left: xOf(startS), width: Math.max(0, (endS - startS) * pxPerS) }}
+      onPointerDown={(e) => {
+        if (grips.includes('move')) return startEdit(e, item, 'move')
+        // a shot: select it and scrub
+        e.stopPropagation()
+        setSelected(item)
+        onContentPointerDown(e)
+      }}
+      onFocus={() => setSelected(item)}
+      onKeyDown={(e) => onBlockKeyDown(e, item)}
+    >
+      {grips.includes('start') && <span className="film-tl__grip film-tl__grip--start" onPointerDown={(e) => startEdit(e, item, 'start')} />}
+      {thumb && <img className="film-tl__thumb" src={thumb} alt="" draggable={false} />}
+      <span className="film-tl__label">{label}</span>
+      {grips.includes('end') && <span className="film-tl__grip film-tl__grip--end" onPointerDown={(e) => startEdit(e, item, 'end')} />}
+    </div>
+  )
+  const opening = shownFilm.opening
+  const closing = shownFilm.closing
+  const flightStart = shownClock.openingS
+  const flightEnd = flightStart + shownClock.flightS
+  const ticks = rulerTicks(total, pxPerS)
+  const mediaLabel = (m: FilmMedia) => m.caption?.trim() || pictures[m.src]?.name || 'Photo'
+
   return (
-    <div className="timeline" role="group" aria-label={`Survol de ${track.name}`}>
-      <button
-        type="button"
-        className="btn btn--primary timeline__play"
-        onClick={() => setPlaying(!playing)}
-        aria-label={playing ? 'Mettre en pause' : 'Lancer le survol'}
-      >
-        {playing ? '❚❚' : '▶'}
-      </button>
-      <div className="timeline__scrub">
-        {profile && (
-          // pointer shortcut for the slider below, which stays the accessible control
-          <svg
-            className="timeline__profile"
-            viewBox={`0 0 ${width} ${PROFILE_HEIGHT}`}
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            onPointerDown={(e) => {
-              e.currentTarget.setPointerCapture(e.pointerId)
-              seek(e)
-            }}
-            onPointerMove={(e) => {
-              if (e.buttons & 1) seek(e)
+    <div
+      className="film-tl"
+      role="group"
+      aria-label={`Timeline du film : ${track.name}`}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer.files.length === 0) return
+        e.preventDefault()
+        void addPhotoFiles(Array.from(e.dataTransfer.files))
+      }}
+    >
+      <div className="film-tl__bar">
+        <button
+          type="button"
+          className="btn btn--primary film-tl__play"
+          onClick={() => setPlaying(!playing)}
+          aria-label={playing ? 'Mettre en pause' : 'Lancer le film'}
+          data-tip={withShortcut(playing ? 'Pause' : 'Lecture', 'play')}
+          data-tip-side="top"
+          data-tip-align="start"
+        >
+          <Icon name={playing ? 'pause' : 'play'} size={16} />
+        </button>
+        <BarButton
+          icon="square"
+          name="Arrêter et revenir au début"
+          onClick={() => {
+            setPlaying(false)
+            seek(0)
+          }}
+        />
+        <span className="film-tl__time">
+          <strong>{formatFilmTime(playheadS, true)}</strong> / {formatFilmTime(clock.totalTime())}
+        </span>
+        <span className="film-tl__readout">
+          {formatDistance(progress * lengthM)} / {formatDistance(lengthM)}
+          {ele !== undefined && (
+            <>
+              {' · '}
+              <span className="visually-hidden">Altitude : </span>
+              {formatNumber(ele)} m
+            </>
+          )}
+          {time !== undefined && (
+            <>
+              {' · '}
+              <span className="visually-hidden">Heure enregistrée : </span>
+              <time dateTime={new Date(time).toISOString()}>{formatClock(time)}</time>
+            </>
+          )}
+        </span>
+        <span className="film-tl__spacer" />
+        <BarButton
+          icon="map-pin"
+          label="Arrêt"
+          name="Ajouter un arrêt à la position du marqueur"
+          tip={withShortcut('Ajouter un arrêt à la position du marqueur', 'add-stop')}
+          onClick={() => addStopAt(Math.round(progress * lengthM))}
+        />
+        {freeCandidates.length > 0 && (
+          <select
+            className="film-tl__select"
+            aria-label="Ajouter un arrêt à un temps fort"
+            value=""
+            onChange={(e) => {
+              const c = freeCandidates[Number(e.currentTarget.value)]
+              if (c) addStopAt(c.atM, { label: c.label, source: c.source })
             }}
           >
-            <clipPath id={clipId}>
-              <rect width={progress * width} height={PROFILE_HEIGHT} />
-            </clipPath>
-            <path className="timeline__profile-area" d={area} />
-            <path className="timeline__profile-played" d={area} clipPath={`url(#${clipId})`} />
-            <line
-              className="timeline__profile-cursor"
-              x1={progress * width}
-              x2={progress * width}
-              y1={0}
-              y2={PROFILE_HEIGHT}
-            />
-          </svg>
+            <option value="" disabled>
+              Arrêt à un temps fort…
+            </option>
+            {freeCandidates.map((c, i) => (
+              <option key={`${c.source.kind}-${c.source.ref}`} value={i}>
+                {c.label} · {formatDistance(c.atM)}
+              </option>
+            ))}
+          </select>
         )}
-        <input
-          type="range"
-          className="range timeline__range"
-          min={0}
-          max={PROGRESS_STEPS}
-          step={1}
-          value={Math.round(progress * PROGRESS_STEPS)}
-          onChange={(e) => setProgress(Number(e.currentTarget.value) / PROGRESS_STEPS)}
-          aria-label="Progression du survol"
-          aria-valuetext={formatDistance(progress * total)}
+        <BarButton
+          icon="type"
+          label="Texte"
+          name="Ajouter un texte à la tête de lecture"
+          tip={withShortcut('Ajouter un texte à la tête de lecture', 'add-text')}
+          onClick={() => editFilm((f) => addText(f, playheadS))}
         />
+        <BarButton
+          icon="image"
+          label={reading ? 'Lecture…' : 'Photo'}
+          name={reading ? 'Lecture des photos…' : 'Ajouter des photos à la tête de lecture'}
+          tip="Ajouter des photos à la tête de lecture (ou les glisser sur la timeline)"
+          onClick={() => photoInputRef.current?.click()}
+          disabled={reading}
+        />
+        <input
+          ref={photoInputRef}
+          className="visually-hidden"
+          type="file"
+          accept="image/*"
+          multiple
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(e) => {
+            const files = Array.from(e.currentTarget.files ?? [])
+            e.currentTarget.value = ''
+            if (files.length > 0) void addPhotoFiles(files)
+          }}
+        />
+        <span className="film-tl__sep" aria-hidden="true" />
+        <select className="film-tl__select" aria-label="Vitesse de lecture" value={speed} onChange={(e) => setSpeed(Number(e.currentTarget.value))}>
+          {SPEEDS.map((value) => (
+            <option key={value} value={value}>
+              ×{formatNumber(value, value % 1 === 0 ? 0 : 1)}
+            </option>
+          ))}
+        </select>
+        <div className="film-tl__zoom" role="group" aria-label="Zoom de la timeline">
+          <BarButton
+            icon="zoom-out"
+            name="Zoom arrière"
+            tip={withShortcut('Zoom arrière', 'zoom')}
+            onClick={() => zoomBy(1 / BUTTON_ZOOM)}
+            disabled={zoom <= ZOOM_RANGE.min}
+          />
+          <input
+            className="film-tl__zoom-range"
+            type="range"
+            min={0}
+            max={ZOOM_SLIDER_STEPS}
+            step={1}
+            value={zoomToSlider(zoom)}
+            aria-label="Zoom"
+            aria-valuetext={`×${formatNumber(zoom, 1)}`}
+            onChange={(e) => zoomBy(sliderToZoom(Number(e.currentTarget.value)) / zoom)}
+          />
+          <BarButton
+            icon="zoom-in"
+            name="Zoom avant"
+            tip={withShortcut('Zoom avant', 'zoom')}
+            onClick={() => zoomBy(BUTTON_ZOOM)}
+            disabled={zoom >= ZOOM_RANGE.max}
+          />
+          <BarButton icon="move-horizontal" label="Ajuster" name="Ajuster : voir tout le film" tip="Voir tout le film" onClick={fitZoom} disabled={zoom <= ZOOM_RANGE.min} />
+        </div>
+        <FilmOptions autoStops={film.autoStops} onAutoStops={toggleAutoStops} />
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => setCollapsed(!collapsed)}
+          aria-expanded={!collapsed}
+          aria-controls={`${id}-lanes`}
+          aria-label={collapsed ? 'Déplier les pistes' : 'Replier les pistes'}
+          data-tip={collapsed ? 'Déplier les pistes' : 'Replier les pistes'}
+          data-tip-side="top"
+          data-tip-align="end"
+        >
+          <Icon name={collapsed ? 'panel-bottom-open' : 'panel-bottom-close'} size={18} />
+        </button>
       </div>
-      <span className="timeline__distance">
-        <strong>{formatDistance(progress * total)}</strong> / {formatDistance(total)}
-        {(ele !== undefined || time !== undefined) && <br />}
-        {ele !== undefined && (
-          <>
-            <span className="visually-hidden">Altitude : </span>
-            <strong>{formatNumber(ele)} m</strong>
-          </>
-        )}
-        {ele !== undefined && time !== undefined && ' · '}
-        {time !== undefined && (
-          <>
-            <span className="visually-hidden">Heure enregistrée : </span>
-            <time dateTime={new Date(time).toISOString()}>
-              <strong>{formatClock(time)}</strong>
-            </time>
-          </>
-        )}
-      </span>
-      <label className="visually-hidden" htmlFor={`${id}-speed`}>
-        Vitesse
-      </label>
-      <select
-        id={`${id}-speed`}
-        className="select timeline__speed"
-        value={speed}
-        onChange={(e) => setSpeed(Number(e.currentTarget.value))}
-      >
-        {SPEEDS.map((value) => (
-          <option key={value} value={value}>
-            ×{formatNumber(value, value % 1 === 0 ? 0 : 1)}
-          </option>
-        ))}
-      </select>
+
+      {!collapsed && (
+        <div className="film-tl__body" id={`${id}-lanes`}>
+          <div className="film-tl__heads">
+            <div className="film-tl__head film-tl__head--ruler" />
+            {/* the lanes carry the same names */}
+            {['Plans', 'Arrêts', 'Textes', 'Médias'].map((name) => (
+              <div key={name} className="film-tl__head" aria-hidden="true">
+                {name}
+              </div>
+            ))}
+          </div>
+          <div className="film-tl__scroller" ref={scrollerRef}>
+            <div
+              ref={contentRef}
+              className="film-tl__content"
+              style={{ width: contentWidth }}
+              onPointerDown={onContentPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={endGesture}
+              onPointerCancel={endGesture}
+            >
+              <div
+                className="film-tl__ruler"
+                role="slider"
+                tabIndex={0}
+                aria-label="Position dans le film"
+                aria-valuemin={0}
+                aria-valuemax={Math.round(clock.totalTime())}
+                aria-valuenow={Math.round(playheadS)}
+                aria-valuetext={`${formatFilmTime(playheadS)} sur ${formatFilmTime(clock.totalTime())}`}
+                onKeyDown={onRulerKeyDown}
+              >
+                {ticks.map((t) => (
+                  <span key={t} className="film-tl__tick" style={{ left: xOf(t) }}>
+                    {formatFilmTime(t)}
+                  </span>
+                ))}
+              </div>
+
+              <div className="film-tl__lane" role="group" aria-label="Plans">
+                {block(
+                  'opening',
+                  0,
+                  flightStart,
+                  opening.style === 'aucune' ? '' : 'Ouverture',
+                  opening.style === 'aucune' ? 'Ouverture : aucune' : 'Ouverture',
+                  `film-tl__block--shot${opening.style === 'aucune' ? ' film-tl__block--none' : ''}`,
+                  opening.style === 'aucune' ? [] : ['end'],
+                )}
+                <div className="film-tl__flight" style={{ left: xOf(flightStart), width: (flightEnd - flightStart) * pxPerS }} aria-hidden="true">
+                  {profile && shownClock.flightS > 0 && (
+                    <svg viewBox={`0 0 ${shownClock.flightS} ${PROFILE_HEIGHT}`} preserveAspectRatio="none">
+                      <clipPath id={clipId}>
+                        <rect width={Math.max(0, playheadS - flightStart)} height={PROFILE_HEIGHT} />
+                      </clipPath>
+                      <path className="film-tl__profile-area" d={area} />
+                      <path className="film-tl__profile-played" d={area} clipPath={`url(#${clipId})`} />
+                    </svg>
+                  )}
+                  {/* the stops inside the flight: where the flyover holds */}
+                  {shownClock.stops.map((s) => (
+                    <span
+                      key={s.id}
+                      className={`film-tl__flight-stop${s.id === selected ? ' film-tl__flight-stop--selected' : ''}`}
+                      style={{ left: (s.startS - flightStart) * pxPerS, width: (s.endS - s.startS) * pxPerS }}
+                    />
+                  ))}
+                  <span className="film-tl__label">Survol · {formatDistance(lengthM)}</span>
+                </div>
+                {block(
+                  'closing',
+                  flightEnd,
+                  total,
+                  closing.style === 'aucune' ? '' : 'Clôture',
+                  closing.style === 'aucune' ? 'Clôture : aucune' : 'Clôture',
+                  `film-tl__block--shot${closing.style === 'aucune' ? ' film-tl__block--none' : ''}`,
+                  closing.style === 'aucune' ? [] : ['start'],
+                )}
+              </div>
+
+              <div className="film-tl__lane" role="group" aria-label="Arrêts">
+                {shownClock.stops.map((s) => {
+                  const label = s.label || 'Arrêt'
+                  return block(
+                    s.id,
+                    s.startS,
+                    s.endS,
+                    label,
+                    `Arrêt ${s.camera === 'orbite' ? 'en orbite' : 'caméra fixe'} : ${label}${shownFilm.autoStops ? ' (automatique)' : ''}`,
+                    `film-tl__block--stop${shownFilm.autoStops ? ' film-tl__block--auto' : ''}`,
+                    ['move', 'end'],
+                  )
+                })}
+              </div>
+
+              <div className="film-tl__lane" role="group" aria-label="Textes">
+                {shownFilm.texts.map((t) =>
+                  block(t.id, t.startS, t.startS + t.durationS, t.text || 'Texte', `Texte : ${t.text}`, 'film-tl__block--text', [
+                    'start',
+                    'move',
+                    'end',
+                  ]),
+                )}
+              </div>
+
+              <div className="film-tl__lane" role="group" aria-label="Médias">
+                {shownFilm.media.map((m) =>
+                  block(
+                    m.id,
+                    m.startS,
+                    m.startS + m.durationS,
+                    mediaLabel(m),
+                    `Photo ${m.layout === 'carte' ? 'en carte' : 'plein écran'} : ${mediaLabel(m)}`,
+                    'film-tl__block--media',
+                    ['start', 'move', 'end'],
+                    pictures[m.src]?.thumb,
+                  ),
+                )}
+              </div>
+
+              <div className="film-tl__playhead" style={{ left: xOf(playheadS) }} aria-hidden="true" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

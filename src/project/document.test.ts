@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Track } from '../core/types'
+import { MEDIA_DEFAULTS } from '../film/model'
 import { buildTrack } from '../import/stats'
 import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS } from '../state/store'
 import type { Settings } from '../state/store'
@@ -88,6 +89,28 @@ describe('serializeProject / parseProject', () => {
     expect(text.split('\n').filter((l) => l.startsWith('    {"id"'))).toHaveLength(2)
     expect(serializeProject({ ...STATE, tracks: [] }, 'x')).toContain('"tracks": []')
     expect(toProjectDocument(STATE, '   ').name).toBe('Sans titre')
+  })
+
+  it('carries the pictures of the film, one line each; leaves out the photos without a readable picture', () => {
+    const data = 'data:image/jpeg;base64,/9j/AAEC'
+    const picture = { data, thumb: data, width: 4, height: 3, name: 'lac.jpg' }
+    const photo = { id: 'media-1', startS: 8, durationS: 5, kind: 'image' as const, src: 'photo-1', ...MEDIA_DEFAULTS, caption: 'Lac Blanc' }
+    const state = { ...STATE, settings: { ...SETTINGS, film: { ...SETTINGS.film, media: [photo] } } }
+    const text = serializeProject(state, 'x', { 'photo-1': picture, 'photo-2': { ...picture, name: 'inutile.jpg' } })
+    expect(text.split('\n').filter((l) => l.startsWith('    "photo-'))).toHaveLength(1)
+    const loaded = parseProject(text)
+    expect(loaded.media).toEqual({ 'photo-1': picture })
+    expect(loaded.settings.film.media).toEqual([photo])
+    expect(loaded.warnings).toEqual([])
+
+    const raw = JSON.parse(text) as Record<string, unknown>
+    delete raw.media
+    const without = parseProject(JSON.stringify(raw))
+    expect(without.settings.film.media).toEqual([])
+    expect(without.warnings).toEqual(['1 photo sans image lisible dans le projet, retirée du film.'])
+    // a film without photos writes no table
+    expect(serializeProject(STATE, 'x', { 'photo-1': picture })).not.toContain('"media": {')
+    expect(parseProject(serializeProject(STATE, 'x')).media).toEqual({})
   })
 
   it('falls back to the default per invalid or missing setting and ignores unknown keys', () => {
@@ -186,7 +209,7 @@ describe('parseProject errors', () => {
     ['not JSON', () => '{', /pas du JSON valide/],
     ['another JSON', () => ({ type: 'FeatureCollection' }), /pas un projet OpenFlyover/],
     ['an array', () => [], /pas un projet OpenFlyover/],
-    ['a future version', (d) => ({ ...d, version: 7 }), /format v7, plus récent .*\(v1\)/],
+    ['a future version', (d) => ({ ...d, version: 7 }), /format v7, plus récent .*\(v2\)/],
     ['a bad version', (d) => ({ ...d, version: '1' }), /version/],
     ['no tracks', (d) => ({ ...d, tracks: undefined }), /liste des traces/],
     ['a track without id', (d) => ({ ...d, tracks: [{ ...(d.tracks as object[])[0], id: '' }] }), /Trace n°1 : identifiant/],

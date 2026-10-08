@@ -1,5 +1,6 @@
 /**
- * Project document: one self-contained, versioned JSON file holding every setting and the tracks.
+ * Project document: one self-contained, versioned JSON file holding every setting, the tracks and the pictures
+ * of the film (media table, `film/media.ts`).
  * Pure functions (no store, no DOM): `serializeProject` / `parseProject`, settings sanitising and
  * the version migration chain. Applying a parsed project to the store lives in `apply.ts`.
  *
@@ -8,6 +9,9 @@
  * to `SETTING_CHECKS` only when a value of the right type can still be invalid (enum, catalogue id, range).
  */
 import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'
+import { sanitizeMediaTable, usedMedia } from '../film/media'
+import type { MediaTable } from '../film/media'
+import { isValidFilm, withFilmDefaults } from '../film/model'
 import { FLYOVER_DURATION_RANGE, isValidCamera } from '../flyover/cameraSettings'
 import { isValidPacing } from '../flyover/pacing'
 import { isValidRace } from '../flyover/race'
@@ -22,7 +26,7 @@ import type { AppState, Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
 
 export const PROJECT_FORMAT = 'openflyover-project'
-export const PROJECT_VERSION = 1
+export const PROJECT_VERSION = 2
 /** Suffix of saved project files (`<name>.openflyover.json`). */
 export const PROJECT_FILE_SUFFIX = '.openflyover.json'
 export const DEFAULT_PROJECT_NAME = 'Sans titre'
@@ -65,6 +69,8 @@ export interface ProjectDocument {
   settings: Settings
   playback: { speed: number }
   tracks: ProjectTrack[]
+  /** pictures of the film by id (`film.media[].src`), omitted when the film has none */
+  media?: MediaTable
 }
 
 /** A parsed and validated project, ready to be applied to the store. */
@@ -73,6 +79,8 @@ export interface LoadedProject {
   settings: Settings
   speed: number
   tracks: Track[]
+  /** pictures of the film (empty for projects without photos) */
+  media: MediaTable
   /** non-fatal problems (settings replaced by their default value), in French */
   warnings: string[]
 }
@@ -93,6 +101,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   camera: isValidCamera,
   flyoverDurationS: (v) => v >= FLYOVER_DURATION_RANGE.min && v <= FLYOVER_DURATION_RANGE.max,
   pacing: isValidPacing,
+  film: isValidFilm,
   exposureEv: (v) => v >= -4 && v <= 4,
   weatherScene: (v) => v.strength >= 0 && v.strength <= 1,
   trackColorBy: (v) => (TRACK_COLOR_MODES as readonly string[]).includes(v),
@@ -109,6 +118,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
 export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unknown } = {
   overlay: withOverlayDefaults,
   video: withVideoDefaults,
+  film: withFilmDefaults,
 }
 
 /** True when `value` has the JSON shape of `reference` (finite numbers, same keys for objects). */
@@ -179,8 +189,9 @@ function encodeWaypoint(w: Waypoint): Waypoint {
   return out
 }
 
-export function toProjectDocument(state: ProjectSource, name: string): ProjectDocument {
-  return {
+export function toProjectDocument(state: ProjectSource, name: string, media: MediaTable = {}): ProjectDocument {
+  const pictures = usedMedia(state.settings.film, media)
+  const doc: ProjectDocument = {
     format: PROJECT_FORMAT,
     version: PROJECT_VERSION,
     name: name.trim() || DEFAULT_PROJECT_NAME,
@@ -194,15 +205,20 @@ export function toProjectDocument(state: ProjectSource, name: string): ProjectDo
       return out
     }),
   }
+  if (Object.keys(pictures).length > 0) doc.media = pictures
+  return doc
 }
 
-/** JSON text of the project: header and settings indented, one line per track. */
-export function serializeProject(state: ProjectSource, name: string): string {
-  const { tracks, ...head } = toProjectDocument(state, name)
+/** JSON text of the project: header and settings indented, one line per track, then one line per picture. */
+export function serializeProject(state: ProjectSource, name: string, media: MediaTable = {}): string {
+  const { tracks, media: pictures, ...head } = toProjectDocument(state, name, media)
   const headJson = JSON.stringify(head, null, 2)
   const tracksJson = tracks.length === 0 ? '[]' : `[\n${tracks.map((t) => `    ${JSON.stringify(t)}`).join(',\n')}\n  ]`
+  const entries = Object.entries(pictures ?? {})
+  const mediaJson =
+    entries.length === 0 ? '' : `,\n  "media": {\n${entries.map(([id, a]) => `    ${JSON.stringify(id)}: ${JSON.stringify(a)}`).join(',\n')}\n  }`
   // headJson ends with "\n}"
-  return `${headJson.slice(0, -2)},\n  "tracks": ${tracksJson}\n}\n`
+  return `${headJson.slice(0, -2)},\n  "tracks": ${tracksJson}${mediaJson}\n}\n`
 }
 
 /** File name for a project: characters forbidden by common file systems replaced by "-". */
@@ -220,8 +236,12 @@ export function projectFileName(name: string): string {
 
 export type ProjectMigration = (doc: Record<string, unknown>) => Record<string, unknown>
 
-/** `MIGRATIONS[n]` upgrades a document from version n to n + 1 (none yet: v1 is the first format). */
-export const MIGRATIONS: Readonly<Record<number, ProjectMigration>> = {}
+/** `MIGRATIONS[n]` upgrades a document from version n to n + 1. */
+export const MIGRATIONS: Readonly<Record<number, ProjectMigration>> = {
+  // v2: the film's automatic stops no longer need the pacing; a v1 project without a film keeps the stops of its
+  // pacing (`withFilmDefaults` completes the film from the defaults)
+  1: (doc) => (isRecord(doc.settings) && !('film' in doc.settings) ? { ...doc, settings: { ...doc.settings, film: { autoMode: 'rythme' } } } : doc),
+}
 
 /** Run the migrations from `doc.version` up to `target`; the returned document has `version: target`. */
 export function migrateProject(
@@ -347,6 +367,14 @@ export function parseProject(text: string): LoadedProject {
   if (invalid.length > 0) {
     warnings.push(`Réglages invalides remplacés par leur valeur par défaut : ${invalid.join(', ')}.`)
   }
+  // photos whose picture is missing or unreadable are left out of the film
+  const media = sanitizeMediaTable(doc.media)
+  const kept = settings.film.media.filter((m) => m.kind !== 'image' || media[m.src])
+  const removed = settings.film.media.length - kept.length
+  if (removed > 0) {
+    warnings.push(`${removed} photo${removed > 1 ? 's' : ''} sans image lisible dans le projet, retirée${removed > 1 ? 's' : ''} du film.`)
+    settings.film = { ...settings.film, media: kept }
+  }
   const rawSpeed = isRecord(doc.playback) ? doc.playback.speed : undefined
   const speedValid = typeof rawSpeed === 'number' && Number.isFinite(rawSpeed) && rawSpeed > 0
   if (rawSpeed !== undefined && !speedValid) warnings.push('Vitesse de lecture invalide : vitesse ×1 utilisée.')
@@ -356,6 +384,7 @@ export function parseProject(text: string): LoadedProject {
     settings,
     speed: speedValid ? rawSpeed : DEFAULT_PLAYBACK.speed,
     tracks,
+    media,
     warnings,
   }
 }

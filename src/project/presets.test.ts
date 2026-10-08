@@ -63,4 +63,18 @@ describe('presetSettings', () => {
     const preset = { name: 'p', settings: { exaggeration: 2, sunHour: 'midi', unknown: 1 } as never }
     expect(presetSettings(preset, base)).toEqual({ ...base, exaggeration: 2 })
   })
+
+  it('keeps the shots of the film only: the stops, texts and media of the current project stay', () => {
+    const stop = { id: 'stop-1', atM: 500, durationS: 3, camera: 'fixe' as const }
+    const text = { id: 'text-1', startS: 1, durationS: 2, text: 'Départ', anchor: 'center' as const, size: 1 }
+    const saved = { ...DEFAULT_SETTINGS.film, opening: { style: 'saut' as const, durationS: 3 }, autoStops: false, stops: [stop] }
+    const store = createPresetStore(memoryStorage())
+    store.save('Plans', { ...DEFAULT_SETTINGS, film: saved })
+    expect(store.list()[0].settings.film).toEqual({ opening: saved.opening, closing: saved.closing })
+
+    const base = { ...DEFAULT_SETTINGS, film: { ...DEFAULT_SETTINGS.film, texts: [text] } }
+    expect(presetSettings(store.list()[0], base).film).toEqual({ ...base.film, opening: saved.opening })
+    // a preset saved with the whole film (before the timeline): same result
+    expect(presetSettings({ name: 'old', settings: { film: saved } as never }, base).film).toEqual({ ...base.film, opening: saved.opening })
+  })
 })
