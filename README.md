@@ -168,7 +168,7 @@ heures de départ) ; le message propose « Annuler ».
   musique » change la durée du survol pour que le film finisse avec elle. « Baisser la musique sous les vidéos » la baisse
   de 10 dB pendant les vidéos qui ont du son. La musique joue pendant la lecture ; le bouton haut-parleur de la barre
   coupe le son de la lecture, musique et vidéos (la vidéo exportée le garde). Elle est enregistrée dans le projet.
-  « Caler sur le rythme » pose les arrêts et les titres sur les temps de la musique (de petites marques en haut du bloc).
+  « Caler sur le rythme » pose les arrêts, les titres et les débuts des portions de vitesse (ralentis) sur les temps de la musique (de petites marques en haut du bloc).
 - « Vitesse » fait passer 1 km de trace deux fois plus vite, à partir du marqueur (ou clic droit sur la trace, « Accélérer /
   ralentir ici ») ; tirez les bords du bloc, choisissez de ×0,25 à ×4 dans le panneau.
 - Dans le panneau d'un arrêt, « Caméra pendant l'arrêt » : comme le film, tour lent autour du point, vue large ou fixe.
@@ -656,5 +656,5 @@ Ce qui distingue OpenFlyover : tout reste local, et les données de la sortie (h
 | Repères automatiques | sommets, cols, refuges et lacs tirés d'OpenStreetMap avec leur altitude ; montées détectées et catégorisées, qui déclenchent ralentis et titres | montées (cat. 4 à HC), waypoints GPX et repères OpenStreetMap (sommets, cols, refuges, lacs… à 0,1–3 km, une requête Overpass par trace en cache) étiquetés en 3D, ralentis et titres aux cols, sommets et refuges : fait |
 | Rendu en lot | le même film en plusieurs formats d'un coup ; un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface | plusieurs formats (format × résolution, image fixe, affiche) en une fois, dans un dossier choisi : fait ; une vidéo par trace d'un dossier, depuis l'interface : fait ; en ligne de commande à faire |
 | Affiche imprimable | la trace sur le relief en très haute résolution, avec titre et chiffres, pour un tirage | A4 / A3 à 300 dpi (portrait, paysage) et carré, vue d'ensemble 3D, titre, date, chiffres clés, profil, météo, crédits, trois styles, plusieurs traces, carte à plat : fait |
-| Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale | piste « Musique » (volume, fondus, forme d'onde), jouée dans l'aperçu, mixée à l'export, durée du film calée sur la musique, arrêts et titres calés sur le rythme : fait ; caler les ralentis sur le rythme à faire |
+| Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale | piste « Musique » (volume, fondus, forme d'onde), jouée dans l'aperçu, mixée à l'export, durée du film calée sur la musique, arrêts, titres et portions de vitesse (ralentis) calés sur le rythme : fait |
 | Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller | points posés sur le relief, sans trace ; itinéraire calculé dans le navigateur sur les chemins OSM, altitudes du relief : fait ; profils (vélo, VTT) à faire |

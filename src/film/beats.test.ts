@@ -5,7 +5,7 @@ import type { FilmBeat, MusicBeats } from './beats'
 import { buildFilmClock } from './clock'
 import type { FilmClockInput } from './clock'
 import { AUDIO_DEFAULTS, DEFAULT_FILM } from './model'
-import type { Film, FilmAudio, FilmStop, FilmText } from './model'
+import type { Film, FilmAudio, FilmSpeed, FilmStop, FilmText } from './model'
 
 const RATE = 22050
 
@@ -173,5 +173,22 @@ describe('snapping the film onto the beats', () => {
     expect(snapFilmToBeats(late, beats, placementOf(late))).toEqual({ film: late, moved: 0 })
     const together: Film = { ...film, texts: [], stops: [stop('stop-1', 2000), stop('stop-2', 2000)] }
     expect(snapFilmToBeats(together, beats, placementOf(together)).moved).toBe(0)
+  })
+
+  it('moves the start of a speed portion onto a beat, its length kept, once', () => {
+    const slow: Film = { ...film, stops: [], texts: [], speeds: [{ id: 'speed-1', fromM: 3420, toM: 3820, factor: 0.5 }] }
+    const base = placementOf(slow)
+    const clockOfSpeeds = (stops: readonly FilmStop[], speeds: readonly FilmSpeed[]) =>
+      buildFilmClock({ opening: slow.opening, closing: slow.closing, stops, speeds, lengthM: L, highlightsM: [], durationS: 60, pacing: { ...DEFAULT_PACING, keepDuration: false } })
+    const placement = { ...base, clockOfSpeeds }
+    const { film: snapped, moved } = snapFilmToBeats(slow, beats, placement)
+    expect(moved).toBe(1)
+    const [portion] = snapped.speeds
+    expect(portion.toM - portion.fromM).toBe(400)
+    const startS = clockOfSpeeds([], snapped.speeds).timeAtProgress(portion.fromM / L)
+    expect(nearest(beats.map((b) => b.timeS), startS)).toBeLessThanOrEqual(BEAT_SNAP_S / 4)
+    expect(snapFilmToBeats(snapped, beats, placement).moved).toBe(0)
+    // without the clock of the portions, they stay where they are
+    expect(snapFilmToBeats(slow, beats, base).moved).toBe(0)
   })
 })
