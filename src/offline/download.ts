@@ -5,7 +5,7 @@
  */
 import { errorMessage } from '../core/errors'
 import type { KeyValueStore, TileCache } from '../platform/platform'
-import { TileFetchError, downloadTile } from '../terrain/fetch'
+import { TileFetchError, downloadTile, isNoDataError } from '../terrain/fetch'
 import type { PlannedTile } from './plan'
 import { offlinePolicy } from './policy'
 
@@ -111,7 +111,8 @@ export function startPackDownload(pack: string, tiles: readonly PlannedTile[], d
       blob = await download(tile.url, controller.signal)
     } catch (error) {
       if (controller.signal.aborted) throw error
-      if (error instanceof TileFetchError && error.status >= 400 && error.status < 500) {
+      // a source without data there (404…), not a busy server (429) nor an IGN glitch (400, see fetch.ts)
+      if (isNoDataError(error) && !(error instanceof TileFetchError && error.status === 400)) {
         progress.missing++
         failuresInARow = 0
         return true
@@ -139,8 +140,10 @@ export function startPackDownload(pack: string, tiles: readonly PlannedTile[], d
       let counted: boolean
       try {
         counted = await handle(tiles[next++])
-      } catch {
-        return // aborted
+      } catch (error) {
+        // aborted, or the storage failed (`has`): the pack is not complete
+        if (!controller.signal.aborted) stop('failed', { error: `Tuiles non lues : ${errorMessage(error)}` })
+        return
       }
       if (!counted) return
       progress.done++
@@ -150,7 +153,7 @@ export function startPackDownload(pack: string, tiles: readonly PlannedTile[], d
 
   const workers = Array.from({ length: Math.max(1, deps.concurrency ?? DOWNLOAD_CONCURRENCY) }, () => worker())
   const finished = Promise.all(workers).then(() => {
-    if (progress.state === 'running' || progress.state === 'paused') progress.state = 'done'
+    if ((progress.state === 'running' || progress.state === 'paused') && progress.done === progress.total) progress.state = 'done'
     emit()
     return { ...progress }
   })

@@ -10,7 +10,7 @@ import { create } from 'zustand'
 import type { Track } from '../core/types'
 import { trackPathOf } from '../flyover/path'
 import { setLabelSource, useLabelSources } from '../scene/labelSources'
-import { buildLandmarks, landmarkLabels } from './landmarks'
+import { DEFAULT_LANDMARK_SETTINGS, buildLandmarks, landmarkLabels } from './landmarks'
 import type { Landmark, LandmarkSettings } from './landmarks'
 import { OverpassError, fetchTrackFeatures } from './overpass'
 import type { OsmFeature } from './overpass'
@@ -39,6 +39,8 @@ export interface SyncLandmarksDeps {
 const pending = new Map<string, AbortController>()
 /** Tracks whose last request failed (not retried until `retry`). */
 const failed = new Set<string>()
+/** tracks and settings of the last `syncLandmarks`, used when a request answers */
+let latest: { tracks: readonly Track[]; settings: LandmarkSettings } = { tracks: [], settings: DEFAULT_LANDMARK_SETTINGS }
 
 function errorMessage(e: unknown): string {
   if (e instanceof OverpassError && (e.status === 429 || e.status === 504)) {
@@ -70,6 +72,7 @@ export function syncLandmarks(
   settings: LandmarkSettings,
   { retry = false, deps = { fetchFeatures: fetchTrackFeatures } }: { retry?: boolean; deps?: SyncLandmarksDeps } = {},
 ): void {
+  latest = { tracks, settings }
   if (tracks.length === 0 || !settings.enabled) {
     resetLandmarkStore()
     return
@@ -100,13 +103,14 @@ export function syncLandmarks(
         if (pending.get(track.id) !== ctrl) return
         pending.delete(track.id)
         useLandmarkStore.setState({ features: { ...useLandmarkStore.getState().features, [track.id]: list } })
-        publish(tracks, settings, useLandmarkStore.getState().message)
+        // the tracks and settings of now, not of when the request left (the user may have changed them meanwhile)
+        publish(latest.tracks, latest.settings, useLandmarkStore.getState().message)
       },
       (e: unknown) => {
         if (pending.get(track.id) !== ctrl) return
         pending.delete(track.id)
         failed.add(track.id)
-        publish(tracks, settings, errorMessage(e))
+        publish(latest.tracks, latest.settings, errorMessage(e))
       },
     )
   }

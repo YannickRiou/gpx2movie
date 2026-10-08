@@ -418,6 +418,8 @@ export function cachedOverpassQuery<T>(
   queue = promise.catch(() => undefined)
   memoryCache.set(key, promise)
   promise.catch(() => memoryCache.delete(key))
+  // the promise is tied to this caller's signal: once aborted, a later caller must not get its AbortError
+  signal?.addEventListener('abort', () => memoryCache.get(key) === promise && memoryCache.delete(key), { once: true })
   return promise
 }
 
