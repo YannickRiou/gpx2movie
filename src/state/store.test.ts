@@ -216,7 +216,7 @@ describe('settings and misc', () => {
         landmarkTitles: true,
         pois: [],
       },
-      labels: { climbs: true, waypoints: true, kmStep: 0 },
+      labels: { climbs: true, waypoints: true, kmStep: 0, size: 1, rangeKm: 70 },
       weather: { enabled: true },
       weatherScene: { enabled: true, strength: 1 },
       clouds: { mode: 'meteo', coverage: 0.4, altitudeM: 1200, quality: 'medium' },
