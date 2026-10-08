@@ -218,9 +218,15 @@ export function withOverlayDefaults(raw: unknown): unknown {
  */
 export function withOverrides(overlay: OverlaySettings, patch: OverlayOverrides | null): OverlaySettings {
   const { overrides, ...rest } = overlay
+  const kept = mergeOverrides(overrides, patch)
+  return kept ? { ...rest, overrides: kept } : rest
+}
+
+/** `overrides` patched (null: none left), fields set to undefined dropped; undefined once nothing is left. */
+function mergeOverrides(overrides: OverlayOverrides | undefined, patch: OverlayOverrides | null): OverlayOverrides | undefined {
   const merged = patch === null ? {} : { ...overrides, ...patch }
   const kept: OverlayOverrides = Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== undefined))
-  return Object.keys(kept).length > 0 ? { ...rest, overrides: kept } : rest
+  return Object.keys(kept).length > 0 ? kept : undefined
 }
 
 /** Widgets whose colours and fonts can differ from the rest of the overlay (the logo is an image). */
@@ -230,9 +236,8 @@ export type StyledWidget = (typeof STYLED_WIDGETS)[number]
 /** `overlay` with the overrides of widget `key` patched like `withOverrides` (null: back to the overlay's). */
 export function withWidgetOverrides(overlay: OverlaySettings, key: StyledWidget, patch: OverlayOverrides | null): OverlaySettings {
   const { overrides, ...rest } = overlay[key]
-  const merged = patch === null ? {} : { ...overrides, ...patch }
-  const kept: OverlayOverrides = Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== undefined))
-  return { ...overlay, [key]: Object.keys(kept).length > 0 ? { ...rest, overrides: kept } : rest }
+  const kept = mergeOverrides(overrides, patch)
+  return { ...overlay, [key]: kept ? { ...rest, overrides: kept } : rest }
 }
 
 /** Overrides drawn for widget `key`: the overlay's, then the widget's own; undefined when neither has any. */

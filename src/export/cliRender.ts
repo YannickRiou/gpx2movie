@@ -16,7 +16,7 @@ import { startPoster } from '../poster/export'
 import { useAppStore } from '../state/store'
 import { buildBatchJobs, formatKey, trackFiles, useBatchStore } from './batch'
 import type { TrackRunState } from './batch'
-import { exportCodec } from './nativeEncoder'
+import { containerFor } from './nativeEncoder'
 import { VIDEO_ASPECTS, VIDEO_RESOLUTIONS } from './schedule'
 
 /** What `cli_render` answers (paths absolute, already in the fs scope). */
@@ -86,7 +86,7 @@ export async function runCliRenderIfAsked(invoke: Invoke = tauriInvoke): Promise
     const tracks = await useBatchStore.getState().runTracks(files, jobs, {
       folder,
       still: { progress: 0, type: 'image/png' },
-      containerOf: async (j) => (await exportCodec({ width: j.width, height: j.height, fps: video.fps, quality: video.quality }))?.container ?? null,
+      containerOf: containerFor(video),
       startPoster,
       save: () => undefined,
     })

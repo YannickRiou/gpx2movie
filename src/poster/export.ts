@@ -8,7 +8,7 @@ import { create } from 'zustand'
 import type { Track } from '../core/types'
 import { useExportStore } from '../export/store'
 import { climbsOf } from '../flyover/climbs'
-import { buildTrackPath } from '../flyover/path'
+import { trackPathOf } from '../flyover/path'
 import { useLandmarkStore, useWaterStore } from '../osm/store'
 import { loadOverlayFonts } from '../overlay/assets'
 import { overlayCredits } from '../overlay/data'
@@ -56,7 +56,7 @@ export function currentPosterContent(): PosterContent | null {
   const weatherState = useWeatherStore.getState()
   const series = weatherState.status === 'ready' && weatherState.trackId === track.id ? weatherState.series : null
   // rebuilt on every preview redraw (each keystroke in the title): built once for the profile and the weather
-  const path = buildTrackPath(track)
+  const path = trackPathOf(track)
   return posterContent({
     tracks,
     race: settings.race.enabled,
