@@ -178,11 +178,27 @@ export const FADE_RANGE = { min: 0, max: 30, step: 0.5 } as const
  * the first key and back to them after the last one (`keyedCamera`, flyover/filmCamera.ts).
  */
 /** A point of interest placed by hand: a name at a place on the ground, shown as a label in the view and the film. */
+export const POI_ICONS = ['epingle', 'refuge', 'bivouac', 'sommet', 'vue', 'photo', 'drapeau', 'eau', 'repas'] as const
+export type PoiIcon = (typeof POI_ICONS)[number]
+export const POI_ICON_LABELS: Record<PoiIcon, string> = {
+  epingle: 'Épingle',
+  refuge: 'Refuge',
+  bivouac: 'Bivouac',
+  sommet: 'Sommet',
+  vue: 'Point de vue',
+  photo: 'Photo',
+  drapeau: 'Drapeau',
+  eau: 'Eau',
+  repas: 'Repas',
+}
+
 export interface FilmPoi {
   id: string
   lon: number
   lat: number
   name: string
+  /** pictogram of its label; absent = 'epingle' */
+  icon?: PoiIcon
 }
 
 export interface FilmCameraKey {
@@ -353,7 +369,14 @@ export function isValidSpeed(speed: unknown): speed is FilmSpeed {
 }
 
 export function isValidPoi(poi: unknown): poi is FilmPoi {
-  return isRecord(poi) && isId(poi.id) && within(poi.lon, -180, 180) && within(poi.lat, -90, 90) && typeof poi.name === 'string'
+  return (
+    isRecord(poi) &&
+    isId(poi.id) &&
+    within(poi.lon, -180, 180) &&
+    within(poi.lat, -90, 90) &&
+    typeof poi.name === 'string' &&
+    (poi.icon === undefined || oneOf(POI_ICONS, poi.icon))
+  )
 }
 
 export function isValidCameraKey(key: unknown): key is FilmCameraKey {

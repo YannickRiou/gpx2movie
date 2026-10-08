@@ -19,6 +19,7 @@ import { useFrame } from '@react-three/fiber'
 import { CanvasTexture, Group, type Camera, LinearFilter, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three'
 import type { LocalFrame, TerrainEngine } from '../core/types'
 import { registerDrapeFlush, useExportStore } from '../export/store'
+import type { PoiIcon } from '../film/model'
 import { climbsOf } from '../flyover/climbs'
 import { cardOpacityAt, overlayTime } from '../overlay/draw'
 import { useAppStore } from '../state/store'
@@ -60,11 +61,23 @@ const PAD_X = 8
 const STRIPE_W = 3
 const STEM_H = 10
 const DOT_R = 4
-/** Pin of a point of interest: Lucide « map-pin » (24 × 24 view box), `PIN_PX` wide, `PIN_X` from the left, before the text. */
+/** Pictogram of a point of interest (24 × 24 view box), `PIN_PX` wide, `PIN_X` from the left, before the text. */
 const PIN_PX = 14
 const PIN_X = 6
 const PIN_GAP = 4
-const PIN_PATH = 'M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0'
+/** Stroked paths after Lucide (ISC License, see ui/icons.tsx): map-pin, house, tent, mountain, eye, camera, flag, droplet, utensils. */
+const POI_ICON_PATHS: Record<PoiIcon, string> = {
+  epingle: 'M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0M15 10a3 3 0 1 1-6 0a3 3 0 1 1 6 0',
+  refuge:
+    'M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  bivouac: 'M3.5 21 14 3M20.5 21 10 3M15.5 21 12 15l-3.5 6M2 21h20',
+  sommet: 'm8 3 4 8 5-5 5 15H2L8 3z',
+  vue: 'M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7ZM15 12a3 3 0 1 1-6 0a3 3 0 1 1 6 0',
+  photo: 'M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3zM15 13a3 3 0 1 1-6 0a3 3 0 1 1 6 0',
+  drapeau: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7',
+  eau: 'M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z',
+  repas: 'M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7',
+}
 /** Texture pixels per CSS pixel (sharp on high-density screens). */
 const TEXTURE_SCALE = 2
 const MAX_CHARS = 40
@@ -87,7 +100,7 @@ function labelFont(scale: number): string {
 }
 
 /** Canvas texture of one label, or null where 2D canvases are unavailable (jsdom). */
-function drawLabelTexture(rawText: string, kind: LandmarkKind): LabelTexture | null {
+function drawLabelTexture(rawText: string, kind: LandmarkKind, icon: PoiIcon = 'epingle'): LabelTexture | null {
   const text = rawText.length > MAX_CHARS ? `${rawText.slice(0, MAX_CHARS - 1)}…` : rawText
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')
@@ -115,7 +128,7 @@ function drawLabelTexture(rawText: string, kind: LandmarkKind): LabelTexture | n
   ctx.fillStyle = accent
   if (!pin) ctx.fillRect(0, 0, STRIPE_W, PANEL_H)
   ctx.restore()
-  if (pin) drawPin(ctx, PIN_X, (PANEL_H - PIN_PX) / 2, accent)
+  if (pin) drawPin(ctx, PIN_X, (PANEL_H - PIN_PX) / 2, accent, icon)
 
   ctx.font = labelFont(1)
   ctx.fillStyle = LABEL_TEXT_COLOR
@@ -144,18 +157,16 @@ function drawLabelTexture(rawText: string, kind: LandmarkKind): LabelTexture | n
   return { texture, width, height, anchorY: (DOT_R + 1) / height }
 }
 
-/** The pin of a point of interest, its top left corner at (x, y). */
-function drawPin(ctx: CanvasRenderingContext2D, x: number, y: number, color: string): void {
+/** The pictogram of a point of interest, its top left corner at (x, y). */
+function drawPin(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, icon: PoiIcon): void {
   ctx.save()
   ctx.translate(x, y)
   ctx.scale(PIN_PX / 24, PIN_PX / 24)
   ctx.strokeStyle = color
   ctx.lineWidth = 2.5
   ctx.lineJoin = 'round'
-  ctx.stroke(new Path2D(PIN_PATH))
-  ctx.beginPath()
-  ctx.arc(12, 10, 3, 0, Math.PI * 2)
-  ctx.stroke()
+  ctx.lineCap = 'round'
+  ctx.stroke(new Path2D(POI_ICON_PATHS[icon]))
   ctx.restore()
 }
 
@@ -316,10 +327,10 @@ export function Labels() {
     const entries: LabelEntry[] = []
     if (frame) {
       for (const label of labels) {
-        const key = `${label.kind}\n${label.text}`
+        const key = `${label.kind}\n${label.icon ?? ''}\n${label.text}`
         let tex = textures.get(key)
         if (!tex) {
-          tex = drawLabelTexture(label.text, label.kind) ?? undefined
+          tex = drawLabelTexture(label.text, label.kind, label.icon) ?? undefined
           if (!tex) continue
           textures.set(key, tex)
         }
