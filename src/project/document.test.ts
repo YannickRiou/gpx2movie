@@ -202,6 +202,17 @@ describe('serializeProject / parseProject', () => {
     ])
     expect(loaded.tracks[1].waypoints).toBeUndefined()
   })
+
+  it('round-trips the UTC offset of a track and drops an invalid one', () => {
+    const track = { ...makeTrack('o', '#FF5A36'), utcOffsetMin: 120 }
+    const text = serializeProject({ ...STATE, tracks: [track, makeTrack('b', '#5BC0EB')] }, 'x')
+    const loaded = parseProject(text)
+    expect(loaded.tracks[0].utcOffsetMin).toBe(120)
+    expect(loaded.tracks[1]).not.toHaveProperty('utcOffsetMin')
+    const d = JSON.parse(text) as { tracks: Record<string, unknown>[] }
+    d.tracks[0].utcOffsetMin = 'UTC+2'
+    expect(parseProject(JSON.stringify(d)).tracks[0]).not.toHaveProperty('utcOffsetMin')
+  })
 })
 
 describe('parseProject errors', () => {

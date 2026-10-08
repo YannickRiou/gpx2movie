@@ -2,7 +2,7 @@
  * Test helper: builds small FIT activities with the official SDK encoder so the decoder can be
  * exercised end to end under vitest (no binary fixture to maintain).
  */
-import { Encoder, Profile } from '@garmin/fitsdk'
+import { Encoder, Profile, Utils } from '@garmin/fitsdk'
 import type { Mesg } from '@garmin/fitsdk'
 
 const DEG_TO_SEMI = 2 ** 31 / 180
@@ -26,7 +26,8 @@ export const FIT_ACTIVITY_START = Date.parse('2025-07-12T07:00:00Z')
 
 /**
  * Minimal FIT activity: file_id, 4 records (the second one has no position, like a point recorded
- * before the GPS fix) and a session with sport = hiking. Three positioned points, 180 s long.
+ * before the GPS fix), a session with sport = hiking and an activity recorded at UTC+2. Three positioned points, 180 s
+ * long.
  */
 export function buildFitActivity(): ArrayBuffer {
   const encoder = new Encoder()
@@ -64,6 +65,11 @@ export function buildFitActivity(): ArrayBuffer {
     subSport: 'generic',
     totalElapsedTime: 180,
     totalTimerTime: 180,
+  })
+  writeMesg(encoder, Profile.MesgNum.ACTIVITY, {
+    timestamp: new Date(start + 180_000),
+    localTimestamp: (start + 180_000 + 2 * 3_600_000 - Utils.FIT_EPOCH_MS) / 1000,
+    numSessions: 1,
   })
   return toArrayBuffer(encoder.close())
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildTrack } from '../import/stats'
 import { buildTrackPath } from './path'
-import { SUN_CHIPS, solarDay, solarHourOf, solarHourToDate, sunChipHour, sunDateAt, sunTimes } from './sun'
+import { SUN_CHIPS, clockHourOfSolar, solarDay, solarHourOf, solarHourToDate, sunChipHour, sunDateAt, sunTimes } from './sun'
 import type { SolarDay } from './sun'
 
 describe('solarHourToDate', () => {
@@ -91,6 +91,16 @@ describe('sunTimes', () => {
     const december = sunTimes(69.6492, 18.9553, new Date(Date.UTC(2024, 11, 21)))
     expect(december).toMatchObject({ sunrise: null, sunset: null, polar: 'night' })
     expect(december.solarNoon.getUTCHours()).toBe(10)
+  })
+})
+
+describe('clockHourOfSolar', () => {
+  it('turns a solar hour into the clock hour of a UTC offset, within the day', () => {
+    // Chamonix in summer (UTC+2): the clock is 1 h 32 min ahead of mean solar time
+    expect(clockHourOfSolar(4.5, 6.87, 120)).toBeCloseTo(4.5 + 2 - 6.87 / 15, 9)
+    expect(clockHourOfSolar(23.5, 0, 60)).toBeCloseTo(0.5, 9)
+    expect(clockHourOfSolar(0.5, -120, -480)).toBeCloseTo(0.5, 9) // Pacific time, clock = solar at 120° W
+    expect(clockHourOfSolar(1, 30, 0)).toBeCloseTo(23, 9)
   })
 })
 

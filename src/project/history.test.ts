@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildTrack } from '../import/stats'
 import { DEFAULT_SETTINGS, resetAppStore, useAppStore } from '../state/store'
-import { createHistory, getSettingsHistory, installHistoryShortcuts, resetSettings } from './history'
+import { createHistory, getSettingsHistory, installHistoryShortcuts, installSliderGestures, resetSettings } from './history'
 import type { History } from './history'
 
 interface Value {
@@ -75,6 +75,31 @@ describe('createHistory', () => {
     h.history.undo()
     expect(h.get().a).toBe(0)
     expect(h.history.getState().canUndo).toBe(false)
+  })
+
+  it('keeps a gesture one step however slow, and starts new steps at its start and end', () => {
+    const h = setup()
+    h.set({ a: 1 })
+    h.tick(100)
+    const end = h.history.beginGesture()
+    for (let i = 2; i <= 5; i++) {
+      h.set({ a: i })
+      h.tick(1000) // pauses longer than the coalescing window
+    }
+    end()
+    h.set({ a: 6 })
+    h.history.undo()
+    expect(h.get().a).toBe(5)
+    h.history.undo()
+    expect(h.get().a).toBe(1)
+    h.history.undo()
+    expect(h.get().a).toBe(0)
+    // after the gesture, slow changes are separate steps again
+    h.set({ a: 1 })
+    h.tick(1000)
+    h.set({ a: 2 })
+    h.history.undo()
+    expect(h.get().a).toBe(1)
   })
 
   it('does not coalesce changes of different keys, nor across an undo', () => {
@@ -249,5 +274,40 @@ describe('installHistoryShortcuts', () => {
     uninstall()
     press({ key: 'z', ctrlKey: true })
     expect(history.undo).not.toHaveBeenCalled()
+  })
+})
+
+describe('installSliderGestures', () => {
+  const pointer = (type: string, target: EventTarget) => target.dispatchEvent(new Event(type, { bubbles: true }))
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('opens a gesture on pointer down on a slider and ends it on pointer up or cancel', () => {
+    const end = vi.fn()
+    const beginGesture = vi.fn(() => end)
+    const history = { ...setup().history, beginGesture }
+    const uninstall = installSliderGestures(history)
+    const range = document.body.appendChild(document.createElement('input'))
+    range.type = 'range'
+    const button = document.body.appendChild(document.createElement('button'))
+
+    pointer('pointerdown', button)
+    expect(beginGesture).not.toHaveBeenCalled()
+    pointer('pointerdown', range)
+    expect(beginGesture).toHaveBeenCalledTimes(1)
+    pointer('pointerup', document.body)
+    expect(end).toHaveBeenCalledTimes(1)
+    pointer('pointerup', document.body) // nothing left to end
+    pointer('pointerdown', range)
+    pointer('pointercancel', range)
+    expect(end).toHaveBeenCalledTimes(2)
+
+    pointer('pointerdown', range)
+    uninstall() // ends the open gesture
+    expect(end).toHaveBeenCalledTimes(3)
+    pointer('pointerdown', range)
+    expect(beginGesture).toHaveBeenCalledTimes(3)
   })
 })

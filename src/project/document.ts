@@ -16,7 +16,7 @@ import { FLYOVER_DURATION_RANGE, isValidCamera } from '../flyover/cameraSettings
 import { isValidPacing } from '../flyover/pacing'
 import { isValidRace } from '../flyover/race'
 import { TRACK_COLORS } from '../import'
-import { buildTrack } from '../import/stats'
+import { buildTrack, isUtcOffsetMin } from '../import/stats'
 import { isValidVideoSettings, withVideoDefaults } from '../export/schedule'
 import { LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { isValidOverlay, withOverlayDefaults } from '../overlay/settings'
@@ -60,6 +60,8 @@ export interface ProjectTrack {
   segments: ProjectSegment[]
   /** GPX waypoints (`Track.waypoints`), omitted when the track has none */
   waypoints?: Waypoint[]
+  /** `Track.utcOffsetMin`, omitted when unknown */
+  utcOffsetMin?: number
 }
 
 export interface ProjectDocument {
@@ -202,6 +204,7 @@ export function toProjectDocument(state: ProjectSource, name: string, media: Med
       if (track.activityType) out.activityType = track.activityType
       out.segments = track.segments.map(encodeSegment)
       if (track.waypoints?.length) out.waypoints = track.waypoints.map(encodeWaypoint)
+      if (track.utcOffsetMin !== undefined) out.utcOffsetMin = track.utcOffsetMin
       return out
     }),
   }
@@ -335,6 +338,7 @@ function decodeTrack(raw: unknown, index: number): Track {
     if (!Array.isArray(raw.waypoints)) throw new Error(`${label} : liste des points (« waypoints ») invalide.`)
     if (raw.waypoints.length > 0) track.waypoints = raw.waypoints.map((w, i) => decodeWaypoint(w, `${label}, point ${i + 1}`))
   }
+  if (isUtcOffsetMin(raw.utcOffsetMin)) track.utcOffsetMin = raw.utcOffsetMin
   track.id = raw.id
   track.color =
     typeof raw.color === 'string' && /^#[0-9a-f]{6}$/i.test(raw.color) ? raw.color : TRACK_COLORS[index % TRACK_COLORS.length]

@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react'
-import { SUN_CHIP_LABELS, SUN_CHIPS, SUN_HOUR_RANGE, solarDay, sunChipHour } from '../flyover/sun'
+import { SUN_CHIP_LABELS, SUN_CHIPS, SUN_HOUR_RANGE, clockHourOfSolar, solarDay, sunChipHour } from '../flyover/sun'
 import type { SolarDay } from '../flyover/sun'
 import { TRACK_COLOR_MODES, TRACK_METRICS, hasMetric } from '../flyover/trackColor'
 import { getSettingsHistory } from '../project/history'
@@ -75,6 +75,7 @@ function SunTimeControl() {
   const sunFromTrack = useAppStore((s) => s.settings.sunFromTrack)
   const setSetting = useAppStore((s) => s.setSetting)
   const startTime = useAppStore((s) => s.tracks[0]?.stats.startTime)
+  const utcOffsetMin = useAppStore((s) => s.tracks[0]?.utcOffsetMin)
   const origin = useAppStore((s) => s.frameOrigin)
   const [today] = useState(() => Date.now())
   const trackHasTime = startTime !== undefined
@@ -92,8 +93,15 @@ function SunTimeControl() {
   let dayHint = 'Lever et coucher calculés une fois la trace chargée.'
   if (day?.polar === 'day') dayHint = 'Jour polaire : le soleil ne se couche pas ce jour-là.'
   else if (day?.polar === 'night') dayHint = 'Nuit polaire : le soleil ne se lève pas ce jour-là.'
-  else if (day && day.sunrise !== null && day.sunset !== null) {
-    dayHint = `Lever ${formatHour(day.sunrise)} · coucher ${formatHour(day.sunset)}, au lieu et au jour de la sortie.`
+  else if (day && day.sunrise !== null && day.sunset !== null && lon !== undefined) {
+    const where = 'au lieu et au jour de la sortie.'
+    const solar = `${formatHour(day.sunrise)} · coucher ${formatHour(day.sunset)} en heure solaire`
+    // clock time of the place only when the track gives its UTC offset (no time zone database)
+    if (utcOffsetMin === undefined) dayHint = `Lever ${solar}, ${where}`
+    else {
+      const clock = (hour: number) => formatHour(clockHourOfSolar(hour, lon, utcOffsetMin))
+      dayHint = `Lever ${clock(day.sunrise)} · coucher ${clock(day.sunset)} à l’heure locale (lever ${solar}), ${where}`
+    }
   }
 
   return (

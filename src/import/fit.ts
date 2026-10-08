@@ -6,7 +6,7 @@
 import { Decoder, Stream, Utils } from '@garmin/fitsdk'
 import type { FitMessages, RecordMesg } from '@garmin/fitsdk'
 import type { Track, TrackPoint } from '../core/types'
-import { buildTrack, stripExtension } from './stats'
+import { buildTrack, isUtcOffsetMin, stripExtension } from './stats'
 
 /** 1 semicircle = 180 / 2^31 degrees. */
 export const SEMICIRCLES_TO_DEGREES = 180 / 2 ** 31
@@ -67,6 +67,19 @@ function readSport(messages: FitMessages): string | undefined {
 }
 
 /**
+ * Offset of the device's local clock from UTC (minutes, to the quarter hour), from the activity message's local
+ * timestamp (seconds since the FIT epoch, local time) and timestamp (UTC).
+ */
+export function readUtcOffset(messages: FitMessages): number | undefined {
+  const activity = messages.activityMesgs?.[0]
+  const utc = toEpochMs(activity?.timestamp)
+  const local = finite(activity?.localTimestamp)
+  if (utc === undefined || local === undefined) return undefined
+  const offset = Math.round((local * 1000 + Utils.FIT_EPOCH_MS - utc) / 900_000) * 15
+  return isUtcOffsetMin(offset) ? offset : undefined
+}
+
+/**
  * Decode a FIT activity into a single-segment track (laps are not split).
  * Records without a position (indoor, before the GPS fix…) are dropped.
  * Throws `Error('Fichier FIT invalide : …')` when the header is not FIT or no positioned record exists.
@@ -95,12 +108,13 @@ export async function parseFit(buffer: ArrayBuffer, fileName: string): Promise<T
     throw invalid(detail ? `aucun point et erreur de décodage (${detail})` : 'aucun enregistrement avec position')
   }
 
-  return [
-    buildTrack({
-      name: stripExtension(fileName) || 'Activité FIT',
-      source: 'fit',
-      segments: [{ points }],
-      activityType: readSport(messages),
-    }),
-  ]
+  const track = buildTrack({
+    name: stripExtension(fileName) || 'Activité FIT',
+    source: 'fit',
+    segments: [{ points }],
+    activityType: readSport(messages),
+  })
+  const utcOffsetMin = readUtcOffset(messages)
+  if (utcOffsetMin !== undefined) track.utcOffsetMin = utcOffsetMin
+  return [track]
 }

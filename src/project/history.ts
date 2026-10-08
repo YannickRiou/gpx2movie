@@ -5,7 +5,8 @@
  * `settings`) through `subscribe`. Each step keeps only the keys it changed (before / after values), so
  * undo restores those keys and leaves alone what changed outside the history (e.g. the imagery source picked
  * automatically on import). Rapid changes of the same keys (dragging a slider) are coalesced into one step;
- * `transaction` groups several changes (a preset).
+ * `transaction` groups several changes (a preset); `beginGesture` keeps one step open however slow the changes (a
+ * slider dragged with the pointer, `installSliderGestures`).
  * `getSettingsHistory` binds one instance to `useAppStore`; `installHistoryShortcuts` adds the keyboard;
  * `resetSettings` puts a group of settings back to their defaults as one step (and returns its guarded undo).
  */
@@ -27,6 +28,8 @@ export interface History {
   redo(): void
   /** run `fn` and record every change it makes as a single step */
   transaction(fn: () => void): void
+  /** until the returned end is called, changes of the same keys form a single step whatever their spacing */
+  beginGesture(): () => void
   /** forget every step (e.g. after opening a project) */
   clear(): void
   /** current state; a new object only when it changes (usable with useSyncExternalStore) */
@@ -75,6 +78,7 @@ export function createHistory<T extends object>(options: HistoryOptions<T>): His
   let restoring = false
   let batchDepth = 0
   let batchStart: T | null = null
+  let gesture = false
   let state: HistoryState = { canUndo: false, canRedo: false }
   const listeners = new Set<() => void>()
 
@@ -104,7 +108,9 @@ export function createHistory<T extends object>(options: HistoryOptions<T>): His
     const t = now()
     const id = keys.join('|')
     const top = past.at(-1)
-    const coalesce = top !== undefined && id === lastKeys && t - lastAt < coalesceMs
+    // in a gesture, only a break (undo, transaction, start or end of the gesture) starts a new step
+    const recent = gesture ? lastAt > -Infinity : t - lastAt < coalesceMs
+    const coalesce = top !== undefined && id === lastKeys && recent
     lastKeys = id
     lastAt = t
     if (coalesce) Object.assign(top.after, pick(next, keys))
@@ -149,6 +155,14 @@ export function createHistory<T extends object>(options: HistoryOptions<T>): His
           lastAt = -Infinity
           push(start, options.get())
         }
+      }
+    },
+    beginGesture() {
+      gesture = true
+      lastAt = -Infinity
+      return () => {
+        gesture = false
+        lastAt = -Infinity
       }
     },
     clear() {
@@ -198,6 +212,32 @@ export function resetSettings(keys: readonly (keyof Settings)[], history: Histor
     if (after === before || useAppStore.getState().settings !== after) return false
     history.undo()
     return true
+  }
+}
+
+/**
+ * A slider dragged with the pointer is a single undo step from pointer down to pointer up, however slow; keyboard
+ * changes keep the usual grouping. Returns the function that removes the listeners.
+ */
+export function installSliderGestures(history: History, target: Window = window): () => void {
+  let end: (() => void) | null = null
+  const release = () => {
+    end?.()
+    end = null
+  }
+  const onDown = (e: Event) => {
+    if (!(e.target instanceof HTMLInputElement) || e.target.type !== 'range') return
+    release()
+    end = history.beginGesture()
+  }
+  target.addEventListener('pointerdown', onDown, true)
+  target.addEventListener('pointerup', release, true)
+  target.addEventListener('pointercancel', release, true)
+  return () => {
+    target.removeEventListener('pointerdown', onDown, true)
+    target.removeEventListener('pointerup', release, true)
+    target.removeEventListener('pointercancel', release, true)
+    release()
   }
 }
 

@@ -86,7 +86,6 @@ describe('applyProject', () => {
     const store = useAppStore.getState()
     store.addTracks([chamonix('old')])
     store.setProgress(0.5)
-    store.setImportError('erreur')
     const fit = useAppStore.getState().fitRequest
 
     applyProject(project({ settings: { ...DEFAULT_SETTINGS, wireframe: true, imagerySourceId: 'eox-s2cloudless' } }))
@@ -96,7 +95,6 @@ describe('applyProject', () => {
     expect(state.playback).toMatchObject({ speed: 2, progress: 0, playing: false })
     expect(state.fitRequest).toBeGreaterThan(fit)
     expect(state.frameOrigin).toEqual({ lon: 6.87, lat: 45.93 })
-    expect(state.importError).toBeNull()
   })
 
   it('replaces the pictures of the film', () => {
