@@ -359,6 +359,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   nommés (`CAMERA_PRESETS` : Poursuite, Hélicoptère, Drone haut, Vue du dessus, Orbite, Cinéma) dans
   `src/flyover/cameraSettings.ts` ; `settings.flyoverDurationS` (15–600 s, 60 par défaut) = durée à ×1, la vitesse de la
   timeline s'y ajoute. Onglet « Survol » (`src/ui/CameraPanel.tsx`, sections « Caméra » et « Durée et rythme »). En pause, un changement de réglage caméra replace la caméra.
+  « Cadrer la caméra pendant cet élément » (inspecteur d'un texte ou d'un média) : `addItemCamera` pose un cadrage là où
+  est le marqueur au début de l'élément (sélectionné, à régler) et, si le marqueur avance pendant l'élément, un second à
+  sa fin qui garde le cadrage qui y était : le reste du film ne change pas.
   « Garder ce cadrage ici » (section « Caméra ») pose un cadrage du film au marqueur (`addCameraKey`, avec le cadrage vu
   là : `keyedCamera` ; un cadrage déjà à ce mètre le reprend), un pas d'annulation, sélectionné pour l'inspecteur (voir
   « Film et timeline », « Caméra »).
