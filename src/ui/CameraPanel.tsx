@@ -14,7 +14,7 @@ import { PACING_RANGES } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
 import { editFilm, usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
-import { formatDistance, formatNumber } from './format'
+import { formatDegrees, formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
 import type { IconName } from './icons'
 import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
@@ -31,10 +31,6 @@ function formatSeconds(seconds: number): string {
   return s === 0 ? `${m} min` : `${m} min ${String(s).padStart(2, '0')} s`
 }
 
-/** -30 -> "−30°" */
-function formatDegrees(deg: number): string {
-  return `${deg < 0 ? '−' : ''}${formatNumber(Math.abs(deg))}°`
-}
 
 type NumericKey = keyof typeof CAMERA_RANGES
 

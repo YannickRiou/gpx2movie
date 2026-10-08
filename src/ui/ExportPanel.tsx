@@ -16,7 +16,7 @@ import {
 } from '../export/batch'
 import { errorMessage } from '../core/errors'
 import { videoBitrate, type CodecCandidate } from '../export/encoder'
-import { exportCodec } from '../export/nativeEncoder'
+import { containerFor, exportCodec } from '../export/nativeEncoder'
 import {
   EXPORT_HOLD_END_S,
   EXPORT_HOLD_START_S,
@@ -573,7 +573,7 @@ function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   /** What both sources share (the folder aside). */
   const shared = (): Pick<BatchContext, 'still' | 'containerOf' | 'startPoster' | 'save'> => ({
     still: { progress: useAppStore.getState().playback.progress, type: 'image/png' },
-    containerOf: async (j) => (await exportCodec({ width: j.width, height: j.height, fps: video.fps, quality: video.quality }))?.container ?? null,
+    containerOf: containerFor(video),
     startPoster,
     save: (r) => r.url && download(r.url, r.fileName),
   })

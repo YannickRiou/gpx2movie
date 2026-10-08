@@ -18,8 +18,7 @@ import { useLandmarkStore, useWaterStore } from '../osm/store'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
 import type { WeatherSeries } from '../weather/series'
-import { buildTrackPath } from '../flyover/path'
-import type { TrackPath } from '../flyover/path'
+import { trackPathOf } from '../flyover/path'
 import { buildRace, raceAt, raceTrackOf } from '../flyover/race'
 import { loadLogo } from './assets'
 import { leaderboardRows, overlayCredits, overlayFrameAt, prepareOverlayTrack, recordedAtProgress } from './data'
@@ -68,9 +67,6 @@ export function photoAssets(): Pick<OverlayAssets, 'photo'> {
 /** Frames of the video clips for the export (opened at the first frame that shows one). */
 let exportVideos: ExportVideos | null = null
 
-/** Path of the first track, for the clips following the flight (built once per track). */
-let followPath: { track: Track; path: TrackPath } | null = null
-
 /**
  * Resolve once the pictures of the photos and the frames of the clips shown at film time `timeS` and `progress`
  * (where a clip following the flight takes its frame) are decoded (export, before a frame).
@@ -81,8 +77,7 @@ export async function loadFrameMedia(timeS: number, progress: number): Promise<v
   if (media.some((m) => m.kind === 'video')) exportVideos ??= createExportVideos((id) => useMediaStore.getState().table[id])
   let recordedMs: number | undefined
   if (tracks[0] && media.some((m) => m.sync?.follow)) {
-    if (followPath?.track !== tracks[0]) followPath = { track: tracks[0], path: buildTrackPath(tracks[0]) }
-    recordedMs = recordedAtProgress(followPath.path, progress)
+    recordedMs = recordedAtProgress(trackPathOf(tracks[0]), progress)
   }
   await Promise.all([getMediaBitmaps().load(mediaToLoad(media, timeS)), exportVideos?.load(media, timeS, recordedMs)])
 }
@@ -91,7 +86,6 @@ export async function loadFrameMedia(timeS: number, progress: number): Promise<v
 export function releaseFrameMedia(): void {
   exportVideos?.dispose()
   exportVideos = null
-  followPath = null
 }
 
 export interface OverlayDrawer {
