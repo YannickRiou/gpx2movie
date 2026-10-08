@@ -45,7 +45,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/climbs.ts` | montées détectées | `detectClimbs`, `climbsOf(track)` (cache par trace), seuils exportés, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
 | `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses données par le film) ; `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
-| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits (`removeFilmItem` passe un plan à « aucune »), `hasFilmItem`, `addMedia`, `updateMedia`, `photoFilmTime` ; `model.ts` : `clipTimeS` ; `exif.ts` : `parseExif`, `photoTimeMs` ; `media.ts` et `video.ts` (seuls modules non purs du dossier) : `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` ; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `createPreviewVideos`, `getPreviewVideos` |
+| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits (`removeFilmItem` passe un plan à « aucune »), `hasFilmItem`, `addMedia`, `updateMedia`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt` ; `model.ts` : `clipTimeS`, `MediaSync`, `SYNC_OFFSET_RANGE` ; `exif.ts` : `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs` ; `media.ts` et `video.ts` (seuls modules non purs du dossier) : `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` ; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `createPreviewVideos`, `getPreviewVideos` |
 | `src/flyover/filmCamera.ts` | caméra du film | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `blendViews`, `shotBlend`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | date du soleil, lever / coucher | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
@@ -54,8 +54,10 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/osm/*` | repères OpenStreetMap | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures` ; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `LANDMARK_DISTANCE_RANGE` ; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
 | `src/overlay/*` | habillage du film | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (pont vers l'export), `OverlayCanvas` |
 | `src/export/*` | export vidéo | `buildFrameSchedule`, `VIDEO_FORMATS`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `settle`, `renderSettledFrame`, `composeFrame`, `useExportStore`, `videoFileName`, `chooseVideoDestination`, `warnsInMemory`, `ExportController` |
+| `src/poster/*` | affiche (voir « Affiche ») | purs, testés : `PosterSettings`, `DEFAULT_POSTER`, `POSTER_FORMATS`, `posterSize`, `isValidPoster` ; `posterContent`, `posterFigure`, `availableFigures` ; `posterLayout` (boîtes), `fitText`, `fitLines`, `wrapText`, `truncate` ; `drawPoster`, `coverCrop`, `POSTER_THEMES`, `POSTER_FONTS` ; non purs : `currentPosterContent`, `startPoster`, `usePosterPreview` (`export.ts`), `PosterPanel` |
 | `src/flyover/race.ts` | course fantôme | `RACE_SYNC_MODES`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers` ; `useRace`, `RaceMarkers` |
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | météo dans la scène | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction` ; `WeatherEffect` |
+| `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | eau réfléchissante | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater` ; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH` ; `WaterLayer`, `WATER_LIFT_M` ; `useWaterStore` (`osm/store.ts`) |
 | `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | nuages volumétriques | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `cloudCoversAt`, `sceneCloudsFrom`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor` ; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
 | `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/platform/*` | site / bureau (voir « Application de bureau ») | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`), `selectPlatform(scope)`, `videoEncoderMissingHint` ; purs, testés : `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore` |
@@ -383,7 +385,7 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - **Légende** `TrackLegend` (en bas à gauche de la vue 3D, seulement si `trackColorBy !== 'none'`) : dégradé, bornes avec unités,
   pastille « Sans donnée » s'il manque des valeurs.
 
-## Film et timeline (phase 4, incréments 1 à 4 sur 4 : modèle, moteur, timeline, textes, photos et vidéos)
+## Film et timeline (phase 4, incréments 1 à 4 sur 4 : modèle, moteur, timeline, textes, photos et vidéos ; musique, phase 7)
 
 - **Principe** : comme un logiciel de montage, « la base, c'est le GPX » : le survol continu de la première trace porte le
   film ; des éléments posés sur des pistes séparées s'y ajoutent. Incréments : 1 modèle pur et moteur (fait) ; 2 timeline sous
@@ -399,11 +401,15 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   elles peuvent se toucher ; `isValidSpeed`, vide par défaut, un film enregistré avant reçoit `[]` par `withFilmDefaults`) ;
   `texts[]` `{ id, startS, durationS, text, subtitle?, anchor, size }` (placement du widget texte de l'habillage) et
   `media[]` `{ id, startS, durationS, kind: 'image' | 'video', src, layout: 'plein-ecran' | 'carte', anchor, size, kenBurns,
-  caption?, inS?, outS?, muted? }` (`src` = id de l'image ou de la vidéo dans la table des médias du document, voir
+  caption?, inS?, outS?, muted?, sync? }` (`src` = id de l'image ou de la vidéo dans la table des médias du document, voir
   « Photos » et « Vidéos » ; vidéo : `inS` / `outS` = début et fin du morceau dans le fichier, défaut son début et sa fin,
-  `clipTimeS` ; `muted` réservé, le son n'étant pas géré ; `MEDIA_DEFAULTS` : plein
+  `clipTimeS` ; `muted` réservé, le son des vidéos n'étant pas repris ; `sync` `{ startMs, offsetS, follow }` : vidéo
+  calée sur la trace, voir « Vidéo calée sur le parcours » ; `MEDIA_DEFAULTS` : plein
   écran, Ken Burns, légende en bas à gauche, taille 1, aussi pour un média enregistré sans ces champs par
-  `withFilmDefaults`), ancrés en temps du film ; ids uniques dans le film (`stop-3`, `text-1`, `media-2`, `nextFilmId`).
+  `withFilmDefaults`), et `audio[]` `{ id, src, startS, durationS (0,5 s–1 h), inS, volume (0–1), fadeInS, fadeOutS (0–30 s) }`
+  (musiques, voir « Musique » ; `src` = id du fichier son dans la table des médias ; `AUDIO_DEFAULTS` : volume 1, fondus
+  0,5 s / 2 s ; `isValidAudio` ; un film enregistré avant reçoit `[]`), ancrés en temps du film ; ids uniques dans le film
+  (`stop-3`, `text-1`, `media-2`, `music-1`, `nextFilmId`).
 - **Assemblage automatique** (`src/film/assemble.ts`) : tant que `autoStops` est vrai, les arrêts sont générés à chaque calcul
   (`autoStops`) aux temps forts (`stopCandidates` : sommets des montées, cols franchis, sommets proches, selon les cases
   `climbs` / `landmarks` du rythme ; un par groupe de `windowM`, comme les pauses qu'ils remplacent), id `auto-<mètres>`,
@@ -415,8 +421,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - **Anciens projets** : un film enregistré sans `autoMode` est complété par `withFilmDefaults` (`SETTING_UPGRADES`, aussi pour
   les préréglages) avec `'rythme'` ; un projet v1 sans film reçoit `{ autoMode: 'rythme' }` par la migration v1 → v2
   (`MIGRATIONS[1]`), complété de même : leurs arrêts restent ceux de leur rythme.
-- **Préréglages** : seuls les plans d'ouverture et de clôture du film sont enregistrés ; `stops`, `speeds`, `texts`, `media` (et
-  `autoStops`) appartiennent à la trace et restent ceux du projet courant à l'application (`presetSettings`, y compris pour
+- **Préréglages** : seuls les plans d'ouverture et de clôture du film sont enregistrés ; `stops`, `speeds`, `texts`, `media`,
+  `audio` (et `autoStops`) appartiennent à la trace et restent ceux du projet courant à l'application (`presetSettings`, y compris pour
   un préréglage enregistré avec tout le film).
 - **Horloge du film** (`src/film/clock.ts`, `buildFilmClock` / `filmClockFor`, hook `useFilmClock` dans
   `src/scene/usePacing.ts`, alias `usePacing` pour les panneaux ; au même endroit `getFilmSource` hors React et
@@ -457,8 +463,10 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   1280 px) : lecture, ■ (pause et retour à la première image), temps `m:ss,d / m:ss`, distance / altitude / heure au
   marqueur, « Arrêt » (S : à la position du marqueur, au mètre, source `manual`, 4 s, orbite), « Arrêt à un temps fort… »
   (temps forts sans arrêt), « Texte » (T : à la tête de lecture, 4 s, en bas au centre), « Média » (voir « Photos » et
-  « Vidéos »), vitesse,
-  zoom (− / curseur logarithmique / + / « Ajuster » = tout le film), menu « Options » (case « Arrêts automatiques » :
+  « Vidéos »), haut-parleur (coupe ou remet la musique de l'aperçu, `useMusicPreview`, montré quand le film a une musique ;
+  ni enregistré ni annulable, l'export garde la musique), vitesse,
+  zoom (− / curseur logarithmique / + / « Ajuster » = tout le film), menu « Options » (« Ajouter une musique… », voir
+  « Musique » ; case « Arrêts automatiques » :
   cochée, `autoStops` + `'temps-forts'`, arrêts propres effacés ; décochée, arrêts générés écrits ; pastille « modifié » /
   « Par défaut » du film, `ModifiedMarker keys={['film']}` ; un point sur le bouton quand le film s'écarte du défaut ; se
   ferme par Échap, un clic dehors ou Tab), replier.
@@ -471,12 +479,15 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   vidéo porte en plus une petite icône de caméra). Piste « Vitesse » sous « Plans » : un bloc par portion, de son entrée à
   sa sortie en temps du film, libellé « ×2 » (cadre plein si accélérée, pointillé si ralentie) ; « Vitesse » de la barre
   (`addSpeed` : ×2 sur 1 km à partir du marqueur, raccourcie ou avancée pour rester sur la trace et hors des autres
-  portions ; message si le marqueur est déjà dans une portion ou s'il n'y a pas 50 m libres).
+  portions ; message si le marqueur est déjà dans une portion ou s'il n'y a pas 50 m libres). Piste « Musique » sous
+  « Médias » : un bloc par musique, nom du fichier, icône de note et forme d'onde (`waveformPath`, la partie du fichier
+  jouée, en bande symétrique, à l'échelle du passage le plus fort) ; vide, elle dit où déposer un fichier.
 - **Gestes** (`dragFilm`, pur) : glisser un arrêt le déplace le long de la trace — son début de tenue suit le pointeur,
   position trouvée par dichotomie sur l'horloge (`stopPositionAt`, 32 pas) ; son bord droit l'allonge (en proportion du
   plafond `keepDuration`) ; un texte ou une photo se déplace ou s'étire par ses deux bords ; le bord intérieur de l'ouverture / de la
   clôture change sa durée ; le bord gauche d'une vidéo déplace aussi son début dans le fichier (`inS`, jamais avant le
-  début du fichier : les images restent en place) ; une portion de vitesse se déplace (longueur en mètres gardée) ou
+  début du fichier : les images restent en place) ; une musique se déplace, son bord droit ne dépasse jamais la fin du
+  fichier (`DragContext.audioFileS`), son bord gauche déplace son début dans le fichier comme une vidéo ; une portion de vitesse se déplace (longueur en mètres gardée) ou
   s'étire par ses deux bords, le bord tenu suit le pointeur en temps du film, position trouvée en mètres par dichotomie
   sur l'horloge de la portion modifiée (`DragContext.clockOfSpeeds`, comme un arrêt), jamais sur ses voisines, 50 m au
   moins (`MIN_SPEED_SPAN_M`), au mètre. Aimantation à 8 px (`snapTargets` : début et fin du film, bords des plans, des arrêts, des
@@ -496,7 +507,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   (style, durée), arrêt (libellé, durée, caméra orbite / fixe, position et fenêtre), vitesse (pastilles ×0,25 ×0,5 ×1,5
   ×2 ×3 ×4, « Réglage fin » en puissances de 2, de / à en km bornés par `updateSpeed`, effet sur la durée), texte (texte, sous-titre, position,
   taille, début, durée), photo (vignette, affichage plein écran / carte, Ken Burns, légende, position, taille, début, durée),
-  vidéo (les mêmes sans Ken Burns, plus « Début dans la vidéo », longueur du fichier et mention « muette »).
+  vidéo (les mêmes sans Ken Burns, plus « Début dans la vidéo », longueur du fichier et mention « muette », qui renvoie à
+  la musique, et « Calage sur le parcours » quand l'heure du tournage est connue), musique (nom du fichier, volume en %, fondus d'entrée et de sortie 0–10 s, début, durée, « Début dans le
+  fichier », bornés par `updateMusic` à la longueur du fichier, « Caler la durée du film sur la musique »).
   Position : grille 3 × 3 (`radiogroup` de 9 `role="radio"`, focus itinérant, flèches qui déplacent et choisissent,
   `nextGridIndex`, libellé de la position à côté). Les modifications passent par `editFilm(…, { step: false })` (frappes
   fusionnées en un pas) ; retoucher un arrêt généré écrit d'abord tous les arrêts.
@@ -536,16 +549,67 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   de 0,3 s d'écart), en pause et recalé sur le temps du film quand on se déplace (la dernière image recalée, copiée sur
   un canvas de 1 920 px au plus, reste affichée pendant le recalage suivant) ; les vidéos non dessinées par une image
   sont mises en pause, celles qui quittent le film libérées ; rien pendant un export. Export : voir « Export vidéo ».
+- **Vidéo calée sur le parcours** (phase 7, « vidéo embarquée synchronisée ») : heure de début du tournage lue à l'ajout
+  (`readVideo`, rangée dans la table des médias : `recordedMs`, `recordedApprox`) : date avec fuseau des appareils Apple
+  (`com.apple.quicktime.creationdate` des métadonnées de mediabunny, `quickTimeDateMs`), sinon heure de création de l'en-tête
+  du film (`moov` › `mvhd`, secondes depuis 1904 en UTC, `mp4CreationTimeMs` : analyseur pur qui ne lit que les en-têtes de
+  boîtes, `moov` au début ou à la fin ; lue comme secondes depuis 1970 quand un encodeur s'est trompé d'origine ; horloge
+  non réglée, avant 2000, ignorée), sinon, marquée approximative, date de dernière modification du fichier moins sa
+  longueur (une caméra écrit le fichier jusqu'à l'arrêt) ; WebM : date du fichier seulement. Décalage de l'horloge
+  `offsetS` (± 1 jour, positif : la vidéo a été filmée plus tard que ne le dit le fichier). `clipSyncOffsetS` : 0 quand la
+  vidéo chevauche la sortie enregistrée, sinon le nombre d'heures entières le plus proche de 0 (jusqu'à 14) qui la fait
+  chevaucher (caméra réglée à l'heure locale qui l'écrit comme de l'UTC, cas des GoPro), sinon rien. Placement
+  (`syncClipPlacement`, pur) : début = passage du marqueur au point enregistré au début de la vidéo
+  (`distanceAtTime` → `clock.timeAtProgress`) ; une vidéo commencée avant la sortie débute au début du vol, `inS` saute la
+  partie d'avant ; durée : en suivant le survol, jusqu'au passage au point enregistré à sa fin (ou fin de la sortie), sinon
+  sa longueur dans le fichier depuis là, au plus sa durée actuelle ; rien hors de la sortie ou sans heures. Proposé par le
+  toast de l'ajout (« Caler sur le parcours », ou « Placer sur le parcours » quand il y a aussi des photos : un seul pas
+  d'annulation, horloge du moment) et par l'inspecteur (bloc « Calage sur le parcours » : heure de tournage, mention
+  approximative, bouton « Caler » / « Recaler », « Décalage de l'horloge (s) » et case « Suivre la vitesse du survol » qui
+  recalent aussitôt, `syncClip` ; hors de la sortie, seul `sync` est gardé et un message le dit). Le placement n'est pas
+  refait seul quand le film change (durée, arrêts) : « Recaler ». **Suivre la vitesse du survol** (`sync.follow`) : temps
+  dans le fichier = instant enregistré sous le marqueur − (début du tournage + décalage) (`clipTimeS(média, t,
+  recordedMs)`, borné à `inS` / `outS`), fonction pure de la progression : ralentis, portions de vitesse et ouverture /
+  clôture suivis ; pendant un arrêt la progression ne bouge pas, **l'image reste figée** (choix : l'image montre toujours
+  l'endroit du marqueur) ; une pause enregistrée sur la trace (temps qui passe sans distance) est sautée. `recordedMs`
+  vient de `recordedAtProgress(path, progress)` (`overlay/data.ts`, à la distance d'`overlayFrameAt`), le même nombre pour le
+  dessin (`drawOverlay`, depuis l'image) et pour le décodage de l'export (`loadFrameMedia(temps, progression)`, chemin de la
+  première trace gardé par trace) : export déterministe. Aperçu : `clipRateAt` (secondes du fichier par seconde de film,
+  différence sur 0,25 s de film) × vitesse de lecture → `playbackRate` (arrondi au centième, au plus ×16) ; recalage
+  au-delà de `FOLLOW_DRIFT_S` (0,2 s) ; sous ×0,0625 (arrêt), l'élément est mis en pause sur l'image. Sans heures sur la
+  trace, une vidéo qui suit est jouée comme une autre.
+- **Musique** (`src/film/audio.ts`) : « Options » › « Ajouter une musique… » (sélecteur de la couche plateforme, plusieurs
+  fichiers) ou fichiers son déposés sur la timeline (`isAudioFile` : type `audio/*` connu, sinon extension `.mp3`, `.m4a`,
+  `.aac`, `.ogg`, `.oga`, `.opus`, `.wav`, `.flac` ; un dépôt mêlant sons, photos et vidéos les répartit). `readAudio` refuse
+  au-delà de `MAX_AUDIO_BYTES` (30 Mo, message qui conseille un MP3 ou un M4A), décode le fichier une fois
+  (`OfflineAudioContext.decodeAudioData` à 22 050 Hz : vérifie que le navigateur le lit, donne sa longueur) et en tire la
+  forme d'onde (`computePeaks` : niveau maximal de 10 tranches par seconde, 4 000 au plus, au centième) ; le fichier est
+  gardé tel quel (`data:audio/mpeg|mp4|aac|ogg|wav|flac|webm`). Ajoutée en entier (`addMusic`) à la fin des musiques déjà
+  là (au début du film sans musique), en un pas d'annulation, bloc sélectionné ; le toast propose « Caler la durée du
+  film ». Volume (`musicEnvelope`, pur) : 0 → volume pendant le fondu d'entrée, volume, → 0 pendant le fondu de sortie,
+  linéaires, raccourcis en proportion quand ils se chevauchent, sur la durée jouée (`musicLengthS` : jamais après la fin
+  du fichier) ; mêmes points pour l'aperçu (`musicGainAt`) et l'export (automatisation du gain). Plusieurs musiques
+  peuvent se chevaucher : elles sont mixées. Aperçu (`startMusicPreview`, lancé par `Timeline`, `createMusicPreview` testé
+  sur de faux éléments) : un `HTMLAudioElement` par musique (URL d'objet du fichier, créé dès qu'elle est dans le film pour
+  qu'il charge), joué pendant la lecture au temps du fichier, à la vitesse de lecture, au volume du moment, recalé
+  au-delà de `MUSIC_DRIFT_S` (0,25 s) d'écart quand il a assez de données ; en pause hors lecture, hors de son bloc et
+  pendant un export (la lecture y est arrêtée) ; libéré quand la musique quitte le film. « Caler la durée du film sur la
+  musique » (`fitFilmToMusic`) : durée du survol (dans 15 s – 10 min, au centième) pour que le film finisse à la fin de la
+  dernière musique, trouvée par la méthode de la sécante sur l'horloge du film (`durationForFilmEnd` : arrêts, portions
+  de vitesse et plans compris) ; un pas d'annulation, toast avec la nouvelle durée ou les bornes atteintes. Le son des
+  vidéos reste hors champ.
 - **Table des médias** (`src/film/media.ts`) : les octets ne sont pas dans les réglages (historique et préréglages
   légers) mais dans une table du document `{ id: { data, thumb, width, height, name?, durationS? } }` (data URL JPEG ;
-  vidéo : data URL du fichier `video/mp4 | webm | quicktime` et sa longueur `durationS`). Une image
+  vidéo : data URL du fichier `video/mp4 | webm | quicktime` et sa longueur `durationS`, avec l'heure de début du tournage `recordedMs` / `recordedApprox` quand elle est connue ; son : data URL `audio/…`,
+  `durationS` et forme d'onde `peaks`, sans vignette ni taille, ids `audio-<n>`). Une image
   reste dans la table quand sa photo quitte le film (l'annulation la retrouve) ; l'enregistrement n'écrit que les images
-  utilisées (`usedMedia`). Accès aux fichiers derrière `readMedia(blob)` (un `File` du sélecteur ou du dépôt sur le web,
+  utilisées, par les médias et les musiques (`usedMedia`). Accès aux fichiers derrière `readMedia(blob)` (un `File` du sélecteur ou du dépôt sur le web,
   un `Blob` lu sur disque pour Tauri, plus tard un chemin de fichier au lieu des octets pour les grosses vidéos). Images décodées à la demande (`getMediaBitmaps` : `ImageBitmap` par id, au plus 6
   gardées, les moins récentes libérées, libérées aussi quand le film ne les utilise plus, redécodées si la table change
   à l'ouverture d'un projet, une image illisible n'est pas réessayée).
-- Limites : vidéos muettes (le son n'est pas géré, `muted` réservé), 50 Mo au plus, sans position GPS ni heure lues
-  (placées à la tête de lecture), refusées là où WebCodecs manque (application de bureau sous Linux) ; l'EXIF n'est lu que dans les JPEG (pas HEIC, que la
+- Limites : vidéos muettes (leur son n'est pas repris, `muted` réservé ; la musique est une piste à part), 50 Mo au plus, sans position GPS
+  lue (placées à la tête de lecture, ou calées sur l'heure de la trace) ; l'heure d'une vidéo ajoutée avant ce calage n'est
+  pas relue ; flux GPS des GoPro (GPMF) non lu ; refusées là où WebCodecs manque (application de bureau sous Linux) ; l'EXIF n'est lu que dans les JPEG (pas HEIC, que la
   plupart des navigateurs ne décodent pas, ni PNG / WebP) ; une photo plein écran est recadrée pour couvrir l'image (une
   photo en hauteur perd le haut et le bas) ; une photo n'est pas liée à un arrêt (elle ne le suit pas quand il bouge).
   Autres limites : l'aperçu 3D ne
@@ -557,7 +621,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - Un projet est un seul fichier JSON `<nom>.openflyover.json` (`format: "openflyover-project"`, `version`, `name`, `settings`,
   `playback.speed`, `tracks`, et `media` quand le film a des photos : table des images par id, une ligne par image après
   les traces, voir « Film et timeline », « Table des médias » ; champ facultatif, pas de changement de version). À
-  l'ouverture, les images invalides sont écartées et les photos du film sans image retirées avec un avertissement ;
+  l'ouverture, les images invalides sont écartées et les photos du film sans image retirées avec un avertissement (les
+  musiques sans fichier aussi) ;
   `applyProject` remplace la table avant les réglages. Les traces sont **embarquées** (fichier autonome) en colonnes par segment (`lon`, `lat`, puis
   `ele` / `time` / `hr` / `cad` / `power` / `temp` seulement si présents, `null` pour un point sans valeur), arrondies à 1e-7° et
   0,01 (ms entières pour le temps) ; stats et emprise recalculées au chargement par `buildTrack`, ids et couleurs conservés.
@@ -578,7 +643,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   `project/history.ts`). La source d'imagerie n'est pas suivie (choisie par région à l'import). Un nouveau réglage d'un
   panneau : ajouter sa clé à la liste `keys` du marqueur.
 - **Préréglages** dans `getPlatform().storage` (`openflyover.presets.v1`, repli en mémoire) ; une clé absente d'un préréglage garde sa
-  valeur courante.
+  valeur courante. `save` répond false quand le stockage refuse (plein ou bloqué) : le préréglage reste utilisable pour la
+  session et le panneau affiche « Préréglage non enregistré : stockage du navigateur plein » ; le cache météo, lui, reste
+  silencieux (il ne perd que sa persistance).
 
 ## Météo historique (phase 7)
 
@@ -754,6 +821,19 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   sinon, au-dessus d'une estimation de 1,5 Go (`MEMORY_WARN_BYTES`, `warnsInMemory`), il prévient que le film gardé en
   mémoire peut saturer l'onglet.
 - Sinon fichier en mémoire (MP4 avec son index au début), téléchargé à la fin.
+- **Musique** : avant la première image, `mixFilmAudio` (`src/film/audio.ts`) mixe les musiques du film dans un
+  `OfflineAudioContext` (48 kHz, stéréo) sur la longueur exacte de la vidéo (`nombre d'images / fps`, images tenues
+  comprises), chaque musique placée au temps du film + les images tenues du début (`round(1 s × fps) / fps` : elle
+  commence avec le film, pas pendant l'image fixe d'attente), lue de `inS` sur sa durée jouée, gain automatisé par les
+  points de `musicEnvelope` (`musicMixPlan`, pur) : rendu identique d'un export à l'autre, jamais en temps réel ; un
+  fichier illisible arrête l'export avec un message. L'encodeur (`createVideoEncoder(…, { audio })`) choisit AAC en MP4,
+  sinon Opus (`AUDIO_CANDIDATES`, `canEncodeAudio`, 192 kbit/s ; Opus seul en WebM), ajoute la piste son
+  (`AudioSampleSource`) et lui passe les échantillons au fil des images, 1 s d'avance (`AUDIO_LEAD_S`, morceaux d'au plus
+  1 s, plans séparés `f32-planar`) pour que les deux pistes s'entrelacent, le reste à la fin ; même chemin en mémoire et
+  sur le disque. Aucun codec son : film muet, `audioCodec` null et note « sans la musique : ce navigateur ne sait pas
+  encoder le son » à côté du résultat (`ExportResult.note`, « avec la musique (AAC) » sinon). Écart entre image et son :
+  au plus une image et demie à la fin du film (la rampe a `round(durée × fps)` images). Mémoire : environ 23 Mo par minute
+  de film pour le mixage.
 - Tout est restauré en fin d'export, en cas d'erreur ou d'annulation (taille, ratio de pixels, frameloop, pointeur,
   progression). Réglage `settings.video { aspect, resolution, fps, quality }` dans le document de projet (anciens `video.format`
   convertis par `withVideoDefaults`) : formats 16:9, 9:16, 1:1, 4:5, 21:9 × petit côté 720p, 1080p, 1440p, 4K
@@ -767,10 +847,52 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   progression décalée de 1e-9 pour que la caméra soit placée par le style courant (et non la vue orbitée à la main), puis
   `OffscreenCanvas.convertToBlob` (JPEG qualité 0,92 ; extension d'après le type obtenu). Nom : `<trace> <progression> %`.
   Restauration identique au film.
+- Image fixe d'ensemble (affiche) : `still.overview` et `still.compose` (voir « Affiche »).
 - La console affiche en fin d'export le temps de rendu, d'attente des tuiles et d'encodage, et le nombre de délais dépassés.
   « Encodage » inclut la copie de l'image WebGL, qui attend la fin du rendu GPU.
 - Limites : sans écriture directe (Firefox, Safari), fichier gardé en mémoire (~2× sa taille) ; onglet à garder ouvert, vitesse liée au GPU (mesure à faire sur une
   machine avec GPU, voir `docs/reprise.md`).
+
+## Affiche (phase 7)
+
+- **Principe** : une affiche PNG de la sortie, en un clic depuis le tiroir d'export (mode « Affiche », à côté de « Vidéo »).
+  La vue 3D est rendue par le chemin de l'image fixe (`ExportController`) à la taille de la boîte de vue de la mise en page,
+  puis dessinée avec le texte sur un `OffscreenCanvas` de la taille de l'affiche par `drawPoster`.
+- **Réglages** : `settings.poster` (`src/poster/settings.ts`) : `format` (A4 2 480 × 3 508, A3 3 508 × 4 960, portrait ou
+  paysage, à 300 dpi ; carré 2 160 × 2 160), `style` (`editorial`, `broadcast`, `app`, libellés de l'habillage), `title`
+  (vide = nom du projet, `effectiveProjectName`), `subtitle` (suivi de la date de la trace), `figures` (distance, D+, durée,
+  altitude max., nombre de montées), `weather`. Validation `isValidPoster` (`SETTING_CHECKS`). Un préréglage n'en garde que
+  le style (`presetSettings`, comme le film réduit à ses plans) : le titre appartient au projet.
+- **Contenu** (`content.ts`, pur) : titre, ligne « sous-titre · date » (`formatDateFr`), chiffres que la trace enregistre
+  (un chiffre absent n'est pas dessiné, la puce est grisée), profil de 400 points (`elevationProfile`), ligne météo
+  (`weatherSummaryLine`, seulement si la météo de la première trace est chargée), crédits (`overlayCredits`, les mêmes
+  chaînes que la barre d'état), lus des stores par `currentPosterContent` (`export.ts`).
+- **Mise en page** (`layout.ts`, pur) : 1 u = 1 % du petit côté. Les boîtes ne dépendent que de la taille, du style et des
+  rangées présentes, jamais d'un texte mesuré : la taille de la vue à rendre est connue avant toute mesure, et un texte ne
+  peut pas déborder sur sa voisine. Portrait et carré : texte sous la vue (une rangée de chiffres) ; paysage (rapport
+  > 1,15) : colonne de 40 u à droite (deux chiffres par rangée, crédits en pied de colonne). Carré : rangées à 70 %. Styles :
+  Éditorial (page papier, vue en retrait de 6 u), Diffusion (vue à fond perdu, bandeau ou colonne encre avec barre rouge
+  balise), Application (vue sur toute l'affiche, carte papier arrondie et ombrée par-dessus). Le texte est ajusté au dessin
+  (`fitText` : taille réduite jusqu'à un plancher, puis « … » ; `fitLines` : crédits sur deux lignes au plus, taille fixe de
+  1,15 u avant réduction). Tests : toutes les boîtes dans la page et ses marges, dans le panneau, sans chevauchement entre
+  elles ni avec la vue (sauf la carte flottante), vue ≥ 38 % de l'affiche, pour chaque format × style × jeux de rangées.
+- **Dessin** (`draw.ts`) : thèmes `POSTER_THEMES` dans la charte « Carte alpine » (papier, encre, rouge balise, glacier),
+  polices des styles d'habillage du même nom (Fraunces, IBM Plex Sans, Plex Sans Condensed), toutes dans `OVERLAY_FONTS`
+  (embarquées et chargées par `loadOverlayFonts`, testé). Vue recadrée pour couvrir sa boîte (`coverCrop`).
+- **Rendu de la vue** : `startPoster` charge les polices, calcule la mise en page et dépose une demande d'image fixe
+  `still { overview: true, compose }` de la taille de la boîte de vue (PNG). Dans `ExportController`, `overview` ne change
+  pas la progression (le `FlyoverRig` ne bouge donc pas la caméra) : la caméra est placée avant chaque rendu sur
+  `overviewView` (cadrage des plans d'ensemble, au rapport de la boîte) vu du sud, nord en haut, la cible des contrôles
+  suit ; le marqueur de progression (`flyover-marker`) passe sur un calque qu'aucune caméra ne rend ; caméra, cible et
+  calque sont remis à la fin. `compose` remplace l'habillage du film : il reçoit l'image composée (ciel + vue) et rend
+  l'affiche, encodée en PNG comme une image fixe ; échelle de rendu des étiquettes et de la trace = petit côté de la vue
+  / 1 080, comme un film. Le résultat suit le chemin des autres exports (tiroir « Vidéo » toujours monté : téléchargement,
+  `saveUrl` sur le bureau, toast) ; nom « <projet> – affiche.png ».
+- **Aperçu** : vignette 2D (≤ 260 × 220 px CSS) dessinée par le même `drawPoster` sous une transformation, sans rendu 3D :
+  la dernière vue rendue pour cette trace (gardée réduite à 480 px, `usePosterPreview`), sinon un ciel avec le plan de la
+  trace (`miniMapOutline`).
+- **Limites** : première trace seulement ; marqueurs de la course fantôme dessinés à la progression courante ; une vue A3
+  en style Application fait 17 Mpx en WebGL (limite de taille du GPU non vérifiée).
 
 ## Météo dans la scène (phase 7)
 
@@ -820,6 +942,38 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - Limites : le terrain est éclairé par des sources (`SunLight`), les ombres des nuages ne l'atteignent donc pas (le
   soleil reste atténué par la météo) ; couches à altitude fixe pour tout le film ; dans l'aperçu, traînées du
   suréchantillonnage temporel quand la caméra bouge vite ; coût élevé sur un GPU faible (mode « Aucun »).
+
+## Eau réfléchissante (phase 3)
+
+- **Données** : OpenStreetMap par Overpass (même client, file d'attente et cache 30 jours que les repères :
+  `cachedOverpassQuery`, `runOverpassQuery(…, parse)`), une requête par trace et seulement si `settings.water.enabled` :
+  `way` / multipolygones `natural=water`, `waterway=riverbank`, `water=*` dans les boîtes du couloir de la trace élargi à 8 km,
+  `out geom qt` (~600 ko, 3–4 s pour l'exemple ; `docs/sources.md`). La requête n'est pas annulée au démontage (partagée et mise en
+  cache ; StrictMode lance l'effet deux fois), sa réponse est seulement ignorée si elle est périmée. Une requête en échec n'est
+  retentée qu'au prochain changement de trace ou de réglage.
+- **Réduction pure** (`water.ts`, testée) : anneaux des relations recousus bout à bout depuis leurs chemins (sens indifférent,
+  anneau non fermé abandonné), anneaux intérieurs rattachés à l'extérieur qui contient leur premier point, chemin membre d'une
+  relation renvoyée ignoré, Douglas–Peucker 4 m, polygones < 2 000 m² écartés, 300 plus grands gardés, coordonnées à 1e-6° ;
+  `lake` (surface plane) ou `river` (`waterway=riverbank`, `water=river|stream|canal…`). Seul ce résultat compact est mis en cache.
+- **Maillage pur** (`waterMesh.ts`, testé) : polygone découpé par une grille de cellules carrées (60 m, au plus 40 par côté,
+  Sutherland–Hodgman de chaque anneau contre chaque cellule), chaque morceau triangulé avec ses trous (`ShapeUtils`, earcut). La
+  grille met des sommets dans l'eau : une rivière suit sa vallée et l'opacité s'efface vers la rive (`fade` = distance au bord
+  la plus proche / 40 m, bornée à 1).
+- **Plaquage** (`WaterLayer`, dans `TerrainLayer`) : comme la trace, `engine.sampleHeight` × exagération + 2 m, re-plaqué
+  (anti-rebond, vidé par l'export via `registerDrapeFlush`) à chaque `engine.onChange`. Un lac est plan au 25ᵉ centile des
+  hauteurs de ses sommets (les berges du MNT ne le soulèvent pas) ; un polygone dont aucune hauteur n'est connue attend ses tuiles.
+  Une seule géométrie fusionnée (un appel de dessin), `raycast` neutralisé (sélecteur de trace, caméra), `depthWrite` coupé.
+- **Rendu** : `MeshStandardMaterial` (rugosité 0,08 : reflet du soleil du `SunLight`, ombres du relief) étendu dans
+  `onBeforeCompile` : normales de quatre vagues sinusoïdales (23, 9, 4,1 et 1,7 m) animées par le **temps du film**
+  (`playback.timeS`, sinon `clock.timeAtProgress`), effacées quand leur longueur d'onde couvre moins de ~8 pixels (pas de
+  scintillement au loin) ; reflet du ciel = Fresnel de Schlick (F0 0,02) × 1,5 × irradiance de la sonde de ciel Takram (`lightProbe`)
+  dans la direction réfléchie relevée au-dessus de l'horizon / π (couleur glacier fixe sans l'atmosphère) ; opacité = fondu de rive
+  × mix(0,82, 1, Fresnel) × `strength`. Fonction du temps du film seulement : l'export reste déterministe.
+- **Réglage** : `settings.water { enabled, strength }` (vrai, 1 ; `SETTING_CHECKS` : 0 ≤ strength ≤ 1), case « Lacs et rivières
+  reflétants » et curseur « Intensité de l'eau » de la section « Fond de carte ».
+- **Limites** : le reflet est celui du ciel moyen (sonde SH), ni des montagnes ni des nuages ; lacs au niveau du MNT (pas de niveau
+  OSM) ; une rivière très pentue garde des marches de 60 m ; seul le couloir de 8 km est interrogé ; les crédits « © contributeurs
+  OpenStreetMap » suivent encore les seuls repères (`useWaterStore.polygons` est prêt pour la barre d'état et l'export).
 
 ## Course fantôme (phase 7)
 

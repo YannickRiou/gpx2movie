@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { pickCodec, videoBitrate, type CodecCandidate } from '../export/encoder'
 import {
   EXPORT_HOLD_END_S,
@@ -22,6 +23,7 @@ import {
   type StillType,
 } from '../export/store'
 import { getPlatform, videoEncoderMissingHint } from '../platform'
+import { PosterPanel } from '../poster/PosterPanel'
 import { usePacing } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { ModifiedMarker } from './ModifiedMarker'
@@ -85,7 +87,7 @@ interface CodecProbe {
  * also a still image of the current progress at the same size; frame rate, quality and image type under
  * « Plus de réglages ».
  */
-export function ExportPanel({ onClose }: { onClose?: () => void }) {
+function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; modes: ReactNode; hidden: boolean }) {
   const video = useAppStore((s) => s.settings.video)
   // film length and progress at each film time, with the slow-downs and pauses of the preview
   const pacing = usePacing()
@@ -185,7 +187,7 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
         : ''
 
   return (
-    <section className="settings export" aria-labelledby={`${id}-title`} aria-busy={busy}>
+    <section className="settings export" aria-labelledby={`${id}-title`} aria-busy={busy} hidden={hidden}>
       <h2 id={`${id}-title`} className="section-title settings__title">
         Exporter
       </h2>
@@ -202,6 +204,7 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
           <Icon name="x" size={18} />
         </button>
       )}
+      {modes}
 
       <fieldset className="field fieldset" disabled={busy}>
         <legend className="field__label">Format</legend>
@@ -329,7 +332,8 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
               Télécharger {result.fileName}
             </a>
           )}{' '}
-          ({formatMegabytes(result.sizeBytes)}, {CODEC_LABELS[result.codec] ?? result.codec})
+          ({formatMegabytes(result.sizeBytes)}, {CODEC_LABELS[result.codec] ?? result.codec}
+          {result.note && `, ${result.note}`})
           {result.incompleteFrames > 0 &&
             ` — ${formatNumber(result.incompleteFrames)} image(s) rendue(s) avant la fin du chargement du relief.`}
         </p>
@@ -401,5 +405,41 @@ export function ExportPanel({ onClose }: { onClose?: () => void }) {
         {announcement}
       </p>
     </section>
+  )
+}
+
+type ExportMode = 'video' | 'poster'
+
+/**
+ * "Exporter" drawer in two modes: « Vidéo » (film and still image) and « Affiche » (poster, src/poster). Both stay
+ * mounted, so the result of an export is always handled once, by the video mode (download, toast).
+ */
+export function ExportPanel({ onClose }: { onClose?: () => void }) {
+  const [mode, setMode] = useState<ExportMode>('video')
+  const busy = useExportStore((s) => isExportBusy(s.phase))
+  const id = useId()
+  const modes = (
+    <fieldset className="field fieldset" disabled={busy}>
+      <legend className="visually-hidden">Type d'export</legend>
+      <div className="segmented">
+        {(
+          [
+            ['video', 'Vidéo'],
+            ['poster', 'Affiche'],
+          ] as const
+        ).map(([value, label]) => (
+          <label key={value} className="segmented__option">
+            <input type="radio" name={`${id}-mode`} value={value} checked={mode === value} onChange={() => setMode(value)} />
+            {label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+  return (
+    <>
+      <VideoExportPanel onClose={onClose} modes={mode === 'video' && modes} hidden={mode !== 'video'} />
+      <PosterPanel onClose={onClose} modes={mode === 'poster' && modes} hidden={mode !== 'poster'} />
+    </>
   )
 }

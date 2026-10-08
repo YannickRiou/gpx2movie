@@ -1,0 +1,28 @@
+/* « Affiche » mode of the export drawer (PosterPanel). Colours from theme.css only. */
+
+/* live thumbnail of the layout, like a print laid on the panel */
+.poster__preview {
+  display: block;
+  justify-self: center;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--color-paper);
+  box-shadow: 0 2px 8px rgb(28 42 51 / 0.18);
+}
+
+/* « Enregistrer à nouveau… » after the poster is ready: a link-like button in the hint line */
+.poster__again {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent-strong);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.poster__again:hover {
+  color: var(--color-ink);
+}

@@ -110,6 +110,16 @@ describe('serializeProject / parseProject', () => {
     expect(without.warnings).toEqual(['1 média sans fichier lisible dans le projet, retiré du film.'])
     // a film without photos writes no table
     expect(serializeProject(STATE, 'x', { 'photo-1': picture })).not.toContain('"media": {')
+    // the sound files of the music too; a music without its file is left out
+    const sound = { data: 'data:audio/mpeg;base64,AAAA', name: 'air.mp3', durationS: 90, peaks: [0.5, 1] }
+    const music = { id: 'music-1', src: 'audio-1', startS: 0, durationS: 90, inS: 0, volume: 0.8, fadeInS: 0.5, fadeOutS: 2 }
+    const scored = { ...STATE, settings: { ...SETTINGS, film: { ...SETTINGS.film, audio: [music] } } }
+    const withMusic = parseProject(serializeProject(scored, 'x', { 'audio-1': sound, 'photo-1': picture }))
+    expect(withMusic.media).toEqual({ 'audio-1': sound })
+    expect(withMusic.settings.film.audio).toEqual([music])
+    const silent = parseProject(serializeProject(scored, 'x'))
+    expect(silent.settings.film.audio).toEqual([])
+    expect(silent.warnings).toEqual(['1 musique sans fichier lisible dans le projet, retirée du film.'])
     expect(parseProject(serializeProject(STATE, 'x')).media).toEqual({})
   })
 

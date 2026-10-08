@@ -9,9 +9,16 @@
  * On disk (`destination`): mediabunny's `StreamTarget`, 4 MiB chunks written at their position. MP4 without fast
  * start (`moov` after the frames, the header size patched at the end): a plain MP4 that every player and editor reads,
  * where a fragmented one is less widely supported. In memory, MP4 keeps its index at the start.
+ *
+ * Soundtrack (the music of the film, mixed beforehand: `film/audio.ts`): AAC in MP4, else Opus (MP4 or WebM), the first
+ * one `AudioEncoder` accepts; none: the film is encoded without it (`audioCodec` null). Its samples are handed to the
+ * muxer along the frames, about a second ahead, so that both tracks are interleaved in the file.
  */
+import type { MixedAudio } from '../film/audio'
 import type { WritableFile } from '../platform'
 import {
+  AudioSample,
+  AudioSampleSource,
   BufferTarget,
   CanvasSource,
   Mp4OutputFormat,
@@ -19,7 +26,9 @@ import {
   Quality,
   StreamTarget,
   WebMOutputFormat,
+  canEncodeAudio,
   canEncodeVideo,
+  type AudioCodec,
   type StreamTargetChunk,
   type VideoCodec,
 } from 'mediabunny'
@@ -52,6 +61,12 @@ export const KEY_FRAME_INTERVAL_S = 2
 /** Size of the writes to disk (also what one desktop IPC call carries). */
 export const STREAM_CHUNK_BYTES = 4 * 1024 * 1024
 
+/** Audio codecs tried for each container, in order. */
+export const AUDIO_CANDIDATES: Record<VideoContainer, readonly AudioCodec[]> = { mp4: ['aac', 'opus'], webm: ['opus'] }
+export const AUDIO_BITRATE = 192_000
+/** Seconds of sound handed to the muxer ahead of the frame being encoded. */
+export const AUDIO_LEAD_S = 1
+
 export const VIDEO_MIME_TYPES: Record<VideoContainer, string> = { mp4: 'video/mp4', webm: 'video/webm' }
 
 /** Target bitrate (bits / s) for a codec at a size, frame rate and quality. */
@@ -67,9 +82,29 @@ export interface VideoEncodeOptions {
   quality: VideoQuality
   /** write the film to this file while encoding instead of keeping it in memory */
   destination?: WritableFile
+  /** soundtrack from the first frame (none: a silent film) */
+  audio?: MixedAudio | null
 }
 
 export type CanEncode = typeof canEncodeVideo
+export type CanEncodeAudio = typeof canEncodeAudio
+
+/** First audio codec of `container` the browser can encode for this soundtrack, or null. */
+export async function pickAudioCodec(
+  container: VideoContainer,
+  audio: Pick<MixedAudio, 'sampleRate' | 'channels'>,
+  canEncode: CanEncodeAudio = canEncodeAudio,
+): Promise<AudioCodec | null> {
+  for (const codec of AUDIO_CANDIDATES[container]) {
+    try {
+      const options = { numberOfChannels: audio.channels.length, sampleRate: audio.sampleRate, quality: new Quality({ bitrate: AUDIO_BITRATE }) }
+      if (await canEncode(codec, options)) return codec
+    } catch {
+      // not this one
+    }
+  }
+  return null
+}
 
 /** First candidate the browser can encode with these options, or null. */
 export async function pickCodec(
@@ -108,6 +143,8 @@ export class ExportCanceledError extends Error {
 
 export interface VideoEncodeSession {
   readonly codec: CodecCandidate
+  /** codec of the soundtrack; null when none was given or none can be encoded (the film is silent) */
+  readonly audioCodec: AudioCodec | null
   readonly bitrate: number
   readonly mimeType: string
   /** '.mp4' or '.webm' */
@@ -142,6 +179,7 @@ export async function createVideoEncoder(
   canvas: HTMLCanvasElement | OffscreenCanvas,
   options: VideoEncodeOptions,
   canEncode: CanEncode = canEncodeVideo,
+  canEncodeSound: CanEncodeAudio = canEncodeAudio,
 ): Promise<VideoEncodeSession> {
   const { destination } = options
   const codec = await pickCodec(options, canEncode, candidatesFor(destination?.fileName))
@@ -162,22 +200,51 @@ export async function createVideoEncoder(
     keyFrameInterval: KEY_FRAME_INTERVAL_S,
   })
   output.addVideoTrack(source, { frameRate: options.fps })
+  const { audio } = options
+  const audioCodec = audio && audio.channels.length > 0 ? await pickAudioCodec(codec.container, audio, canEncodeSound) : null
+  const sound = audioCodec ? new AudioSampleSource({ codec: audioCodec, quality: new Quality({ bitrate: AUDIO_BITRATE }) }) : null
+  if (sound) output.addAudioTrack(sound)
   await output.start()
 
   const frameDuration = 1 / options.fps
   const mimeType = VIDEO_MIME_TYPES[codec.container]
 
+  /** samples of the soundtrack already handed to the muxer */
+  let sent = 0
+  /** hand the soundtrack over up to `untilS` seconds, at most a second per sample */
+  const addAudio = async (untilS: number) => {
+    if (!sound || !audio) return
+    const { sampleRate, channels } = audio
+    const until = Math.min(channels[0].length, Math.ceil(untilS * sampleRate))
+    while (sent < until) {
+      const n = Math.min(until - sent, sampleRate)
+      const data = new Float32Array(n * channels.length)
+      channels.forEach((channel, c) => data.set(channel.subarray(sent, sent + n), c * n))
+      const sample = new AudioSample({ data, format: 'f32-planar', numberOfChannels: channels.length, sampleRate, timestamp: sent / sampleRate })
+      try {
+        await sound.add(sample)
+      } finally {
+        sample.close()
+      }
+      sent += n
+    }
+  }
+
   return {
     codec,
+    audioCodec,
     bitrate,
     mimeType,
     extension: `.${codec.container}`,
     async addFrame(index) {
       if (canceled) throw new ExportCanceledError()
+      await addAudio((index + 1) * frameDuration + AUDIO_LEAD_S)
       await source.add(index * frameDuration, frameDuration)
     },
     async finish() {
       if (canceled) throw new ExportCanceledError()
+      await addAudio(Infinity)
+      sound?.close()
       source.close()
       await output.finalize()
       if (destination) return { blob: null, sizeBytes }

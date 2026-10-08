@@ -11,6 +11,8 @@
  * - `texts` and `media`: items anchored in film time (seconds at ×1 from the very start, opening included), on
  *   their own lanes, drawn by the overlay. A medium names its picture or video clip by id (`src`): the bytes live in the media
  *   table of the project document (`film/media.ts`), so the settings and the undo history stay light.
+ * - `audio`: music clips of the soundtrack, in film time too, on the « Musique » lane: played along by the preview
+ *   and mixed into the exported film (`film/audio.ts`); their files are in the media table as well.
  *
  * Part of `Settings` (key `film`): saved in the project document, undone, read the same way by the preview and
  * the export. Ids are stable (`stop-3`, `text-1`, `auto-4520` for a generated stop) so the timeline can select
@@ -96,7 +98,28 @@ export interface FilmMedia {
   outS?: number
   /** video: reserved, the sound of the clips is not handled yet */
   muted?: boolean
+  /** video synced with the recorded track (« Caler sur le parcours »), see `MediaSync` */
+  sync?: MediaSync
 }
+
+/**
+ * A clip synced with the recorded track: when it was recorded and how its time follows the flight. Its place on
+ * the timeline is set by `syncClipPlacement` (film/timeline.ts) when it is synced or its offset changes.
+ */
+export interface MediaSync {
+  /** recording start of the clip (ms since epoch, from the file) */
+  startMs: number
+  /** correction of the camera clock (seconds; positive: the clip was recorded later than its file says) */
+  offsetS: number
+  /**
+   * the clip's time follows the flight: the frame shown is the one recorded when the athlete was where the marker
+   * is (slow-downs, speed portions and stops of the film included; during a stop the frame holds)
+   */
+  follow: boolean
+}
+
+/** Range of the clock correction of a synced clip (seconds): a day either way covers time zones. */
+export const SYNC_OFFSET_RANGE = { min: -86_400, max: 86_400 } as const
 
 export interface FilmSpeed {
   id: string
@@ -106,6 +129,28 @@ export interface FilmSpeed {
   /** local ground speed multiplied by this (2 = twice as fast, 0.5 = half as fast) */
   factor: number
 }
+
+export interface FilmAudio {
+  id: string
+  /** id of the sound file in the media table of the project document */
+  src: string
+  /** film time at which it starts and how long it plays (seconds at ×1; never past the end of the file) */
+  startS: number
+  durationS: number
+  /** where it starts in the file (seconds) */
+  inS: number
+  /** 0 (silent) to 1 (as recorded) */
+  volume: number
+  /** linear fades at its start and its end (seconds; shortened in proportion when they overlap) */
+  fadeInS: number
+  fadeOutS: number
+}
+
+/** Volume and fades of a music clip added on the timeline. */
+export const AUDIO_DEFAULTS: Pick<FilmAudio, 'volume' | 'fadeInS' | 'fadeOutS'> = { volume: 1, fadeInS: 0.5, fadeOutS: 2 }
+/** Ranges of a music clip (also its validity ranges in a loaded project), seconds. */
+export const AUDIO_DURATION_RANGE = { min: 0.5, max: 3600 } as const
+export const FADE_RANGE = { min: 0, max: 30, step: 0.5 } as const
 
 /** Range of the speed factor (also its validity range in a loaded project). */
 export const SPEED_FACTOR_RANGE = { min: 0.25, max: 4 } as const
@@ -131,6 +176,8 @@ export interface Film {
   speeds: FilmSpeed[]
   texts: FilmText[]
   media: FilmMedia[]
+  /** music of the soundtrack (they may overlap: mixed) */
+  audio: FilmAudio[]
 }
 
 /** Slider ranges (also the validity ranges of a loaded project), seconds. */
@@ -149,14 +196,20 @@ export const DEFAULT_FILM: Film = {
   speeds: [],
   texts: [],
   media: [],
+  audio: [],
 }
 
 /**
  * Time in the file of a video shown at film time `timeS`: its start in the file (`inS`) plus the time since the
- * clip appeared, held at its end in the file (`outS`; past the end of the file, its last frame is held).
+ * clip appeared, held at its end in the file (`outS`; past the end of the file, its last frame is held). A synced
+ * clip following the flight (`sync.follow`) shows instead what it recorded at `recordedMs`, the recorded instant
+ * under the marker at that film time (ms since epoch; without it, as an unsynced clip), within `inS` and `outS`.
  */
-export function clipTimeS(media: Pick<FilmMedia, 'startS' | 'inS' | 'outS'>, timeS: number): number {
-  const t = (media.inS ?? 0) + Math.max(0, timeS - media.startS)
+export function clipTimeS(media: Pick<FilmMedia, 'startS' | 'inS' | 'outS' | 'sync'>, timeS: number, recordedMs?: number): number {
+  const follows = media.sync?.follow && recordedMs !== undefined && Number.isFinite(recordedMs)
+  const t = follows
+    ? Math.max(media.inS ?? 0, (recordedMs - media.sync!.startMs) / 1000 - media.sync!.offsetS)
+    : (media.inS ?? 0) + Math.max(0, timeS - media.startS)
   return media.outS === undefined ? t : Math.min(t, media.outS)
 }
 
@@ -169,11 +222,11 @@ export function shotDurationS(shot: FilmShot): number {
 // Ids
 // ---------------------------------------------------------------------------
 
-export type FilmItemKind = 'stop' | 'speed' | 'text' | 'media'
+export type FilmItemKind = 'stop' | 'speed' | 'text' | 'media' | 'music'
 
 /** Next free id `<kind>-<n>` of the film (one more than the highest number used by that kind). */
 export function nextFilmId(film: Film, kind: FilmItemKind): string {
-  const lanes = { stop: film.stops, speed: film.speeds, text: film.texts, media: film.media }
+  const lanes = { stop: film.stops, speed: film.speeds, text: film.texts, media: film.media, music: film.audio }
   const items: readonly { id: string }[] = lanes[kind]
   const pattern = new RegExp(`^${kind}-(\\d+)$`)
   let max = 0
@@ -258,7 +311,32 @@ export function isValidMedia(media: unknown): media is FilmMedia {
     optionalString(media.caption) &&
     within(inS, 0, Number.MAX_VALUE) &&
     (media.outS === undefined || within(media.outS, (inS as number) + 0.01, Number.MAX_VALUE)) &&
-    (media.muted === undefined || typeof media.muted === 'boolean')
+    (media.muted === undefined || typeof media.muted === 'boolean') &&
+    (media.sync === undefined || isValidSync(media.sync))
+  )
+}
+
+function isValidSync(sync: unknown): sync is MediaSync {
+  return (
+    isRecord(sync) &&
+    typeof sync.startMs === 'number' &&
+    Number.isFinite(sync.startMs) &&
+    within(sync.offsetS, SYNC_OFFSET_RANGE.min, SYNC_OFFSET_RANGE.max) &&
+    typeof sync.follow === 'boolean'
+  )
+}
+
+export function isValidAudio(audio: unknown): audio is FilmAudio {
+  return (
+    isRecord(audio) &&
+    isId(audio.id) &&
+    isId(audio.src) &&
+    within(audio.startS, 0, Number.MAX_VALUE) &&
+    within(audio.durationS, AUDIO_DURATION_RANGE.min, AUDIO_DURATION_RANGE.max) &&
+    within(audio.inS, 0, Number.MAX_VALUE) &&
+    within(audio.volume, 0, 1) &&
+    within(audio.fadeInS, FADE_RANGE.min, FADE_RANGE.max) &&
+    within(audio.fadeOutS, FADE_RANGE.min, FADE_RANGE.max)
   )
 }
 
@@ -270,15 +348,15 @@ export function isValidFilm(film: Film): boolean {
   if (!isValidShot(film.opening) || !isValidShot(film.closing) || typeof film.autoStops !== 'boolean') return false
   if (!oneOf(AUTO_STOP_MODES, film.autoMode)) return false
   if (!film.stops.every(isValidStop) || !film.texts.every(isValidText) || !film.media.every(isValidMedia)) return false
-  if (!film.speeds.every(isValidSpeed) || !apart(film.speeds)) return false
-  const ids = [...film.stops, ...film.speeds, ...film.texts, ...film.media].map((item) => item.id)
+  if (!film.speeds.every(isValidSpeed) || !apart(film.speeds) || !film.audio.every(isValidAudio)) return false
+  const ids = [...film.stops, ...film.speeds, ...film.texts, ...film.media, ...film.audio].map((item) => item.id)
   return new Set(ids).size === ids.length
 }
 
 /**
  * Fill-in of a film saved before a field existed (`SETTING_UPGRADES`): missing fields from `DEFAULT_FILM`, except
  * `autoMode`, which keeps the automatic stops of those films following the pacing ('rythme') as they did; media
- * saved before their placement get `MEDIA_DEFAULTS`.
+ * saved before their placement get `MEDIA_DEFAULTS`; a film saved before the music gets no music (`audio: []`).
  */
 export function withFilmDefaults(raw: unknown): unknown {
   if (!isRecord(raw)) return raw

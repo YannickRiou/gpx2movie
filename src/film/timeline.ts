@@ -3,24 +3,28 @@
  * by its gestures (drag a block, drag an edge, nudge, add, remove), as pure functions of the film. The component
  * only turns pointer and keyboard events into these calls and commits the result as one undo step.
  *
- * Items are selected by id: 'opening', 'closing', or the id of a stop, a speed portion, a text or a medium (unique
- * across the film).
+ * Items are selected by id: 'opening', 'closing', or the id of a stop, a speed portion, a text, a medium or a music
+ * clip (unique across the film).
  * Times are film times (seconds at ×1 from the first frame, opening included).
  */
-import { distanceAtTime, nearestOnPath } from '../flyover/path'
+import { distanceAtTime, nearestOnPath, recordedTimeAt } from '../flyover/path'
 import type { TrackPath } from '../flyover/path'
 import type { ClockStop, FilmClock } from './clock'
 import {
+  AUDIO_DEFAULTS,
+  AUDIO_DURATION_RANGE,
   AUTO_STOP_S,
+  FADE_RANGE,
   ITEM_DURATION_RANGE,
   MEDIA_DEFAULTS,
   MIN_SPEED_SPAN_M,
   SHOT_DURATION_RANGE,
   SPEED_FACTOR_RANGE,
   STOP_DURATION_RANGE,
+  clipTimeS,
   nextFilmId,
 } from './model'
-import type { Film, FilmMedia, FilmShot, FilmSpeed, FilmStop, FilmText } from './model'
+import type { Film, FilmAudio, FilmMedia, FilmShot, FilmSpeed, FilmStop, FilmText, MediaSync } from './model'
 
 export type TimelineItem = 'opening' | 'closing' | string
 /** part of a block a gesture holds: its body (move) or one of its edges */
@@ -93,8 +97,8 @@ export function snapTime(t: number, targets: readonly number[], thresholdS: numb
 }
 
 /**
- * Times a dragged edge snaps to: start and end of the film, edges of the shots, of the stops, speed portions, texts
- * and media (but those of `except`), highlights (progress values), playhead.
+ * Times a dragged edge snaps to: start and end of the film, edges of the shots, of the stops, speed portions, texts,
+ * media and music clips (but those of `except`), highlights (progress values), playhead.
  */
 export function snapTargets(
   clock: FilmClock,
@@ -106,7 +110,7 @@ export function snapTargets(
   const total = clock.totalTime()
   const out = [0, total, clock.openingS, total - clock.closingS, playheadS]
   for (const s of [...clock.stops, ...clock.speeds]) if (s.id !== except) out.push(s.startS, s.endS)
-  for (const t of [...film.texts, ...film.media]) if (t.id !== except) out.push(t.startS, t.startS + t.durationS)
+  for (const t of [...film.texts, ...film.media, ...film.audio]) if (t.id !== except) out.push(t.startS, t.startS + t.durationS)
   for (const h of highlights) out.push(clock.timeAtProgress(h))
   return out
 }
@@ -181,11 +185,36 @@ export interface DragContext {
   snapS: number
   /** clock with other speed portions (speed portions are left as they are without it) */
   clockOfSpeeds?: ClockOfSpeeds
+  /** length of a sound file of the media table (a music clip never plays past the end of its file) */
+  audioFileS?: (src: string) => number | undefined
 }
 
 const shotDuration = (d: number) => roundS(clamp(d, SHOT_DURATION_RANGE.min, SHOT_DURATION_RANGE.max))
 const stopDuration = (d: number) => roundS(clamp(d, STOP_DURATION_RANGE.min, STOP_DURATION_RANGE.max))
 const itemDuration = (d: number) => roundS(clamp(d, ITEM_DURATION_RANGE.min, ITEM_DURATION_RANGE.max))
+/** longest a music clip may play from `inS` in a file of `fileS` seconds */
+const musicMaxS = (inS: number, fileS = Infinity) => Math.max(AUDIO_DURATION_RANGE.min, Math.min(AUDIO_DURATION_RANGE.max, fileS - inS))
+
+/**
+ * Music clip `own` after dragging `grip` by `deltaS`: moved (start snapped, else end), or stretched by its end (never
+ * past the end of the file), or by its start, which moves its start in the file along (never before the file's).
+ */
+function dragMusic(own: FilmAudio, grip: Grip, deltaS: number, fileS: number | undefined, snap: (t: number) => number): FilmAudio {
+  const start = own.startS
+  const end = own.startS + own.durationS
+  if (grip === 'move') {
+    const snappedStart = snap(start + deltaS)
+    const shift = snappedStart !== start + deltaS ? snappedStart - start : snap(end + deltaS) - end
+    return { ...own, startS: roundS(Math.max(0, start + shift)) }
+  }
+  if (grip === 'start') {
+    const min = Math.max(0, start - own.inS, end - musicMaxS(0, fileS))
+    const s = clamp(snap(start + deltaS), min, end - AUDIO_DURATION_RANGE.min)
+    return { ...own, startS: roundS(s), durationS: roundS(end - s), inS: roundS(Math.max(0, own.inS + s - start)) }
+  }
+  const durationS = clamp(snap(end + deltaS) - start, AUDIO_DURATION_RANGE.min, musicMaxS(own.inS, fileS))
+  return { ...own, durationS: roundS(durationS) }
+}
 
 function withShot(film: Film, key: 'opening' | 'closing', durationS: number): Film {
   const shot: FilmShot = film[key]
@@ -273,6 +302,12 @@ export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: num
   if (speed) {
     const next = dragSpeed(film, speed, grip, deltaS, ctx, snap)
     return next.fromM === speed.fromM && next.toM === speed.toM ? film : { ...film, speeds: film.speeds.map((s) => (s.id === item ? next : s)) }
+  }
+
+  const music = film.audio.find((a) => a.id === item)
+  if (music) {
+    const next = dragMusic(music, grip, deltaS, ctx.audioFileS?.(music.src), snap)
+    return { ...film, audio: film.audio.map((a) => (a.id === item ? next : a)) }
   }
 
   const lane = film.texts.some((t) => t.id === item) ? 'texts' : 'media'
@@ -374,6 +409,25 @@ export function addMedia(film: Film, startS: number, sources: readonly { src: st
   return { film: next, ids }
 }
 
+/**
+ * Music clips added one after the other, the first at the end of the music already there (the start of the film
+ * without any), one per sound file of the media table (`src`, `fileS`: its length): the whole file,
+ * `AUDIO_DEFAULTS` volume and fades. With their new ids.
+ */
+export function addMusic(film: Film, sources: readonly { src: string; fileS: number }[]): { film: Film; ids: string[] } {
+  let next = film
+  const ids: string[] = []
+  let at = film.audio.reduce((end, a) => Math.max(end, a.startS + a.durationS), 0)
+  for (const { src, fileS } of sources) {
+    const id = nextFilmId(next, 'music')
+    const durationS = roundS(clamp(fileS, AUDIO_DURATION_RANGE.min, AUDIO_DURATION_RANGE.max))
+    next = { ...next, audio: [...next.audio, { id, src, startS: roundS(at), durationS, inS: 0, ...AUDIO_DEFAULTS }] }
+    ids.push(id)
+    at += durationS
+  }
+  return { film: next, ids }
+}
+
 /** Farthest a geotagged photo may be from the track to be placed on it (metres). */
 export const PHOTO_MAX_OFF_M = 2000
 /** Capture instants this long before the start or after the end of the recording place a photo at that end. */
@@ -396,7 +450,94 @@ export function photoFilmTime(path: TrackPath, clock: FilmClock, place: { lon?: 
   return atM === undefined ? undefined : roundS(clock.timeAtProgress(atM / path.lengthM))
 }
 
-/** `film` without the stop, speed portion, text or media `id`; a shot cannot be removed: it goes to style 'aucune'. */
+/** Recorded instants of the first and last timed points of the track (ms), undefined without time. */
+function recordedRange(path: TrackPath): { from: number; to: number } | undefined {
+  let from = Number.NaN
+  let to = Number.NaN
+  for (let i = 0; i < path.count; i++) {
+    const t = path.time[i]
+    if (Number.isNaN(t)) continue
+    if (Number.isNaN(from)) from = t
+    to = t
+  }
+  return Number.isNaN(from) ? undefined : { from, to }
+}
+
+/** Recorded instant under the marker at film time `timeS` (ms since epoch), undefined for an untimed track. */
+export function recordedAtFilmTime(path: TrackPath, clock: Pick<FilmClock, 'progressAtTime'>, timeS: number): number | undefined {
+  if (path.count === 0) return undefined
+  return recordedTimeAt(path, Math.min(1, Math.max(0, clock.progressAtTime(timeS))) * path.lengthM)
+}
+
+/** Most hours tried when a clip does not fall within the outing (camera clock set to local time, written as UTC). */
+export const SYNC_MAX_HOURS = 14
+
+/**
+ * Clock correction (seconds) under which a clip recorded from `startMs`, `fileS` long, overlaps the recorded outing:
+ * 0 when it does as it is, else the whole number of hours nearest to 0 that makes it overlap (a camera set to local
+ * time writes it as if it were UTC), undefined when none does or the track has no time.
+ */
+export function clipSyncOffsetS(path: TrackPath, startMs: number, fileS: number): number | undefined {
+  const range = recordedRange(path)
+  if (!range) return undefined
+  const overlaps = (offsetS: number) => startMs + offsetS * 1000 < range.to && startMs + (offsetS + fileS) * 1000 > range.from
+  for (let h = 0; h <= SYNC_MAX_HOURS; h++) {
+    for (const offsetS of h === 0 ? [0] : [-h * 3600, h * 3600]) if (overlaps(offsetS)) return offsetS
+  }
+  return undefined
+}
+
+/**
+ * Place on the timeline of a synced clip (`media.sync`, `fileS`: its length): it starts when the marker passes the
+ * point recorded at its start (at the start of the flight for a clip started before the outing, `inS` skipping the
+ * part filmed before); following the flight, it lasts until the marker passes the point recorded at its end (or the
+ * end of the outing), else its length in the file from there, at most its current duration. Undefined when the
+ * clip does not overlap the outing or the track has no time.
+ */
+export function syncClipPlacement(
+  media: FilmMedia,
+  path: TrackPath,
+  clock: Pick<FilmClock, 'timeAtProgress'>,
+  fileS: number,
+): Pick<FilmMedia, 'startS' | 'durationS' | 'inS'> | undefined {
+  const range = recordedRange(path)
+  if (!media.sync || !range || path.lengthM <= 0) return undefined
+  const startMs = media.sync.startMs + media.sync.offsetS * 1000
+  const endMs = startMs + fileS * 1000
+  if (startMs >= range.to || endMs <= range.from) return undefined
+  const filmTimeAt = (ms: number) => clock.timeAtProgress((distanceAtTime(path, ms) ?? 0) / path.lengthM)
+  const inS = Math.max(0, (range.from - startMs) / 1000)
+  const startS = filmTimeAt(Math.max(startMs, range.from))
+  const durationS = media.sync.follow ? filmTimeAt(Math.min(endMs, range.to)) - startS : Math.min(media.durationS, fileS - inS)
+  return { startS: roundS(startS), durationS: itemDuration(durationS), inS: roundS(inS) }
+}
+
+/**
+ * `film` with clip `id` synced (`sync`) and placed by `syncClipPlacement`; undefined when it does not overlap the
+ * outing (or is not in the film).
+ */
+export function syncClip(film: Film, id: string, sync: MediaSync, path: TrackPath, clock: Pick<FilmClock, 'timeAtProgress'>, fileS: number): Film | undefined {
+  const media = film.media.find((m) => m.id === id)
+  const place = media && syncClipPlacement({ ...media, sync }, path, clock, fileS)
+  return place && updateMedia(film, id, { sync, ...place })
+}
+
+/** Film time over which the preview measures how fast a clip following the flight plays (seconds). */
+export const FOLLOW_RATE_STEP_S = 0.25
+
+/**
+ * Seconds of the file played per second of film at film time `timeS`: 1 for a clip that does not follow the flight;
+ * following it, how fast the recorded time passes under the marker (0 during a stop: the frame holds).
+ */
+export function clipRateAt(media: FilmMedia, path: TrackPath, clock: Pick<FilmClock, 'progressAtTime'>, timeS: number): number {
+  if (!media.sync?.follow) return 1
+  const a = recordedAtFilmTime(path, clock, timeS)
+  const b = recordedAtFilmTime(path, clock, timeS + FOLLOW_RATE_STEP_S)
+  if (a === undefined || b === undefined) return 1
+  return Math.max(0, (clipTimeS(media, timeS + FOLLOW_RATE_STEP_S, b) - clipTimeS(media, timeS, a)) / FOLLOW_RATE_STEP_S)
+}
+
+/** `film` without the stop, speed portion, text, medium or music clip `id`; a shot cannot be removed: it goes to style 'aucune'. */
 export function removeFilmItem(film: Film, id: TimelineItem): Film {
   if (id === 'opening' || id === 'closing') return updateShot(film, id, { style: 'aucune' })
   return {
@@ -405,16 +546,17 @@ export function removeFilmItem(film: Film, id: TimelineItem): Film {
     speeds: film.speeds.filter((s) => s.id !== id),
     texts: film.texts.filter((t) => t.id !== id),
     media: film.media.filter((m) => m.id !== id),
+    audio: film.audio.filter((a) => a.id !== id),
   }
 }
 
 /**
  * `item` is in the film: a shot (always there), one of the clock's `stops` (generated ones included), a speed portion,
- * a text or a medium.
+ * a text, a medium or a music clip.
  */
 export function hasFilmItem(film: Film, stops: readonly { id: string }[], item: TimelineItem): boolean {
   if (item === 'opening' || item === 'closing') return true
-  return [stops, film.speeds, film.texts, film.media].some((lane) => lane.some((s) => s.id === item))
+  return [stops, film.speeds, film.texts, film.media, film.audio].some((lane) => lane.some((s) => s.id === item))
 }
 
 /** Stop `id` with `patch`, duration clamped to its range. */
@@ -475,6 +617,30 @@ export function updateMedia(film: Film, id: string, patch: Partial<Omit<FilmMedi
       const next = { ...m, ...patch }
       const inS = next.inS === undefined ? {} : { inS: roundS(Math.max(0, next.inS)) }
       return { ...next, startS: roundS(Math.max(0, next.startS)), durationS: itemDuration(next.durationS), ...inS }
+    }),
+  }
+}
+
+/**
+ * Music clip `id` with `patch`: start in the file within it (`fileS`: its length, when known), duration never past
+ * its end, volume 0–1 at 1/100, fades within their range.
+ */
+export function updateMusic(film: Film, id: string, patch: Partial<Omit<FilmAudio, 'id'>>, fileS?: number): Film {
+  return {
+    ...film,
+    audio: film.audio.map((a) => {
+      if (a.id !== id) return a
+      const next = { ...a, ...patch }
+      const inS = roundS(clamp(next.inS, 0, fileS === undefined ? Infinity : Math.max(0, fileS - AUDIO_DURATION_RANGE.min)))
+      return {
+        ...next,
+        startS: roundS(Math.max(0, next.startS)),
+        inS,
+        durationS: roundS(clamp(next.durationS, AUDIO_DURATION_RANGE.min, musicMaxS(inS, fileS))),
+        volume: Math.round(clamp(next.volume, 0, 1) * 100) / 100,
+        fadeInS: roundS(clamp(next.fadeInS, FADE_RANGE.min, FADE_RANGE.max)),
+        fadeOutS: roundS(clamp(next.fadeOutS, FADE_RANGE.min, FADE_RANGE.max)),
+      }
     }),
   }
 }

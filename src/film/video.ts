@@ -7,7 +7,9 @@
  *   in the page), so its file must stay under `MAX_VIDEO_BYTES`; it must be an MP4, WebM or QuickTime file whose
  *   video the browser decodes (WebCodecs, the same decoder as the export).
  * - Preview (`getPreviewVideos`): one muted HTMLVideoElement per clip, playing along during the playback and
- *   paused on the film time when scrubbing; the last frame seeked to is kept while the next seek runs.
+ *   paused on the film time when scrubbing; the last frame seeked to is kept while the next seek runs. A clip
+ *   following the flight (`sync.follow`) plays at the rate the recorded time passes under the marker, held during
+ *   a stop.
  * - Export (`createExportVideos`): frame-exact and deterministic, never real-time playback: before every frame the
  *   frame of each visible clip at its time in the file is decoded by mediabunny (the last frame starting at or
  *   before that time), reading forward from the previous one.
@@ -18,6 +20,7 @@ import { BlobSource, CanvasSink, Input, MP4, QTFF, WEBM } from 'mediabunny'
 import { fitWithin } from '../overlay/assets'
 import type { OverlayImage } from '../overlay/draw'
 import { useAppStore } from '../state/store'
+import { mp4CreationTimeMs, quickTimeDateMs } from './exif'
 import type { PhotoExif } from './exif'
 import { MAX_VIDEO_BYTES, THUMB_JPEG_QUALITY, THUMB_MAX_SIDE_PX, dataUrlToBlob, encodeJpeg, readPhoto, useMediaStore } from './media'
 import type { MediaAsset } from './media'
@@ -39,7 +42,8 @@ export function isMediaFile(file: { type: string; name?: string }): boolean {
 
 const megabytes = (bytes: number) => Math.ceil(bytes / (1024 * 1024))
 
-function blobToDataUrl(blob: Blob, type: string): Promise<string> {
+/** `blob` as a base64 data URL of type `type`. */
+export function blobToDataUrl(blob: Blob, type: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
@@ -52,8 +56,24 @@ function blobToDataUrl(blob: Blob, type: string): Promise<string> {
 }
 
 /**
- * A video file -> its entry of the media table: the file as it is, its first frame as the thumbnail, its size and
- * length. Throws a French message when it is too large or the browser cannot decode it.
+ * When the clip started recording, to sync it with the track: the date with its time zone of Apple devices, else
+ * the creation time of the movie header of an MP4 / QuickTime file, else (flagged approximate) the last change of
+ * the file minus its length (a camera writes the file until the recording stops). Nothing when none is known.
+ */
+async function recordingStart(input: Input, file: Blob, mp4: boolean, durationS: number): Promise<Pick<MediaAsset, 'recordedMs' | 'recordedApprox'>> {
+  const tags = await input.getMetadataTags().catch(() => undefined)
+  const apple = tags?.raw?.['com.apple.quicktime.creationdate']
+  const read = (offset: number, length: number) => file.slice(offset, offset + length).arrayBuffer().then((b) => new Uint8Array(b))
+  const recordedMs = (typeof apple === 'string' ? quickTimeDateMs(apple) : undefined) ?? (mp4 ? await mp4CreationTimeMs(read, file.size) : undefined)
+  if (recordedMs !== undefined) return { recordedMs }
+  const modified = (file as Partial<File>).lastModified
+  return typeof modified === 'number' && modified > 0 ? { recordedMs: modified - Math.round(durationS * 1000), recordedApprox: true } : {}
+}
+
+/**
+ * A video file -> its entry of the media table: the file as it is, its first frame as the thumbnail, its size,
+ * length and recording start (`recordingStart`). Throws a French message when it is too large or the browser
+ * cannot decode it.
  */
 export async function readVideo(file: Blob, name?: string): Promise<{ asset: MediaAsset }> {
   if (file.size > MAX_VIDEO_BYTES) {
@@ -76,7 +96,8 @@ export async function readVideo(file: Blob, name?: string): Promise<{ asset: Med
     if (!first || !(durationS > 0)) throw new Error('vidéo vide ou illisible.')
     const thumb = encodeJpeg(first.canvas, first.canvas.width, first.canvas.height, THUMB_MAX_SIDE_PX, THUMB_JPEG_QUALITY).data
     const type = format === WEBM ? 'video/webm' : format === QTFF ? 'video/quicktime' : 'video/mp4'
-    return { asset: { data: await blobToDataUrl(file, type), thumb, width, height, name, durationS } }
+    const recorded = await recordingStart(input, file, format !== WEBM, durationS)
+    return { asset: { data: await blobToDataUrl(file, type), thumb, width, height, name, durationS, ...recorded } }
   } finally {
     input.dispose()
   }
@@ -184,8 +205,11 @@ function openClip(asset: MediaAsset): OpenedClip {
 }
 
 export interface ExportVideos {
-  /** decode the frames of the clips shown at film time `timeS` (throws a French message for an unreadable clip) */
-  load(media: readonly FilmMedia[], timeS: number): Promise<void>
+  /**
+   * decode the frames of the clips shown at film time `timeS` (throws a French message for an unreadable clip);
+   * `recordedMs`: the recorded instant under the marker then, for the clips following the flight (`clipTimeS`)
+   */
+  load(media: readonly FilmMedia[], timeS: number, recordedMs?: number): Promise<void>
   /** frame of `item` at `clipS` in its file, once loaded for that time */
   get(item: FilmMedia, clipS: number): OverlayImage | undefined
   dispose(): void
@@ -196,7 +220,7 @@ export function createExportVideos(source: (src: string) => MediaAsset | undefin
   const clips = new Map<string, { asset: MediaAsset; clip: OpenedClip; reader: ClipReader }>()
   const shown = new Map<string, { clipS: number; frame: ClipFrame | null }>()
   return {
-    async load(media, timeS) {
+    async load(media, timeS, recordedMs) {
       shown.clear()
       for (const item of visibleVideos(media, timeS)) {
         const asset = source(item.src)
@@ -208,7 +232,7 @@ export function createExportVideos(source: (src: string) => MediaAsset | undefin
           entry = { asset, clip, reader: createClipReader((s) => clip.frames(s)) }
           clips.set(item.id, entry)
         }
-        const clipS = clipTimeS(item, timeS)
+        const clipS = clipTimeS(item, timeS, recordedMs)
         try {
           shown.set(item.id, { clipS, frame: await entry.reader.frameAt(clipS) })
         } catch {
@@ -250,15 +274,22 @@ export interface PreviewElement {
   addEventListener(type: 'loadeddata' | 'seeked', listener: () => void): void
 }
 
-/** Drift tolerated while playing along (seconds), and while paused (about a frame). */
+/** Drift tolerated while playing along (seconds; a clip following the flight: less), and while paused (about a frame). */
 export const PLAY_DRIFT_S = 0.3
+export const FOLLOW_DRIFT_S = 0.2
 export const SEEK_TOLERANCE_S = 0.02
+/** Playback rates of a video element (browsers refuse others); a clip slower than the lowest is held instead. */
+export const PLAYBACK_RATE_RANGE = { min: 0.0625, max: 16 } as const
 /** HTMLMediaElement.HAVE_CURRENT_DATA */
 const HAVE_CURRENT_DATA = 2
 
 export interface PreviewVideos {
-  /** frame of `item` at `clipS` in its file: plays along while `playing`, else seeks there; undefined until ready */
-  frame(item: FilmMedia, clipS: number, playback: { playing: boolean; speed: number }): OverlayImage | undefined
+  /**
+   * frame of `item` at `clipS` in its file: plays along while `playing` (at `rate` seconds of the file per second of
+   * film times the playback speed: `clipRateAt` for a clip following the flight; held below the lowest rate), else
+   * seeks there; undefined until ready
+   */
+  frame(item: FilmMedia, clipS: number, playback: { playing: boolean; speed: number }, rate?: number): OverlayImage | undefined
   /** pause the clips not asked for since the last call */
   settle(): void
   /** drop the elements of the media that are not in `ids` */
@@ -294,7 +325,7 @@ export function createPreviewVideos(
     entries.delete(id)
   }
   return {
-    frame(item, clipS, { playing, speed }) {
+    frame(item, clipS, { playing, speed }, rate = 1) {
       const asset = source(item.src)
       if (!asset) return undefined
       let entry = entries.get(item.id)
@@ -314,12 +345,13 @@ export function createPreviewVideos(
       used.add(item.id)
       const el = entry.el
       const end = Math.min(item.outS ?? Infinity, Number.isFinite(el.duration) ? el.duration : Infinity)
-      if (playing && clipS < end - SEEK_TOLERANCE_S) {
-        el.playbackRate = speed
+      const playRate = Math.round(speed * rate * 100) / 100
+      if (playing && clipS < end - SEEK_TOLERANCE_S && playRate >= PLAYBACK_RATE_RANGE.min) {
+        el.playbackRate = Math.min(PLAYBACK_RATE_RANGE.max, playRate)
         if (el.paused) {
           el.currentTime = clipS
           el.play().catch(() => undefined)
-        } else if (Math.abs(el.currentTime - clipS) > PLAY_DRIFT_S) {
+        } else if (Math.abs(el.currentTime - clipS) > (item.sync?.follow ? FOLLOW_DRIFT_S : PLAY_DRIFT_S)) {
           el.currentTime = clipS
         }
       } else {

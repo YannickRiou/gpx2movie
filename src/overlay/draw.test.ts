@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import sampleGpx from '../../public/samples/tour-du-mont-blanc-j1.gpx?raw'
 import { parseGpx } from '../import/gpx'
-import { overlayFrameAt, prepareOverlayTrack } from './data'
+import { overlayFrameAt, prepareOverlayTrack, recordedAtProgress } from './data'
 import {
   SAFE_MARGIN,
   cardOpacityAt,
@@ -569,6 +569,14 @@ describe('timeline photos', () => {
     expect(draw(clip, 61)).toEqual([])
     // a playing clip changes every frame: the export renders the held frames again
     expect(overlayTimedState(DEFAULT_OVERLAY, [], at(50), [{ ...clip, layout: 'carte' }])).toEqual([1, 50])
+    // following the flight: the frame recorded under the marker, whatever the film time
+    const recorded = recordedAtProgress(track.path, 0.5)!
+    expect(recorded).toBeGreaterThan(0)
+    const following: FilmMedia = { ...clip, inS: 0, sync: { startMs: recorded - 12_000, offsetS: 0, follow: true } }
+    asked.length = 0
+    draw(following, 42)
+    draw(following, 58)
+    expect(asked).toEqual([12, 12])
   })
 
   it('full screen: the Ken Burns move follows the film time, still without it', () => {

@@ -24,12 +24,16 @@ export function ProjectPanel() {
 
   const savePreset = () => {
     try {
-      presetStore.save(presetName, useAppStore.getState().settings)
+      const stored = presetStore.save(presetName, useAppStore.getState().settings)
       const name = normalizePresetName(presetName)
       setPresets(presetStore.list())
       setSelectedPreset(name)
       setPresetName('')
-      showToast({ kind: 'success', text: `Préréglage « ${name} » enregistré` })
+      showToast(
+        stored
+          ? { kind: 'success', text: `Préréglage « ${name} » enregistré` }
+          : { kind: 'error', text: 'Préréglage non enregistré : stockage du navigateur plein. Il reste utilisable jusqu’à la fermeture de la page.' },
+      )
     } catch (err) {
       showToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) })
     }

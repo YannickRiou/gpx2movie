@@ -76,8 +76,10 @@ describe('engine options from settings', () => {
     weather: { enabled: true },
     weatherScene: { enabled: true, strength: 1 },
     clouds: { mode: 'meteo' as const, coverage: 0.4, altitudeM: 1200, quality: 'medium' as const },
+    water: { enabled: true, strength: 1 },
     overlay: DEFAULT_OVERLAY,
     video: { aspect: '16:9' as const, resolution: '1080p' as const, fps: 30 as const, quality: 'high' as const },
+    poster: { format: 'a4-portrait' as const, style: 'editorial' as const, title: '', subtitle: '', figures: { distance: true, ascent: true, time: true, maxAltitude: true, climbs: true }, weather: true },
     landmarks: {
       enabled: true,
       kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false },

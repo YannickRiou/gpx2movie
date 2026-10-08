@@ -20,6 +20,7 @@ import { buildTrack, isUtcOffsetMin } from '../import/stats'
 import { isValidVideoSettings, withVideoDefaults } from '../export/schedule'
 import { LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { isValidOverlay, withOverlayDefaults } from '../overlay/settings'
+import { isValidPoster } from '../poster/settings'
 import { TRACK_COLOR_MODES } from '../flyover/trackColor'
 import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS } from '../state/store'
 import type { AppState, Settings } from '../state/store'
@@ -72,7 +73,7 @@ export interface ProjectDocument {
   settings: Settings
   playback: { speed: number }
   tracks: ProjectTrack[]
-  /** pictures of the film by id (`film.media[].src`), omitted when the film has none */
+  /** pictures, clips and sound files of the film by id (`film.media[].src`, `film.audio[].src`), omitted when it has none */
   media?: MediaTable
 }
 
@@ -108,9 +109,11 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   exposureEv: (v) => v >= -4 && v <= 4,
   weatherScene: (v) => v.strength >= 0 && v.strength <= 1,
   clouds: isValidClouds,
+  water: (v) => v.strength >= 0 && v.strength <= 1,
   trackColorBy: (v) => (TRACK_COLOR_MODES as readonly string[]).includes(v),
   overlay: isValidOverlay,
   video: isValidVideoSettings,
+  poster: isValidPoster,
   landmarks: (v) => v.maxDistanceM >= LANDMARK_DISTANCE_RANGE.min && v.maxDistanceM <= LANDMARK_DISTANCE_RANGE.max,
   race: isValidRace,
 }
@@ -380,6 +383,12 @@ export function parseProject(text: string): LoadedProject {
   if (removed > 0) {
     warnings.push(`${removed} média${removed > 1 ? 's' : ''} sans fichier lisible dans le projet, retiré${removed > 1 ? 's' : ''} du film.`)
     settings.film = { ...settings.film, media: kept }
+  }
+  const music = settings.film.audio.filter((a) => media[a.src])
+  const silenced = settings.film.audio.length - music.length
+  if (silenced > 0) {
+    warnings.push(`${silenced} musique${silenced > 1 ? 's' : ''} sans fichier lisible dans le projet, retirée${silenced > 1 ? 's' : ''} du film.`)
+    settings.film = { ...settings.film, audio: music }
   }
   const rawSpeed = isRecord(doc.playback) ? doc.playback.speed : undefined
   const speedValid = typeof rawSpeed === 'number' && Number.isFinite(rawSpeed) && rawSpeed > 0
