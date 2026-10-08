@@ -5,10 +5,9 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
 ## Branches, PR, dépôt
 
-- `master` : tout ce qui est fusionné (PR #1 à #5, la dernière le 2026-10-08).
-- `lot-video-sync-phase7` (branche courante) : géoïde, packs hors ligne, rendu en lot, chargement découpé, vagues 1 et 2
-  des fonctions restantes (voir « Travail en cours »). PR vers `master` ouverte puis fusionnée dès que les vérifications
-  sont vertes (fusion autorisée par l'utilisateur).
+- `master` : tout ce qui est fusionné (PR #1 à #6 ; #6 le 2026-10-08 : géoïde, hors ligne, rendu en lot, vagues 1 et 2).
+- `lot-vague3` (branche courante) : vagues 3 et 4 des fonctions restantes (voir « Travail en cours »). PR vers `master`
+  fusionnée dès que les vérifications sont vertes (fusion autorisée par l'utilisateur).
 - Méthode : une branche par lot, une PR avec procédure de test manuel, fusion (`gh pr merge N --merge`), puis nouvelle
   branche partie de `origin/master`.
 - **Pousser** : `git push` tout simplement. Le remote `origin` est `git@github-yannickriou:YannickRiou/gpx2movie.git`,
@@ -27,6 +26,11 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
   et aide, T / Ctrl+Z / S, projet enregistré puis rouvert, export 320 × 180 + image fixe. 7 à 8 min ici (export
   5 à 6 min, nuages coupés) ; `OPENFLYOVER_E2E_SKIP_EXPORT=1` : moins de 1 min 30. Échoue sur toute erreur de console hors bruit
   réseau. Un seul navigateur à la fois sur cette machine.
+- Vérifier le Rust de l'application de bureau (Linux impossible ici, Ubuntu 20.04 sans webkit2gtk-4.1) :
+  `rustup target add x86_64-pc-windows-msvc`, puis `RC_x86_64_pc_windows_msvc=<faux windres> cargo check -j 1 --target
+  x86_64-pc-windows-msvc` dans `src-tauri/`. Le faux `windres` est un script exécutable nommé `windres` qui répond à `-V`
+  par une ligne contenant « GNU windres » et, sinon, écrit un fichier vide à la sortie demandée (`-o`). `cargo test` ne
+  tourne pas ici.
 - Serveur de dev utilisé pour les captures : `npm run dev -- --port 5190` (à relancer).
 - Contrôle visuel sans écran : Chromium headless (`~/.cache/ms-playwright/chromium_headless_shell-1223/…`) piloté par
   puppeteer-core (`~/.npm/_npx/e0b87bb3fb84adaa/node_modules/puppeteer-core`), GPU logiciel SwiftShader : 20–40 s par
@@ -54,27 +58,37 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
 Voir `git log` et les PR #1 à #5 ; détail technique dans `ARCHITECTURE.md`, fonctionnalités dans `README.md`.
 
-## Travail en cours (branche `lot-video-sync-phase7`)
+## Travail en cours (branche `lot-vague3`)
 
-Vérifié pour tout le lot : typecheck, lint (0 erreur), `npx vitest run --maxWorkers=1` (83 fichiers, 1 268 tests),
-`npm run build`. Vu en capture (SwiftShader, 1440 × 900) : section « Trace et marqueur », figurine, zones de sécurité en
-16:9, section « Couleurs », losange de cadrage et inspecteur « Cadrage ». Le reste est à voir ou écouter sur une machine
-avec GPU : [`docs/tests-gpu.md`](tests-gpu.md).
+Vérifié pour tout le lot : typecheck, lint (0 erreur), `npx vitest run --maxWorkers=1` (89 fichiers, 1 426 tests),
+`npm run build` (premier écran toujours sans three.js). Vu en capture (SwiftShader, 1440 × 900) : liste « Points
+d'intérêt » et étiquette à épingle, « Mes projets » (carte du projet ouvert), « Un film par trace » dans le tiroir
+d'export, titres aux repères dans la piste Textes. Le reste est à voir, écouter ou lancer sur une machine avec GPU, sous
+Linux ou sur GitHub : [`docs/tests-gpu.md`](tests-gpu.md).
 
-- **Trace et marqueur** (onglet Survol) : `settings.trackStyle` (épaisseur, plein / tirets / points, halo, trace qui se
-  dessine) et `settings.marker` (boule, 7 figurines, image ronde, taille). `ARCHITECTURE.md`, « Trace et marqueur ».
-- **Étalonnage** (onglet Carte › Couleurs, 7 préréglages + 4 curseurs) et **zones de sécurité** (bouton sous « Recadrer »,
-  touche G). Le SMAA de la chaîne de l'atmosphère est maintenant dans sa propre passe, après le tone mapping (il lisait
-  l'image HDR brute sur les bords), l'étalonnage le suit dans la même passe.
-- **Son des vidéos** : son et volume par clip, « Baisser la musique sous les vidéos » (−10 dB, rampes 0,3 s) ; anciens
-  projets muets. Jamais écouté.
-- **Habillage** : « Couleurs et polices » par-dessus le style (`overlay.overrides`, `resolveOverlayTheme`), widget
-  « Classement » de la course fantôme (`overlay.leaderboard`).
-- **Export « Habillage seul »** : WebM VP9 transparent (alpha par mediabunny), sans rendu 3D, mêmes images que le film.
-- **Caméra par arrêt** (Comme le film / Tour lent / Vue large / Fixe ; « Fixe » tient maintenant aussi l'orbite) et
-  **cadrages clés** (`film.cameraKeys`, losanges dans « Plans », « Garder ce cadrage ici », inspecteur « Cadrage »).
-- **Chargement découpé** : premier écran ~540 kB (~177 kB gzip, three.js exclu : `flyover/cameraKeys.ts` sans three pour le panneau Caméra) ; scène, export, hors ligne, atmosphère, FIT et mediabunny
-  à part.
+- **Plan de situation** : style d'ouverture / de clôture `'situation'` (« Depuis la région »), vue à 65° jusqu'à 5 ×
+  la diagonale de la trace, bornée par la zone de relief chargée (trace + 25 km) : pour une trace de 15 km, seulement
+  ~2,8 × plus haut que la vue d'ensemble. Aller plus haut demanderait d'élargir la zone (tuiles, packs hors ligne).
+- **Points d'intérêt à la main** : `film.pois`, clic droit sur le relief ou la trace, liste dans l'onglet Carte, « Arrêt ».
+- **Traces enchaînées** : « Enchaîner en un seul parcours » (onglet Trace), offre à l'import de traces qui se suivent,
+  « Annuler » dans le toast (`src/import/chain.ts`).
+- **Ralentis et titres aux repères** : `film.landmarkTitles` (neuf : oui ; anciens projets : non), ×0,5 sur 400 m et
+  carton du nom aux cols, sommets et refuges (titre seul là où un arrêt existe déjà), éléments `auto-…` refaits quand les
+  repères arrivent (une étape d'annulation), figés dès qu'on en retouche un.
+- **Calage sur la musique** : tempo et temps détectés (`src/film/beats.ts`, gardés dans la table des médias),
+  « Caler sur le rythme » (débuts de textes et d'arrêts sur la mesure à ±0,4 s), repères sur le bloc de musique. Seuil
+  de confiance réglé sur des signaux de synthèse seulement.
+- **Affiche** : plusieurs traces (cadrage commun, totaux, liste jusqu'à 6) et « Carte à plat » (carte 2D vue de dessus
+  depuis les tuiles d'imagerie).
+- **Un film par trace d'un dossier** : source « Un film par trace » du mode « Plusieurs formats » (Chrome / Edge /
+  bureau), état d'origine remis à la fin, `history.suspend()` pendant la série.
+- **Mes projets** : projets gardés par l'application (`<app data>/projects/` sur le bureau, Cache Storage sur le site),
+  enregistrés 3 s après chaque changement. Pas de vignette ; une modification faite moins de 3 s avant la fermeture est
+  perdue.
+- **Encodeur natif Linux** : `src-tauri/src/video.rs`, `ffmpeg` du système (H.264 + AAC), choisi quand WebCodecs manque ;
+  « installez ffmpeg » sinon. Jamais lancé ; `cargo test` à faire sous Linux.
+- **Installeurs** : `.github/workflows/desktop.yml` (Windows, macOS, Linux ; signature si les secrets existent) et
+  `ci.yml` (vérifications à chaque push). Jamais lancés sur GitHub. Guide : `docs/installeurs.md`.
 
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
 
@@ -188,18 +202,14 @@ reste la source de chaque chantier.
 
 ## Prochaines étapes proposées
 
-Fonctions validées par l'utilisateur (« toutes pertinentes »), par vagues, quelques agents à la fois (mémoire) :
-
-1. Vague 3 : plan de situation (ouverture depuis la région), points d'intérêt ajoutés à la main, traces enchaînées,
-   ralentis et titres aux repères OpenStreetMap.
-2. Vague 4 : ralentis et arrêts calés sur les temps de la musique, affiche à plusieurs traces et carte à plat, un film par
-   GPX d'un dossier, projets rangés en local dans l'exe, encodeur natif sous Linux, installeurs signés (préparer la
-   chaîne ; le certificat est à fournir par l'utilisateur).
-3. Vague 5 : reconnaissance d'itinéraire (à confirmer avec l'utilisateur avant de construire).
-4. Petites suites : `THREE.Clock` → `THREE.Timer` ; e2e qui attend les morceaux chargés à part ; aide de message d'erreur
-   répétée ~12 fois ; copies de `clamp` restantes (`film/clock.ts`, `film/timeline.ts`, `film/audio.ts`,
-   `terrain/dem.ts`) → `core/math.ts` ; passe de performance de la scène (pas de rendu continu à l'arrêt, nuages moins
-   chers en aperçu).
+1. L'utilisateur : tests sur la machine avec GPU (`docs/tests-gpu.md`), premier lancement des workflows GitHub, certificat
+   de signature s'il en veut un.
+2. Reconnaissance d'itinéraire (vague 5) : à confirmer avec l'utilisateur avant de construire.
+3. Petites suites : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version) ;
+   e2e qui attend les morceaux chargés à part ; aide de message d'erreur répétée ~12 fois ; copies de `clamp` restantes
+   (`film/clock.ts`, `film/timeline.ts`, `film/audio.ts`, `terrain/dem.ts`) → `core/math.ts` ; passe de performance de la
+   scène (pas de rendu continu à l'arrêt, nuages moins chers en aperçu) ; un export « .webm » demandé sur le bureau Linux
+   sort en MP4.
 
 ## Limites et points ouverts
 

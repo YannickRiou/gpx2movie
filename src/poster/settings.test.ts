@@ -21,6 +21,16 @@ describe('poster settings', () => {
     expect(invalid).toEqual(['poster'])
   })
 
+  it('opens a poster saved before « Carte à plat » with the 3D view', () => {
+    const older: Partial<PosterSettings> = { ...DEFAULT_POSTER, style: 'app', title: 'Tour' }
+    delete older.flat
+    const { settings, invalid } = sanitizeSettings({ poster: older })
+    expect(invalid).toEqual([])
+    expect(settings.poster).toEqual({ ...older, flat: false })
+    expect(sanitizeSettings({ poster: { ...older, flat: true } }).settings.poster.flat).toBe(true)
+    expect(sanitizeSettings({ poster: { ...older, flat: 'oui' } }).invalid).toEqual(['poster'])
+  })
+
   it('prints at 300 dpi, the long side at most 4960 px', () => {
     expect(posterSize('a4-portrait')).toEqual({ width: 2480, height: 3508 })
     expect(posterSize('a3-landscape')).toEqual({ width: 4960, height: 3508 })

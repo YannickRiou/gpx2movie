@@ -6,7 +6,7 @@ import { useRace } from '../scene/useRace'
 import { useAppStore } from '../state/store'
 import { formatDistance, formatDistanceGap, formatTimeGap, formatTrackSummary } from './format'
 import { Icon } from './icons'
-import { chooseTracksToImport } from './projectActions'
+import { chainLoadedTracks, chooseTracksToImport } from './projectActions'
 
 /** Progress steps the leaderboard follows: a few renders per second of its own rows, not one per frame. */
 const PROGRESS_STEPS = 1000
@@ -126,7 +126,30 @@ function AddTracksButton() {
   )
 }
 
-/** One card per imported track, with a delete button; the ghost race block from two tracks. */
+/** « Enchaîner en un seul parcours » (2+ tracks): one continuous film instead of a ghost race. */
+function ChainTracks({ tracks }: { tracks: readonly Track[] }) {
+  const id = useId()
+  const loading = useAppStore((s) => s.loading)
+  return (
+    <div className="field tracks__chain">
+      <button
+        type="button"
+        className="btn btn--secondary btn--block"
+        onClick={() => chainLoadedTracks(tracks)}
+        disabled={loading}
+        aria-describedby={`${id}-hint`}
+      >
+        <Icon name="spline" size={16} />
+        Enchaîner en un seul parcours
+      </button>
+      <p id={`${id}-hint`} className="field__hint">
+        Dans l’ordre des heures de départ, ou de la liste si une trace n’est pas horodatée.
+      </p>
+    </div>
+  )
+}
+
+/** One card per imported track, with a delete button; chaining and the ghost race block from two tracks. */
 export function TrackList() {
   const tracks = useAppStore((s) => s.tracks)
   const removeTrack = useAppStore((s) => s.removeTrack)
@@ -164,6 +187,7 @@ export function TrackList() {
           ))}
         </ul>
       )}
+      {tracks.length >= 2 && <ChainTracks tracks={tracks} />}
       {tracks.length >= 2 && <RacePanel tracks={tracks} />}
     </section>
   )

@@ -1,7 +1,7 @@
 /**
- * « Affiche » mode of the export drawer: format, style, title, subtitle, figures and weather of the poster, a live
- * thumbnail of its layout (2D only: the last rendered 3D view, or a placeholder with the track's outline), and the
- * button that renders it. The result is saved like the other exports (export drawer, `getPlatform().saveUrl`).
+ * « Affiche » mode of the export drawer: format, style, title, subtitle, figures, weather and « Carte à plat » of the
+ * poster, a live thumbnail of its layout (2D only: the last rendered view, or a placeholder with the track's
+ * outline), and the button that renders it. The result is saved like the other exports (export drawer, `getPlatform().saveUrl`).
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -21,9 +21,9 @@ import { withShortcut } from '../ui/shortcuts'
 import { effectiveProjectName } from '../ui/shell'
 import { showToast } from '../ui/toast'
 import { useWeatherStore } from '../weather/store'
-import { availableFigures } from './content'
+import { availableFigures, posterStats } from './content'
 import { drawPoster } from './draw'
-import { currentPosterContent, posterRows, startPoster, usePosterPreview } from './export'
+import { currentPosterContent, posterRows, previewKey, startPoster, usePosterPreview } from './export'
 import { posterLayout } from './layout'
 import { POSTER_FIGURES, POSTER_FIGURE_LABELS, POSTER_FORMATS, POSTER_STYLES, posterSize } from './settings'
 import type { PosterSettings } from './settings'
@@ -36,8 +36,10 @@ const PREVIEW_MAX_H = 220
 /** Live thumbnail of the poster: the same drawing as the export, scaled down, without rendering the 3D view. */
 function PosterPreview({ poster }: { poster: PosterSettings }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const track = useAppStore((s) => s.tracks[0])
+  const tracks = useAppStore((s) => s.tracks)
+  const track = tracks[0]
   // what the content reads besides the poster settings: redraw when they change
+  const race = useAppStore((s) => s.settings.race.enabled)
   const projectName = useAppStore((s) => s.projectName)
   const terrain = useAppStore((s) => s.settings.terrainSourceId)
   const imagery = useAppStore((s) => s.settings.imagerySourceId)
@@ -71,9 +73,9 @@ function PosterPreview({ poster }: { poster: PosterSettings }) {
     const k = canvas.width / width
     ctx.setTransform(k, 0, 0, k, 0, 0)
     const layout = posterLayout(width, height, poster.style, posterRows(content))
-    const shown = view && track && view.trackId === track.id ? { image: view.image, width: view.width, height: view.height } : null
+    const shown = view && view.key === previewKey(tracks, poster.flat) ? { image: view.image, width: view.width, height: view.height } : null
     drawPoster(ctx, layout, content, poster.style, shown, outline)
-  }, [poster, track, projectName, terrain, imagery, weather, landmarks, view, fontsReady, outline, width, height, cssW, cssH])
+  }, [poster, tracks, race, projectName, terrain, imagery, weather, landmarks, view, fontsReady, outline, width, height, cssW, cssH])
 
   return (
     <canvas
@@ -93,15 +95,19 @@ export function PosterPanel({ modes, onClose, hidden }: { modes: ReactNode; onCl
   const id = useId()
   const poster = useAppStore((s) => s.settings.poster)
   const setSetting = useAppStore((s) => s.setSetting)
-  const track = useAppStore((s) => s.tracks[0])
+  const tracks = useAppStore((s) => s.tracks)
+  const track = tracks[0]
+  const race = useAppStore((s) => s.settings.race.enabled)
   const projectName = useAppStore((s) => s.projectName)
-  const hasWeather = useWeatherStore((s) => s.status === 'ready' && s.trackId === track?.id)
+  // a set of outings is summed: no weather of a single day
+  const outings = tracks.length > 1 && !race
+  const hasWeather = useWeatherStore((s) => s.status === 'ready' && s.trackId === track?.id) && !outings
   const { phase, result } = useExportStore()
   const busy = isExportBusy(phase)
   /** the last poster made (shown while it is still the last export) */
   const [done, setDone] = useState<ExportResult | null>(null)
 
-  const available = useMemo(() => (track ? availableFigures(track) : null), [track])
+  const available = useMemo(() => (track ? availableFigures(posterStats(tracks, race)) : null), [track, tracks, race])
   const set = (patch: Partial<PosterSettings>) => setSetting('poster', { ...poster, ...patch })
   const { width, height } = posterSize(poster.format)
   const defaultTitle = effectiveProjectName(projectName, track?.name)
@@ -235,7 +241,7 @@ export function PosterPanel({ modes, onClose, hidden }: { modes: ReactNode; onCl
         </div>
       </fieldset>
 
-      <label className="checkbox" title={hasWeather ? undefined : 'Météo de la sortie non chargée'}>
+      <label className="checkbox" title={hasWeather ? undefined : outings ? 'Plusieurs sorties : pas de météo du jour' : 'Météo de la sortie non chargée'}>
         <input
           type="checkbox"
           checked={poster.weather && hasWeather}
@@ -244,7 +250,15 @@ export function PosterPanel({ modes, onClose, hidden }: { modes: ReactNode; onCl
         />
         Météo du jour
       </label>
-      <p className="field__hint">Vue 3D de toute la trace, nord en haut. Les crédits des sources figurent en petit au bas de l'affiche.</p>
+      <label className="checkbox">
+        <input type="checkbox" checked={poster.flat} disabled={busy} onChange={(e) => set({ flat: e.currentTarget.checked })} />
+        Carte à plat
+      </label>
+      <p className="field__hint">
+        {poster.flat ? "Carte vue d'en haut, tirée de l'imagerie choisie" : 'Vue 3D'}
+        {tracks.length > 1 ? ' de toutes les traces' : ' de toute la trace'}, nord en haut. Les crédits des sources figurent en petit au
+        bas de l'affiche.
+      </p>
 
       {!busy && (
         <button type="button" className="btn btn--primary" onClick={create} disabled={!track}>

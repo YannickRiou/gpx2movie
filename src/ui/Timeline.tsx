@@ -18,8 +18,9 @@
  */
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
-import { materializeStops, stopCandidates } from '../film/assemble'
+import { freezeLandmarkTitles, materializeStops, stopCandidates } from '../film/assemble'
 import { AUDIO_FILE_EXTENSIONS, fitFilmToMusic, isAudioFile, musicLengthS, readAudio, startMusicPreview, useMusicPreview, waveformPath } from '../film/audio'
+import { beatTicksPath } from '../film/beats'
 import { buildFilmClock, filmClockFor, filmClockInputFor } from '../film/clock'
 import { photoTimeMs } from '../film/exif'
 import { useMediaStore } from '../film/media'
@@ -369,13 +370,14 @@ export function Timeline() {
   // --- edits -------------------------------------------------------------------------------------------------
   const isStop = (item: TimelineItem) => clock.stops.some((s) => s.id === item)
   const withOwnStops = (f: Film) => materializeStops(f, { track, landmarks, pacing })
-  /** one undo step */
-  const commit = (next: Film) => {
+  /** one undo step (retouching a landmark title fixes them, as in `editFilm`) */
+  const commit = (edited: Film) => {
+    const next = freezeLandmarkTitles(film, edited)
     if (next !== film) getSettingsHistory().transaction(() => setSetting('film', next))
   }
   /** nudges with the arrows (quick changes of the film are merged into one undo step) */
   const change = (fn: (f: Film) => Film, stops: boolean) => {
-    const next = fn(stops ? withOwnStops(film) : film)
+    const next = freezeLandmarkTitles(film, fn(stops ? withOwnStops(film) : film))
     if (next !== film) setSetting('film', next)
   }
   const dragContext = (item: TimelineItem): DragContext => ({
@@ -985,6 +987,7 @@ export function Timeline() {
                     wave && (
                       <svg className="film-tl__wave" viewBox={`0 0 ${a.durationS} 1`} preserveAspectRatio="none" aria-hidden="true">
                         <path d={wave} />
+                        {sound?.beats && <path className="film-tl__beats" d={beatTicksPath(sound.beats, a.inS, lengthS)} />}
                       </svg>
                     ),
                   )

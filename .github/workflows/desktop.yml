@@ -1,0 +1,120 @@
+# Desktop installers (Tauri) for Windows, macOS and Linux.
+# Manual run: installers as workflow artifacts. Tag v*: the same, plus a draft GitHub Release.
+# Signing is optional: without the secrets (see docs/installeurs.md) the installers are built unsigned.
+name: Installeurs
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to create the draft release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest # .exe (NSIS) and .msi
+            args: ''
+          - platform: macos-latest # one .dmg for Apple Silicon and Intel
+            args: '--target universal-apple-darwin'
+          - platform: ubuntu-22.04 # oldest Ubuntu with webkit2gtk-4.1
+            args: '--bundles appimage,deb'
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Bibliothèques système (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # a universal macOS app is built from both architectures
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: npm ci
+
+      # Windows signing (https://v2.tauri.app/distribute/sign/windows/): import the PFX into the user's certificate
+      # store, then give its thumbprint to Tauri. src-tauri/tauri.windows.conf.json is merged into tauri.conf.json on
+      # Windows only; it is written here and never committed. Skipped when the secret is absent.
+      - name: Certificat Windows (facultatif)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) { Write-Output 'Pas de certificat : installeurs non signés.'; exit 0 }
+          $dir = Join-Path $env:RUNNER_TEMP 'certificate'
+          New-Item -ItemType Directory -Path $dir | Out-Null
+          Set-Content -Path "$dir/cert.txt" -Value $env:WINDOWS_CERTIFICATE
+          certutil -decode "$dir/cert.txt" "$dir/cert.pfx" | Out-Null
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          # a PFX may also carry its chain: keep the certificate that has the private key
+          $cert = Import-PfxCertificate -FilePath "$dir/cert.pfx" -CertStoreLocation Cert:\CurrentUser\My -Password $password |
+            Where-Object HasPrivateKey | Select-Object -First 1
+          Remove-Item -Recurse -Force $dir
+          if (-not $cert) { throw 'Le certificat ne contient pas de clé privée.' }
+          @{ bundle = @{ windows = @{ certificateThumbprint = $cert.Thumbprint } } } |
+            ConvertTo-Json -Depth 4 | Set-Content -Path src-tauri/tauri.windows.conf.json
+          Write-Output "Signature avec le certificat $($cert.Subject)"
+
+      # macOS signing and notarization (https://v2.tauri.app/distribute/sign/macos/). Tauri reads these variables;
+      # an empty one would still count as set and break the build, so they are exported only when the secrets exist.
+      - name: Certificat Apple (facultatif)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then echo 'Pas de certificat : signature ad hoc seulement.'; exit 0; fi
+          {
+            echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE"
+            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
+            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
+          } >> "$GITHUB_ENV"
+          if [ -n "$APPLE_ID" ]; then
+            {
+              echo "APPLE_ID=$APPLE_ID"
+              echo "APPLE_PASSWORD=$APPLE_PASSWORD"
+              echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+            } >> "$GITHUB_ENV"
+          else
+            echo 'Pas d’identifiant Apple : application signée, non notarisée.'
+          fi
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # package.json has no "tauri" script (only tauri:dev / tauri:build)
+          tauriScript: npx tauri
+          args: ${{ matrix.args }}
+          uploadWorkflowArtifacts: true
+          # tag push only: empty values build without a release
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ${{ github.ref_type == 'tag' && format('OpenFlyover {0}', github.ref_name) || '' }}
+          releaseBody: 'Installeurs de bureau. Voir docs/installeurs.md pour les installer.'
+          releaseDraft: true
+          prerelease: false

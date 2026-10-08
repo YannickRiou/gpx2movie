@@ -1,19 +1,23 @@
 /**
  * TrackPicker — direct manipulation of the first track in the 3D view: a click on the line moves the playhead there
  * (film time of that progress), a right-click opens a small menu « Ajouter un arrêt ici » / « Ajouter un texte ici » /
- * « Accélérer / ralentir ici » (`TrackMenu`, DOM, next to the canvas); the cursor becomes a pointer over the line. A press that travels
- * `CLICK_SLOP_PX` or more is a camera drag (OrbitControls), not a click. Nothing during an export.
+ * « Accélérer / ralentir ici » (`TrackMenu`, DOM, next to the canvas); the cursor becomes a pointer over the line. A
+ * right-click on the relief, on the line or off it, also offers « Point d'intérêt ici » (a name typed in the menu). A
+ * press that travels `CLICK_SLOP_PX` or more is a camera drag (OrbitControls), not a click. Nothing during an export.
  *
  * Picking is in screen space (`pickProjectedPath`, pure): samples of the path draped like the line (terrain height, else
  * recorded elevation, × exaggeration + lift), projected with the camera, nearest within `PICK_RADIUS_PX`. A part of the
- * line hidden by the relief can be picked too (the line shows it in transparency).
+ * line hidden by the relief can be picked too (the line shows it in transparency). The relief is picked by a ray on the
+ * tiles drawn, only on a right-click (the point of the track picked when no tile is under the pointer yet).
  */
 import { useEffect, useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
-import { Vector3 } from 'three'
+import { Raycaster, Vector2, Vector3 } from 'three'
 import { create } from 'zustand'
+import type { LonLat } from '../core/types'
 import { isExportBusy, useExportStore } from '../export/store'
 import { filmClockFor } from '../film/clock'
+import { POI_NAME_MAX, addPoi, defaultPoiName } from '../film/pois'
 import { addSpeed, addStop, addText } from '../film/timeline'
 import { buildTrackPath, pickProjectedPath, samplePath } from '../flyover/path'
 import { useAppStore } from '../state/store'
@@ -30,11 +34,14 @@ const PICK_SAMPLES = 1500
 /** Draped positions are recomputed after this delay (the terrain keeps loading finer tiles). */
 const DRAPE_TTL_MS = 1000
 /** Room the menu needs before it opens on the other side of the pointer (CSS pixels). */
-const MENU_ROOM = { width: 220, height: 136 }
+const MENU_ROOM = { width: 220, height: 168 }
 
 interface TrackMenuState {
-  /** position in the canvas (CSS pixels), distance along the first track, open towards the left / the top */
-  menu: { x: number; y: number; atM: number; left: boolean; up: boolean } | null
+  /**
+   * position in the canvas (CSS pixels), distance along the first track (off the line: none), place on the ground,
+   * open towards the left / the top, and whether it now asks for the name of a point of interest
+   */
+  menu: { x: number; y: number; atM?: number; ground?: LonLat; left: boolean; up: boolean; naming?: boolean } | null
 }
 
 const useTrackMenu = create<TrackMenuState>(() => ({ menu: null }))
@@ -69,7 +76,7 @@ export function TrackPicker() {
       lat[k] = p.lat
       ele[k] = p.ele ?? Number.NaN
     }
-    return { distM, lon, lat, ele, lengthM: path.lengthM }
+    return { distM, lon, lat, ele, lengthM: path.lengthM, path }
   }, [track])
   /** draped local positions (xyz per sample) and when they were computed */
   const drapeRef = useRef<{ at: number; world: Float32Array } | null>(null)
@@ -110,6 +117,20 @@ export function TrackPicker() {
       return pickProjectedPath(screen, samples.distM, e.clientX - rect.left, e.clientY - rect.top, PICK_RADIUS_PX)
     }
 
+    const raycaster = new Raycaster()
+    const pointer = new Vector2()
+    /** lon/lat of the relief under the pointer (first tile drawn along the ray), undefined where none is drawn */
+    const pickGround = (e: PointerEvent): LonLat | undefined => {
+      if (!engine) return undefined
+      const rect = canvas.getBoundingClientRect()
+      pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, 1 - ((e.clientY - rect.top) / rect.height) * 2)
+      raycaster.setFromCamera(pointer, camera)
+      const hit = raycaster.intersectObjects(engine.group.children.filter((tile) => tile.visible), false)[0]
+      if (!hit) return undefined
+      const { lon, lat } = frame.toLonLat(hit.point)
+      return { lon, lat }
+    }
+
     let press: { x: number; y: number; button: number } | null = null
     const onPointerDown = (e: PointerEvent) => {
       press = { x: e.clientX, y: e.clientY, button: e.button }
@@ -119,17 +140,18 @@ export function TrackPicker() {
       press = null
       if (!p || p.button !== e.button || exporting() || Math.hypot(e.clientX - p.x, e.clientY - p.y) >= CLICK_SLOP_PX) return
       const atM = pick(e)
-      if (atM === undefined) return
-      if (e.button === 0) {
+      if (e.button === 0 && atM !== undefined) {
         const clock = clockRef.current
         const progress = atM / samples.lengthM
         const t = clock.timeAtProgress(progress)
         useAppStore.getState().setProgress(progress, t < clock.totalTime() ? t : null)
       } else if (e.button === 2) {
+        const ground = pickGround(e) ?? (atM === undefined ? undefined : samplePath(samples.path, atM))
+        if (atM === undefined && !ground) return
         const rect = canvas.getBoundingClientRect()
         const x = e.clientX - rect.left
         const y = e.clientY - rect.top
-        useTrackMenu.setState({ menu: { x, y, atM, left: x > rect.width - MENU_ROOM.width, up: y > rect.height - MENU_ROOM.height } })
+        useTrackMenu.setState({ menu: { x, y, atM, ground, left: x > rect.width - MENU_ROOM.width, up: y > rect.height - MENU_ROOM.height } })
       }
     }
     const onPointerMove = (e: PointerEvent) => {
@@ -163,9 +185,35 @@ export function TrackPicker() {
 
 /**
  * Menu of a right-click on the track (DOM, positioned in the canvas wrapper): add a stop, a text or a speed portion
- * there (×2 from that point; inside a portion, that portion is selected), one undo step each, the new block selected. Closes on Escape, on a click elsewhere, when the focus leaves it and on export.
+ * there (×2 from that point; inside a portion, that portion is selected), one undo step each, the new block selected;
+ * on the relief, on the track or off it, a point of interest (`PoiNameForm`). Closes on Escape, on a click
+ * elsewhere, when the focus leaves it and on export.
  */
-type Item = 'stop' | 'text' | 'speed'
+type Item = 'stop' | 'text' | 'speed' | 'poi'
+
+/** The name of a point of interest added from the menu at `at`: Enter adds it (one undo step), empty = default name. */
+function PoiNameForm({ at }: { at: LonLat }) {
+  const placeholder = useAppStore((s) => defaultPoiName(s.settings.film))
+  return (
+    <form
+      className="track-menu__form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const name = String(new FormData(e.currentTarget).get('name') ?? '')
+        closeMenu()
+        editFilm((film) => ({ film: addPoi(film, at, name) }))
+      }}
+    >
+      <label className="track-menu__label">
+        Nom du point d'intérêt
+        <input name="name" className="input" placeholder={placeholder} maxLength={POI_NAME_MAX} autoComplete="off" />
+      </label>
+      <button type="submit" className="track-menu__item">
+        Ajouter
+      </button>
+    </form>
+  )
+}
 
 export function TrackMenu() {
   const menu = useTrackMenu((s) => s.menu)
@@ -174,7 +222,7 @@ export function TrackMenu() {
 
   useEffect(() => {
     if (!menu) return
-    ref.current?.querySelector('button')?.focus()
+    ref.current?.querySelector<HTMLElement>('input, button')?.focus()
     const onDown = (e: PointerEvent) => {
       if (!(e.target instanceof Node) || !ref.current?.contains(e.target)) closeMenu()
     }
@@ -191,36 +239,43 @@ export function TrackMenu() {
 
   if (!menu || busy) return null
   const add = (what: Item) => {
+    if (what === 'poi') {
+      useTrackMenu.setState({ menu: { ...menu, naming: true } })
+      return
+    }
     closeMenu()
     const source = getFilmSource()
     const lengthM = source.track?.stats.distanceM ?? 0
-    if (lengthM <= 0) return
-    if (what === 'stop') editFilm((f) => addStop(f, Math.round(menu.atM)), { stops: true })
-    else if (what === 'text') editFilm((f) => addText(f, filmClockFor(source).timeAtProgress(menu.atM / lengthM)))
-    else {
-      const atM = Math.round(menu.atM)
-      editFilm((f) => addSpeed(f, atM, lengthM) ?? { film: f, id: f.speeds.find((s) => atM >= s.fromM && atM < s.toM)?.id })
-    }
+    if (lengthM <= 0 || menu.atM === undefined) return
+    const atM = Math.round(menu.atM)
+    const progress = menu.atM / lengthM
+    if (what === 'stop') editFilm((f) => addStop(f, atM), { stops: true })
+    else if (what === 'text') editFilm((f) => addText(f, filmClockFor(source).timeAtProgress(progress)))
+    else editFilm((f) => addSpeed(f, atM, lengthM) ?? { film: f, id: f.speeds.find((s) => atM >= s.fromM && atM < s.toM)?.id })
   }
-  const items: { what: Item; label: string }[] = [
-    { what: 'stop', label: 'Ajouter un arrêt ici' },
-    { what: 'text', label: 'Ajouter un texte ici' },
-    { what: 'speed', label: 'Accélérer / ralentir ici' },
-  ]
+  const items: { what: Item; label: string }[] = []
+  if (menu.atM !== undefined) {
+    items.push(
+      { what: 'stop', label: 'Ajouter un arrêt ici' },
+      { what: 'text', label: 'Ajouter un texte ici' },
+      { what: 'speed', label: 'Accélérer / ralentir ici' },
+    )
+  }
+  if (menu.ground) items.push({ what: 'poi', label: "Point d'intérêt ici" })
 
   return (
     <div
       ref={ref}
       className="track-menu"
-      role="menu"
-      aria-label="Ajouter sur la trace"
+      role={menu.naming ? 'dialog' : 'menu'}
+      aria-label={menu.naming ? "Point d'intérêt" : 'Ajouter ici'}
       data-local-escape=""
       style={{ left: menu.x, top: menu.y, transform: `translate(${menu.left ? '-100%' : '0'}, ${menu.up ? '-100%' : '0'})` }}
       onKeyDown={(e) => {
         const buttons = Array.from(ref.current?.querySelectorAll('button') ?? [])
         const index = buttons.findIndex((b) => b === document.activeElement)
         if (e.key === 'Escape') closeMenu()
-        else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        else if (!menu.naming && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
           const step = e.key === 'ArrowDown' ? 1 : -1
           buttons[(index + step + buttons.length) % buttons.length]?.focus()
         } else return
@@ -232,11 +287,15 @@ export function TrackMenu() {
         if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) closeMenu()
       }}
     >
-      {items.map((item) => (
-        <button key={item.what} type="button" role="menuitem" className="track-menu__item" tabIndex={-1} onClick={() => add(item.what)}>
-          {item.label}
-        </button>
-      ))}
+      {menu.naming && menu.ground ? (
+        <PoiNameForm at={menu.ground} />
+      ) : (
+        items.map((item) => (
+          <button key={item.what} type="button" role="menuitem" className="track-menu__item" tabIndex={-1} onClick={() => add(item.what)}>
+            {item.label}
+          </button>
+        ))
+      )}
     </div>
   )
 }

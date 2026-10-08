@@ -14,6 +14,8 @@ import {
   labelOpacity,
   lineOfSightClearance,
   occlusionFade,
+  POI_PRIORITY,
+  poiLabels,
   resolveOverlaps,
   spriteScaleForPixels,
   waypointLabels,
@@ -78,6 +80,15 @@ describe('label texts and sources', () => {
       ['wpt:c:0', 'Tresse', undefined],
     ])
     expect(labels[1]).not.toHaveProperty('ele')
+  })
+
+  it('shows the points of interest placed by hand above every other label, not the blank ones', () => {
+    const labels = poiLabels([
+      { id: 'poi-1', lon: 6.8, lat: 45.9, name: ' Pique-nique ' },
+      { id: 'poi-2', lon: 6.9, lat: 45.9, name: '  ' },
+    ])
+    expect(labels).toEqual([{ id: 'poi:poi-1', lon: 6.8, lat: 45.9, text: 'Pique-nique', kind: 'poi', priority: POI_PRIORITY }])
+    expect(POI_PRIORITY).toBeGreaterThan(climbLabels(track('a'), [climb('HC', 2000)])[0].priority)
   })
 })
 

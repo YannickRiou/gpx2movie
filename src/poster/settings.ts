@@ -43,6 +43,8 @@ export interface PosterSettings {
   figures: Record<PosterFigureId, boolean>
   /** weather of the day under the profile (when the outing's weather is known) */
   weather: boolean
+  /** « Carte à plat »: the view is a map seen from straight above (imagery tiles), not the 3D overview */
+  flat: boolean
 }
 
 export const DEFAULT_POSTER: PosterSettings = {
@@ -52,6 +54,7 @@ export const DEFAULT_POSTER: PosterSettings = {
   subtitle: '',
   figures: { distance: true, ascent: true, time: true, maxAltitude: true, climbs: true },
   weather: true,
+  flat: false,
 }
 
 /** Pixel size of a format. */
@@ -63,4 +66,9 @@ export function posterSize(format: PosterFormatId): { width: number; height: num
 /** Value checks once the JSON shape matches `DEFAULT_POSTER` (`SETTING_CHECKS`): format and style ids. */
 export function isValidPoster(p: PosterSettings): boolean {
   return POSTER_FORMATS.some((f) => f.id === p.format) && (POSTER_STYLES as readonly string[]).includes(p.style)
+}
+
+/** Fields missing from a poster saved before they were added, taken from `DEFAULT_POSTER` (`SETTING_UPGRADES`). */
+export function withPosterDefaults(raw: unknown): unknown {
+  return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? { ...DEFAULT_POSTER, ...raw } : raw
 }

@@ -9,8 +9,9 @@
  * web fonts loaded first) into an OffscreenCanvas and encoded; meanwhile the tiles of the upcoming frames are
  * prefetched. The music of the film is mixed beforehand over the exact length of the film (held frames included)
  * and encoded along the frames (silent, with a note, when the browser cannot encode sound). A still image request renders its single progress the same way and keeps the composed canvas as
- * PNG / JPEG instead; an overview still (poster) shows the whole track from the south and hands the image to its
- * `compose` function. Everything is restored afterwards, on success, error or cancel.
+ * PNG / JPEG instead; an overview still (poster) shows the whole track (or its `framing`) from the south and hands the
+ * image to its `compose` function; a still with `drawView` (flat map poster) skips the scene. Everything is restored
+ * afterwards, on success, error or cancel.
  *
  * The overlay alone (`overlayOnly`) skips the scene: the same frames, each overlay drawn on a cleared canvas and encoded
  * with its transparency, so the file lines up frame for frame with the film.
@@ -33,6 +34,7 @@ import { useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { REPLACE_EPSILON, composeFrame, composeOverlayFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
 import { ExportCanceledError, createVideoEncoder, type VideoEncodeSession } from './encoder'
+import { createExportEncoder } from './nativeEncoder'
 import { buildFrameSchedule, buildFrameTimes } from './schedule'
 import {
   EMPTY_TIMINGS,
@@ -106,6 +108,49 @@ async function abandon(error: unknown, request: ExportRequest, session: VideoEnc
   else useExportStore.getState().fail(errorMessage(error))
 }
 
+type Still = NonNullable<ExportRequest['still']>
+
+/** Encodes the still image (composed by the poster when it has `compose`) and hands the result to the store. */
+async function finishStill(request: ExportRequest, still: Still, view: OffscreenCanvas, incompleteFrames: number): Promise<void> {
+  useExportStore.getState().finalizing()
+  const output = still.compose ? await still.compose(view) : view
+  const blob = await output.convertToBlob({ type: still.type, quality: STILL_JPEG_QUALITY })
+  // a browser without a JPEG encoder answers PNG
+  const jpeg = blob.type === 'image/jpeg'
+  useExportStore.getState().complete({
+    url: URL.createObjectURL(blob),
+    fileName: videoFileName(request.baseName, jpeg ? '.jpg' : '.png'),
+    mimeType: blob.type,
+    sizeBytes: blob.size,
+    codec: jpeg ? 'jpeg' : 'png',
+    incompleteFrames,
+  })
+}
+
+/** A still whose view is drawn without the scene (`drawView`, flat map poster): no WebGL frame, nothing to restore. */
+async function runDrawnStill(
+  request: ExportRequest,
+  still: Still,
+  drawView: (signal: AbortSignal) => Promise<OffscreenCanvas>,
+  signal: AbortSignal,
+): Promise<void> {
+  const abort = new AbortController()
+  const isCanceled = () => signal.aborted || useExportStore.getState().cancelRequested
+  const stop = useExportStore.subscribe(() => {
+    if (isCanceled()) abort.abort()
+  })
+  signal.addEventListener('abort', () => abort.abort(), { once: true })
+  try {
+    const view = await drawView(abort.signal)
+    useExportStore.getState().reportFrame(1, performance.now())
+    await finishStill(request, still, view, 0)
+  } catch (error) {
+    await abandon(error, request, null, isCanceled())
+  } finally {
+    stop()
+  }
+}
+
 /**
  * The overlay alone over a transparent background, at the frames of the film (`schedule`, `times`): nothing waits
  * for the terrain, no WebGL frame, no sound. Each frame is drawn anew (cheap in 2D), at the film time of the frame.
@@ -167,6 +212,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
   // film time of every frame: the shots, the orbiting stops and the time-based styles move while the progress holds
   const times = request.still ? [] : buildFrameTimes(request)
   if (request.overlayOnly) return runOverlayOnly(request, deps, schedule, times)
+  const drawView = request.still?.drawView
+  if (request.still && drawView) return runDrawnStill(request, request.still, drawView, deps.signal)
 
   const { width, height, fps } = request
   const filmClock = deps.clock()
@@ -196,12 +243,13 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     : null
   const marker = overview ? three.scene.getObjectByName('flyover-marker') : undefined
   const markerLayers = marker?.layers.mask
+  const framing = request.still?.framing ?? path
   const placeOverview = () => {
     const frame = deps.frame()
     const engine = deps.engine()
-    if (!path || path.count === 0 || !frame) return
+    if (!framing || framing.count === 0 || !frame) return
     const sampler: HeightSampler | null = engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null
-    const view = overviewView(path, frame, sampler, useAppStore.getState().settings.exaggeration, width / height, FROM_SOUTH)
+    const view = overviewView(framing, frame, sampler, useAppStore.getState().settings.exaggeration, width / height, FROM_SOUTH)
     const { camera } = deps.get()
     camera.position.copy(view.position)
     camera.lookAt(view.target)
@@ -313,19 +361,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       // a composed still (poster) draws its own text instead of the film overlay
       composeFrame(ctx, canvas, { progress, time }, width, height, compose ? undefined : deps.overlay())
       exportStore().reportFrame(1, performance.now())
-      exportStore().finalizing()
-      const output = compose ? await compose(compositor) : compositor
-      const blob = await output.convertToBlob({ type: request.still.type, quality: STILL_JPEG_QUALITY })
-      // a browser without a JPEG encoder answers PNG
-      const jpeg = blob.type === 'image/jpeg'
-      exportStore().complete({
-        url: URL.createObjectURL(blob),
-        fileName: videoFileName(request.baseName, jpeg ? '.jpg' : '.png'),
-        mimeType: blob.type,
-        sizeBytes: blob.size,
-        codec: jpeg ? 'jpeg' : 'png',
-        incompleteFrames: complete ? 0 : 1,
-      })
+      await finishStill(request, request.still, compositor, complete ? 0 : 1)
       return
     }
 
@@ -336,7 +372,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       lengthS: schedule.length / fps,
     })
     if (isCanceled()) throw new ExportCanceledError()
-    session = await createVideoEncoder(compositor, { ...request, audio })
+    // WebCodecs, else the system's ffmpeg (desktop app on Linux)
+    session = await createExportEncoder(compositor, { ...request, audio })
     /** opacities of the timed overlay (cards, timeline texts, photos and clips) at a frame, '' without overlay */
     const overlayKey = (progress: number, timeS: number) =>
       deps.overlay()

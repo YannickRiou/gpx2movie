@@ -4,7 +4,9 @@
  * included.
  *
  * - `readAudio(file)`: MP3, M4A / AAC, OGG / Opus, WAV or FLAC of `MAX_AUDIO_BYTES` at most, kept as is (the project
- *   stays one file), decoded once by the Web Audio API to check it and draw its waveform (`peaks`).
+ *   stays one file), decoded once by the Web Audio API to check it, draw its waveform (`peaks`) and find its beats
+ *   (`beats`, `film/beats.ts`).
+ * - « Caler sur le rythme » (`snapFilmToMusic`): the stops and the title cards moved onto those beats.
  * - Volume of a clip (`musicEnvelope`): its volume with a linear fade in and out, the same breakpoints for the
  *   preview (`musicGainAt`) and the export (gain automation), so both sound alike.
  * - Video clips with sound (`clipSounds`): their file played from `inS` while the clip shows it, with fades of a few
@@ -23,14 +25,17 @@
 import { create } from 'zustand'
 import { FLYOVER_DURATION_RANGE } from '../flyover/cameraSettings'
 import { getSettingsHistory } from '../project/history'
-import { getFilmSource } from '../scene/usePacing'
+import { editFilm, getFilmSource } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatFilmTime } from './timeline'
-import { filmClockFor } from './clock'
+import { materializeStops } from './assemble'
+import { detectBeats, filmBeats, snapFilmToBeats } from './beats'
+import type { MusicBeats } from './beats'
+import { buildFilmClock, filmClockFor, filmClockInputFor } from './clock'
 import { AUDIO_TYPES, MAX_AUDIO_BYTES, MAX_PEAKS, dataUrlToBlob, useMediaStore } from './media'
 import type { MediaAsset } from './media'
 import { clipHasSound } from './model'
-import type { Film, FilmAudio, FilmMedia } from './model'
+import type { Film, FilmAudio, FilmMedia, FilmStop } from './model'
 import { blobToDataUrl, decodeClipSound } from './video'
 
 type AudioType = (typeof AUDIO_TYPES)[number]
@@ -382,7 +387,7 @@ export function fitFilmToMusic(): { kind: 'success' | 'info'; text: string } {
 // Files
 // ---------------------------------------------------------------------------
 
-/** Rate at which a file is decoded for its waveform (enough for the drawing, light in memory). */
+/** Rate at which a file is decoded for its waveform and its beats (enough for both, light in memory). */
 const PEAKS_SAMPLE_RATE = 22050
 
 const megabytes = (bytes: number) => Math.ceil(bytes / (1024 * 1024))
@@ -401,15 +406,72 @@ export async function readAudio(file: Blob & { name?: string }, name = file.name
   }
   let decoded: AudioBuffer
   try {
-    decoded = await new OfflineAudioContext(1, 1, PEAKS_SAMPLE_RATE).decodeAudioData(await file.arrayBuffer())
+    decoded = await decodeForAnalysis(await file.arrayBuffer())
   } catch {
     throw new Error('ce navigateur ne sait pas lire ce fichier audio (essayez un MP3).')
   }
   const durationS = Math.round(decoded.duration * 1000) / 1000
   if (!(durationS > 0)) throw new Error('fichier audio vide.')
-  const channels = Array.from({ length: decoded.numberOfChannels }, (_, c) => decoded.getChannelData(c))
+  const channels = channelsOf(decoded)
   const peaks = computePeaks(channels, peakCount(durationS))
-  return { asset: { data: await blobToDataUrl(file, `audio/${type}`), name, durationS, peaks } }
+  const beats = detectBeats(channels, decoded.sampleRate)
+  return { asset: { data: await blobToDataUrl(file, `audio/${type}`), name, durationS, peaks, beats } }
+}
+
+const decodeForAnalysis = (bytes: ArrayBuffer) => new OfflineAudioContext(1, 1, PEAKS_SAMPLE_RATE).decodeAudioData(bytes)
+const channelsOf = (decoded: AudioBuffer) => Array.from({ length: decoded.numberOfChannels }, (_, c) => decoded.getChannelData(c))
+
+// ---------------------------------------------------------------------------
+// Beats: « Caler sur le rythme »
+// ---------------------------------------------------------------------------
+
+/**
+ * Beats of sound file `src` of the media table; for a file read before they were, found first and kept in its entry
+ * (saved with the project). Undefined without the file or when it cannot be decoded.
+ */
+async function musicBeats(src: string): Promise<MusicBeats | undefined> {
+  const asset = useMediaStore.getState().table[src]
+  if (!asset || asset.beats) return asset?.beats
+  let decoded: AudioBuffer
+  try {
+    decoded = await decodeForAnalysis(await dataUrlToBlob(asset.data).arrayBuffer())
+  } catch {
+    return undefined
+  }
+  const beats = detectBeats(channelsOf(decoded), decoded.sampleRate)
+  // unless another project was opened meanwhile
+  useMediaStore.setState(({ table }) => (table[src] === asset ? { table: { ...table, [src]: { ...asset, beats } } } : {}))
+  return beats
+}
+
+/**
+ * « Caler sur le rythme »: the title cards and the stops of the film moved onto the beats of its music
+ * (`snapFilmToBeats`, one undo step, the generated stops written out); nothing done when no music has a confident
+ * tempo. The message saying what was done.
+ */
+export async function snapFilmToMusic(): Promise<{ kind: 'success' | 'info'; text: string }> {
+  const files = [...new Set(getFilmSource().film.audio.map((a) => a.src))]
+  if (files.length === 0) return { kind: 'info', text: 'Pas de musique dans le film.' }
+  const found = new Map<string, MusicBeats | undefined>()
+  for (const src of files) found.set(src, await musicBeats(src))
+
+  // the film as it is once the music is analysed
+  const source = getFilmSource()
+  const table = useMediaStore.getState().table
+  const beats = filmBeats(source.film.audio, (src) => found.get(src), (clip) => musicLengthS(clip, table[clip.src]?.durationS))
+  if (beats.length === 0) return { kind: 'info', text: 'Rythme de la musique trop incertain : rien n’a été calé.' }
+  const tempos = [...found.values()].flatMap((b) => (b && b.times.length > 0 ? [Math.round(b.bpm)] : []))
+  const tempo = `≈ ${[...new Set(tempos)].join(' / ')} BPM`
+
+  const { track, landmarks, pacing } = source
+  const film = track ? materializeStops(source.film, { track, landmarks, pacing }) : source.film
+  const input = filmClockInputFor({ ...source, film })
+  const clockOf = (stops: readonly FilmStop[]) => buildFilmClock({ ...input, stops })
+  const snapped = snapFilmToBeats(film, beats, { clockOf, lengthM: input.lengthM })
+  if (snapped.moved === 0) return { kind: 'info', text: `Arrêts et titres déjà sur le rythme, ou trop loin d’un temps (${tempo}).` }
+  editFilm(() => ({ film: snapped.film }))
+  const n = snapped.moved
+  return { kind: 'success', text: `${n} élément${n > 1 ? 's' : ''} calé${n > 1 ? 's' : ''} sur le rythme (${tempo}).` }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,19 +1,24 @@
 /**
  * File actions shared by the top bar, its keyboard shortcuts, the window drop and the panels: save / open the project
- * file, import GPX / FIT tracks and the sample, save an export on the desktop (src/platform). Outcomes are shown as
- * toasts.
+ * file, import GPX / FIT tracks and the sample, chain tracks into one, save an export on the desktop (src/platform).
+ * Outcomes are shown as toasts.
  */
+import type { Track } from '../core/types'
 import { useMediaStore } from '../film/media'
 import { importFile, importText } from '../import'
+import { chainTracks, followEachOther, replaceByChain } from '../import/chain'
 import { getPlatform } from '../platform'
+import type { ProjectEntry } from '../platform'
 import { applyProject } from '../project/apply'
 import { parseProject, projectFileName, serializeProject } from '../project/document'
 import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
-import { importFiles } from './importFlow'
+import { errorMessage, importFiles } from './importFlow'
 import type { ImportJob } from './importFlow'
+import { flushAutosave, setOpenEntry } from './library'
 import { effectiveProjectName, routeOpenedFiles } from './shell'
-import { showToast } from './toast'
+import { dismissToast, showToast } from './toast'
+import type { ToastInput } from './toast'
 
 /** Save the project as `<nom>.openflyover.json` (download, or save dialog on the desktop) and mark it saved. */
 export async function saveProject(): Promise<void> {
@@ -45,16 +50,23 @@ export async function saveExportedFile(url: string, fileName: string): Promise<v
   }
 }
 
-/** Replace everything by the project in `file`; says so, with the warnings of the file, or why it failed. */
-export async function openProject(file: File): Promise<void> {
+/**
+ * Replace everything by the project in `file`; says so, with the warnings of the file, or why it failed. `entry`: the
+ * « Mes projets » entry it comes from (its name wins, it is saved automatically from now on).
+ */
+export async function openProject(file: File, entry: ProjectEntry | null = null): Promise<void> {
+  // a change of the project being replaced, still waiting for its autosave
+  await flushAutosave()
   try {
     const project = parseProject(await file.text())
     applyProject(project)
     getSettingsHistory().clear()
     const store = useAppStore.getState()
-    store.setProjectName(project.name)
+    const name = entry?.name ?? project.name
+    store.setProjectName(name)
     store.markProjectSaved()
-    const opened = `Projet « ${effectiveProjectName(project.name, store.tracks[0]?.name)} » ouvert`
+    setOpenEntry(entry?.id ?? null)
+    const opened = `Projet « ${effectiveProjectName(name, store.tracks[0]?.name)} » ouvert`
     if (project.warnings.length > 0) showToast({ kind: 'info', text: `${opened}.\n${project.warnings.join('\n')}` })
     else showToast({ kind: 'success', text: opened })
   } catch (err) {
@@ -99,11 +111,49 @@ const SAMPLE_NAME = 'tour-du-mont-blanc-j1.gpx'
 /** `importFiles` bound to the app store and the toasts. */
 async function runImport(jobs: ImportJob[]): Promise<void> {
   const { setLoading, addTracks } = useAppStore.getState()
-  await importFiles(jobs, {
+  const outcome = await importFiles(jobs, {
     trackCount: () => useAppStore.getState().tracks.length,
     setLoading,
     addTracks,
     notify: (kind, text) => showToast({ kind, text }),
+  })
+  const imported = outcome.tracks
+  if (followEachOther(imported)) {
+    showUntilTracksChange({
+      kind: 'info',
+      text: `Enchaîner ces ${imported.length} traces ?`,
+      action: { label: 'Enchaîner', run: () => chainLoadedTracks(imported) },
+    })
+  }
+}
+
+/** Show `toast` until the tracks change: its action is meant for the tracks it was shown with. */
+function showUntilTracksChange(toast: ToastInput): void {
+  const tracks = useAppStore.getState().tracks
+  const id = showToast(toast)
+  const stop = useAppStore.subscribe((state) => {
+    if (state.tracks === tracks) return
+    stop()
+    dismissToast(id)
+  })
+}
+
+/** « Enchaîner en un seul parcours » : `chained` (loaded tracks) become one track, with « Annuler » in the message. */
+export function chainLoadedTracks(chained: readonly Track[]): void {
+  const store = useAppStore.getState()
+  const separate = store.tracks
+  let merged: Track
+  try {
+    merged = chainTracks(chained)
+  } catch (error) {
+    showToast({ kind: 'error', text: errorMessage(error) })
+    return
+  }
+  store.replaceTracks(replaceByChain(separate, chained, merged))
+  showUntilTracksChange({
+    kind: 'success',
+    text: `Traces enchaînées : « ${merged.name} »`,
+    action: { label: 'Annuler', run: () => useAppStore.getState().replaceTracks(separate) },
   })
 }
 

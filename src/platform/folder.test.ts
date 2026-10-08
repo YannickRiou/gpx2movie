@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { canPickFolder, joinPath, pickFolder } from './folder'
+import { canPickFolder, joinPath, pickFolder, pickReadableFolder } from './folder'
 
 const dialog = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn() }))
-const fs = vi.hoisted(() => ({ open: vi.fn(), remove: vi.fn(async () => undefined), SeekMode: { Start: 0 } }))
+const fs = vi.hoisted(() => ({
+  open: vi.fn(),
+  remove: vi.fn(async () => undefined),
+  readDir: vi.fn(),
+  readFile: vi.fn(async () => new Uint8Array([1, 2])),
+  SeekMode: { Start: 0 },
+}))
 vi.mock('@tauri-apps/plugin-dialog', () => dialog)
 vi.mock('@tauri-apps/plugin-fs', () => fs)
 
@@ -55,5 +61,40 @@ describe('folder', () => {
     expect(file.fileName).toBe('Tour – affiche.png')
     dialog.open.mockResolvedValueOnce(null)
     expect(await pickFolder({ isDesktop: true })).toBeNull()
+  })
+
+  it('web: lists the files of the picked folder, without its subfolders', async () => {
+    const entries = [
+      { kind: 'file', name: 'b.gpx', getFile: async () => new File(['<gpx/>'], 'b.gpx') },
+      { kind: 'directory', name: 'photos' },
+    ]
+    const picker = vi.fn(async () => ({
+      name: 'Saison',
+      async *values() {
+        yield* entries
+      },
+    }))
+    const folder = await pickReadableFolder({ isDesktop: false }, { showDirectoryPicker: picker })
+    expect(picker).toHaveBeenCalledWith({ id: 'openflyover-traces', mode: 'read' })
+    expect(folder?.name).toBe('Saison')
+    expect(folder?.files.map((f) => f.name)).toEqual(['b.gpx'])
+    expect(await (await folder!.files[0].read()).text()).toBe('<gpx/>')
+    picker.mockRejectedValueOnce(new DOMException('closed', 'AbortError'))
+    expect(await pickReadableFolder({ isDesktop: false }, { showDirectoryPicker: picker })).toBeNull()
+  })
+
+  it('desktop: reads the files of the folder of the dialog', async () => {
+    dialog.open.mockResolvedValueOnce('C:\\Traces')
+    fs.readDir.mockResolvedValueOnce([
+      { name: 'a.fit', isFile: true, isDirectory: false },
+      { name: 'vieux', isFile: false, isDirectory: true },
+    ])
+    const folder = await pickReadableFolder({ isDesktop: true })
+    expect(folder?.name).toBe('Traces')
+    expect(folder?.files.map((f) => f.name)).toEqual(['a.fit'])
+    const file = await folder!.files[0].read()
+    expect(fs.readFile).toHaveBeenCalledWith('C:\\Traces\\a.fit')
+    expect(file.name).toBe('a.fit')
+    expect(file.size).toBe(2)
   })
 })
