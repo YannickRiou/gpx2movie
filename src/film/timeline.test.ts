@@ -4,17 +4,19 @@ import { DEFAULT_PACING } from '../flyover/pacing'
 import { buildTrack } from '../import/stats'
 import { buildFilmClock } from './clock'
 import type { FilmClockInput } from './clock'
-import { AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, isValidFilm } from './model'
-import type { Film, FilmMedia, FilmStop, FilmText } from './model'
+import { AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, MIN_SPEED_SPAN_M, isValidFilm } from './model'
+import type { Film, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
 import {
   NEW_MEDIA_S,
   NEW_VIDEO_MAX_S,
   addMedia,
+  addSpeed,
   addStop,
   addText,
   dragFilm,
   fitPxPerS,
   formatFilmTime,
+  formatSpeedFactor,
   hasFilmItem,
   photoFilmTime,
   removeFilmItem,
@@ -24,6 +26,7 @@ import {
   snapTime,
   stopPositionAt,
   updateShot,
+  updateSpeed,
   updateStop,
   updateMedia,
   updateText,
@@ -260,6 +263,90 @@ describe('edits', () => {
     expect(hasFilmItem(removeFilmItem(film, 'media-1'), stops, 'media-1')).toBe(false)
     // a generated stop is only in the clock
     expect(hasFilmItem(film, [{ id: 'auto-1500' }], 'auto-1500')).toBe(true)
+  })
+})
+
+describe('speed portions', () => {
+  const speed = (id: string, fromM: number, toM: number, factor = 2): FilmSpeed => ({ id, fromM, toM, factor })
+  const withSpeeds: Film = { ...film, speeds: [speed('speed-1', 3000, 4000), speed('speed-2', 5000, 6000, 0.5)] }
+  /** drag context whose clock knows the speed portions (and the stops of `f`) */
+  function speedContext(f: Film, patch: Partial<DragContext> = {}): DragContext {
+    const input: FilmClockInput = {
+      opening: f.opening,
+      closing: f.closing,
+      stops: f.stops,
+      speeds: f.speeds,
+      lengthM: L,
+      highlightsM: [],
+      durationS: D,
+      pacing: { ...DEFAULT_PACING, keepDuration: false },
+    }
+    const clockOfSpeeds = (speeds: readonly FilmSpeed[]) => buildFilmClock({ ...input, speeds })
+    return { ...contextOf(f), clock: clockOfSpeeds(f.speeds), clockOfSpeeds, ...patch }
+  }
+  const placed = (f: Film, id: string) => speedContext(f).clock.speeds.find((s) => s.id === id)!
+  /** 1 m of track in film seconds at the base speed */
+  const METRE_S = D / L
+
+  it('adds a ×2 portion of 1 km from the marker, earlier or shorter to stay on the track and off the others', () => {
+    const added = addSpeed(withSpeeds, 1000, L)!
+    expect(added.id).toBe('speed-3')
+    expect(added.film.speeds[2]).toEqual(speed('speed-3', 1000, 2000))
+    expect(isValidFilm(added.film)).toBe(true)
+    expect(addSpeed(withSpeeds, 2500, L)!.film.speeds[2]).toMatchObject({ fromM: 2000, toM: 3000 })
+    expect(addSpeed(withSpeeds, 4200, L)!.film.speeds[2]).toMatchObject({ fromM: 4000, toM: 5000 })
+    expect(addSpeed(withSpeeds, L, L)!.film.speeds[2]).toMatchObject({ fromM: 9000, toM: L })
+    // inside a portion, or no room
+    expect(addSpeed(withSpeeds, 3500, L)).toBeNull()
+    expect(addSpeed({ ...film, speeds: [speed('a', 0, 2000), speed('b', 2000 + MIN_SPEED_SPAN_M - 1, 3000)] }, 2010, L)).toBeNull()
+  })
+
+  it('moves a portion: its start follows the pointer, its length in metres stays, never over a neighbour', () => {
+    const before = placed(withSpeeds, 'speed-1')
+    const moved = dragFilm(withSpeeds, 'speed-1', 'move', -6, speedContext(withSpeeds))
+    const [p] = moved.speeds
+    expect(p.toM - p.fromM).toBe(1000)
+    expect(Number.isInteger(p.fromM)).toBe(true)
+    expect(Math.abs(placed(moved, 'speed-1').startS - (before.startS - 6))).toBeLessThanOrEqual(METRE_S)
+    expect(isValidFilm(moved)).toBe(true)
+    // stopped by the next portion and by the start of the track
+    expect(dragFilm(withSpeeds, 'speed-1', 'move', 100, speedContext(withSpeeds)).speeds[0]).toMatchObject({ fromM: 4000, toM: 5000 })
+    expect(dragFilm(withSpeeds, 'speed-1', 'move', -100, speedContext(withSpeeds)).speeds[0]).toMatchObject({ fromM: 0, toM: 1000 })
+  })
+
+  it('stretches a portion by either edge, at least MIN_SPEED_SPAN_M long, the edge snapping', () => {
+    const ctx = speedContext(withSpeeds)
+    const before = placed(withSpeeds, 'speed-2')
+    const longer = dragFilm(withSpeeds, 'speed-2', 'end', 3, ctx)
+    expect(longer.speeds[1].fromM).toBe(5000)
+    expect(Math.abs(placed(longer, 'speed-2').endS - (before.endS + 3))).toBeLessThanOrEqual(METRE_S / 0.5)
+    const earlier = dragFilm(withSpeeds, 'speed-2', 'start', -2, ctx)
+    expect(earlier.speeds[1].toM).toBe(6000)
+    expect(Math.abs(placed(earlier, 'speed-2').startS - (before.startS - 2))).toBeLessThanOrEqual(METRE_S)
+    expect(dragFilm(withSpeeds, 'speed-2', 'start', 100, ctx).speeds[1]).toMatchObject({ fromM: 6000 - MIN_SPEED_SPAN_M, toM: 6000 })
+    expect(dragFilm(withSpeeds, 'speed-2', 'start', -100, ctx).speeds[1].fromM).toBe(4000)
+    // the end edge snaps to a target time (the playhead)
+    const snapped = dragFilm(withSpeeds, 'speed-2', 'end', 3.2, speedContext(withSpeeds, { targets: [before.endS + 3], snapS: 0.5 }))
+    expect(Math.abs(placed(snapped, 'speed-2').endS - (before.endS + 3))).toBeLessThanOrEqual(METRE_S / 0.5)
+    // without the clock of the speeds, nothing moves
+    expect(dragFilm(withSpeeds, 'speed-2', 'move', 3, contextOf(withSpeeds))).toBe(withSpeeds)
+  })
+
+  it('updates clamp the factor and the edges; removed like any block; edges are snap targets', () => {
+    expect(updateSpeed(withSpeeds, 'speed-1', { factor: 9 }, L).speeds[0].factor).toBe(4)
+    expect(updateSpeed(withSpeeds, 'speed-1', { factor: 1.414 }, L).speeds[0].factor).toBe(1.41)
+    expect(updateSpeed(withSpeeds, 'speed-1', { toM: 5500.4 }, L).speeds[0]).toMatchObject({ fromM: 3000, toM: 5000 })
+    expect(updateSpeed(withSpeeds, 'speed-1', { fromM: 3990 }, L).speeds[0]).toMatchObject({ fromM: 3990, toM: 4040 })
+    expect(updateSpeed(withSpeeds, 'speed-2', { toM: 5010 }, L).speeds[1]).toMatchObject({ fromM: 4960, toM: 5010 })
+    expect(updateSpeed(withSpeeds, 'speed-9', { factor: 3 }, L)).toBe(withSpeeds)
+    expect(removeFilmItem(withSpeeds, 'speed-1').speeds.map((s) => s.id)).toEqual(['speed-2'])
+    expect(hasFilmItem(withSpeeds, [], 'speed-2')).toBe(true)
+    expect(hasFilmItem(removeFilmItem(withSpeeds, 'speed-2'), [], 'speed-2')).toBe(false)
+    const { clock } = speedContext(withSpeeds)
+    const targets = snapTargets(clock, withSpeeds, [], 0, 'speed-1')
+    expect(targets).toContain(clock.speeds[1].startS)
+    expect(targets).not.toContain(clock.speeds[0].startS)
+    expect([0.25, 2, 1.5].map(formatSpeedFactor)).toEqual(['×0,25', '×2', '×1,5'])
   })
 })
 

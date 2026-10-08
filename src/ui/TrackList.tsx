@@ -1,4 +1,4 @@
-import { useId, useRef } from 'react'
+import { useId } from 'react'
 import type { Track } from '../core/types'
 import { RACE_SYNC_LABELS, RACE_SYNC_MODES, raceAt, rankRacers, syncNeedsTime } from '../flyover/race'
 import type { Race, RaceSync, Racer } from '../flyover/race'
@@ -6,7 +6,7 @@ import { useRace } from '../scene/useRace'
 import { useAppStore } from '../state/store'
 import { formatDistance, formatDistanceGap, formatTimeGap, formatTrackSummary } from './format'
 import { Icon } from './icons'
-import { importTrackFiles } from './projectActions'
+import { chooseTracksToImport } from './projectActions'
 
 /** Progress steps the leaderboard follows: a few renders per second of its own rows, not one per frame. */
 const PROGRESS_STEPS = 1000
@@ -110,35 +110,19 @@ function RacePanel({ tracks }: { tracks: readonly Track[] }) {
 
 /** « + Ajouter »: pick more GPX / FIT files. */
 function AddTracksButton() {
-  const input = useRef<HTMLInputElement>(null)
   const loading = useAppStore((s) => s.loading)
   return (
-    <>
-      <button
-        type="button"
-        className="btn btn--secondary btn--small"
-        onClick={() => input.current?.click()}
-        disabled={loading}
-        data-tip="Ajouter des traces GPX ou FIT (plusieurs à la fois)"
-        data-tip-align="end"
-      >
-        <Icon name="plus" size={16} />
-        Ajouter
-      </button>
-      <input
-        ref={input}
-        className="visually-hidden"
-        type="file"
-        multiple
-        accept=".gpx,.fit"
-        tabIndex={-1}
-        aria-hidden="true"
-        onChange={(e) => {
-          importTrackFiles(Array.from(e.currentTarget.files ?? []))
-          e.currentTarget.value = ''
-        }}
-      />
-    </>
+    <button
+      type="button"
+      className="btn btn--secondary btn--small"
+      onClick={() => void chooseTracksToImport()}
+      disabled={loading}
+      data-tip="Ajouter des traces GPX ou FIT (plusieurs à la fois)"
+      data-tip-align="end"
+    >
+      <Icon name="plus" size={16} />
+      Ajouter
+    </button>
   )
 }
 

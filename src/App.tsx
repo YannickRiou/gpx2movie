@@ -49,7 +49,7 @@ const PREFS_KEY = 'openflyover.shell.v1'
 
 function loadPrefs() {
   try {
-    return parseShellPrefs(localStorage.getItem(PREFS_KEY))
+    return parseShellPrefs(getPlatform().storage.get(PREFS_KEY))
   } catch {
     return parseShellPrefs(null)
   }
@@ -147,7 +147,7 @@ export default function App() {
     // the drawer of a narrow window opens and closes on its own: only the tab is worth keeping then
     if (isDrawer()) return
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ tab: shell.tab, collapsed: keptCollapsed }))
+      getPlatform().storage.set(PREFS_KEY, JSON.stringify({ tab: shell.tab, collapsed: keptCollapsed }))
     } catch {
       // storage unavailable: the choice lasts for the session
     }

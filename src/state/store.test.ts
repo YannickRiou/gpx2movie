@@ -153,6 +153,7 @@ describe('settings and misc', () => {
         autoStops: true,
         autoMode: 'temps-forts',
         stops: [],
+        speeds: [],
         texts: [],
         media: [],
       },

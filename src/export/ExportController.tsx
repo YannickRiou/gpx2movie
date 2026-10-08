@@ -95,6 +95,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     schedule =
       still === undefined ? buildFrameSchedule(request) : [still < 1 ? still + REPLACE_EPSILON : still - REPLACE_EPSILON]
   } catch (error) {
+    await request.destination?.discard().catch(() => undefined)
     if (exportStore().begin(request.id, 0, performance.now())) exportStore().fail(errorMessage(error))
     return
   }
@@ -274,7 +275,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     }
 
     exportStore().finalizing()
-    const blob = await session.finish()
+    const { blob, sizeBytes } = await session.finish()
     const { container, codec } = session.codec
     const s = (ms: number) => (ms / 1000).toFixed(1)
     console.info(
@@ -283,15 +284,18 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
         `${timings.timeouts} délai(s) dépassé(s)`,
     )
     exportStore().complete({
-      url: URL.createObjectURL(blob),
-      fileName: videoFileName(request.baseName, session.extension),
+      // null: already written to the chosen file
+      url: blob && URL.createObjectURL(blob),
+      fileName: request.destination?.fileName ?? videoFileName(request.baseName, session.extension),
       mimeType: session.mimeType,
-      sizeBytes: blob.size,
+      sizeBytes,
       codec: `${container}/${codec}`,
       incompleteFrames: timings.timeouts,
     })
   } catch (error) {
     await session?.cancel().catch(() => undefined)
+    // also when failing before the encoder existed
+    await request.destination?.discard().catch(() => undefined)
     if (error instanceof ExportCanceledError || isCanceled()) exportStore().canceled()
     else exportStore().fail(errorMessage(error))
   } finally {

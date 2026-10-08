@@ -6,8 +6,12 @@
  *
  * Also shared with the scene during an export: the render scale (pixel-sized elements grow with the video) and
  * the drape-flush registry (the track and the labels re-drape synchronously instead of after their debounce).
+ *
+ * A film goes straight to disk when the platform can stream (`chooseVideoDestination`, asked from the click that
+ * starts the export), else it is kept in memory and downloaded at the end.
  */
 import { create } from 'zustand'
+import type { Platform, WritableFile } from '../platform'
 import type { VideoQuality } from './schedule'
 
 export type ExportPhase = 'idle' | 'starting' | 'rendering' | 'finalizing' | 'done' | 'error' | 'canceled'
@@ -31,11 +35,13 @@ export interface ExportRequest {
   baseName: string
   /** a still image of this progress instead of the film (the timing fields are then unused) */
   still?: { progress: number; type: StillType }
+  /** film written to this file while encoding (removed if the export does not finish) */
+  destination?: WritableFile
 }
 
 export interface ExportResult {
-  /** object URL of the video or image blob (revoked by `reset` or the next export) */
-  url: string
+  /** object URL of the video or image blob (revoked by `reset` or the next export); null when written to disk */
+  url: string | null
   fileName: string
   mimeType: string
   sizeBytes: number
@@ -146,14 +152,46 @@ const IDLE = {
 }
 
 function revoke(result: ExportResult | null): void {
-  if (result) URL.revokeObjectURL(result.url)
+  if (result?.url) URL.revokeObjectURL(result.url)
+}
+
+/** A request that will not run: its destination file is removed. */
+function drop(request: Pick<ExportRequest, 'destination'> | null): void {
+  void request?.destination?.discard().catch(() => undefined)
+}
+
+/** Above this estimate, a film kept in memory (about twice its size at the end) may exhaust the tab. */
+export const MEMORY_WARN_BYTES = 1.5e9
+
+/** The size estimate warns: a large film that cannot be written straight to disk. */
+export function warnsInMemory(estimatedBytes: number, streamsToDisk: boolean): boolean {
+  return !streamsToDisk && estimatedBytes > MEMORY_WARN_BYTES
+}
+
+/**
+ * Where a film goes: `start: false` when the user closed the save dialog; `destination` when it is written while
+ * encoding; neither in memory (no streaming here, or the dialog failed). Call it from the click that starts the
+ * export: the browser's picker needs that gesture.
+ */
+export async function chooseVideoDestination(
+  platform: Pick<Platform, 'capabilities' | 'createWritableFile'>,
+  fileName: string,
+): Promise<{ start: boolean; destination?: WritableFile }> {
+  if (!platform.capabilities.canStreamToDisk) return { start: true }
+  try {
+    const destination = await platform.createWritableFile({ fileName })
+    return destination ? { start: true, destination } : { start: false }
+  } catch (error) {
+    console.warn("[export] écriture directe impossible, film gardé en mémoire :", error)
+    return { start: true }
+  }
 }
 
 export const useExportStore = create<ExportState>()((set, get) => ({
   ...IDLE,
 
   start(request) {
-    if (isExportBusy(get().phase)) return
+    if (isExportBusy(get().phase)) return drop(request)
     revoke(get().result)
     set({ ...IDLE, phase: 'starting', request: { ...request, id: nextId++ } })
   },
@@ -161,7 +199,10 @@ export const useExportStore = create<ExportState>()((set, get) => ({
   cancel() {
     const { phase } = get()
     // not picked up by a controller yet: nothing to stop
-    if (phase === 'starting') set({ phase: 'canceled', request: null })
+    if (phase === 'starting') {
+      drop(get().request)
+      set({ phase: 'canceled', request: null })
+    }
     else if (phase === 'rendering' || phase === 'finalizing') set({ cancelRequested: true })
   },
 

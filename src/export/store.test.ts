@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   EMPTY_TIMINGS,
+  MEMORY_WARN_BYTES,
+  chooseVideoDestination,
+  warnsInMemory,
   estimateRemainingS,
   exportRenderScale,
   flushDrapes,
@@ -141,6 +144,59 @@ describe('useExportStore', () => {
     expect(store()).toMatchObject({ phase: 'error', error: 'boom', request: null })
     store().reset()
     expect(store()).toMatchObject({ phase: 'idle', error: null })
+  })
+})
+
+describe('straight to disk', () => {
+  const file = () => ({ fileName: 'Mon film.mp4', write: vi.fn(), close: vi.fn(), discard: vi.fn(async () => undefined) })
+  const platform = (canStreamToDisk: boolean, createWritableFile: () => Promise<unknown>) => ({
+    capabilities: { isDesktop: false, canEncodeVideo: true, canStreamToDisk },
+    createWritableFile: vi.fn(createWritableFile) as never,
+  })
+
+  it('warns about the size only for a large film kept in memory', () => {
+    expect(warnsInMemory(MEMORY_WARN_BYTES + 1, false)).toBe(true)
+    expect(warnsInMemory(MEMORY_WARN_BYTES, false)).toBe(false)
+    expect(warnsInMemory(10 * MEMORY_WARN_BYTES, true)).toBe(false)
+  })
+
+  it('chooses the destination: a file, memory, or nothing when the dialog is closed', async () => {
+    const destination = file()
+    const streaming = platform(true, async () => destination)
+    expect(await chooseVideoDestination(streaming, 'Tour.mp4')).toEqual({ start: true, destination })
+    expect(streaming.createWritableFile).toHaveBeenCalledWith({ fileName: 'Tour.mp4' })
+    expect(await chooseVideoDestination(platform(true, async () => null), 'Tour.mp4')).toEqual({ start: false })
+    const memory = platform(false, async () => destination)
+    expect(await chooseVideoDestination(memory, 'Tour.mp4')).toEqual({ start: true })
+    expect(memory.createWritableFile).not.toHaveBeenCalled()
+  })
+
+  it('falls back to memory when the dialog fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const failing = platform(true, async () => {
+      throw new DOMException('no gesture', 'SecurityError')
+    })
+    expect(await chooseVideoDestination(failing, 'Tour.mp4')).toEqual({ start: true })
+  })
+
+  it('removes the file of a request that will not run', () => {
+    const running = file()
+    useExportStore.getState().start({ ...REQUEST, destination: running })
+    const refused = file()
+    useExportStore.getState().start({ ...REQUEST, destination: refused })
+    expect(refused.discard).toHaveBeenCalled()
+    useExportStore.getState().cancel()
+    expect(running.discard).toHaveBeenCalled()
+    expect(useExportStore.getState().phase).toBe('canceled')
+  })
+
+  it('has no URL to revoke for a film already on disk', () => {
+    useExportStore.getState().start(REQUEST)
+    const { request } = useExportStore.getState()
+    useExportStore.getState().begin(request!.id, 1, 0)
+    useExportStore.getState().complete({ ...RESULT, url: null })
+    useExportStore.getState().reset()
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
   })
 })
 

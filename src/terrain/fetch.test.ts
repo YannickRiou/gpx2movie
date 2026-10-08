@@ -183,24 +183,32 @@ describe('createTileFetcher', () => {
     expect(fetcher.stats.failed).toBe(0)
   })
 
-  it('gives up after the second network error', async () => {
+  it('gives up after three retries of a network error', async () => {
     const fetcher = createTileFetcher({ retryDelayMs: 0 })
     const promise = fetcher.fetchBitmap('u')
-    pending[0].d.reject(new TypeError('Failed to fetch'))
-    await flush()
-    pending[1].d.reject(new TypeError('Failed to fetch'))
+    for (let i = 0; i < 3; i++) {
+      pending[i].d.reject(new TypeError('Failed to fetch'))
+      await flush()
+    }
+    pending[3].d.reject(new TypeError('Failed to fetch'))
     await expect(promise).rejects.toBeInstanceOf(TypeError)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
     expect(fetcher.stats).toEqual({ inflight: 0, queued: 0, cached: 0, failed: 1 })
   })
 
-  it('retries once on a server error (5xx)', async () => {
+  it('retries on server errors (5xx) and 429', async () => {
     const fetcher = createTileFetcher({ retryDelayMs: 0 })
     const promise = fetcher.fetchBitmap('u')
-    pending[0].d.resolve(httpResponse(503))
+    pending[0].d.resolve(httpResponse(502))
     await flush()
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    pending[1].d.resolve(okResponse())
+    pending[1].d.resolve(httpResponse(429))
+    await flush()
+    pending[2].d.resolve(httpResponse(400))
+    await flush()
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    // retries bypass the HTTP cache (a cached error would come back)
+    expect(fetchMock).toHaveBeenLastCalledWith('u', expect.objectContaining({ cache: 'reload' }))
+    pending[3].d.resolve(okResponse())
     const bitmap = await promise
     expect(bitmap).toBe(bitmaps[0])
   })

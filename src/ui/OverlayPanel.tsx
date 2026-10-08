@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import type { ChangeEvent, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { hasMetric } from '../flyover/trackColor'
 import { fileToLogoDataUrl } from '../overlay/assets'
 import {
@@ -21,6 +21,7 @@ import {
   WIDGET_SIZE_MIN,
 } from '../overlay/settings'
 import type { CounterId, CreditsPosition, OverlayAnchor, OverlaySettings } from '../overlay/settings'
+import { getPlatform } from '../platform'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
 import { formatNumber } from './format'
@@ -157,12 +158,10 @@ export function OverlayPanel() {
     heartRate: !track || hasMetric(track, 'heartRate'),
   }
 
-  const onLogoFile = async (e: ChangeEvent<HTMLInputElement>) => {
-    const input = e.currentTarget
-    const file = input.files?.[0]
-    input.value = ''
-    if (!file) return
+  const chooseLogo = async () => {
     try {
+      const [file] = await getPlatform().openFiles({ filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'svg'] }] })
+      if (!file) return
       setLogoError(null)
       setWidget('logo', { image: await fileToLogoDataUrl(file) })
     } catch {
@@ -328,10 +327,9 @@ export function OverlayPanel() {
 
             <WidgetGroup label="Logo" enabled={overlay.logo.enabled} onToggle={(enabled) => setWidget('logo', { enabled })}>
               <div className="project__row">
-                <label className="btn btn--secondary">
+                <button type="button" className="btn btn--secondary" onClick={() => void chooseLogo()}>
                   {overlay.logo.image ? "Changer l'image" : 'Choisir une image'}
-                  <input className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={onLogoFile} />
-                </label>
+                </button>
                 {overlay.logo.image && (
                   <button type="button" className="btn btn--secondary" onClick={() => setWidget('logo', { image: '' })}>
                     Retirer

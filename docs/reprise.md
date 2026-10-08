@@ -90,8 +90,33 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
   `RC_x86_64_pc_windows_msvc` pointant sur un faux `windres` qui écrit un fichier vide ; `rustup target add
   x86_64-pc-windows-msvc`). Impossible ici sous Linux : Ubuntu 20.04 n'a pas `libwebkit2gtk-4.1` ni GLib ≥ 2.70.
   Jamais lancé dans une vraie fenêtre. Détail : `ARCHITECTURE.md`, « Application de bureau ».
+- Même branche, phase 6, suite (non commitée) : tous les choix de fichier par `getPlatform().openFiles` (accueil, « Ajouter »
+  des traces, logo, « Média » de la timeline), préférences de l'interface, préréglages et cache météo par
+  `getPlatform().storage` (mêmes clés), « Enregistrer … » au lieu de « Télécharger … » à la fin d'un export sur le bureau.
+  Cache Overpass aussi (même lot que l'écriture directe ci-dessous) : `KeyValueStore.set` répond false quand le stockage
+  refuse, `keys(préfixe)` liste les clés ; le cache libère ses propres entrées puis réessaie, comme avant. Images GIF et
+  AVIF acceptées par « Média » (types connus de la couche plateforme).
+- Même branche, phase 5, écriture directe sur le disque (non commitée) : `Platform.createWritableFile` (site :
+  `showSaveFilePicker` ; bureau : plugin-fs `open` / `seek` / `write`, droits ajoutés dans `capabilities/default.json`),
+  `capabilities.canStreamToDisk`, `StreamTarget` de mediabunny (MP4 sans fast start, morceaux de 4 Mio), fichier supprimé
+  à l'annulation ou en cas d'erreur, « Enregistrement direct sur le disque » et alerte au-delà de 1,5 Go en mémoire dans le
+  tiroir, « Vidéo enregistrée dans <nom> ». Vérifié : tests (logique pure, session d'encodage avec faux mediabunny,
+  plateformes avec faux sélecteur et faux plugin-fs). Jamais vu : un vrai export écrit sur le disque (voir ci-dessous).
+  Détail : `ARCHITECTURE.md`, « Export vidéo ».
+
+- Même branche, phase 4, vitesse par portion (non commitée) : `film.speeds[]` `{ id, fromM, toM, factor }` (×0,25–×4,
+  sans chevauchement, hors préréglages), multiplicateur de vitesse à transitions douces dans `flightPacing`, piste
+  « Vitesse » sous « Plans » (glisser, bords, Suppr, un pas par geste), bouton « Vitesse » de la barre (×2 sur 1 km au
+  marqueur), inspecteur (pastilles, réglage fin, de / à en km), « Accélérer / ralentir ici » au clic droit sur la trace.
+  Vérifié : tests (rythme, horloge, modèle, gestes). Jamais vu à l'écran. Détail : `ARCHITECTURE.md`, « Film et timeline ».
 
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
+
+- Vitesse par portion : bouton « Vitesse » (bloc ×2 sous « Plans », inspecteur ouvert), barre de la timeline encore sur
+  une ligne à 1440 / 1280 px avec ce bouton de plus, glisser / étirer un bloc (il suit le pointeur, s'arrête contre ses
+  voisins, aimantation, Alt), pastilles et réglage fin (libellé et durée du film mis à jour), de / à au clavier, Suppr et
+  Ctrl+Z, lecture et export : accélération sans à-coup aux bords, portion ralentie en pointillés, menu du clic droit à
+  trois entrées (retourné près du bas), « garder la durée » activé puis désactivé.
 
 - Passe clarté : interrupteurs (état, focus, désactivé), pastilles (coche, pointillés « absent de cette trace »), sections
   de l'Habillage (en-têtes collants, filet des options sous chaque interrupteur), météo sur deux lignes à 280 px, onglets
@@ -100,7 +125,10 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
 - Couche plateforme, sur le site : « Ouvrir » et Ctrl+O (champ créé à la volée : traces, projet, plusieurs fichiers,
   Annuler), « Enregistrer » (téléchargement, toast), dépôt sur la fenêtre, téléchargement automatique d'un export, sous
   Chrome et Firefox. Sur le bureau : les mêmes avec les fenêtres natives (Annuler n'enregistre rien et ne marque pas le
-  projet enregistré), tuiles / météo / Overpass sous la CSP, message « pas d'encodeur » sous Linux.
+  projet enregistré), tuiles / météo / Overpass sous la CSP, message « pas d'encodeur » sous Linux. Suite : « Choisir un
+  fichier » et « Ouvrir un projet… » de l'accueil, « Ajouter », logo, « Média » (filtres, Annuler, plusieurs fichiers),
+  onglet et panneau replié retrouvés au rechargement, préréglages et météo d'avant toujours là, « Enregistrer … » et action
+  du toast à la fin d'un export sur le bureau.
 - Timeline : glisser un arrêt (aimantation, Alt), étirer un texte des deux bords, bord de l'ouverture, Ctrl+Z par geste,
   Ctrl+molette, un film long (défilement).
 - Photos : ajout, miniatures, plein écran avec zoom lent, carte dans les 3 styles, placement GPS, export avec photo.
@@ -132,6 +160,11 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
 - Plus ancien : marqueurs de course fantôme, mini-carte dans les 3 styles, étiquettes effacées sous les cartes, ralentis.
 - Export réel sur machine avec GPU : vitesse (avant `c8a00ed` / après), film 60 s en 1080p puis 4K (mémoire), 9:16,
   trace et étiquettes à l'échelle en 4K, crédits incrustés, image fixe.
+- Écriture directe (Chrome / Edge, puis bureau Windows) : fenêtre « Enregistrer » au clic, fichier qui grossit pendant
+  l'export (`.crswap` dans Chrome), MP4 lu par VLC, le lecteur du système et un logiciel de montage (durée, recherche),
+  WebM si « .webm » est tapé, annulation et fenêtre fermée (aucun fichier restant), disque plein / clé retirée (message
+  d'erreur, fichier supprimé), mémoire de l'onglet stable sur un film 4K long ; Firefox : alerte au-delà de 1,5 Go et
+  téléchargement comme avant.
 
 ## Prochaines étapes proposées
 
@@ -140,12 +173,10 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
 3. Timeline : son des vidéos (`muted` réservé), photo attachée à un arrêt, défilement
    automatique pendant un glisser au bord, textes ancrés à un arrêt, mémoriser l'état ouvert / fermé des sections.
 4. Phase 6 (bureau, Tauri) : premier lancement réel (`npm run tauri:dev`) sous Windows, puis macOS / Linux récent ;
-   encodeur natif pour Linux (plan dans `ARCHITECTURE.md`, « Export vidéo sans WebCodecs ») ; brancher sur
-   `getPlatform()` les champs de fichier restants (accueil, liste des traces, logo, médias) et le stockage ; accès disque pour les photos et vidéos derrière `readMedia` (un chemin de fichier plutôt que les octets
+   encodeur natif pour Linux (plan dans `ARCHITECTURE.md`, « Export vidéo sans WebCodecs »)  ; accès disque pour les photos et vidéos derrière `readMedia` (un chemin de fichier plutôt que les octets
    pour les grosses vidéos) ; sans WebCodecs, les vidéos sont refusées à l'ajout. Hébergement en sous-dossier : `/fonts/`, `/samples/`,
    `/favicon.svg` sont absolus → `import.meta.env.BASE_URL` (seulement si nécessaire).
-5. Phase 3 restante : eau réfléchissante, géoïde. Phase 5 : écriture directe sur disque pour les films
-   longs. Phase 7 : vidéo embarquée, comparatif photos IGN anciennes, rendu en lot, affiche, calage musical.
+5. Phase 3 restante : eau réfléchissante, géoïde. Phase 7 : vidéo embarquée, comparatif photos IGN anciennes, rendu en lot, affiche, calage musical.
 
 ## Limites et points ouverts
 

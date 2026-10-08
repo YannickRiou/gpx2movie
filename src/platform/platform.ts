@@ -23,11 +23,28 @@ export interface SaveFileOptions {
 /** `saved: false` when the user closed the dialog; `fileName` is the name actually written. */
 export type SaveOutcome = { saved: true; fileName: string } | { saved: false }
 
+/**
+ * A file being written while it is produced (long films go straight to disk instead of memory). The encoder writes
+ * in order, then patches its headers at earlier positions: every write says where it goes.
+ */
+export interface WritableFile {
+  /** name actually chosen in the dialog */
+  readonly fileName: string
+  write(data: Uint8Array, position: number): Promise<void>
+  /** flush and close: the file is complete */
+  close(): Promise<void>
+  /** stop writing and remove the partial file; safe at any time and more than once, a no-op after `close` */
+  discard(): Promise<void>
+}
+
 /** Synchronous like localStorage (preferences and caches are read at start-up). */
 export interface KeyValueStore {
   get(key: string): string | null
-  set(key: string, value: string): void
+  /** false when the value could not be stored (storage full or unavailable): it is then kept in memory for this session */
+  set(key: string, value: string): boolean
   remove(key: string): void
+  /** keys starting with `prefix`, stored or kept in memory */
+  keys(prefix?: string): string[]
 }
 
 export interface Capabilities {
@@ -35,6 +52,8 @@ export interface Capabilities {
   isDesktop: boolean
   /** WebCodecs is present (missing in WebKitGTK, the Linux webview of the desktop app) */
   canEncodeVideo: boolean
+  /** `createWritableFile` works: desktop, or a browser with `showSaveFilePicker` (Chrome, Edge) */
+  canStreamToDisk: boolean
 }
 
 export interface Platform {
@@ -45,6 +64,11 @@ export interface Platform {
   saveFile(data: Blob, options: SaveFileOptions): Promise<SaveOutcome>
   /** same for an object URL already made (export result) */
   saveUrl(url: string, options: SaveFileOptions): Promise<SaveOutcome>
+  /**
+   * Ask where to save, then hand a file open for writing; null when the dialog is closed. Only when
+   * `capabilities.canStreamToDisk`; on the web it must be called from the user's click (before any await).
+   */
+  createWritableFile(options: SaveFileOptions): Promise<WritableFile | null>
   /** files of an HTML drop (the desktop window keeps HTML drops: `dragDropEnabled: false`) */
   droppedFiles(dataTransfer: DataTransfer | null | undefined): File[]
 }
@@ -58,6 +82,8 @@ export function detectCapabilities(scope: object): Capabilities {
   return {
     isDesktop: isTauriRuntime(scope),
     canEncodeVideo: typeof (scope as { VideoEncoder?: unknown }).VideoEncoder === 'function',
+    canStreamToDisk:
+      isTauriRuntime(scope) || typeof (scope as { showSaveFilePicker?: unknown }).showSaveFilePicker === 'function',
   }
 }
 
@@ -87,6 +113,8 @@ const MIME_TYPES: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   webp: 'image/webp',
+  gif: 'image/gif',
+  avif: 'image/avif',
   svg: 'image/svg+xml',
 }
 
@@ -102,30 +130,62 @@ export function saveFilters(options: SaveFileOptions): FileFilter[] {
   return ext ? [{ name: ext.toUpperCase(), extensions: [ext] }] : []
 }
 
+/** `types` of the browser's save picker: one per filter, extensions keyed by their type. */
+export function pickerTypes(filters: readonly FileFilter[]): { description: string; accept: Record<string, string[]> }[] {
+  return filters.map((f) => {
+    const accept: Record<string, string[]> = {}
+    for (const ext of f.extensions) (accept[mimeTypeOf(`f.${ext}`) || 'application/octet-stream'] ??= []).push(`.${ext.toLowerCase()}`)
+    return { description: f.name, accept }
+  })
+}
+
 /** Files of a drop, the same on both targets. */
 export function droppedFiles(dataTransfer: DataTransfer | null | undefined): File[] {
   return Array.from(dataTransfer?.files ?? [])
 }
 
-/** `storage` (localStorage) behind a store that never throws; memory only when it is missing or blocked. */
-export function keyValueStore(storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null): KeyValueStore {
+/** `storage` (localStorage) behind a store that never throws; values it refuses (missing, blocked, full) stay in memory. */
+export function keyValueStore(
+  storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'> | null,
+): KeyValueStore {
+  /** values the storage refused, for this session */
   const memory = new Map<string, string>()
   return {
     get(key) {
+      // a refused value is newer than what the storage may still hold
+      const kept = memory.get(key)
+      if (kept !== undefined) return kept
       try {
-        if (storage) return storage.getItem(key)
+        return storage?.getItem(key) ?? null
       } catch {
-        // blocked (private window, quota): memory below
+        return null // blocked (private window)
       }
-      return memory.get(key) ?? null
     },
     set(key, value) {
-      memory.set(key, value)
       try {
-        storage?.setItem(key, value)
+        if (storage) {
+          storage.setItem(key, value)
+          memory.delete(key)
+          return true
+        }
       } catch {
-        // kept in memory for this session
+        // full or blocked: memory below
       }
+      memory.set(key, value)
+      return false
+    },
+    keys(prefix = '') {
+      const found = new Set<string>()
+      try {
+        for (let i = 0; storage && i < storage.length; i++) {
+          const key = storage.key(i)
+          if (key?.startsWith(prefix)) found.add(key)
+        }
+      } catch {
+        // blocked: memory only
+      }
+      for (const key of memory.keys()) if (key.startsWith(prefix)) found.add(key)
+      return [...found]
     },
     remove(key) {
       memory.delete(key)
