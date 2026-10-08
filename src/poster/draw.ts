@@ -5,7 +5,7 @@
  *
  * The three styles take the fonts of the overlay styles of the same name and the « Carte alpine » colours.
  */
-import { SKY_GRADIENT } from '../export/capture'
+import { fillSky } from '../export/capture'
 import type { MiniMapOutline } from '../overlay/data'
 import { formatDistance, formatNumber } from '../ui/format'
 import type { PosterContent, PosterProfile } from './content'
@@ -168,11 +168,7 @@ function roundedRect(ctx: PosterContext, b: Box, r: number): void {
 
 /** Before the first render: the sky of the export and the track seen from above, in trail red. */
 function drawPlaceholder(ctx: PosterContext, box: Box, outline: MiniMapOutline | undefined, u: number): void {
-  const sky = ctx.createLinearGradient(0, box.y, 0, box.y + box.h)
-  sky.addColorStop(0, SKY_GRADIENT[0])
-  sky.addColorStop(1, SKY_GRADIENT[1])
-  ctx.fillStyle = sky
-  ctx.fillRect(box.x, box.y, box.w, box.h)
+  fillSky(ctx, box.x, box.y, box.w, box.h)
   if (!outline || outline.x.length < 2 || !(outline.width > 0 || outline.height > 0)) return
   const side = Math.min(box.w, box.h) * 0.6
   const scale = side / Math.max(outline.width, outline.height)

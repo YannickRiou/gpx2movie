@@ -22,7 +22,7 @@ import type { PosterRows } from './layout'
 import { posterSize } from './settings'
 
 /** Longest side of the view kept for the preview (px). */
-export const PREVIEW_VIEW_PX = 480
+const PREVIEW_VIEW_PX = 480
 
 /** Rows of the layout for a content. */
 export function posterRows(content: PosterContent): PosterRows {
@@ -35,7 +35,7 @@ export function posterRows(content: PosterContent): PosterRows {
 }
 
 /** File name without extension: « <projet> – affiche ». */
-export function posterBaseName(projectName: string): string {
+function posterBaseName(projectName: string): string {
   return `${projectName} – affiche`
 }
 
@@ -46,12 +46,15 @@ export function currentPosterContent(): PosterContent | null {
   if (!track) return null
   const weatherState = useWeatherStore.getState()
   const series = weatherState.status === 'ready' && weatherState.trackId === track.id ? weatherState.series : null
+  // rebuilt on every preview redraw (each keystroke in the title): built once for the profile and the weather
+  const path = buildTrackPath(track)
   return posterContent({
     track,
+    path,
     poster: settings.poster,
     projectName: effectiveProjectName(projectName, track.name),
     climbs: climbsOf(track).length,
-    weather: series ? summarizeOuting(series, buildTrackPath(track)) : undefined,
+    weather: series ? summarizeOuting(series, path) : undefined,
     credits: overlayCredits({
       terrainSourceId: settings.terrainSourceId,
       imagerySourceId: settings.imagerySourceId,

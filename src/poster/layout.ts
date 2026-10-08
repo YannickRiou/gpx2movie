@@ -169,15 +169,17 @@ export function posterLayout(width: number, height: number, style: PosterStyleId
   const base = { width, height, u, side, fonts }
 
   if (!side) {
+    // portrait and square: every figure on one row
+    const columns = Math.max(1, rows.figures)
     // measure the text column once (its height does not depend on where it starts)
-    const probe = (w: number) => stackRows(rows, 0, 0, w, u, s, Math.max(1, rows.figures)).height
+    const probe = (w: number) => stackRows(rows, 0, 0, w, u, s, columns).height
     if (style === 'editorial') {
       const margin = 6 * u
       const gap = 4.5 * u
       const w = width - 2 * margin
       const textH = probe(w)
       const view = rounded({ x: margin, y: margin, w, h: height - 2 * margin - gap - textH })
-      const text = stackRows(rows, margin, view.y + view.h + gap, w, u, s, Math.max(1, rows.figures))
+      const text = stackRows(rows, margin, view.y + view.h + gap, w, u, s, columns)
       return { ...base, view, panel: null, accentBar: null, ...pick(text) }
     }
     if (style === 'broadcast') {
@@ -188,7 +190,7 @@ export function posterLayout(width: number, height: number, style: PosterStyleId
       const panelH = probe(w) + 2 * pad + bar
       const view = rounded({ x: 0, y: 0, w: width, h: height - panelH })
       const panel = { x: 0, y: view.h, w: width, h: height - view.h }
-      const text = stackRows(rows, inset, panel.y + bar + pad, w, u, s, Math.max(1, rows.figures))
+      const text = stackRows(rows, inset, panel.y + bar + pad, w, u, s, columns)
       return { ...base, view, panel, accentBar: { x: 0, y: panel.y, w: width, h: bar }, ...pick(text) }
     }
     const margin = 4 * u
@@ -196,7 +198,7 @@ export function posterLayout(width: number, height: number, style: PosterStyleId
     const w = width - 2 * margin - 2 * pad
     const cardH = probe(w) + 2 * pad
     const panel = { x: margin, y: height - margin - cardH, w: width - 2 * margin, h: cardH }
-    const text = stackRows(rows, margin + pad, panel.y + pad, w, u, s, Math.max(1, rows.figures))
+    const text = stackRows(rows, margin + pad, panel.y + pad, w, u, s, columns)
     return { ...base, view: { x: 0, y: 0, w: width, h: height }, panel, accentBar: null, ...pick(text) }
   }
 

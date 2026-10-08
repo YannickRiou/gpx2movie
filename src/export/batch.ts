@@ -10,7 +10,6 @@
  * runner). `exportJob` drives the real export store; the batch store keeps the selection and the last run.
  */
 import { create } from 'zustand'
-import type { WritableFile } from '../platform'
 import type { WritableFolder } from '../platform/folder'
 import { VIDEO_ASPECTS, VIDEO_RESOLUTIONS, videoSize } from './schedule'
 import type { VideoAspect, VideoResolution } from './schedule'
@@ -228,7 +227,7 @@ export interface BatchContext {
 }
 
 /** Resolves with the export state once the export store is no longer busy. */
-export function settledExport(): Promise<ExportState> {
+function settledExport(): Promise<ExportState> {
   return new Promise((resolve) => {
     let stop = () => {}
     const check = (state: ExportState) => {
@@ -256,30 +255,35 @@ async function writeToFolder(folder: WritableFolder, result: ExportResult & { ur
   return { ...result, url: null, fileName: file.fileName }
 }
 
+/** Hand one job to the export store (or the poster to `startPoster`); the reason when it cannot start. */
+async function startJob(job: BatchJob, ctx: BatchContext): Promise<string | null> {
+  const store = useExportStore.getState()
+  if (job.kind === 'poster') return (await ctx.startPoster()) ? null : 'aucune trace chargée'
+  const request = { ...ctx.film, width: job.width, height: job.height, baseName: batchBaseName(ctx.projectName, job) }
+  if (job.kind === 'still') {
+    store.start({ ...request, still: ctx.still })
+    return null
+  }
+  const container = await ctx.containerOf(job)
+  if (!container) return `ce navigateur ne sait pas encoder une vidéo de ${job.width} × ${job.height} pixels`
+  const destination = ctx.folder ? await ctx.folder.createFile(videoFileName(request.baseName, `.${container}`)) : undefined
+  store.start({ ...request, destination })
+  return null
+}
+
 /** Export one job through the export store and its controller; resolves once it has settled. */
 export async function exportJob(job: BatchJob, ctx: BatchContext): Promise<JobOutcome> {
   const store = useExportStore.getState
   if (isExportBusy(store().phase)) return { status: 'error', error: 'un autre export est en cours' }
-  if (job.kind === 'poster') {
-    if (!(await ctx.startPoster())) return { status: 'error', error: 'aucune trace chargée' }
-  } else {
-    const request = { ...ctx.film, width: job.width, height: job.height, baseName: batchBaseName(ctx.projectName, job) }
-    if (job.kind === 'still') store().start({ ...request, still: ctx.still })
-    else {
-      const container = await ctx.containerOf(job)
-      if (!container)
-        return { status: 'error', error: `ce navigateur ne sait pas encoder une vidéo de ${job.width} × ${job.height} pixels` }
-      let destination: WritableFile | undefined
-      if (ctx.folder) destination = await ctx.folder.createFile(videoFileName(request.baseName, `.${container}`))
-      store().start({ ...request, destination })
-    }
-  }
+  const failure = await startJob(job, ctx)
+  if (failure) return { status: 'error', error: failure }
   // asked while the request was being prepared
   if (ctx.canceled()) store().cancel()
   const settled = await settledExport()
   if (settled.phase === 'error') return { status: 'error', error: settled.error ?? 'échec' }
   const result = settled.phase === 'done' ? store().takeResult() : null
   if (!result) return { status: 'canceled' }
+  // a film streamed to disk is already in place
   if (result.url === null) return { status: 'done', result }
   if (ctx.folder) {
     try {
