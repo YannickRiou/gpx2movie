@@ -28,6 +28,7 @@ import {
   LABEL_PANEL_COLOR,
   LABEL_TEXT_COLOR,
   climbLabels,
+  kmLabels,
   distanceFade,
   labelOpacity,
   lineOfSightClearance,
@@ -283,6 +284,7 @@ export function Labels() {
     const first = tracks[0]
     if (show.climbs && first) out.push(...climbLabels(first, climbsOf(first)))
     if (show.waypoints) out.push(...waypointLabels(tracks))
+    if (first) out.push(...kmLabels(first, show.kmStep))
     out.push(...poiLabels(pois))
     out.push(...externalLabels(sources))
     return out

@@ -1,5 +1,6 @@
 import { useId, useMemo } from 'react'
 import { climbsOf } from '../flyover/climbs'
+import { KM_MARKER_STEPS } from '../scene/labelModel'
 import { useAppStore } from '../state/store'
 import { formatAscent, formatDistance, formatNumber } from './format'
 
@@ -66,6 +67,20 @@ export function ClimbList() {
             onChange={(e) => setSetting('labels', { ...labels, waypoints: e.currentTarget.checked })}
           />
           Points nommés du fichier GPX
+        </label>
+        <label className="field">
+          <span className="field__label">Bornes kilométriques</span>
+          <select
+            className="select"
+            value={labels.kmStep}
+            onChange={(e) => setSetting('labels', { ...labels, kmStep: Number(e.currentTarget.value) })}
+          >
+            {KM_MARKER_STEPS.map((step) => (
+              <option key={step} value={step}>
+                {step === 0 ? 'Aucune' : step === 1 ? 'Tous les kilomètres' : `Tous les ${step} km`}
+              </option>
+            ))}
+          </select>
         </label>
       </fieldset>
     </section>
