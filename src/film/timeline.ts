@@ -7,6 +7,7 @@
  * or a music clip (unique across the film).
  * Times are film times (seconds at ×1 from the first frame, opening included).
  */
+import { clamp } from '../core/math'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import type { CameraSettings } from '../flyover/cameraSettings'
 import { distanceAtTime, nearestOnPath, recordedTimeAt } from '../flyover/path'
@@ -33,7 +34,6 @@ export type TimelineItem = 'opening' | 'closing' | string
 /** part of a block a gesture holds: its body (move) or one of its edges */
 export type Grip = 'move' | 'start' | 'end'
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 /** times and durations kept at 1/100 s: clean values in the project file */
 const roundS = (s: number) => Math.round(s * 100) / 100
 

@@ -23,6 +23,7 @@
  * injected elements and the film length fitted to the music are pure and tested.
  */
 import { create } from 'zustand'
+import { clamp } from '../core/math'
 import { FLYOVER_DURATION_RANGE } from '../flyover/cameraSettings'
 import { getSettingsHistory } from '../project/history'
 import { editFilm, getFilmSource } from '../scene/usePacing'
@@ -346,14 +347,14 @@ export function filmMixPlan(
  * Found by the secant method from `current`; the nearest end of the range when `endS` is out of reach.
  */
 export function durationForFilmEnd(endS: number, totalFor: (durationS: number) => number, current: number, range: { min: number; max: number }): number {
-  const clamp = (d: number) => Math.min(range.max, Math.max(range.min, d))
-  let d0 = clamp(current)
+  const inRange = (d: number) => clamp(d, range.min, range.max)
+  let d0 = inRange(current)
   let t0 = totalFor(d0)
-  let d1 = clamp(d0 + endS - t0)
+  let d1 = inRange(d0 + endS - t0)
   let t1 = totalFor(d1)
   for (let k = 0; k < 12 && Math.abs(t1 - endS) > 0.005; k++) {
     const slope = d1 !== d0 ? (t1 - t0) / (d1 - d0) : 1
-    const next = clamp(d1 + (endS - t1) / (slope > 0 ? slope : 1))
+    const next = inRange(d1 + (endS - t1) / (slope > 0 ? slope : 1))
     if (next === d1) break
     d0 = d1
     t0 = t1
