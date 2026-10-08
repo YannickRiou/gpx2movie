@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Track } from '../core/types'
-import { errorMessage, formatImportError, importFiles, importedMessage, runImportJobs } from './importFlow'
+import { errorMessage } from '../core/errors'
+import { formatImportError, importFiles, importedMessage, runImportJobs } from './importFlow'
 import type { ImportSink } from './importFlow'
 
 function track(id: string): Track {

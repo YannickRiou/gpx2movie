@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react'
+import { errorMessage } from '../core/errors'
 import { getPlatform } from '../platform'
 import type { ProjectEntry } from '../platform'
 import { applySettings } from '../project/apply'
@@ -180,7 +181,7 @@ function PresetSection() {
           : { kind: 'error', text: 'Préréglage non enregistré : stockage du navigateur plein. Il reste utilisable jusqu’à la fermeture de la page.' },
       )
     } catch (err) {
-      showToast({ kind: 'error', text: err instanceof Error ? err.message : String(err) })
+      showToast({ kind: 'error', text: errorMessage(err) })
     }
   }
 
