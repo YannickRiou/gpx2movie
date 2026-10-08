@@ -178,6 +178,9 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
 
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
 
+Liste à cocher pour la machine avec GPU, regroupée par priorité : [`docs/tests-gpu.md`](tests-gpu.md). Le détail ci-dessous
+reste la source de chaque chantier.
+
 - Rendu en lot : les trois modes du tiroir sur une ligne à 300 px (« Plusieurs formats » assez court ?), pastilles des 5
   formats × 4 résolutions, estimation (taille après le sondage des codecs, durée seulement après un premier film), « Tout
   exporter » dans Chrome (dossier demandé une fois, fichiers qui grossissent dans le dossier, noms, image et affiche
