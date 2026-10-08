@@ -396,6 +396,25 @@ export function addCameraKey(film: Film, atM: number, framing: Pick<CameraSettin
   return { film: updateCameraKey({ ...film, cameraKeys: [...film.cameraKeys, key] }, id, {}), id }
 }
 
+/**
+ * A camera of its own for a text or a photo shown from film time `startS` to `endS`: a camera key where the marker is at
+ * its start (the framing there, to adjust: it is the key returned) and, when the marker moves meanwhile, one at its end
+ * keeping the framing that was there, so that the rest of the film is unchanged. `framingAt` gives the framing the
+ * film has at a position (camera keys included), `atTime` the position at a film time.
+ */
+export function addItemCamera(
+  film: Film,
+  startS: number,
+  endS: number,
+  atTime: (timeS: number) => number,
+  framingAt: (atM: number) => Pick<CameraSettings, 'distance' | 'pitchDeg' | 'headingOffsetDeg'>,
+): { film: Film; id: string } {
+  const fromM = Math.round(atTime(startS))
+  const toM = Math.round(atTime(endS))
+  const after = toM > fromM ? addCameraKey(film, toM, framingAt(toM)).film : film
+  return addCameraKey(after, fromM, framingAt(fromM))
+}
+
 /** Length of a text added on the timeline (seconds). */
 export const NEW_TEXT_S = 4
 

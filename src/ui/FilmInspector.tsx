@@ -16,6 +16,7 @@ import {
 } from '../film/model'
 import type { Film, MediaLayout, MediaSync, ShotStyle, StopCamera } from '../film/model'
 import {
+  addItemCamera,
   clipSyncOffsetS,
   formatFilmTime,
   formatSpeedFactor,
@@ -30,6 +31,7 @@ import {
   syncClipPlacement,
   updateText,
 } from '../film/timeline'
+import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { buildTrackPath } from '../flyover/path'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
@@ -203,6 +205,31 @@ export function FilmInspector() {
     </div>
   )
 
+  /** « Cadrer la caméra ici »: a camera key of its own while the item shows (`addItemCamera`), selected to adjust */
+  const itemCamera = (startS: number, durationS: number) => (
+    <button
+      type="button"
+      className="btn btn--secondary"
+      data-tip="Pose un cadrage au début (à régler) et rend celui d'avant à la fin"
+      onClick={() => {
+        const { camera, flyoverDurationS } = useAppStore.getState().settings
+        const easeM = cameraKeyEaseM(lengthM, flyoverDurationS)
+        editFilm((f) =>
+          addItemCamera(
+            f,
+            startS,
+            startS + durationS,
+            (t) => clock.progressAtTime(t) * lengthM,
+            (atM) => keyedCamera(camera, f.cameraKeys, atM, easeM),
+          ),
+        )
+      }}
+    >
+      <Icon name="locate-fixed" size={16} />
+      Cadrer la caméra pendant cet élément
+    </button>
+  )
+
   let title: string
   let body: ReactNode
   let removeLabel = 'Supprimer'
@@ -351,6 +378,7 @@ export function FilmInspector() {
           {anchorSelect('Position', filmText.anchor, (anchor) => set({ anchor }))}
           {range('size', 'Taille', filmText.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
           {timing(filmText.startS, filmText.durationS, set)}
+          {itemCamera(filmText.startS, filmText.durationS)}
           <p className="field__hint">Le texte s'affichera dans l'habillage du film.</p>
         </>
       )
@@ -457,6 +485,7 @@ export function FilmInspector() {
           {anchorSelect(card ? 'Position' : 'Position de la légende', media.anchor, (anchor) => set({ anchor }))}
           {range('size', 'Taille', media.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
           {timing(media.startS, media.durationS, set)}
+          {itemCamera(media.startS, media.durationS)}
           {video && number('in', 'Début dans la vidéo (s)', media.inS ?? 0, 0, fileS, (inS) => set({ inS: Math.min(inS, fileS) }))}
           {video && clipSound()}
           {video && picture?.recordedMs !== undefined && clipSync(picture.recordedMs, picture.recordedApprox === true, fileS)}
