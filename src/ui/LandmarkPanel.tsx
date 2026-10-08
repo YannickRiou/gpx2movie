@@ -4,7 +4,7 @@ import { OSM_ATTRIBUTION, OSM_KINDS } from '../osm/overpass'
 import type { OsmKind } from '../osm/overpass'
 import { syncLandmarks, useLandmarkStore } from '../osm/store'
 import { useAppStore } from '../state/store'
-import { ModifiedMarker } from './ModifiedMarker'
+import { PanelSection } from './PanelSection'
 import { formatDistance, formatNumber } from './format'
 
 /** Badge of each kind in the list (singular). */
@@ -20,7 +20,7 @@ const KIND_BADGES: Readonly<Record<OsmKind, string>> = {
 }
 
 /**
- * « Repères (OpenStreetMap) »: kinds and corridor width, status, the landmarks of the first track ordered
+ * « Repères (OpenStreetMap) » (foldable section of the Carte tab): kinds and corridor width, status, the landmarks of the first track ordered
  * along it (click = seek the flyover there) and the ODbL attribution. Also drives the landmark store.
  */
 export function LandmarkPanel() {
@@ -43,12 +43,7 @@ export function LandmarkPanel() {
   const list = landmarks ?? []
 
   return (
-    <section className="settings landmarks-panel" aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} className="section-title settings__title">
-        Repères (OpenStreetMap)
-      </h2>
-      <ModifiedMarker keys={['landmarks']} label="Repères" />
-
+    <PanelSection title="Repères (OpenStreetMap)" keys={['landmarks']}>
       <label className="checkbox" htmlFor={`${id}-enabled`}>
         <input
           id={`${id}-enabled`}
@@ -149,6 +144,6 @@ export function LandmarkPanel() {
           </a>
         </p>
       )}
-    </section>
+    </PanelSection>
   )
 }

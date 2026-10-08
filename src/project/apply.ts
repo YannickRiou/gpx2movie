@@ -67,5 +67,4 @@ export function applyProject(project: LoadedProject): void {
   // (all synchronous: the scene never sees the intermediate source)
   applySettings(project.settings)
   store.setSpeed(project.speed)
-  store.setImportError(null)
 }

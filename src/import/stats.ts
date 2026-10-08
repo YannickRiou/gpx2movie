@@ -175,6 +175,11 @@ export function buildTrack(init: TrackInit): Track {
   return track
 }
 
+/** A plausible UTC offset of a local clock, in minutes (UTC−12 … UTC+14). */
+export function isUtcOffsetMin(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= -12 * 60 && value <= 14 * 60
+}
+
 /** "dossier/trace.GPX" -> "trace"; names without an extension are returned unchanged. */
 export function stripExtension(fileName: string): string {
   const base = fileName.split(/[\\/]/).pop() ?? fileName

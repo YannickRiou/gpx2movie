@@ -68,12 +68,6 @@ describe('addTracks', () => {
     expect(useAppStore.getState().frameOrigin).toBeNull()
   })
 
-  it('clears a previous import error', () => {
-    useAppStore.getState().setImportError('boom')
-    useAppStore.getState().addTracks([CA])
-    expect(useAppStore.getState().importError).toBeNull()
-  })
-
   it('switches imagery to the regional source when the trip is fully covered', () => {
     useAppStore.getState().addTracks([FR])
     expect(useAppStore.getState().settings.imagerySourceId).toBe('ign-ortho')
@@ -182,15 +176,13 @@ describe('settings and misc', () => {
     expect(useAppStore.getState().fitRequest).toBe(2)
   })
 
-  it('stores terrain stats, loading and import error', () => {
+  it('stores terrain stats and loading', () => {
     const stats = { visibleTiles: 4, loadedTiles: 42, pendingTiles: 3, failedTiles: 0 }
     useAppStore.getState().setTerrainStats(stats)
     useAppStore.getState().setLoading(true)
-    useAppStore.getState().setImportError('Fichier illisible')
     const st = useAppStore.getState()
     expect(st.terrainStats).toEqual(stats)
     expect(st.loading).toBe(true)
-    expect(st.importError).toBe('Fichier illisible')
   })
 })
 

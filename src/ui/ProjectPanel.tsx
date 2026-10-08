@@ -19,6 +19,7 @@ export function ProjectPanel() {
   const applyPreset = () => {
     if (!selected) return
     history.transaction(() => applySettings(presetSettings(selected, useAppStore.getState().settings)))
+    showToast({ kind: 'success', text: `Préréglage appliqué : ${selected.name}` })
   }
 
   const savePreset = () => {

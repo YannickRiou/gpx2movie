@@ -116,6 +116,12 @@ export function solarDay(lat: number, lon: number, dayMs: number): SolarDay {
   return { sunrise: hour(times.sunrise), sunset: hour(times.sunset), noon: solarHourOf(dayMs, lon, times.solarNoon), polar: times.polar }
 }
 
+/** Clock hour (0–24) of a local mean solar hour at `lon`, for a local clock `utcOffsetMin` minutes ahead of UTC. */
+export function clockHourOfSolar(solarHour: number, lon: number, utcOffsetMin: number): number {
+  const hour = solarHour - lon / 15 + utcOffsetMin / 60
+  return ((hour % 24) + 24) % 24
+}
+
 /** Quick choices of the fixed solar hour (« Lumière » section). */
 export const SUN_CHIPS = ['lever', 'matin', 'midi', 'heure-doree', 'coucher', 'nuit'] as const
 export type SunChip = (typeof SUN_CHIPS)[number]

@@ -56,7 +56,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/export/*` | export vidéo | `buildFrameSchedule`, `VIDEO_FORMATS`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `settle`, `renderSettledFrame`, `composeFrame`, `useExportStore`, `videoFileName`, `ExportController` |
 | `src/flyover/race.ts` | course fantôme | `RACE_SYNC_MODES`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers` ; `useRace`, `RaceMarkers` |
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | météo dans la scène | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction` ; `WeatherEffect` |
-| `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `createPresetStore`, `getPresetStore`, `presetSettings` |
+| `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `shellShortcut`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `importTrackFiles`, `loadSample`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
 
@@ -128,7 +128,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 8. **État** (`store.ts`) : `tracks: Track[]`, `addTracks`, `removeTrack`, `clearTracks`, `settings { terrainSourceId, imagerySourceId,
    imageryZoomOffset, exaggeration, wireframe }`, `setSetting`, `terrainStats`, `bounds` (union des traces) et `frameOrigin` (centroïde du
    premier lot arrondi à 0,01°, fixe tant qu'il reste une trace) ; l'`area` du moteur est dérivée dans la scène (`TerrainLayer`).
-   `fitRequest` (compteur incrémenté pour demander un recadrage), `importError` (plus affiché : les échecs passent par les messages, voir « Interface »), `loading`. À l'import, l'imagerie bascule automatiquement sur
+   `fitRequest` (compteur incrémenté pour demander un recadrage), `loading` (les échecs d'import passent par les messages, voir « Interface »). À l'import, l'imagerie bascule automatiquement sur
    IGN puis swisstopo si la trace est entièrement dans leur emprise, sauf si l'utilisateur a déjà choisi une source à la main.
 9. **UI** (`ui/`) : voir « Interface » (coque, onglets, barre du haut, tiroir d'export, bande d'état). Libellés en
    français. Charte : `src/ui/theme.css`.
@@ -202,7 +202,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   `toastDuration` (5 s, jusqu'à 12 s pour un long texte), minuterie suspendue au survol ou au focus ; erreurs en
   `role="alert"`, jusqu'à fermeture ; bouton d'action facultatif. Sources : import (`importFiles` de `importFlow.ts`, lié
   au store par `projectActions.ts` : « Trace « … » importée », échecs), projet ouvert / enregistré / avertissements du
-  fichier, préréglages, export (« Vidéo prête · Télécharger à nouveau », « Image prête », échec), « Réglages remis par
+  fichier, préréglages (enregistré, « Préréglage appliqué : … »), export (« Vidéo prête · Télécharger à nouveau », « Image
+  prête », échec, « Export annulé »), « Réglages remis par
   défaut · Annuler » (`resetSettings` renvoie une annulation gardée : elle n'agit que si les réglages sont encore ceux du
   retour, donc jamais sur une étape postérieure ni antérieure ; le message disparaît au changement suivant des réglages).
   Aussi les photos ajoutées sur la timeline (« Placer sur le parcours » en action).
@@ -235,7 +236,7 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - **Sections des onglets Carte et Survol** (`PanelSection.tsx`) : `PanelSection` = section repliable à plat (classes `fold`,
   en-tête collant : titre, « modifié / Par défaut » de ses clés, chevron), ouverte au départ. Carte : « Fond de carte »
   (imagerie), « Relief et trace » (exagération, couleur de la trace), « Lumière », « Atmosphère et météo » (atmosphère,
-  ombres, météo dans la scène), puis « Repères ». Survol : « Caméra » (préréglage, style en tuiles à icônes, nord en haut),
+  ombres, météo dans la scène), puis « Repères (OpenStreetMap) » (`LandmarkPanel`, absente sans trace). Survol : « Caméra » (préréglage, style en tuiles à icônes, nord en haut),
   « Durée et rythme » (durée, durée du film, ralentis oui / non). Les réglages rares sont dans `MoreSettings` (« Plus de
   réglages », `<details>` fermé) : détail imagerie, source du relief, filaire, exposition, intensité de la météo, distance /
   inclinaison / visée / lissage, temps forts et paramètres du rythme. Son résumé porte « modifié » quand un réglage caché
@@ -245,10 +246,12 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
 - **Lumière** : bascule « Suivre la trace » (= `sunFromTrack`, désactivée avec une explication sans horodatage) / « Heure
   fixe ». En heure fixe : curseur de l'heure solaire au-dessus d'une barre nuit / aube / jour / crépuscule avec les repères
   du lever et du coucher (`solarDay` au point d'origine du repère local et au jour UTC du début de la première trace, comme la
-  scène ; journée type 6 h – 18 h sans trace), et six raccourcis « Lever » (premier quart d'heure après le lever), « Matin »
+  scène ; journée type 6 h – 18 h sans trace) ; le texte sous la barre donne lever et coucher à l'heure locale quand la
+  première trace connaît son décalage UTC (`Track.utcOffsetMin`, `clockHourOfSolar`), avec l'heure solaire entre
+  parenthèses, sinon en « heure solaire » seulement (pas de base de fuseaux horaires), et six raccourcis « Lever » (premier quart d'heure après le lever), « Matin »
   (mi-chemin vers midi), « Midi », « Heure dorée » (1 h avant le coucher), « Coucher » (dernier quart d'heure avant),
   « Nuit » (minuit solaire), grisés quand le moment n'existe pas (jour ou nuit polaire). Chaque raccourci est une étape
-  d'annulation (`transaction`) ; un glissé du curseur en est une par le regroupement habituel (400 ms).
+  d'annulation (`transaction`) ; un glissé du curseur en est une (voir « Historique »).
 - **Icônes** : tracés Lucide (ISC, mention dans l'en-tête de `src/ui/icons.tsx`), SVG en ligne, seulement celles utilisées ;
   cadres des formats dessinés d'après le ratio (`AspectIcon`).
 
@@ -506,7 +509,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   (énumération, id de catalogue, plage). Tout changement de format incrémente `PROJECT_VERSION` et ajoute `MIGRATIONS[n]`
   (version 2 : film des projets v1, voir « Film et timeline »).
 - **Historique** des réglages hors du store : abonné à `useAppStore`, chaque pas ne garde que les clés modifiées ; changements des
-  mêmes clés à moins de 400 ms fusionnés (un glissé = un pas), un préréglage = un pas, un geste de la timeline = un pas ; l'imagerie régionale choisie à l'import
+  mêmes clés à moins de 400 ms fusionnés (clavier), un glissé de curseur au pointeur = un pas de l'appui au relâcher quelle
+  que soit sa lenteur (`beginGesture`, branché sur tout `input[type=range]` par `installSliderGestures`), un préréglage = un pas, un geste de la timeline = un pas ; l'imagerie régionale choisie à l'import
   n'est pas enregistrée ; ouvrir un projet vide l'historique. Raccourcis Ctrl/Cmd+Z, Ctrl/Cmd+Maj+Z, Ctrl+Y (ignorés dans les
   champs texte), installés une fois par `App`. Enregistrer, ouvrir et le nom du projet sont dans la barre du haut ; le
   panneau « Projet » ne garde que les préréglages.
@@ -551,6 +555,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   moyenne (%) : cat. 4 ≥ 8 000, 3 ≥ 16 000, 2 ≥ 32 000, 1 ≥ 64 000, HC ≥ 80 000 (non classée en dessous).
 - **Waypoints** : `Track.waypoints?` (ajout optionnel au contrat) contient les `<wpt>` du GPX, rattachés à la première trace du
   fichier ; le document de projet les enregistre.
+- **Décalage UTC** : `Track.utcOffsetMin?` (ajout optionnel au contrat, minutes d'avance de l'horloge locale sur UTC) vient
+  du `localTimestamp` du message `activity` d'un FIT (au quart d'heure, `readUtcOffset`) ou du premier `<time>` d'un GPX
+  écrit avec un décalage (`gpxUtcOffset` ; « Z » et « +00:00 » ne disent rien) ; le document de projet l'enregistre.
 - **`Labels`** (dans `TerrainLayer`) : sprites WebGL à texture canvas (taille constante à l'écran, panneau encre, texte blanc,
   trait d'accent par type) pour le sommet de chaque montée, les waypoints et toute source externe enregistrée par
   `setLabelSource(id, LandmarkLabel[])` (ex. `'osm'`). Hauteur = terrain (ou altitude enregistrée) × exagération, replaquée sur
