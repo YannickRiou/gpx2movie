@@ -3,6 +3,7 @@ import { KIND_LABELS, LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { OSM_ATTRIBUTION, OSM_KINDS } from '../osm/overpass'
 import type { OsmKind } from '../osm/overpass'
 import { syncLandmarks, useLandmarkStore } from '../osm/store'
+import { setLandmarkTitles } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { PanelSection } from './PanelSection'
 import { formatDistance, formatNumber } from './format'
@@ -20,8 +21,10 @@ const KIND_BADGES: Readonly<Record<OsmKind, string>> = {
 }
 
 /**
- * « Repères (OpenStreetMap) » (foldable section of the Carte tab): kinds and corridor width, status, the landmarks of the first track ordered
- * along it (click = seek the flyover there) and the ODbL attribution. Also drives the landmark store.
+ * « Repères (OpenStreetMap) » (foldable section of the Carte tab): kinds and corridor width, « Ralentir et titrer aux
+ * repères », status, the landmarks of the first track ordered along it (click = seek the flyover there) and the ODbL
+ * attribution. Also drives the landmark store, and makes the landmark titles of the film again whenever the landmarks
+ * of the first track are published (loaded, kinds or distance changed) while that option is on.
  */
 export function LandmarkPanel() {
   const id = useId()
@@ -33,10 +36,16 @@ export function LandmarkPanel() {
   const message = useLandmarkStore((s) => s.message)
   const first = tracks[0]
   const landmarks = useLandmarkStore((s) => (first ? s.landmarks[first.id] : undefined))
+  const titles = useAppStore((s) => s.settings.film.landmarkTitles)
 
   useEffect(() => {
     syncLandmarks(tracks, settings)
   }, [tracks, settings])
+
+  // not on a change of the film: an undone title stays undone until the landmarks change
+  useEffect(() => {
+    if (landmarks && useAppStore.getState().settings.film.landmarkTitles) setLandmarkTitles(true)
+  }, [landmarks])
 
   if (!first) return null
   const lengthM = first.stats.distanceM
@@ -94,6 +103,18 @@ export function LandmarkPanel() {
               {formatDistance(settings.maxDistanceM)}
             </output>
           </div>
+        </div>
+      )}
+
+      {settings.enabled && (
+        <div className="field">
+          <label className="checkbox checkbox--switch" htmlFor={`${id}-titles`}>
+            <input id={`${id}-titles`} type="checkbox" checked={titles} onChange={(e) => setLandmarkTitles(e.currentTarget.checked)} />
+            Ralentir et titrer aux repères
+          </label>
+          <p className="field__hint">
+            Le film ralentit aux cols, sommets et refuges sur la trace et affiche leur nom. Retoucher un de ces titres les fige.
+          </p>
         </div>
       )}
 

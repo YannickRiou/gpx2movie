@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Vector3 } from 'three'
+import { PerspectiveCamera, Vector3 } from 'three'
 import { buildFilmClock } from '../film/clock'
 import type { FilmClockInput } from '../film/clock'
 import type { FilmCameraKey, FilmShot, FilmStop } from '../film/model'
@@ -13,11 +13,18 @@ import {
   cameraKeyEaseM,
   computeFilmView,
   filmViewMovesWithTime,
+  groundReach,
   heldMotionTimeS,
   JUMP_S,
   keyedCamera,
   OVERVIEW_DISTANCE_FACTOR,
+  OVERVIEW_PITCH_DEG,
+  overviewDistanceM,
   overviewView,
+  REGION_DISTANCE_FACTOR,
+  REGION_PITCH_DEG,
+  regionDistanceM,
+  regionView,
   shotBlend,
   smootherstep,
   stopOrbitRad,
@@ -113,6 +120,77 @@ describe('overview', () => {
     const clamped = blendViews(low, { target: new Vector3(0, 0, 0), position: new Vector3(0, 20, 200) }, 0.5, frame, high, 1)
     const at = frame.toLonLat(clamped.position)
     expect(clamped.position.y).toBeCloseTo(frame.toLocal(at.lon, at.lat, 1e9 + MIN_GROUND_CLEARANCE_M).y, 0)
+  })
+})
+
+describe('region view (« Depuis la région »)', () => {
+  const joined = flightAt(0, 0)
+  const pitchDeg = (view: { position: Vector3; target: Vector3 }) => {
+    const from = view.position.clone().sub(view.target)
+    return (Math.asin(from.y / from.length()) * 180) / Math.PI
+  }
+
+  it('ground reach: the farthest frame corner on flat ground, as a camera of the scene sees it', () => {
+    for (const [pitch, aspect] of [[REGION_PITCH_DEG, 16 / 9], [OVERVIEW_PITCH_DEG, 16 / 9], [REGION_PITCH_DEG, 9 / 16]]) {
+      const camera = new PerspectiveCamera(50, aspect)
+      camera.position.set(0, Math.sin((pitch * Math.PI) / 180), Math.cos((pitch * Math.PI) / 180))
+      camera.lookAt(0, 0, 0)
+      camera.updateMatrixWorld()
+      let farthest = 0
+      for (const [x, y] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const ray = new Vector3(x, y, 0.5).unproject(camera).sub(camera.position)
+        const hit = camera.position.clone().addScaledVector(ray, -camera.position.y / ray.y)
+        farthest = Math.max(farthest, hit.length())
+      }
+      expect(groundReach(pitch, aspect)).toBeCloseTo(farthest, 9)
+    }
+  })
+
+  it('distance: ×5 the diagonal for a short track, kept on the terrain area or within what the overview shows, never under it', () => {
+    expect(regionDistanceM(1_000, 300, 16 / 9)).toBeCloseTo(REGION_DISTANCE_FACTOR * 1_000, 9)
+    // the test track: 4.4 km straight north, the frame stays within the 25 km margin around it
+    const onTerrain = regionDistanceM(4_400, 0, 16 / 9)
+    expect(onTerrain).toBeCloseTo(25_000 / groundReach(REGION_PITCH_DEG, 16 / 9), 6)
+    expect(onTerrain).toBeLessThan(REGION_DISTANCE_FACTOR * 4_400)
+    // a long outing: the frame reaches as far as the overview's, no farther
+    const overview = overviewDistanceM(100_000, 16 / 9)
+    const wide = regionDistanceM(100_000, 35_000, 16 / 9)
+    expect(wide * groundReach(REGION_PITCH_DEG, 16 / 9)).toBeCloseTo(overview * groundReach(OVERVIEW_PITCH_DEG, 16 / 9), 6)
+    for (const [diagonal, halfSide, aspect] of [[100, 0, 16 / 9], [4_400, 0, 9 / 16], [300_000, 100_000, 1]]) {
+      expect(regionDistanceM(diagonal, halfSide, aspect)).toBeGreaterThanOrEqual(overviewDistanceM(diagonal, aspect))
+    }
+  })
+
+  it('the overview target and side, farther and steeper', () => {
+    const overview = overviewView(path, frame, flat, 1, 16 / 9, joined)
+    const region = regionView(path, frame, flat, 1, 16 / 9, joined)
+    expect(region.target.distanceTo(overview.target)).toBeLessThan(1e-9)
+    expect(region.position.distanceTo(region.target)).toBeCloseTo(regionDistanceM(path.lengthM, 0, 16 / 9), -1)
+    expect(pitchDeg(region)).toBeCloseTo(REGION_PITCH_DEG, 6)
+    expect(pitchDeg(overview)).toBeCloseTo(OVERVIEW_PITCH_DEG, 6)
+    expect(region.position.z).toBeGreaterThan(region.target.z)
+  })
+
+  it('opening from the region view to the flight, closing back up to it, smooth and always closing in at 30 i/s', () => {
+    const clock = clockOf({ style: 'situation', durationS: 8 }, { style: 'situation', durationS: 6 })
+    expectSameView(computeFilmView(path, clock, 0, 0, frame, flat, options), regionView(path, frame, flat, 1, 16 / 9, flightAt(0, 0)))
+    expectSameView(computeFilmView(path, clock, 8, 0, frame, flat, options), flightAt(0, 0))
+    const end = computeFilmView(path, clock, clock.totalTime(), 1, frame, flat, options)
+    expectSameView(end, regionView(path, frame, flat, 1, 16 / 9, flightAt(1, clock.flightS)))
+
+    const range = (view: { position: Vector3; target: Vector3 }) => view.position.distanceTo(view.target)
+    let previous = computeFilmView(path, clock, 0, 0, frame, flat, options)
+    let previousStep = 0
+    for (let t = 1 / 30; t <= 8; t += 1 / 30) {
+      const view = computeFilmView(path, clock, t, 0, frame, flat, options)
+      const step = view.position.distanceTo(previous.position)
+      expect(range(view)).toBeLessThan(range(previous))
+      // the fastest frame of a 20 km dive in 8 s, and no jolt from one frame to the next
+      expect(step).toBeLessThan(250)
+      expect(Math.abs(step - previousStep)).toBeLessThan(10)
+      previous = view
+      previousStep = step
+    }
   })
 })
 

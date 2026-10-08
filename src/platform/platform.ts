@@ -30,6 +30,8 @@ export type SaveOutcome = { saved: true; fileName: string } | { saved: false }
 export interface WritableFile {
   /** name actually chosen in the dialog */
   readonly fileName: string
+  /** desktop: full path of that file (the native video encoder writes it itself) */
+  readonly path?: string
   write(data: Uint8Array, position: number): Promise<void>
   /** flush and close: the file is complete */
   close(): Promise<void>
@@ -65,11 +67,42 @@ export interface TileCache {
   size(): Promise<{ usedBytes: number; quotaBytes: number } | null>
 }
 
+/** A project of « Mes projets »: its document is kept apart, read only when the project is opened. */
+export interface ProjectEntry {
+  id: string
+  name: string
+  /** last save, ms since 1970 */
+  updatedAt: number
+  /** first track and distance, shown in the list */
+  summary: string
+  /** size of the document (UTF-8 bytes) */
+  sizeBytes: number
+}
+
+/** Projects kept by the app (desktop: files in the app data folder; web: Cache Storage of the site). */
+export interface ProjectLibrary {
+  /** most recent first; an entry that cannot be read is left out */
+  list(): Promise<ProjectEntry[]>
+  /** write the document of entry `id`, or of a new entry when `id` is null */
+  save(id: string | null, project: { name: string; summary: string; text: string }): Promise<ProjectEntry>
+  /** text of the document */
+  load(id: string): Promise<string>
+  /** the entry only: the document keeps its name until its next save */
+  rename(id: string, name: string): Promise<ProjectEntry>
+  remove(id: string): Promise<void>
+}
+
+/**
+ * What encodes the films: WebCodecs (browsers, WebView2, WebKit on macOS), else in the desktop app the system's
+ * ffmpeg through the Rust commands (WebKitGTK on Linux: whether ffmpeg is installed is asked when probing,
+ * `video_available`), else nothing.
+ */
+export type VideoEncoderKind = 'webcodecs' | 'native' | null
+
 export interface Capabilities {
   /** running inside the desktop app */
   isDesktop: boolean
-  /** WebCodecs is present (missing in WebKitGTK, the Linux webview of the desktop app) */
-  canEncodeVideo: boolean
+  videoEncoder: VideoEncoderKind
   /** `createWritableFile` works: desktop, or a browser with `showSaveFilePicker` (Chrome, Edge) */
   canStreamToDisk: boolean
 }
@@ -91,6 +124,8 @@ export interface Platform {
   droppedFiles(dataTransfer: DataTransfer | null | undefined): File[]
   /** offline tiles; null when the browser has no Cache Storage (page not served over HTTPS) */
   readonly tileCache: TileCache | null
+  /** « Mes projets »; null when the browser has no Cache Storage (page not served over HTTPS) */
+  readonly projectLibrary: ProjectLibrary | null
 }
 
 /** Tauri v2 sets `isTauri` (and `__TAURI_INTERNALS__`) on the window of its webview. */
@@ -101,7 +136,8 @@ export function isTauriRuntime(scope: object): boolean {
 export function detectCapabilities(scope: object): Capabilities {
   return {
     isDesktop: isTauriRuntime(scope),
-    canEncodeVideo: typeof (scope as { VideoEncoder?: unknown }).VideoEncoder === 'function',
+    videoEncoder:
+      typeof (scope as { VideoEncoder?: unknown }).VideoEncoder === 'function' ? 'webcodecs' : isTauriRuntime(scope) ? 'native' : null,
     canStreamToDisk:
       isTauriRuntime(scope) || typeof (scope as { showSaveFilePicker?: unknown }).showSaveFilePicker === 'function',
   }

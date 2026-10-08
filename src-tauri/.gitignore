@@ -1,2 +1,3 @@
 /target/
 /gen/schemas
+/tauri.windows.conf.json

@@ -34,8 +34,14 @@ reproduire à côté de la case.
       textes et photos tombent image pour image ; annuler ne laisse aucun fichier.
 - [ ] Rendu en lot : 16:9 1080p + 9:16 1080p + image fixe + affiche dans un dossier ; noms des fichiers, « Tout
       annuler » pendant le 2ᵉ film (fichier commencé supprimé), format refusé par l'encodeur marqué en échec.
+- [ ] Un film par trace : dossier de 3 GPX / FIT + un fichier cassé, 16:9 720p ; un film par trace, nommé d'après son
+      fichier, arrêts et titres des repères refaits pour chaque trace, fichier cassé marqué en échec ; à la fin, les
+      traces et le film d'avant reviennent (« Enregistré » inchangé, Ctrl+Z sans effet du lot) ; « Tout annuler ».
 - [ ] Affiche A4 portrait puis A3 paysage : vue d'ensemble nord en haut, crédits lisibles à l'impression ; limite de taille
       de la carte graphique en A3 (rendu de 17 Mpx).
+- [ ] Affiche de plusieurs traces (3 sorties, puis une course fantôme de 3 traces, puis 8 sorties) et « Carte à plat » :
+      toutes les traces cadrées, chacune dans sa couleur, liste lisible dans les 5 formats × 3 styles (8 sorties :
+      seulement les sommes) ; carte à plat nette, nord en haut, sans brume, trace bien placée sur l'image, annulation.
 
 ## 2. Son (à écouter)
 
@@ -43,6 +49,10 @@ reproduire à côté de la case.
       ×2, ×0,5, fondus audibles, bouton haut-parleur, « Caler la durée du film sur la musique ».
 - [ ] Export avec musique : son calé sur l'image du début à la fin, AAC dans le MP4 (Windows / macOS), Opus dans le WebM ;
       lu partout.
+- [ ] « Caler sur le rythme » sur 3 vraies musiques (pop ou électro, acoustique, sans batterie) : tempo annoncé juste
+      (comparer à un compteur de BPM), marques du bloc sur les temps, arrêts et titres qui tombent sur le temps à
+      l'écoute (à ×1 et dans l'export) ; musique sans rythme net : message « trop incertain », rien ne bouge ; noter si
+      les débuts de mesure tombent sur le 1er temps.
 - [ ] Son des vidéos : son du clip à ×1, réglage du volume en direct, pas de clic au début ni à la fin d'un clip, musique baissée sous le clip si l'option est cochée,
       clip qui suit la vitesse du survol muet ; export identique à l'aperçu.
 
@@ -50,6 +60,8 @@ reproduire à côté de la case.
 
 - [ ] Lecture de l'exemple dans les 5 styles de caméra : pas d'à-coup, pas de trou dans le relief, ralentis et arrêts
       doux, ouverture et clôture (descente depuis la vue d'ensemble).
+- [ ] Ouverture et clôture « Depuis la région » (16:9 et 9:16, trace courte et longue) : relief chargé à temps pour la vue
+      de très haut (pas de bord du terrain ni de tuiles floues), plongée vers la trace et remontée sans à-coup.
 - [ ] Atmosphère, ombres, nuages (Météo / Manuel / Aucun) et eau : images par seconde acceptables ; nuages et eau au
       soleil rasant (reflets, vaguelettes), pas de taches grises sur l'imagerie.
 - [ ] Étalonnage (onglet Carte › Couleurs) : préréglages Naturel → Noir et blanc, avec et sans atmosphère ; aucun
@@ -79,6 +91,12 @@ reproduire à côté de la case.
       pendant un arrêt.
 - [ ] Vue 3D : clic sur la trace = tête de lecture ; clic droit = menu (arrêt, texte, vitesse ici) ; glisser la caméra ne
       déclenche rien ; Firefox (menu du navigateur bien remplacé).
+- [ ] Points d'intérêt : clic droit sur le relief hors de la trace puis sur la trace › « Point d'intérêt ici », nom tapé ;
+      étiquette à épingle au bon endroit, cachée derrière une crête et sous les cartes d'ouverture, présente dans l'export ;
+      « Ajouter au marqueur », renommer, « Arrêt », ✕ et Ctrl+Z dans l'onglet Carte.
+- [ ] Ralentir et titrer aux repères : trace alpine neuve, repères chargés → titres « Col … · altitude » en haut au centre
+      au passage, ralenti doux sans à-coup, pas de ralenti sur un arrêt (titre seul) ; décocher / recocher, Ctrl+Z ;
+      déplacer un titre décoche la case ; ancien projet rouvert inchangé ; export identique à l'aperçu.
 - [ ] Projet avec textes, photos, vidéos et musique : enregistrer, recharger la page, rouvrir.
 
 ## 5. Interface
@@ -95,17 +113,37 @@ reproduire à côté de la case.
 - [ ] Classement de la course fantôme dans les 3 styles : points de couleur et écarts alignés, pas de saut de largeur,
       « Tête » puis « Arrivée ».
 
+- [ ] Enchaîner deux traces d'une randonnée de deux jours (onglet Trace, puis au dépôt des deux fichiers) : une seule
+      trace « J1 → J2 » ou au nom commun, aucun trait entre la fin du jour 1 et le départ du jour 2, marqueur qui saute
+      ce trou ; « Annuler » rend les deux traces.
+
 ## 6. Hors ligne
 
 - [ ] Préparer l'exemple en 2 km (avec IGN puis Esri) : estimation, progression, Pause / Reprendre / Annuler, pack listé.
 - [ ] Couper le réseau (DevTools › Network › Offline ou Wi-Fi) et recharger : vue et export sans trou dans le couloir.
 - [ ] Supprimer le pack : tuiles reprises du réseau. Firefox (stockage persistant), Safari (quota).
 
-## 7. Application de bureau (Windows)
+## 7. Application de bureau (Windows, Linux)
 
 - [ ] `npm run tauri:dev` : fenêtre, carte, météo et repères chargés (règles de sécurité de la fenêtre).
 - [ ] Ouvrir / Enregistrer avec les fenêtres du système ; Annuler n'écrit rien.
 - [ ] Export vidéo écrit sur le disque, rendu en lot dans un dossier, affiche.
 - [ ] Pack hors ligne : dossier `%APPDATA%\io.github.yannickriou.openflyover\tiles` créé, relu au redémarrage sans
       réseau, vidé par « Supprimer ».
+- [ ] Mes projets : « Garder dans Mes projets », fichiers dans `%APPDATA%\io.github.yannickriou.openflyover\projects`,
+      enregistrement automatique quelques secondes après un changement, liste relue au redémarrage, ouvrir, renommer,
+      supprimer.
 - [ ] `npm run tauri:build` : installeur produit, application installée qui démarre.
+
+Sous Linux (Ubuntu 22.04 ou plus, WebKitGTK sans WebCodecs : export par le `ffmpeg` du système) :
+
+- [ ] `cargo test` dans `src-tauri/` (arguments de ffmpeg, qualité → crf).
+- [ ] Sans ffmpeg : le tiroir « Exporter » dit « installez ffmpeg », bouton désactivé, l'image fixe marche.
+- [ ] `sudo apt install ffmpeg`, relancer : MP4 (H.264) annoncé ; export 1080p 30 i/s d'un film avec musique, fichier lu
+      par VLC et le lecteur du système, son présent et calé, couleurs identiques à l'aperçu.
+- [ ] Qualité standard / maximale : tailles différentes, aucune image manquante (nombre d'images = celui du tiroir).
+- [ ] Annuler pendant l'export : fichier supprimé, plus de processus `ffmpeg`, rien de `openflyover-*.wav` dans `/tmp`.
+- [ ] Rendu en lot dans un dossier (plusieurs formats, dont 9:16) ; 4K si la machine le permet.
+- [ ] Échec simulé (`pkill ffmpeg` pendant l'export) : l'export s'arrête avec un message sur ffmpeg, pas de fichier
+      partiel.
+- [ ] Depuis l'AppImage et depuis le paquet deb : ffmpeg trouvé et lancé (variables d'environnement de l'AppImage).

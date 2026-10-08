@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { DUCK_DB, fitFilmToMusic, musicLengthS } from '../film/audio'
+import { DUCK_DB, fitFilmToMusic, musicLengthS, snapFilmToMusic } from '../film/audio'
 import { useMediaStore } from '../film/media'
 import {
   AUDIO_DURATION_RANGE,
@@ -41,11 +41,17 @@ import { Icon } from './icons'
 import { nextGridIndex } from './shell'
 import { showToast } from './toast'
 
-const SHOT_STYLE_LABELS: Record<ShotStyle, string> = { aucune: 'Aucune', descente: 'Descente', saut: 'Saut' }
+const SHOT_STYLE_LABELS: Record<ShotStyle, string> = {
+  aucune: 'Aucune',
+  descente: 'Descente',
+  saut: 'Saut',
+  situation: 'Depuis la région',
+}
 const SHOT_HINTS: Record<ShotStyle, string> = {
   aucune: 'Le film commence ou finit directement sur le survol.',
   descente: "La caméra glisse entre la vue d'ensemble de la trace et le survol.",
   saut: "La vue d'ensemble est tenue, puis la caméra rejoint vite le survol.",
+  situation: 'La caméra glisse entre une vue de très haut sur la région et le survol.',
 }
 const STOP_CAMERA_HINTS: Record<StopCamera, string> = {
   film: 'La caméra du survol continue, sans mouvement ajouté.',
@@ -487,11 +493,16 @@ export function FilmInspector() {
           <button type="button" className="btn btn--secondary film-inspector__remove" onClick={() => showToast(fitFilmToMusic())}>
             Caler la durée du film sur la musique
           </button>
+          <button type="button" className="btn btn--secondary film-inspector__remove" onClick={() => void snapFilmToMusic().then(showToast)}>
+            Caler sur le rythme
+          </button>
           <p className="field__hint">
             Jouée de {formatFilmTime(music.startS)} à {formatFilmTime(music.startS + lengthS)} dans le film
             {fileS !== undefined && ` (fichier de ${formatFilmTime(fileS)})`}, pendant la lecture et dans le film exporté. Caler la durée
             change la durée du survol pour que le film finisse avec la musique. Baisser la musique : toutes les musiques
-            baissent de {-DUCK_DB} dB pendant les vidéos avec du son.
+            baissent de {-DUCK_DB} dB pendant les vidéos avec du son. Caler sur le rythme : les arrêts et les titres à moins
+            de 0,4 s d’un temps de la musique s’y posent, sur un début de mesure s’il y en a un aussi près
+            {sound?.beats && (sound.beats.times.length > 0 ? ` (≈ ${Math.round(sound.beats.bpm)} BPM)` : ' (tempo de ce fichier incertain)')}.
           </p>
         </>
       )

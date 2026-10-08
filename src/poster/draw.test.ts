@@ -13,14 +13,14 @@ import { DEFAULT_POSTER, POSTER_FORMATS, POSTER_STYLES } from './settings'
 
 /** 2D context stand-in: records texts (with their measured width) and drawn images; a glyph is half the font size wide. */
 function fakeContext() {
-  const texts: { text: string; x: number; width: number; align: string }[] = []
+  const texts: { text: string; x: number; y: number; width: number; align: string }[] = []
   const images: number[][] = []
   let lines = 0
   const state: Record<string, unknown> = { font: '10px sans-serif', textAlign: 'left' }
   const fontPx = () => Number(/(\d+(?:\.\d+)?)px/.exec(String(state.font))?.[1] ?? 10)
   const target: Record<string, unknown> = {
     measureText: (text: string) => ({ width: text.length * fontPx() * 0.5 }),
-    fillText: (text: string, x: number) => texts.push({ text, x, width: text.length * fontPx() * 0.5, align: String(state.textAlign) }),
+    fillText: (text: string, x: number, y: number) => texts.push({ text, x, y, width: text.length * fontPx() * 0.5, align: String(state.textAlign) }),
     drawImage: (_image: unknown, ...args: number[]) => images.push(args),
     lineTo: () => lines++,
     createLinearGradient: () => ({ addColorStop: () => {} }),
@@ -38,7 +38,10 @@ function fakeContext() {
 
 const track = parseGpx(sampleGpx, 'tour-du-mont-blanc-j1.gpx')[0]
 const credits = ['Relief : Mapterhorn', 'Imagerie : Esri, Maxar, Earthstar Geographics', '© contributeurs OpenStreetMap (ODbL)']
-const content = posterContent({ track, poster: { ...DEFAULT_POSTER, subtitle: 'Étape 1' }, projectName: 'Tour du Mont-Blanc', climbs: 4, credits })
+const content = posterContent({ tracks: [track], race: false, poster: { ...DEFAULT_POSTER, subtitle: 'Étape 1' }, projectName: 'Tour du Mont-Blanc', climbs: [4], credits })
+/** six outings with long names: the most the list holds */
+const outings = Array.from({ length: 6 }, (_, i) => ({ ...track, id: `t${i}`, name: `Sortie numéro ${i + 1} par le très long chemin des crêtes`, color: '#C23B22' }))
+const several = posterContent({ tracks: outings, race: false, poster: DEFAULT_POSTER, projectName: 'Été', climbs: outings.map(() => 4), credits })
 
 describe('poster drawing', () => {
   it('draws only embedded faces, all loaded with the overlay ones', () => {
@@ -68,6 +71,25 @@ describe('poster drawing', () => {
         expect(left + t.width).toBeLessThanOrEqual(f.width + 1e-6)
       }
       expect(images).toEqual([[0, 0, layout.view.w, layout.view.h, layout.view.x, layout.view.y, layout.view.w, layout.view.h]])
+    },
+  )
+
+  it.each(POSTER_FORMATS.flatMap((f) => POSTER_STYLES.map((style) => ({ f, style }))))(
+    '$f.id $style: every listed track drawn in its row, its name cut before its figures',
+    ({ f, style }) => {
+      const layout = posterLayout(f.width, f.height, style, posterRows(several))
+      const { ctx, texts } = fakeContext()
+      drawPoster(ctx, layout, several, style, null)
+      expect(layout.tracks).toHaveLength(6)
+      layout.tracks.forEach((row, i) => {
+        const inRow = texts.filter((t) => {
+          const left = t.align === 'right' ? t.x - t.width : t.x
+          return t.y >= row.y && t.y <= row.y + row.h && left >= row.x - 1e-6 && left + t.width <= row.x + row.w + 1e-6
+        })
+        expect(inRow.map((t) => t.text)).toEqual(
+          expect.arrayContaining([expect.stringMatching(new RegExp(`^Sortie numéro ${i + 1}`)), several.tracks[i].distance, several.tracks[i].date]),
+        )
+      })
     },
   )
 

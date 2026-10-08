@@ -143,6 +143,7 @@ describe('film model', () => {
   })
 
   it('rejects bad shots, items and duplicate ids', () => {
+    expect(isValidFilm(film({ opening: { style: 'situation', durationS: 8 }, closing: { style: 'situation', durationS: 6 } }))).toBe(true)
     const bad: Film[] = [
       film({ opening: { style: 'balayage' as 'saut', durationS: 5 } }),
       film({ closing: { style: 'saut', durationS: 0 } }),
@@ -178,6 +179,10 @@ describe('film model', () => {
     expect(invalid).toEqual(['film'])
     expect(settings.film).toEqual(DEFAULT_FILM)
     expect(isValidFilm(film({ autoMode: 'partout' as 'rythme' }))).toBe(false)
+    // landmark titles: on for new films, off for those saved before them (their flight stays as it was)
+    expect(DEFAULT_FILM.landmarkTitles).toBe(true)
+    const { landmarkTitles: _t, ...untitled } = film({})
+    expect(sanitizeSettings({ film: untitled }).settings.film.landmarkTitles).toBe(false)
     // media saved before their placement get the defaults
     const bare = { id: 'media-1', startS: 10, durationS: 5, kind: 'image', src: 'photo-1' }
     expect(sanitizeSettings({ film: { ...DEFAULT_FILM, media: [bare] } }).settings.film.media).toEqual([media('media-1')])
@@ -199,7 +204,7 @@ describe('film model', () => {
     expect(parseProject(JSON.stringify(doc)).settings.film).toEqual(custom)
     // a v1 project saved before the film existed: default shots, stops of its pacing
     const { film: _, ...before } = doc.settings
-    expect(parseProject(JSON.stringify({ ...doc, settings: before })).settings.film).toEqual(film({ autoMode: 'rythme' }))
+    expect(parseProject(JSON.stringify({ ...doc, settings: before })).settings.film).toEqual(film({ autoMode: 'rythme', landmarkTitles: false }))
   })
 
   it('time in the file of a video: from its start in the file, held at its end', () => {

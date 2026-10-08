@@ -14,6 +14,18 @@ import {
   tileFileName,
   videoEncoderMissingHint,
 } from './index'
+import type { VideoEncoderKind } from './index'
+import {
+  DESKTOP_PROJECT_ROOT,
+  WEB_PROJECT_CACHE,
+  cleanProjectName,
+  createDesktopLibraryFiles,
+  createProjectLibrary,
+  createWebLibraryFiles,
+  parseProjectEntry,
+  projectFileNames,
+  sortProjectEntries,
+} from './projectLibrary'
 import { DESKTOP_TILE_ROOT, WEB_TILE_CACHE_PREFIX, createDesktopTileCache, createWebTileCache } from './tileCache'
 
 const dialog = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn() }))
@@ -35,9 +47,11 @@ describe('detection', () => {
     expect(isTauriRuntime({ isTauri: 'yes' })).toBe(false)
   })
 
-  it('can encode a video only with WebCodecs', () => {
-    expect(detectCapabilities({ VideoEncoder: class {} })).toMatchObject({ isDesktop: false, canEncodeVideo: true })
-    expect(detectCapabilities({ isTauri: true })).toMatchObject({ isDesktop: true, canEncodeVideo: false })
+  it('encodes with WebCodecs, else with the native encoder of the desktop app', () => {
+    expect(detectCapabilities({ VideoEncoder: class {} })).toMatchObject({ isDesktop: false, videoEncoder: 'webcodecs' })
+    expect(detectCapabilities({ isTauri: true, VideoEncoder: class {} }).videoEncoder).toBe('webcodecs')
+    expect(detectCapabilities({ isTauri: true })).toMatchObject({ isDesktop: true, videoEncoder: 'native' })
+    expect(detectCapabilities({}).videoEncoder).toBeNull()
   })
 
   it('streams to disk on the desktop and with the save picker', () => {
@@ -52,10 +66,11 @@ describe('detection', () => {
   })
 
   it('explains a missing encoder, per target', () => {
-    const caps = (isDesktop: boolean, canEncodeVideo: boolean) => ({ isDesktop, canEncodeVideo, canStreamToDisk: isDesktop })
-    expect(videoEncoderMissingHint(caps(false, true))).toBeNull()
-    expect(videoEncoderMissingHint(caps(true, false))).toMatch(/application de bureau/)
-    expect(videoEncoderMissingHint(caps(false, false))).toMatch(/WebCodecs/)
+    const caps = (isDesktop: boolean, videoEncoder: VideoEncoderKind) => ({ isDesktop, videoEncoder, canStreamToDisk: isDesktop })
+    expect(videoEncoderMissingHint(caps(false, 'webcodecs'))).toBeNull()
+    expect(videoEncoderMissingHint(caps(true, 'native'))).toMatch(/installez ffmpeg/)
+    expect(videoEncoderMissingHint(caps(true, 'native'), true)).toMatch(/application de bureau/)
+    expect(videoEncoderMissingHint(caps(false, null))).toMatch(/WebCodecs/)
   })
 })
 
@@ -356,6 +371,8 @@ describe('offline tile cache', () => {
         return {
           match: async (url: string) => store.get(url)?.clone(),
           put: async (url: string, response: Response) => void store.set(url, response),
+          keys: async () => [...store.keys()].map((url) => ({ url })),
+          delete: async (url: string) => store.delete(url),
         } as unknown as Cache
       }),
     }
@@ -413,7 +430,7 @@ describe('offline tile cache', () => {
       dirs,
       calls,
       BaseDirectory: { AppData: 14 },
-      exists: vi.fn(async (path: string) => dirs.has(path)),
+      exists: vi.fn(async (path: string) => dirs.has(path) || files.has(path)),
       readDir: vi.fn(async (path: string) => {
         calls.push(`readDir ${path}`)
         const names = new Set<string>()
@@ -433,6 +450,7 @@ describe('offline tile cache', () => {
       }),
       remove: vi.fn(async (path: string) => {
         dirs.delete(path)
+        files.delete(path)
         for (const p of [...files.keys()]) if (p.startsWith(`${path}/`)) files.delete(p)
       }),
     }
@@ -472,6 +490,75 @@ describe('offline tile cache', () => {
 
   it('desktop: the platform keeps its tiles behind the same contract', () => {
     expect(selectPlatform({ isTauri: true }).tileCache).not.toBeNull()
+  })
+
+  const entry = (id: string, updatedAt: number, name = id) => ({ id, name, updatedAt, summary: '', sizeBytes: 1 })
+
+  it('« Mes projets »: file names from a checked id, names cleaned, most recent first', () => {
+    expect(projectFileNames('ab-12')).toEqual({ document: 'ab-12.openflyover.json', entry: 'ab-12.entry.json' })
+    expect(() => projectFileNames('../tiles/x')).toThrow(/invalide/)
+    expect(() => projectFileNames('')).toThrow(/invalide/)
+    expect(cleanProjectName('  Tour   du\nMont-Blanc ')).toBe('Tour du Mont-Blanc')
+    expect(cleanProjectName('x'.repeat(200))).toHaveLength(120)
+    expect(() => cleanProjectName('   ')).toThrow(/vide/)
+    const sorted = sortProjectEntries([entry('a', 1), entry('c', 3, 'Zèbre'), entry('b', 3, 'Âne')])
+    expect(sorted.map((e) => e.id)).toEqual(['b', 'c', 'a'])
+    expect(parseProjectEntry(JSON.stringify(entry('a', 1)), 'a')).toEqual(entry('a', 1))
+    expect(parseProjectEntry(JSON.stringify(entry('a', 1)), 'b')).toBeNull()
+    expect(parseProjectEntry('{"id":"a","name":3}', 'a')).toBeNull()
+    expect(parseProjectEntry('pas du JSON', 'a')).toBeNull()
+  })
+
+  it('« Mes projets » on the desktop: two files per project under the app data folder', async () => {
+    const fs = fakeFs()
+    let clock = 1000
+    let ids = 0
+    const library = createProjectLibrary(createDesktopLibraryFiles(async () => fs as never), () => clock++, () => `p${++ids}`)
+    expect(await library.list()).toEqual([])
+
+    const first = await library.save(null, { name: ' Mont Blanc ', summary: 'Jour 1 · 12,4 km', text: '{"é":1}' })
+    expect(first).toEqual({ id: 'p1', name: 'Mont Blanc', updatedAt: 1000, summary: 'Jour 1 · 12,4 km', sizeBytes: 8 })
+    expect(fs.mkdir).toHaveBeenCalledWith(DESKTOP_PROJECT_ROOT, { baseDir: 14, recursive: true })
+    // TextEncoder's bytes come from another realm than jsdom's Uint8Array
+    expect(fs.writeFile).toHaveBeenCalledWith(`${DESKTOP_PROJECT_ROOT}/p1.openflyover.json`, expect.anything(), { baseDir: 14 })
+    expect(fs.files.has(`${DESKTOP_PROJECT_ROOT}/p1.entry.json`)).toBe(true)
+    await library.save(null, { name: 'Écrins', summary: '', text: '{}' })
+    // a damaged entry is left out of the list
+    fs.files.set(`${DESKTOP_PROJECT_ROOT}/p9.entry.json`, new TextEncoder().encode('{'))
+
+    expect((await library.list()).map((e) => e.name)).toEqual(['Écrins', 'Mont Blanc'])
+    expect(await library.load('p1')).toBe('{"é":1}')
+    const saved = await library.save('p1', { name: 'Mont Blanc', summary: '', text: '{"v":2}' })
+    expect(saved.updatedAt).toBe(1002)
+    expect((await library.list())[0].id).toBe('p1')
+    expect((await library.rename('p1', 'Tour du Mont-Blanc')).name).toBe('Tour du Mont-Blanc')
+    expect(await library.load('p1')).toBe('{"v":2}')
+
+    await library.remove('p1')
+    expect(fs.files.has(`${DESKTOP_PROJECT_ROOT}/p1.openflyover.json`)).toBe(false)
+    expect((await library.list()).map((e) => e.id)).toEqual(['p2'])
+    await expect(library.load('p1')).rejects.toThrow(/plus dans/)
+    await expect(library.rename('p1', 'x')).rejects.toThrow(/plus dans/)
+    await expect(library.load('../tiles/a')).rejects.toThrow(/invalide/)
+  })
+
+  it('« Mes projets » on the web: one cache, the browser asked once to keep it', async () => {
+    const storage = fakeCaches()
+    const persist = vi.fn(async () => true)
+    const library = createProjectLibrary(createWebLibraryFiles(storage, { persist }), () => 5, () => 'w1')
+    await library.save(null, { name: 'Vercors', summary: '', text: '{"a":1}' })
+    await library.save('w1', { name: 'Vercors', summary: '', text: '{"a":2}' })
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect([...storage.caches.keys()]).toEqual([WEB_PROJECT_CACHE])
+    expect(await library.list()).toEqual([{ id: 'w1', name: 'Vercors', updatedAt: 5, summary: '', sizeBytes: 7 }])
+    expect(await library.load('w1')).toBe('{"a":2}')
+    await library.remove('w1')
+    expect(await library.list()).toEqual([])
+  })
+
+  it('« Mes projets »: on the desktop, and on the web only with Cache Storage', () => {
+    expect(selectPlatform({ isTauri: true }).projectLibrary).not.toBeNull()
+    expect(selectPlatform({}).projectLibrary).toBeNull()
   })
 })
 

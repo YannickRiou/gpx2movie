@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { importText } from '../import'
 import type { WritableFile } from '../platform'
-import type { WritableFolder } from '../platform/folder'
+import type { FolderFile, WritableFolder } from '../platform/folder'
+import { getSettingsHistory } from '../project/history'
+import { resetAppStore, useAppStore } from '../state/store'
 import {
   batchBaseName,
   batchProgressLabel,
@@ -11,11 +14,16 @@ import {
   formatKey,
   resetBatchStore,
   runBatch,
+  runTrackFilms,
+  trackFiles,
+  trackFilmName,
+  trackProgressLabel,
   useBatchStore,
   type BatchContext,
   type BatchJob,
   type BatchJobState,
   type JobOutcome,
+  type TrackRunState,
 } from './batch'
 import { resetExportStore, useExportStore, videoFileName, type ExportRequest } from './store'
 
@@ -61,12 +69,12 @@ describe('job list', () => {
   })
 })
 
-describe('runBatch', () => {
-  const done = (job: BatchJob): JobOutcome => ({
-    status: 'done',
-    result: { url: null, fileName: job.label, mimeType: 'video/mp4', sizeBytes: 1, codec: 'mp4/avc', incompleteFrames: 0 },
-  })
+const done = (job: BatchJob): JobOutcome => ({
+  status: 'done',
+  result: { url: null, fileName: job.label, mimeType: 'video/mp4', sizeBytes: 1, codec: 'mp4/avc', incompleteFrames: 0 },
+})
 
+describe('runBatch', () => {
   it('runs the jobs one after the other and reports each change', async () => {
     const list = jobs(formatKey('16:9', '1080p'), formatKey('9:16', '1080p'), formatKey('1:1', '1080p'))
     const running: string[] = []
@@ -278,5 +286,117 @@ describe('useBatchStore', () => {
     useBatchStore.getState().clear()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:Tour – 16x9-720p')
     expect(useBatchStore.getState()).toMatchObject({ phase: 'idle', jobs: [] })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// One film per track of a folder
+// ---------------------------------------------------------------------------
+
+/** An untimed track of three points: a film needs no time. */
+const GPX = `<?xml version="1.0"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+<trkpt lat="45.90" lon="6.80"><ele>1000</ele></trkpt>
+<trkpt lat="45.91" lon="6.80"><ele>1100</ele></trkpt>
+<trkpt lat="45.92" lon="6.81"><ele>1150</ele></trkpt>
+</trkseg></trk></gpx>`
+
+function folderFile(name: string, text = GPX): FolderFile {
+  return { name, read: async () => new File([text], name) }
+}
+
+describe('one film per track', () => {
+  it('lists the GPX and FIT files sorted by name, and names the films after them', () => {
+    const files = ['Sortie 10.gpx', 'notes.txt', 'Sortie 2.FIT', 'photo.jpg', 'Sortie 1.gpx'].map((name) => ({ name }))
+    expect(trackFiles(files).map((f) => f.name)).toEqual(['Sortie 1.gpx', 'Sortie 2.FIT', 'Sortie 10.gpx'])
+    const [film] = jobs(formatKey('16:9', '1080p'))
+    expect(videoFileName(batchBaseName(trackFilmName('Sortie 2.FIT'), film), '.mp4')).toBe('Sortie 2 – 16x9-1080p.mp4')
+    expect(trackFilmName('Sortie 2.FIT', ['Sortie 2.gpx', 'Sortie 2.FIT'])).toBe('Sortie 2 (fit)')
+    expect(trackFilmName('Sortie 2.gpx', ['Sortie 2.gpx', 'Sortie 3.fit'])).toBe('Sortie 2')
+  })
+
+  it('skips an unreadable file or a failed film, goes on, and restores once at the end', async () => {
+    const list = jobs(formatKey('16:9', '1080p'), formatKey('9:16', '1080p'))
+    const runs: string[] = []
+    const reports: TrackRunState[][] = []
+    const restore = vi.fn()
+    const states = await runTrackFilms([folderFile('a.gpx'), folderFile('b.gpx'), folderFile('c.gpx')], list, {
+      async show(file) {
+        if (file.name === 'b.gpx') throw new Error('fichier illisible')
+      },
+      async run(job, name) {
+        runs.push(`${name} ${job.label}`)
+        return name === 'c' && job.label === '9:16 1080p' ? { status: 'error', error: 'refusé' } : done(job)
+      },
+      canceled: () => false,
+      report: (s) => reports.push(s.map((t) => ({ ...t }))),
+      restore,
+    })
+    expect(runs).toEqual(['a 16:9 1080p', 'a 9:16 1080p', 'c 16:9 1080p', 'c 9:16 1080p'])
+    expect(states.map((t) => [t.name, t.status, t.error])).toEqual([
+      ['a.gpx', 'done', undefined],
+      ['b.gpx', 'error', 'fichier illisible'],
+      ['c.gpx', 'error', 'refusé'],
+    ])
+    expect(states[2].jobs.map((j) => j.status)).toEqual(['done', 'error'])
+    expect(restore).toHaveBeenCalledTimes(1)
+    // a's first film rendered, the second one starting
+    const halfway = reports.find((r) => r[0].jobs[1]?.status === 'running')!
+    expect(trackProgressLabel(halfway, 0.5)).toBe('1 / 3 · a.gpx · 75 %')
+    expect(trackProgressLabel(states, 1)).toBe('')
+    expect(batchSummary(states)).toEqual({ done: 1, failed: 2, canceled: 0 })
+  })
+
+  it('cancels the tracks left on a cancel, and still restores', async () => {
+    const restore = vi.fn()
+    const states = await runTrackFilms([folderFile('a.gpx'), folderFile('b.gpx'), folderFile('c.gpx')], jobs(formatKey('1:1', '720p')), {
+      show: async () => {},
+      run: async (job, name) => (name === 'b' ? { status: 'canceled' } : done(job)),
+      canceled: () => false,
+      report: () => {},
+      restore,
+    })
+    expect(states.map((t) => t.status)).toEqual(['done', 'canceled', 'canceled'])
+    expect(restore).toHaveBeenCalledTimes(1)
+  })
+
+  it('through the stores: each track alone with its automatic film, then the tracks and film of before', async () => {
+    resetAppStore()
+    controller = fakeController(() => 'done')
+    const app = useAppStore.getState()
+    // no network in the tests
+    app.setSetting('landmarks', { ...app.settings.landmarks, enabled: false })
+    app.setSetting('weather', { enabled: false })
+    const text = { id: 'text-1', startS: 1, durationS: 3, text: 'Bonjour', anchor: 'top-center', size: 1 } as const
+    app.setSetting('film', { ...app.settings.film, texts: [text], opening: { ...app.settings.film.opening, durationS: 9 } })
+    app.addTracks(importText(GPX, 'avant.gpx'))
+    getSettingsHistory().clear()
+    const before = useAppStore.getState()
+
+    const shown: { tracks: number; texts: number; opening: number }[] = []
+    controller.stop()
+    controller = fakeController(() => {
+      const { tracks, settings } = useAppStore.getState()
+      shown.push({ tracks: tracks.length, texts: settings.film.texts.length, opening: settings.film.opening.durationS })
+      return 'done'
+    })
+    const { folder, files } = fakeFolder()
+    const list = jobs(formatKey('16:9', '720p'))
+    const states = await useBatchStore
+      .getState()
+      .runTracks([folderFile('a.gpx'), folderFile('casse.gpx', 'pas une trace'), folderFile('b.gpx')], list, { ...context(), folder })
+
+    expect(states.map((t) => t.status)).toEqual(['done', 'error', 'done'])
+    expect(Object.keys(files)).toEqual(['a – 16x9-720p.mp4', 'b – 16x9-720p.mp4'])
+    expect(shown).toEqual([
+      { tracks: 1, texts: 0, opening: 9 },
+      { tracks: 1, texts: 0, opening: 9 },
+    ])
+    const after = useAppStore.getState()
+    expect(after.tracks).toBe(before.tracks)
+    expect(after.settings).toBe(before.settings)
+    expect(after.frameOrigin).toBe(before.frameOrigin)
+    expect(getSettingsHistory().getState().canUndo).toBe(false)
+    expect(useBatchStore.getState()).toMatchObject({ phase: 'finished', folderName: 'Films', jobs: [] })
   })
 })
