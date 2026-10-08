@@ -5,6 +5,7 @@
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { errorMessage } from '../core/errors'
 import { isExportBusy, useExportStore } from '../export/store'
 import type { ExportResult } from '../export/store'
 import { buildTrackPath } from '../flyover/path'
@@ -128,7 +129,7 @@ export function PosterPanel({ modes, onClose, hidden }: { modes: ReactNode; onCl
     if (!r.url) return
     void getPlatform()
       .saveUrl(r.url, { fileName: r.fileName })
-      .catch((err: unknown) => showToast({ kind: 'error', text: `Impossible d'enregistrer « ${r.fileName} » : ${err instanceof Error ? err.message : String(err)}` }))
+      .catch((err: unknown) => showToast({ kind: 'error', text: `Impossible d'enregistrer « ${r.fileName} » : ${errorMessage(err)}` }))
   }
 
   return (

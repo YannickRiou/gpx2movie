@@ -19,6 +19,7 @@ import { computeFilmView, filmViewMovesWithTime } from '../flyover/filmCamera'
 import { buildTrackPath } from '../flyover/path'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
+import { frameDelta } from './renderOnDemand'
 import { headsLeft, LEAD_MARKER_COLORS, placeMarker, useMarkerImage } from './markerSprite'
 import { useFilmClock } from './usePacing'
 import { LINE_LIFT_M, type HeightSampler } from './TrackLines'
@@ -71,7 +72,7 @@ export function FlyoverRig() {
       const { progress, timeS } = useAppStore.getState().playback
       // resynchronise after a scrub or a change of the film (no film time)
       const from = timeS === null ? clock.positionAt(progress) : { timeS, progress }
-      const position = clock.advance(from, delta, speed)
+      const position = clock.advance(from, frameDelta(delta), speed)
       // the film ends at its total time, after the closing: without a film time, progress 1 stops the playback
       store.setProgress(position.progress, position.timeS < clock.totalTime() ? position.timeS : null)
     }

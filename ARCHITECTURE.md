@@ -30,6 +30,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 |---|---|---|
 | `src/core/types.ts` | contrats partagés | (figé) |
 | `src/core/math.ts` | petits outils numériques | `clamp(value, min, max)`, `lastIndexAtOrBelow(sorted, value)`, `firstIndexAtOrAbove(sorted, value)` (recherches dichotomiques sur tableaux croissants) |
+| `src/core/errors.ts` | message d'erreur montré à l'utilisateur | `errorMessage(error)` : message d'une `Error`, chaîne rejetée (commande Tauri), sinon « erreur inconnue » |
 | `src/geo/ellipsoid.ts` | WGS84 ↔ ECEF, repère local | `WGS84`, `lonLatToEcef(lon,lat,h,target?)`, `ecefToLonLat(v)`, `createLocalFrame(lon,lat): LocalFrame` ; `lonLat.ts` (sans three.js, importé par le reste de l'app) : `haversineM(a: LonLat, b: LonLat)`, `centroid(bounds)`, `expandBounds(bounds, marginM, minSizeM?)` (réexportés par `ellipsoid.ts`) |
 | `src/geo/geoid.ts` | géoïde EGM96 | `geoidUndulation(lon,lat)` (m, grille 1° bilinéaire, `egm96Grid.ts` généré par `scripts/gen-geoid.mjs` depuis la grille 15' de la NGA redistribuée par PROJ-data, domaine public ; 170 Ko ; 0,45 m RMS face à la grille 15', jusqu'à ~14 m sur les îles volcaniques), `mslToEllipsoidHeight`, `ellipsoidToMslHeight`, `mslLocalToEcef(frame, target?)` |
 | `src/geo/mercator.ts` | maths de tuiles | `lonLatToTileFrac(lon,lat,z)`, `tileBounds(key): LonLatBounds`, `tileCenter(key)`, `tilesForBounds(bounds,z): TileKey[]`, `tileCountForBounds(bounds,z)`, `zoomForTileBudget(bounds, maxTiles, minZoom, maxZoom)`, `tileGroundSizeM(key)`, `childrenOf(key)`, `parentOf(key)`, `tileKeyString(key)`, `parseTileKey(s)` (lève sur clé invalide), `tileContains(key, lon, lat)`, `lonLatToTileUV(key, lon, lat): {u,v}` (u,v ∈ [0,1], v=0 au nord), `tileUVToLonLat(key,u,v)`, `boundsIntersect(a,b)` |
@@ -65,6 +66,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/poster/*` | affiche (voir « Affiche ») | purs, testés : `PosterSettings`, `DEFAULT_POSTER`, `POSTER_FORMATS`, `posterSize`, `isValidPoster`, `withPosterDefaults` ; `posterContent`, `posterFigure`, `availableFigures`, `posterStats`, `totalStats`, `trackLine`, `POSTER_LIST_MAX` ; `posterLayout` (boîtes), `fitText`, `fitLines`, `fitTrackList`, `wrapText`, `truncate` ; `drawPoster`, `coverCrop`, `POSTER_THEMES`, `POSTER_FONTS` ; `framingPath`, `planFlatMap` (`view.ts`) ; non purs : `renderFlatMap` (`view.ts`), `currentPosterContent`, `startPoster`, `usePosterPreview`, `previewKey` (`export.ts`), `PosterPanel` |
 | `src/flyover/race.ts` | course fantôme | `RACE_SYNC_MODES`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers` ; `useRace`, `RaceMarkers` |
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | météo dans la scène | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction` ; `WeatherEffect` |
+| `src/osm/paths.ts` + `src/route/graph.ts` + `src/route/planner.ts` + `src/terrain/heightAt.ts` + `src/osm/geocode.ts` + `src/ui/RoutePanel.tsx` | reconnaissance (itinéraire futur) | `pathsQuery` (voies `highway` d'une boîte calée sur une grille de 0,02°, sans autoroutes ni voies privées), `parsePaths`, `fetchPaths` (client Overpass, file et cache communs) ; `buildGraph` (nœuds = points partagés des voies, coût = longueur × facteur du type : sentiers 1, routes principales 3), `nearestNode`, `shortestPath` (A*), `routeThrough` (`RouteError`, point à plus de `MAX_SNAP_M` = 500 m d'un chemin) ; `computeRouteTrack` (chemins à 2 km autour des points, itinéraire densifié à 20 m, altitudes `fetchHeights` au zoom 13, trace `gpx` sans heures, points posés en waypoints « Départ » / « Étape n » / « Arrivée »), `useRouteStore` (brouillon hors réglages : ni préréglages ni annulation ; épingles `setLabelSource('route', …)`), `planAreaAround`, `isRouteTrack` ; `findPlace` / `parseCoordinates` (Nominatim, à la validation seulement, 1 requête/s) ; `planArea` / `setPlanArea` du store : relief sans trace (la scène se monte dès que `bounds` existe ; survol, trace, eau et export seulement avec une trace) ; entrée « Point de passage ici » de `TrackMenu` |
 | `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | eau réfléchissante | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater` ; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH` ; `WaterLayer`, `WATER_LIFT_M` ; `useWaterStore` (`osm/store.ts`) |
 | `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | nuages volumétriques | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `cloudCoversAt`, `sceneCloudsFrom`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor` ; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
 | `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | étalonnage | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms` ; `GradingEffect` ; `useGradingEffect`, `GradingComposer` |
@@ -101,6 +103,23 @@ seul fichier de 3,1 MB (930 kB gzip). Le reste arrive par `import()` dynamiques,
 Pour garder three.js hors du premier écran, l'app importe les distances et boîtes lon/lat de `geo/lonLat.ts`, pas de
 `geo/ellipsoid.ts`. React a son propre fichier (`codeSplitting.groups` dans `vite.config.ts`), gardé en cache d'une version à
 l'autre. Les fichiers paresseux de plus de 500 kB (three + fiber, Takram, mediabunny) sont attendus : seuil d'alerte à 800 kB.
+
+## Rendu à la demande
+
+La scène est dessinée seulement quand quelque chose change (`frameloop="demand"`, `src/scene/renderOnDemand.ts`) : à
+l'arrêt, plus aucune image. Une image est demandée à chaque image tant que le film joue, que des tuiles se chargent
+(`engine.stats.pendingTiles`) ou qu'un recadrage s'anime (`CameraRig`) ; puis `WAKE_FRAMES` = 30 images après tout
+changement des stores lus par la scène (application hors `terrainStats` et `loading`, météo, étiquettes, export), après
+un drapé (trace, eau, étiquettes), le chargement de la police des étiquettes ou de l'image du marqueur, et pour chaque
+texture des chargeurs de three (ciel, nuages) : le temps que le suréchantillonnage temporel des nuages converge
+(~16 images). OrbitControls (drei) demande lui-même ses images, amortissement compris. Le pas de temps d'une image est
+borné à `MAX_FRAME_DELTA_S` = 0,25 s (`frameDelta`) : la lecture et le recadrage ne sautent pas après une pause.
+L'export garde `frameloop 'never'` et dessine lui-même ses images. Mesuré en rendu logiciel : plus aucune demande d'image
+une fois la marge écoulée (~30 s là-bas, une image par seconde ; ~0,5 s sur une vraie carte graphique). Les délais du
+moteur comptés en images (nouvel essai d'une tuile en échec, déchargement) attendent la prochaine image.
+
+Aperçu des nuages : préréglage « bas » allégé (`PREVIEW_MARCH` : 120 pas d'au moins 150 m, 15 pour les ombres, au lieu de
+200, 100 m et 25), à moitié de la résolution et suréchantillonné dans le temps ; l'export revient à la qualité choisie.
 
 ## Moteur de terrain — conception
 
@@ -340,6 +359,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   nommés (`CAMERA_PRESETS` : Poursuite, Hélicoptère, Drone haut, Vue du dessus, Orbite, Cinéma) dans
   `src/flyover/cameraSettings.ts` ; `settings.flyoverDurationS` (15–600 s, 60 par défaut) = durée à ×1, la vitesse de la
   timeline s'y ajoute. Onglet « Survol » (`src/ui/CameraPanel.tsx`, sections « Caméra » et « Durée et rythme »). En pause, un changement de réglage caméra replace la caméra.
+  « Cadrer la caméra pendant cet élément » (inspecteur d'un texte ou d'un média) : `addItemCamera` pose un cadrage là où
+  est le marqueur au début de l'élément (sélectionné, à régler) et, si le marqueur avance pendant l'élément, un second à
+  sa fin qui garde le cadrage qui y était : le reste du film ne change pas.
   « Garder ce cadrage ici » (section « Caméra ») pose un cadrage du film au marqueur (`addCameraKey`, avec le cadrage vu
   là : `keyedCamera` ; un cadrage déjà à ce mètre le reprend), un pas d'annulation, sélectionné pour l'inspecteur (voir
   « Film et timeline », « Caméra »).
@@ -493,7 +515,7 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   4 piste des médias (photos et vidéos faites, avec leur son : voir « Son des vidéos »).
 - **Modèle** (`src/film/model.ts`, `settings.film` : enregistré dans le document de projet, annulable, validé par
   `isValidFilm` dans `SETTING_CHECKS`, aucune migration : un ancien projet reçoit `DEFAULT_FILM`) :
-  `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut' | 'situation', durationS }` (1–30 s ; défaut descente 6 s / 5 s) ;
+  `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut' | 'situation' | 'balayage', durationS }` (1–30 s ; défaut descente 6 s / 5 s) ;
   `autoStops` (arrêts générés) et `autoMode` : `'temps-forts'` (défaut des nouveaux projets) ou `'rythme'` (projets
   antérieurs) ;
   `stops[]` `{ id, atM, durationS (0,5–60 s), camera: 'film' | 'orbite' | 'large' | 'fixe', label?, source?: { kind, ref? } }`
@@ -568,7 +590,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   distance 1,6 × diagonale (relief compris, × hauteur / largeur pour un cadre plus haut que large : le 9:16 garde toute la
   trace), 40° au-dessus de l'horizon, du côté d'où regarde la caméra de vol au raccord (pas de virage pendant la transition).
   Transition : cible interpolée, direction normalisée (nlerp), distance géométrique, smootherstep, 80 m au-dessus du sol ;
-  `descente` sur toute la durée du plan, `saut` tient la vue d'ensemble puis bouge en 0,6 s. `situation` (« Depuis la
+  `descente` sur toute la durée du plan, `saut` tient la vue d'ensemble puis bouge en 0,6 s. `balayage` : la vue
+  d'ensemble tourne de `SWEEP_DEG` = 75° autour de sa cible (`turnedView`, `sweepRad`) pendant les premiers 60 % du plan
+  d'ouverture et finit du côté du vol, puis glisse comme `descente` (clôture : l'inverse). `situation` (« Depuis la
   région », plan de situation) : comme `descente`, mais depuis (ou, en clôture, jusqu'à) la vue de la région
   (`regionView`) : même cible et même côté que la vue d'ensemble, 65° au-dessus de l'horizon, distance
   `regionDistanceM` = 5 × diagonale (× hauteur / largeur en portrait), bornée pour que le coin le plus lointain du cadre
@@ -766,7 +790,10 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   moins de `BEAT_SNAP_S` (0,4 s), sinon sur le temps le plus proche (`beatNear`) ; déjà à moins de `ON_BEAT_S` (20 ms) :
   laissé. Jamais de chevauchement créé : un titre qui chevaucherait un autre titre reste, un arrêt qui passerait ou
   tomberait sur un autre arrêt reste, un arrêt dont la tenue ne peut pas tomber sur le temps (dans un autre arrêt, au
-  bout de la trace) reste. Un pas d'annulation (`editFilm`) ; les arrêts générés sont écrits (comme toute retouche
+  bout de la trace) reste. Puis chaque portion de vitesse (`snapSpeeds`, avec `clockOfSpeeds`) : son début (temps du
+  film où elle commence, horloge recalculée avec la portion déplacée) va sur le temps, sa longueur gardée, au mètre
+  près, entre ses voisines ; elle reste si son début tombe à plus de `BEAT_SNAP_S` / 4 du temps visé. Un pas
+  d'annulation (`editFilm`) ; les arrêts générés sont écrits (comme toute retouche
   d'arrêt), un titre de repère déplacé fige les titres de repères. Recaler ne déplace rien. Toast « N éléments calés
   sur le rythme (≈ 112 BPM) » ; tempo incertain : message, rien n'est fait.
 - **Son des vidéos** (`clipHasSound`, `clipSounds`, `duckEnvelope` dans `src/film/audio.ts`, purs et testés) : une vidéo
@@ -965,7 +992,11 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   fonction pure, `resolveOverlayTheme(style, overrides)` (`themes.ts`), appelée par `drawOverlay` : aperçu et export
   identiques. L'accent recolore aussi ce que le style dessinait dans son accent (profil, mini-carte), le texte donne le
   texte secondaire (même couleur à 80 %), le fond recolore aussi le passe-partout des photos ; un style sans encart
-  (Éditorial) garde son voile.
+  (Éditorial) garde son voile. Par élément (`STYLED_WIDGETS` : titre, clôture, compteurs, profil, météo, mini-carte,
+  classement, texte) : `overrides` facultatif sur l'élément, mêmes champs, par-dessus ceux de l'habillage
+  (`widgetOverrides`, `withWidgetOverrides`) ; `drawOverlay` dessine cet élément avec son propre thème ; validés par
+  `isValidOverlay` (un élément invalide rejette l'habillage, comme le reste). « Couleurs et polices » au bas de chaque
+  élément de l'onglet Habillage, « Comme le reste de l'habillage » retire ses changements.
 - **Classement de la course fantôme** (`settings.overlay.leaderboard`, éteint par défaut, ancrable, proposé dès deux
   traces, dessiné seulement course fantôme activée) : `leaderboardRows(raceAt(course, progression), traces)` (`data.ts`,
   pur) range les coureurs par `rankRacers` et donne rang (ex æquo au même point et au même écart : 1, 1, 3), nom, couleur
@@ -1146,6 +1177,15 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   « Encodage » inclut la copie de l'image WebGL, qui attend la fin du rendu GPU.
 - Limites : sans écriture directe (Firefox, Safari), fichier gardé en mémoire (~2× sa taille) ; onglet à garder ouvert, vitesse liée au GPU (mesure à faire sur une
   machine avec GPU, voir `docs/reprise.md`).
+- **En ligne de commande** (bureau, `src-tauri/src/cli.rs` + `src/export/cliRender.ts`) : `openflyover --rendu <dossier>
+  [--sortie <dossier>] [--prereglage <nom>] [--formats 16:9@1080p,…]`. Rust lit les arguments au démarrage (`parse_cli`,
+  testé ; option inconnue, valeur manquante, options sans `--rendu` : message et code 2), rend les chemins absolus
+  (`prepare` : dossier des traces existant, sortie créée), ajoute ces deux dossiers, et eux seuls, à la portée fs, et
+  garde la demande. L'application la demande une fois au démarrage (`cli_render`, qui la consomme : un rechargement ne
+  relance rien), applique le préréglage nommé (`presetSettings`), vérifie les formats (`cliFormats` ; défaut : celui de
+  « Vidéo »), lit les traces du dossier (`readableFolderAt`), lance le même `runTracks` que le tiroir avec
+  `writableFolderAt(sortie)`, écrit `rendu-en-lot.txt` (`cliReport` : une ligne par trace) et quitte par `cli_exit`
+  (0 : tous les films faits ; 1 : un échec ; 2 : demande impossible). La fenêtre s'ouvre (WebGL en a besoin).
 
 ## Affiche (phase 7)
 
@@ -1406,8 +1446,10 @@ JavaScript.
   [`-i son.wav`] `-c:v libx264 -preset medium -crf <qualité> -pix_fmt yuv420p`, couleurs converties et marquées BT.709
   (`-vf scale=out_color_matrix=bt709`, `-colorspace` / `-color_primaries` / `-color_trc bt709`) [`-c:a aac -b:a 192k`]
   `-movflags +faststart -f mp4 -y chemin`. Qualité → `crf` : standard 23, haute 20, maximale 17 (qualité constante, pas
-  de débit visé : l'estimation de taille du tiroir reste celle du H.264 de WebCodecs). Toujours du MP4, quel que soit le
-  nom tapé.
+  de débit visé : l'estimation de taille du tiroir reste celle du H.264 de WebCodecs). Nom tapé en `.webm` (`is_webm`,
+  `nativeCodecFor` côté JavaScript) : `-c:v libvpx-vp9 -crf <qualité> -b:v 0 -deadline good -cpu-used 4 -row-mt 1`,
+  son `-c:a libopus`, `-f webm` ; `crf` standard 34, haute 31, maximale 26 (essayé avec le ffmpeg d'une Ubuntu : VP9 +
+  Opus lus par `ffprobe`, WAV 44,1 kHz rééchantillonné seul).
 - **Chemin** : celui du fichier choisi dans la fenêtre « Enregistrer » au début de l'export (`WritableFile.path`, posé
   par `openWritablePath` ; dossier du rendu en lot compris). `video_open` refuse un chemin relatif ou hors de la portée
   fs (où l'extension dialog ajoute chaque fichier choisi). La poignée ouverte par la fenêtre n'écrit rien ; elle est
@@ -1417,7 +1459,7 @@ JavaScript.
   binaire d'`invoke` (pas de JSON ; 8,3 Mo en 1080p, négligeable devant le rendu). Contre-pression : `video_frame`
   écrit sur l'entrée standard de ffmpeg et ne répond que quand le tube a pris l'image ; taille vérifiée.
 - **Son** : le mixage du film (`mixFilmAudio`, voir « Export vidéo ») est converti en WAV 16 bits entrelacé (`wavFile`)
-  et passé avant l'ouverture (`video_sound`), seconde entrée de ffmpeg, encodée en AAC 192 kbit/s ; fichier temporaire
+  et passé avant l'ouverture (`video_sound`), seconde entrée de ffmpeg, encodée en AAC 192 kbit/s (Opus en WebM) ; fichier temporaire
   supprimé en fin de session (réussite, échec, annulation) ou si `video_open` échoue.
 - **Erreurs** : ffmpeg tourne avec `-loglevel error` ; s'il s'arrête (écriture refusée sur son entrée) ou finit en
   échec, la commande renvoie « ffmpeg a échoué : » et ses trois dernières lignes d'erreur, et supprime le fichier
@@ -1456,9 +1498,10 @@ d'un survol des traces chargées ; la vue et l'export les lisent ensuite sans r�
   plan : plans d'ensemble et orbites hautes (niveaux grossiers, déjà là), export 4K (un niveau de plus dans un couloir
   large).
 - **Politique** (`policy.ts`) : une décision par source, motifs et liens dans le README ; une source absente de la
-  table est refusée. Refusées : OpenTopoMap, Esri World Imagery, swisstopo (photos et carte). Une imagerie refusée
-  n'empêche pas le pack : il ne contient alors que le relief et l'imagerie reste en ligne. Limite par jour et par
-  appareil : Mapterhorn 20 000, IGN 50 000 (toutes couches), EOX 20 000 ; AWS sans limite.
+  table est refusée. OpenTopoMap, Esri World Imagery et swisstopo (photos et carte) sont permis en usage personnel
+  (`personalUse`, mise en garde dans le panneau) avec une limite basse. Une imagerie refusée n'empêche pas le pack : il
+  ne contient alors que le relief et l'imagerie reste en ligne. Limite par jour et par appareil : Mapterhorn 20 000,
+  IGN 50 000 (toutes couches), EOX 20 000, Esri et swisstopo 10 000, OpenTopoMap 2 000 ; AWS sans limite.
 - **Téléchargement** (`download.ts`) : 4 requêtes à la fois, réessais de `downloadTile` (ceux du fetcher), tuiles déjà
   dans le pack sautées, 4xx = « pas de donnée ici » (Mapterhorn au-delà de z12 hors zones fines), arrêt après 20 échecs
   réseau de suite ou si le stockage refuse une tuile, pause (les requêtes en cours finissent), reprise, annulation

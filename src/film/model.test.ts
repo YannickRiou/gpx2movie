@@ -145,7 +145,7 @@ describe('film model', () => {
   it('rejects bad shots, items and duplicate ids', () => {
     expect(isValidFilm(film({ opening: { style: 'situation', durationS: 8 }, closing: { style: 'situation', durationS: 6 } }))).toBe(true)
     const bad: Film[] = [
-      film({ opening: { style: 'balayage' as 'saut', durationS: 5 } }),
+      film({ opening: { style: 'tourbillon' as 'saut', durationS: 5 } }),
       film({ closing: { style: 'saut', durationS: 0 } }),
       film({ stops: [stop('stop-1', { camera: 'drone' as 'fixe' })] }),
       film({ stops: [stop('stop-1', { atM: -1 })] }),

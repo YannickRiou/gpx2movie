@@ -1134,6 +1134,50 @@
   min-width: 0;
 }
 
+/* Reconnaissance (RoutePanel): place to show, points placed on the relief */
+.place-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.place-form__row {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.place-form__row > .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.route-points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route-point {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.route-point__name {
+  font-weight: 600;
+}
+
+.route-point__at {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ==========================================================================
  * Carte et Survol : sections repliables, « Plus de réglages », ⓘ, journée du soleil, moments, tuiles de style
  * ========================================================================== */

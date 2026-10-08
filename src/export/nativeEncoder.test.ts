@@ -85,6 +85,15 @@ describe('createNativeVideoEncoder', () => {
     expect(session.audioCodec).toBe('aac')
   })
 
+  it('writes WebM / VP9 and Opus when the name typed ends in .webm', async () => {
+    const { invoke } = fakeInvoke()
+    const audio = { sampleRate: 48000, channels: [new Float32Array(10)] }
+    const session = await createNativeVideoEncoder(fakeCanvas(), { ...OPTIONS, destination: fakeFile('/films/Tour.WebM'), audio }, invoke)
+    expect(session.codec).toEqual({ container: 'webm', codec: 'vp9' })
+    expect(session.audioCodec).toBe('opus')
+    expect([session.mimeType, session.extension]).toEqual(['video/webm', '.webm'])
+  })
+
   it('cancels once, removing the file, and refuses frames afterwards', async () => {
     const { invoke, commands } = fakeInvoke()
     const file = fakeFile()

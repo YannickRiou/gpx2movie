@@ -16,6 +16,7 @@ import {
 } from '../film/model'
 import type { Film, MediaLayout, MediaSync, ShotStyle, StopCamera } from '../film/model'
 import {
+  addItemCamera,
   clipSyncOffsetS,
   formatFilmTime,
   formatSpeedFactor,
@@ -30,6 +31,7 @@ import {
   syncClipPlacement,
   updateText,
 } from '../film/timeline'
+import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { buildTrackPath } from '../flyover/path'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
@@ -46,12 +48,14 @@ const SHOT_STYLE_LABELS: Record<ShotStyle, string> = {
   descente: 'Descente',
   saut: 'Saut',
   situation: 'Depuis la région',
+  balayage: 'Balayage',
 }
 const SHOT_HINTS: Record<ShotStyle, string> = {
   aucune: 'Le film commence ou finit directement sur le survol.',
   descente: "La caméra glisse entre la vue d'ensemble de la trace et le survol.",
   saut: "La vue d'ensemble est tenue, puis la caméra rejoint vite le survol.",
   situation: 'La caméra glisse entre une vue de très haut sur la région et le survol.',
+  balayage: "La vue d'ensemble tourne lentement autour de la trace, puis la caméra glisse vers le survol (à la fin : l'inverse).",
 }
 const STOP_CAMERA_HINTS: Record<StopCamera, string> = {
   film: 'La caméra du survol continue, sans mouvement ajouté.',
@@ -199,6 +203,31 @@ export function FilmInspector() {
       {number('start', 'Début (s)', startS, 0, clock.totalTime(), (v) => set({ startS: v }))}
       {number('length', 'Durée (s)', durationS, ITEM_DURATION_RANGE.min, ITEM_DURATION_RANGE.max, (v) => set({ durationS: v }))}
     </div>
+  )
+
+  /** « Cadrer la caméra ici »: a camera key of its own while the item shows (`addItemCamera`), selected to adjust */
+  const itemCamera = (startS: number, durationS: number) => (
+    <button
+      type="button"
+      className="btn btn--secondary"
+      data-tip="Pose un cadrage au début (à régler) et rend celui d'avant à la fin"
+      onClick={() => {
+        const { camera, flyoverDurationS } = useAppStore.getState().settings
+        const easeM = cameraKeyEaseM(lengthM, flyoverDurationS)
+        editFilm((f) =>
+          addItemCamera(
+            f,
+            startS,
+            startS + durationS,
+            (t) => clock.progressAtTime(t) * lengthM,
+            (atM) => keyedCamera(camera, f.cameraKeys, atM, easeM),
+          ),
+        )
+      }}
+    >
+      <Icon name="locate-fixed" size={16} />
+      Cadrer la caméra pendant cet élément
+    </button>
   )
 
   let title: string
@@ -349,6 +378,7 @@ export function FilmInspector() {
           {anchorSelect('Position', filmText.anchor, (anchor) => set({ anchor }))}
           {range('size', 'Taille', filmText.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
           {timing(filmText.startS, filmText.durationS, set)}
+          {itemCamera(filmText.startS, filmText.durationS)}
           <p className="field__hint">Le texte s'affichera dans l'habillage du film.</p>
         </>
       )
@@ -455,6 +485,7 @@ export function FilmInspector() {
           {anchorSelect(card ? 'Position' : 'Position de la légende', media.anchor, (anchor) => set({ anchor }))}
           {range('size', 'Taille', media.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
           {timing(media.startS, media.durationS, set)}
+          {itemCamera(media.startS, media.durationS)}
           {video && number('in', 'Début dans la vidéo (s)', media.inS ?? 0, 0, fileS, (inS) => set({ inS: Math.min(inS, fileS) }))}
           {video && clipSound()}
           {video && picture?.recordedMs !== undefined && clipSync(picture.recordedMs, picture.recordedApprox === true, fileS)}
@@ -500,8 +531,8 @@ export function FilmInspector() {
             Jouée de {formatFilmTime(music.startS)} à {formatFilmTime(music.startS + lengthS)} dans le film
             {fileS !== undefined && ` (fichier de ${formatFilmTime(fileS)})`}, pendant la lecture et dans le film exporté. Caler la durée
             change la durée du survol pour que le film finisse avec la musique. Baisser la musique : toutes les musiques
-            baissent de {-DUCK_DB} dB pendant les vidéos avec du son. Caler sur le rythme : les arrêts et les titres à moins
-            de 0,4 s d’un temps de la musique s’y posent, sur un début de mesure s’il y en a un aussi près
+            baissent de {-DUCK_DB} dB pendant les vidéos avec du son. Caler sur le rythme : les arrêts, les titres et les débuts
+            des portions de vitesse à moins de 0,4 s d’un temps de la musique s’y posent, sur un début de mesure s’il y en a un aussi près
             {sound?.beats && (sound.beats.times.length > 0 ? ` (≈ ${Math.round(sound.beats.bpm)} BPM)` : ' (tempo de ce fichier incertain)')}.
           </p>
         </>

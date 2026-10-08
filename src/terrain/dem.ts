@@ -9,6 +9,7 @@
  *
  * Grids are row-major with row 0 at the north edge (see `HeightGrid` in core/types).
  */
+import { clamp } from '../core/math'
 import type { DemEncoding, HeightGrid } from '../core/types'
 
 /** Height encoded by a Terrarium (0, 0, 0) pixel; several providers use it as a nodata sentinel. */
@@ -108,10 +109,6 @@ export function decodeDem(bitmap: ImageBitmap, encoding: DemEncoding): HeightGri
 // ---------------------------------------------------------------------------
 // Sampling
 // ---------------------------------------------------------------------------
-
-function clamp(x: number, min: number, max: number): number {
-  return x < min ? min : x > max ? max : x
-}
 
 /**
  * Bilinear sample at (u, v) in [0, 1] (u east, v south, v = 0 at the north row), clamped to the grid.

@@ -3,8 +3,8 @@
  * ffmpeg, run by the Rust commands of src-tauri/src/video.rs, writing the file picked in the save dialog. Same
  * contract as the WebCodecs session (`VideoEncodeSession`): each frame of the compositor is read back
  * (`getImageData`) and sent as raw RGBA bytes, a binary body rather than JSON; `video_frame` answers once ffmpeg took
- * it. MP4 / H.264, plus AAC when the film has sound (the mixed soundtrack handed over first as a WAV file). Never
- * transparent: the overlay alone needs WebCodecs.
+ * it. MP4 / H.264, plus AAC when the film has sound (the mixed soundtrack handed over first as a WAV file); WebM / VP9
+ * and Opus when the name typed in the save dialog ends in `.webm`. Never transparent: the overlay alone needs WebCodecs.
  *
  * Also the choice between both encoders: `exportCodec` (what the export panel shows) and `createExportEncoder`.
  */
@@ -29,10 +29,16 @@ export type Invoke = (command: string, args?: InvokeArgs, options?: InvokeOption
 /** Tauri's `invoke`, loaded on first use: the web build never runs it. */
 const tauriInvoke: Invoke = async (command, args, options) => (await import('@tauri-apps/api/core')).invoke(command, args, options)
 
-/** What ffmpeg writes, whatever the name typed in the save dialog. */
+/** What ffmpeg writes, unless the name typed in the save dialog ends in `.webm` (`NATIVE_WEBM_CODEC`). */
 export const NATIVE_CODEC: CodecCandidate = { container: 'mp4', codec: 'avc' }
+export const NATIVE_WEBM_CODEC: CodecCandidate = { container: 'webm', codec: 'vp9' }
 /** Header naming the session of `video_frame`, whose body is the frame itself. */
 export const SESSION_HEADER = 'x-video-session'
+
+/** Codec ffmpeg writes at `path` (same rule as `is_webm` in video.rs). */
+export function nativeCodecFor(path: string): CodecCandidate {
+  return /\.webm$/i.test(path) ? NATIVE_WEBM_CODEC : NATIVE_CODEC
+}
 
 /** True when the system's ffmpeg runs (asked every time: installing it while the app is open is seen). */
 export async function nativeVideoAvailable(invoke: Invoke = tauriInvoke): Promise<boolean> {
@@ -106,15 +112,16 @@ export async function createNativeVideoEncoder(
   const sound = audio && audio.channels.length > 0 ? ((await invoke('video_sound', wavFile(audio))) as number) : null
   const id = (await invoke('video_open', { path: destination.path, width, height, fps, quality, sound })) as number
   const frameOptions = { headers: { [SESSION_HEADER]: String(id) } }
+  const codec = nativeCodecFor(destination.path)
   let canceled = false
 
   return {
-    codec: NATIVE_CODEC,
-    audioCodec: sound === null ? null : 'aac',
+    codec,
+    audioCodec: sound === null ? null : codec.container === 'webm' ? 'opus' : 'aac',
     // ffmpeg aims at a constant quality (crf), not at a bitrate: this one is only the size estimate
-    bitrate: videoBitrate(width, height, fps, quality, NATIVE_CODEC.codec),
-    mimeType: VIDEO_MIME_TYPES.mp4,
-    extension: '.mp4',
+    bitrate: videoBitrate(width, height, fps, quality, codec.codec),
+    mimeType: VIDEO_MIME_TYPES[codec.container],
+    extension: `.${codec.container}`,
     async addFrame() {
       if (canceled) throw new ExportCanceledError()
       const { data } = ctx.getImageData(0, 0, width, height)

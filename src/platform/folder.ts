@@ -32,6 +32,19 @@ export function joinPath(dir: string, name: string): string {
   return /[\\/]$/.test(dir) ? `${dir}${name}` : `${dir}${separator}${name}`
 }
 
+/** Desktop: the folder at `dir` (in the fs scope: picked in a dialog, or given on the command line). */
+export function writableFolderAt(dir: string): WritableFolder {
+  return { name: fileNameOf(dir.replace(/[\\/]+$/, '')), createFile: (fileName) => openWritablePath(joinPath(dir, fileName)) }
+}
+
+/** Desktop: the files directly inside the folder at `dir` (in the fs scope). */
+export async function readableFolderAt(dir: string, fs?: typeof import('@tauri-apps/plugin-fs')): Promise<ReadableFolder> {
+  const { readDir, readFile } = fs ?? (await import('@tauri-apps/plugin-fs'))
+  const entries = (await readDir(dir)).filter((entry) => entry.isFile)
+  const files = entries.map(({ name }) => ({ name, read: async () => new File([await readFile(joinPath(dir, name))], name) }))
+  return { name: fileNameOf(dir.replace(/[\\/]+$/, '')), files }
+}
+
 /**
  * Ask for a folder; null when the dialog is closed. On the web, call it from the user's click (before any await).
  */
@@ -42,8 +55,7 @@ export async function pickFolder(
   if (capabilities.isDesktop) {
     const { open } = await import('@tauri-apps/plugin-dialog')
     const dir = (await open({ directory: true, multiple: false, recursive: false })) as string | null
-    if (!dir) return null
-    return { name: fileNameOf(dir.replace(/[\\/]+$/, '')), createFile: (fileName) => openWritablePath(joinPath(dir, fileName)) }
+    return dir ? writableFolderAt(dir) : null
   }
   const picker = (scope as { showDirectoryPicker?: DirectoryPicker }).showDirectoryPicker
   if (!picker) throw new Error('Ce navigateur ne sait pas écrire dans un dossier.')
@@ -93,10 +105,7 @@ export async function pickReadableFolder(
   if (capabilities.isDesktop) {
     const [{ open }, fs] = await Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/plugin-fs')])
     const dir = (await open({ directory: true, multiple: false, recursive: false })) as string | null
-    if (!dir) return null
-    const entries = (await fs.readDir(dir)).filter((entry) => entry.isFile)
-    const files = entries.map(({ name }) => ({ name, read: async () => new File([await fs.readFile(joinPath(dir, name))], name) }))
-    return { name: fileNameOf(dir.replace(/[\\/]+$/, '')), files }
+    return dir ? readableFolderAt(dir, fs) : null
   }
   const picker = (scope as { showDirectoryPicker?: ReadDirectoryPicker }).showDirectoryPicker
   if (!picker) throw new Error('Ce navigateur ne sait pas lire un dossier.')

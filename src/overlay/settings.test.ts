@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isValidSetting, sanitizeSettings } from '../project/document'
-import { DEFAULT_OVERLAY, isValidOverlay, withOverlayDefaults, withOverrides } from './settings'
+import { DEFAULT_OVERLAY, isValidOverlay, widgetOverrides, withOverlayDefaults, withOverrides, withWidgetOverrides } from './settings'
 import type { OverlaySettings } from './settings'
 import { OVERLAY_FONT_FAMILIES, OVERLAY_THEMES, parseColor, resolveOverlayTheme, toHex } from './themes'
 
@@ -111,6 +111,26 @@ describe('overlay overrides', () => {
     expect(withOverrides(both, { titleFont: undefined }).overrides).toEqual({ accent: '#00ff00' })
     expect(withOverrides(both, null)).toEqual(DEFAULT_OVERLAY)
     expect('overrides' in withOverrides(accent, { accent: undefined })).toBe(false)
+  })
+})
+
+describe('widget overrides', () => {
+  it('are patched on one widget, merged over the overlay\'s, dropped once empty', () => {
+    const base = withOverrides(DEFAULT_OVERLAY, { accent: '#00ff00', titleFont: 'plex' })
+    const counters = withWidgetOverrides(base, 'counters', { accent: '#0000ff' })
+    expect(counters.counters.overrides).toEqual({ accent: '#0000ff' })
+    expect(widgetOverrides(counters, 'counters')).toEqual({ accent: '#0000ff', titleFont: 'plex' })
+    expect(widgetOverrides(counters, 'profile')).toEqual(base.overrides)
+    expect(withWidgetOverrides(counters, 'counters', null)).toEqual(base)
+    expect('overrides' in withWidgetOverrides(counters, 'counters', { accent: undefined }).counters).toBe(false)
+  })
+
+  it('are restored from a project when valid, and reject the overlay when not', () => {
+    const custom = withWidgetOverrides(DEFAULT_OVERLAY, 'minimap', { text: '#123456', numberFont: 'mono' })
+    expect(sanitizeSettings({ overlay: custom }).settings.overlay).toEqual(custom)
+    const bad = { ...DEFAULT_OVERLAY, minimap: { ...DEFAULT_OVERLAY.minimap, overrides: { accent: 'red' } } }
+    expect(isValidOverlay(bad as OverlaySettings)).toBe(false)
+    expect(sanitizeSettings({ overlay: bad }).invalid).toEqual(['overlay'])
   })
 })
 

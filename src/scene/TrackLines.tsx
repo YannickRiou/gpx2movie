@@ -53,6 +53,7 @@ import { useAppStore } from '../state/store'
 import { DEFAULT_TRACK_STYLE } from './markerSettings'
 import type { TrackStyle } from './markerSettings'
 import { useTerrainContext } from './TerrainLayer'
+import { wakeScene } from './renderOnDemand'
 import {
   applyDash,
   createGlowMaterial,
@@ -593,6 +594,7 @@ export function TrackLines() {
 
   const drapeAll = useCallback((current: TerrainEngine | null, factor: number) => {
     for (const set of setsRef.current.values()) drapeTrackLineSet(set, current, factor)
+    wakeScene()
   }, [])
 
   // Build / rebuild the lines, then drape them with the current terrain and exaggeration.

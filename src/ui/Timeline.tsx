@@ -18,6 +18,7 @@
  */
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
+import { errorMessage } from '../core/errors'
 import { freezeLandmarkTitles, materializeStops, stopCandidates } from '../film/assemble'
 import { AUDIO_FILE_EXTENSIONS, fitFilmToMusic, isAudioFile, musicLengthS, readAudio, startMusicPreview, useMusicPreview, waveformPath } from '../film/audio'
 import { beatTicksPath } from '../film/beats'
@@ -415,7 +416,7 @@ export function Timeline() {
       try {
         read.push(await readMedia(file, file.name))
       } catch (err) {
-        failed.push(`« ${file.name} » : ${err instanceof Error ? err.message : String(err)}`)
+        failed.push(`« ${file.name} » : ${errorMessage(err)}`)
       }
     }
     setReading(false)
@@ -481,7 +482,7 @@ export function Timeline() {
       try {
         read.push(await readAudio(file, file.name))
       } catch (err) {
-        failed.push(`« ${file.name} » : ${err instanceof Error ? err.message : String(err)}`)
+        failed.push(`« ${file.name} » : ${errorMessage(err)}`)
       }
     }
     setReading(false)

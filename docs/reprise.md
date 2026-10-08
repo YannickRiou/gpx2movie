@@ -5,9 +5,9 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
 ## Branches, PR, dépôt
 
-- `master` : tout ce qui est fusionné (PR #1 à #6 ; #6 le 2026-10-08 : géoïde, hors ligne, rendu en lot, vagues 1 et 2).
-- `lot-vague3` (branche courante) : vagues 3 et 4 des fonctions restantes (voir « Travail en cours »). PR vers `master`
-  fusionnée dès que les vérifications sont vertes (fusion autorisée par l'utilisateur).
+- `master` : tout ce qui est fusionné (PR #1 à #7 ; #7 le 2026-10-08 : vagues 3 et 4).
+- `ai-dev/confident-darwin-83rxik` (session cloud, PR #8 ouverte) : petites suites, reconnaissance (vague 5), rendu à la
+  demande (voir « Travail en cours »).
 - Méthode : une branche par lot, une PR avec procédure de test manuel, fusion (`gh pr merge N --merge`), puis nouvelle
   branche partie de `origin/master`.
 - **Pousser** : `git push` tout simplement. Le remote `origin` est `git@github-yannickriou:YannickRiou/gpx2movie.git`,
@@ -16,14 +16,25 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
   ici, et le push HTTPS avec le jeton `gh` renvoyait « Internal Server Error ». `~/.gitconfig` contient encore un jeton
   d'accès personnel en clair du compte `yriouvortex` (règle `url.*.insteadOf`) : à révoquer et supprimer par l'utilisateur.
 
+## Session cloud (branche `ai-dev/confident-darwin-83rxik`)
+
+- Hook de démarrage `.claude/hooks/session-start.sh` (déclaré dans `.claude/settings.json`, sessions cloud seulement) :
+  Node v24.21.0 (somme SHA-256 vérifiée) dans `/opt/node-v24.21.0` et mis en tête du PATH, `npm install` (le npm de
+  Node 24 laisse `package-lock.json` intact ; celui de Node 22 le réécrit), `OPENFLYOVER_CHROME` sur le headless shell
+  de `/opt/pw-browsers`, `LANG=C.UTF-8` (sans locale UTF-8, Chromium nomme « download » un téléchargement au nom
+  accentué), bibliothèques Tauri Linux par `apt-get` (WebKitGTK 4.1…). ~25 s la première fois, < 1 s ensuite.
+- Ici, `cargo test` tourne dans `src-tauri/` (Ubuntu 24.04, 2 min la première compilation) : 5 tests verts.
+- Réseau : la politique de l'environnement refuse les hôtes de tuiles (`tiles.mapterhorn.com`, `tile.openstreetmap.org`…,
+  403 du proxy). `npm run e2e` avec `OPENFLYOVER_E2E_SKIP_EXPORT=1` : 5/5 en ~20 s.
+
 ## Environnement et méthode (WSL)
 
 - Node 24 via nvm : `source ~/.nvm/nvm.sh && nvm use 24` avant `npm …`.
 - Vérifications : `npm run typecheck`, `npm run lint` (34 avertissements préexistants dans `src/scene`, 0 erreur),
   `npx vitest run --maxWorkers=1` (63 fichiers, 844 tests au dernier commit vert), `npm run build`.
 - Tests de bout en bout : `npm run e2e` (`e2e/run.mjs`, puppeteer-core, Chromium de Playwright ou `OPENFLYOVER_CHROME`,
-  SwiftShader, serveur Vite lancé par le script sans surveillance des fichiers). 5 scénarios : accueil et exemple, onglets
-  et aide, T / Ctrl+Z / S, projet enregistré puis rouvert, export 320 × 180 + image fixe. 7 à 8 min ici (export
+  SwiftShader, serveur Vite lancé par le script sans surveillance des fichiers). 6 scénarios : accueil et exemple, onglets
+  et aide, T / Ctrl+Z / S, projet enregistré puis rouvert, export 320 × 180 + image fixe, reconnaissance (Overpass simulé). 7 à 8 min ici (export
   5 à 6 min, nuages coupés) ; `OPENFLYOVER_E2E_SKIP_EXPORT=1` : moins de 1 min 30. Échoue sur toute erreur de console hors bruit
   réseau. Un seul navigateur à la fois sur cette machine.
 - Vérifier le Rust de l'application de bureau (Linux impossible ici, Ubuntu 20.04 sans webkit2gtk-4.1) :
@@ -56,39 +67,36 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 
 ## Fait et fusionné
 
-Voir `git log` et les PR #1 à #5 ; détail technique dans `ARCHITECTURE.md`, fonctionnalités dans `README.md`.
+Voir `git log` et les PR #1 à #7 (vagues 3 et 4 : plan de situation, points d'intérêt, traces enchaînées, ralentis et
+titres aux repères, calage sur la musique, affiche à plusieurs traces et carte à plat, un film par trace d'un dossier,
+Mes projets, encodeur natif Linux, installeurs) ; détail technique dans `ARCHITECTURE.md`, fonctionnalités dans `README.md`.
 
-## Travail en cours (branche `lot-vague3`)
+## Travail en cours (branche `ai-dev/confident-darwin-83rxik`, PR #8)
 
-Vérifié pour tout le lot : typecheck, lint (0 erreur), `npx vitest run --maxWorkers=1` (89 fichiers, 1 426 tests),
-`npm run build` (premier écran toujours sans three.js). Vu en capture (SwiftShader, 1440 × 900) : liste « Points
-d'intérêt » et étiquette à épingle, « Mes projets » (carte du projet ouvert), « Un film par trace » dans le tiroir
-d'export, titres aux repères dans la piste Textes. Le reste est à voir, écouter ou lancer sur une machine avec GPU, sous
-Linux ou sur GitHub : [`docs/tests-gpu.md`](tests-gpu.md).
+Vérifié : typecheck, lint (0 erreur), `npx vitest run --maxWorkers=1` (90 fichiers, 1 439 tests), `npm run build`
+(premier écran sans three.js), `cargo test` (5), `npm run e2e` (6 scénarios ; ici la reconnaissance passe avec la source
+de relief AWS, Mapterhorn étant bloqué par le réseau de la session). Le reste : [`docs/tests-gpu.md`](tests-gpu.md).
 
-- **Plan de situation** : style d'ouverture / de clôture `'situation'` (« Depuis la région »), vue à 65° jusqu'à 5 ×
-  la diagonale de la trace, bornée par la zone de relief chargée (trace + 25 km) : pour une trace de 15 km, seulement
-  ~2,8 × plus haut que la vue d'ensemble. Aller plus haut demanderait d'élargir la zone (tuiles, packs hors ligne).
-- **Points d'intérêt à la main** : `film.pois`, clic droit sur le relief ou la trace, liste dans l'onglet Carte, « Arrêt ».
-- **Traces enchaînées** : « Enchaîner en un seul parcours » (onglet Trace), offre à l'import de traces qui se suivent,
-  « Annuler » dans le toast (`src/import/chain.ts`).
-- **Ralentis et titres aux repères** : `film.landmarkTitles` (neuf : oui ; anciens projets : non), ×0,5 sur 400 m et
-  carton du nom aux cols, sommets et refuges (titre seul là où un arrêt existe déjà), éléments `auto-…` refaits quand les
-  repères arrivent (une étape d'annulation), figés dès qu'on en retouche un.
-- **Calage sur la musique** : tempo et temps détectés (`src/film/beats.ts`, gardés dans la table des médias),
-  « Caler sur le rythme » (débuts de textes et d'arrêts sur la mesure à ±0,4 s), repères sur le bloc de musique. Seuil
-  de confiance réglé sur des signaux de synthèse seulement.
-- **Affiche** : plusieurs traces (cadrage commun, totaux, liste jusqu'à 6) et « Carte à plat » (carte 2D vue de dessus
-  depuis les tuiles d'imagerie).
-- **Un film par trace d'un dossier** : source « Un film par trace » du mode « Plusieurs formats » (Chrome / Edge /
-  bureau), état d'origine remis à la fin, `history.suspend()` pendant la série.
-- **Mes projets** : projets gardés par l'application (`<app data>/projects/` sur le bureau, Cache Storage sur le site),
-  enregistrés 3 s après chaque changement. Pas de vignette ; une modification faite moins de 3 s avant la fermeture est
-  perdue.
-- **Encodeur natif Linux** : `src-tauri/src/video.rs`, `ffmpeg` du système (H.264 + AAC), choisi quand WebCodecs manque ;
-  « installez ffmpeg » sinon. Jamais lancé ; `cargo test` à faire sous Linux.
-- **Installeurs** : `.github/workflows/desktop.yml` (Windows, macOS, Linux ; signature si les secrets existent) et
-  `ci.yml` (vérifications à chaque push). Jamais lancés sur GitHub. Guide : `docs/installeurs.md`.
+- **Petites suites** : copies de `clamp` → `core/math.ts` ; `errorMessage` partagé (`core/errors.ts`, 16 copies
+  retirées) ; bureau Linux, nom en « .webm » → WebM VP9 + Opus par ffmpeg (vérifié par `cargo test` et un vrai ffmpeg) ;
+  e2e qui attend la scène 3D avant d'exporter.
+- **Reconnaissance (vague 5)** : « Préparer une sortie » (accueil et onglet Trace) : lieu (Nominatim, à la validation)
+  ou coordonnées → relief sans trace (`planArea` du store) ; clic droit › « Point de passage ici » (épingles « Départ »,
+  « Étape n », « Arrivée ») ; « Calculer l'itinéraire » : chemins OSM par Overpass (boîte calée sur une grille de 0,02°,
+  2 km de marge, 0,3° au plus), A* qui préfère sentiers et pistes, altitudes des tuiles au zoom 13, trace `gpx` sans
+  heures avec les points en waypoints ; « Modifier » reprend les points et recalcule (même couleur). Vu en capture :
+  points, trace, montées et film monté sur une grille de chemins simulée. Jamais essayé sur de vrais chemins OSM
+  (Overpass et Nominatim bloqués ici). Un seul profil (à pied).
+- **Suite de la feuille de route** : « Caler sur le rythme » pose aussi les débuts des portions de vitesse (`snapSpeeds`) ;
+  ouverture / clôture « Balayage » (`turnedView`, `sweepRad`) ; couleurs et polices par élément de l'habillage
+  (`overrides` sur l'élément, `widgetOverrides`) ; « Cadrer la caméra pendant cet élément » pour un texte ou une photo
+  (`addItemCamera` : cadrage au début, cadrage d'avant rendu à la fin) ; rendu en lot en ligne de commande sur le bureau
+  (`src-tauri/src/cli.rs`, `src/export/cliRender.ts`, `cargo test` 9 tests ; jamais lancé dans une vraie fenêtre).
+- **Documentation** : `docs/fonctionnement.html` (explication technique du projet, autonome, charte du projet) ;
+  feuille de route du README auditée ligne par ligne (phase 4 : fait / partiel / à faire).
+- **Rendu à la demande** : `frameloop="demand"` (`scene/renderOnDemand.ts`) ; mesuré en rendu logiciel : plus aucune
+  image demandée une fois la marge de 30 images écoulée, lecture et recadrage sans saut. Aperçu des nuages allégé
+  (`PREVIEW_MARCH`), jamais vu à l'écran.
 
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
 
@@ -204,12 +212,15 @@ reste la source de chaque chantier.
 
 1. L'utilisateur : tests sur la machine avec GPU (`docs/tests-gpu.md`), premier lancement des workflows GitHub, certificat
    de signature s'il en veut un.
-2. Reconnaissance d'itinéraire (vague 5) : à confirmer avec l'utilisateur avant de construire.
-3. Petites suites : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version) ;
-   e2e qui attend les morceaux chargés à part ; aide de message d'erreur répétée ~12 fois ; copies de `clamp` restantes
-   (`film/clock.ts`, `film/timeline.ts`, `film/audio.ts`, `terrain/dem.ts`) → `core/math.ts` ; passe de performance de la
-   scène (pas de rendu continu à l'arrêt, nuages moins chers en aperçu) ; un export « .webm » demandé sur le bureau Linux
-   sort en MP4.
+2. Fusionner la PR #8 après relecture.
+3. Reste de la feuille de route (README, phase 4, lignes « à faire » ; à confirmer avant de construire) : « transitions
+   entre sections réglables » (sens à préciser avec l'utilisateur) ; couleur de trace au choix et choix de la trace
+   survolée (petits) ; choix de la date du soleil (petit) ; figurines manquantes (petit) ; icônes et types d'épingles des
+   points d'intérêt ; bornes kilométriques ; réglage commun d'apparition des étiquettes ; police et couleur par texte ;
+   thèmes enregistrables séparément ; onglets Contenu / Style / Visibilité ; prises de vue enregistrées (gros).
+   Reconnaissance : l'utilisateur doute de son utilité, ne pas l'étendre (profils vélo / VTT écartés) ; la retirer s'il
+   le demande.
+4. Petites suites : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version).
 
 ## Limites et points ouverts
 

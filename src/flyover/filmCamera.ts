@@ -12,6 +12,8 @@
  * above the ground. 'descente' eases over the whole shot; 'saut' holds the overview and moves in JUMP_S.
  * 'situation' eases over the whole shot like 'descente', from (or to) the region view: same target and side,
  * higher and steeper (`regionDistanceM`), in one move that passes the overview's distance on the way.
+ * 'balayage': the overview turns SWEEP_DEG around its target (ending on the flight's side) during the first
+ * SWEEP_SHARE of the opening, then glides like 'descente' over the rest; the closing plays it backwards.
  */
 import { Vector3 } from 'three'
 import { clamp, smootherstep } from '../core/math'
@@ -38,6 +40,9 @@ export const REGION_PITCH_DEG = 65
 const TERRAIN_MARGIN_M = 25_000
 const TERRAIN_MIN_SIZE_M = 40_000
 const CAMERA_FOV_DEG = 50
+/** 'balayage' shot: turn of the overview around its target (degrees), share of the shot it takes. */
+export const SWEEP_DEG = 75
+export const SWEEP_SHARE = 0.6
 /** Length of the quick move of a 'saut' shot (seconds). */
 export const JUMP_S = 0.6
 /** 'orbite' stop: the camera turns out by STOP_ORBIT_DEG_PER_S × stop duration (at most STOP_ORBIT_MAX_DEG) and back. */
@@ -52,9 +57,28 @@ const UP = new Vector3(0, 1, 0)
 /** Fraction (0 = first view, 1 = second) of a shot `localS` seconds into it: opening overview → flight, closing flight → overview. */
 export function shotBlend(style: ShotStyle, phase: 'opening' | 'closing', localS: number, lengthS: number): number {
   if (!(lengthS > 0)) return 1
+  if (style === 'balayage') {
+    const u = localS / lengthS
+    return smootherstep(phase === 'opening' ? (u - SWEEP_SHARE) / (1 - SWEEP_SHARE) : u / (1 - SWEEP_SHARE))
+  }
   if (style !== 'saut') return smootherstep(localS / lengthS)
   const jump = Math.min(JUMP_S, lengthS)
   return smootherstep((phase === 'opening' ? localS - (lengthS - jump) : localS) / jump)
+}
+
+/** Turn (radians) of the overview of a 'balayage' shot `localS` seconds into it: SWEEP_DEG → 0 (opening), 0 → SWEEP_DEG (closing). */
+export function sweepRad(phase: 'opening' | 'closing', localS: number, lengthS: number): number {
+  if (!(lengthS > 0)) return 0
+  const u = localS / lengthS
+  const k = phase === 'opening' ? 1 - smootherstep(u / SWEEP_SHARE) : smootherstep((u - (1 - SWEEP_SHARE)) / SWEEP_SHARE)
+  return SWEEP_DEG * DEG * k
+}
+
+/** `view` turned by `angleRad` around the vertical through its target. */
+export function turnedView(view: CameraView, angleRad: number): CameraView {
+  if (angleRad === 0) return view
+  const offset = view.position.clone().sub(view.target).applyAxisAngle(UP, angleRad)
+  return { target: view.target.clone(), position: view.target.clone().add(offset) }
 }
 
 /** 0 → 1 → 0 over a stop window `lengthS` long, `localS` seconds into it (raised cosine: still at both ends). */
@@ -310,7 +334,8 @@ export function computeFilmView(
 
   const shot = state.phase === 'opening' ? clock.opening : clock.closing
   const wideView = shot.style === 'situation' ? regionView : overviewView
-  const wide = wideView(path, frame, sample, options.exaggeration, aspect, flight)
+  const overview = wideView(path, frame, sample, options.exaggeration, aspect, flight)
+  const wide = shot.style === 'balayage' ? turnedView(overview, sweepRad(state.phase, state.localS, state.lengthS)) : overview
   const k = shotBlend(shot.style, state.phase, state.localS, state.lengthS)
   const view =
     state.phase === 'opening'

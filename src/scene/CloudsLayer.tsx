@@ -31,6 +31,11 @@ import { useTerrainContext } from './TerrainLayer'
 const CLOUD_TEXTURES_URL = `${import.meta.env.BASE_URL}clouds/`
 /** Resolution of the cloud pass in the preview (fraction of the canvas). */
 const PREVIEW_RESOLUTION_SCALE = 0.5
+/**
+ * Preview marches, cheaper than the 'low' preset (200 steps of at least 100 m, 25 for the shadows): the clouds of the
+ * preview are a little coarser, the export keeps its quality (`qualityPreset` sets every value back).
+ */
+const PREVIEW_MARCH = { maxIterationCount: 120, minStepSize: 150, shadowIterationCount: 15 }
 /** Noise slices averaged per exported frame. */
 const EXPORT_SAMPLES: Record<CloudQuality, number> = { low: 2, medium: 4, high: 6 }
 
@@ -66,7 +71,12 @@ export function CloudsLayer({ date, path, noise }: { date: RefObject<Date | null
     // the weather post-effect already adds the haze
     effect.haze = false
     effect.cloudLayers[3].height = 0
-    if (!exporting) return
+    if (!exporting) {
+      effect.clouds.maxIterationCount = PREVIEW_MARCH.maxIterationCount
+      effect.clouds.minStepSize = PREVIEW_MARCH.minStepSize
+      effect.shadow.maxIterationCount = PREVIEW_MARCH.shadowIterationCount
+      return
+    }
     const update = effect.update
     const samples = EXPORT_SAMPLES[quality]
     effect.update = function (renderer, inputBuffer) {

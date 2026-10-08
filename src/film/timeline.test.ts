@@ -10,6 +10,7 @@ import {
   NEW_MEDIA_S,
   NEW_VIDEO_MAX_S,
   addCameraKey,
+  addItemCamera,
   addMedia,
   addMusic,
   addSpeed,
@@ -547,6 +548,19 @@ describe('music', () => {
 
 describe('camera keys', () => {
   const framing = { distance: 2.345, pitchDeg: 61.27, headingOffsetDeg: 190 }
+
+  it('frames a text or a photo: a key at its start to adjust, one at its end keeping the framing there', () => {
+    const atTime = (t: number) => t * 100
+    const framingAt = (atM: number) => (atM < 2000 ? framing : { distance: 1, pitchDeg: 30, headingOffsetDeg: 0 })
+    const { film: framed, id } = addItemCamera(film, 12, 22, atTime, framingAt)
+    expect(framed.cameraKeys.map((k) => [k.atM, k.distance])).toEqual([
+      [2200, 1],
+      [1200, 2.35],
+    ])
+    expect(framed.cameraKeys.find((k) => k.id === id)?.atM).toBe(1200)
+    // the marker holds (a stop): one key only
+    expect(addItemCamera(film, 12, 22, () => 1500, framingAt).film.cameraKeys).toHaveLength(1)
+  })
 
   it('adds a key at the marker, rounded, valid; a second one at the same metre takes the framing', () => {
     const { film: one, id } = addCameraKey(film, 2500.4, framing)

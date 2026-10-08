@@ -25,6 +25,7 @@ reproduire à côté de la case.
 - [ ] 9:16 et 1:1 : rien de coupé, habillage et crédits bien placés.
 - [ ] Écriture directe sur le disque (Chrome / Edge) : fenêtre « Enregistrer » au clic, fichier qui grossit pendant
       l'export, MP4 lu par VLC, le lecteur du système et un logiciel de montage (durée, recherche) ; « .webm » tapé → WebM.
+- [ ] Nom tapé en « .webm » : fichier WebM (VP9, Opus) lu par VLC et Firefox ; durée de l'encodage comparée au MP4.
 - [ ] Annuler pendant l'export, ou fermer la fenêtre « Enregistrer » : aucun fichier restant, vue et interface rétablies.
 - [ ] Firefox : export en mémoire, alerte au-delà de 1,5 Go estimés, téléchargement.
 - [ ] Nuages activés (réglage « Météo » ou « Manuel 50 % ») : coût de l'export, mêmes images d'un export à l'autre.
@@ -70,6 +71,16 @@ reproduire à côté de la case.
 - [ ] Trace et marqueur (onglet Survol) : épaisseur, tirets et points pendant le vol, halo sur forêt et sur neige, trace
       qui se dessine collée au marqueur, figurines lisibles et retournées dans les virages, avatar rond ; « Boule » par
       défaut identique à avant.
+- [ ] Rendu à la demande : vue immobile → le GPU retombe à presque rien (gestionnaire des tâches, onglet GPU) ; rien
+      de figé après un changement : glisser un curseur, tourner la caméra (amortissement jusqu'au bout), tuiles qui
+      arrivent, nuages qui se stabilisent (~0,5 s), police des étiquettes, image du marqueur, eau, recadrage (animation
+      complète) ; lecture qui repart sans saut après une longue pause ; export inchangé.
+- [ ] Nuages de l'aperçu (moins de pas de calcul que le préréglage « bas ») : pas de bandes ni de trous visibles par
+      rapport à avant ; l'export garde sa qualité.
+- [ ] Reconnaissance : « Préparer une sortie » (« Chamonix », puis « 45.92, 6.87 »), relief sans trace, épingles
+      « Départ » / « Étape » / « Arrivée » au clic droit, « Calculer l'itinéraire » sur de vrais chemins (sentiers
+      préférés aux routes, point à plus de 500 m refusé), film monté, « Modifier » puis recalcul (même couleur), projet
+      enregistré puis rouvert (« Modifier » toujours proposé) ; bureau Windows (Nominatim sous la CSP).
 - [ ] Zones de sécurité : bouton sous « Recadrer » ou touche G, bandes des réseaux en 9:16 et 4:5, marges en 16:9,
       absentes de l'export.
 
@@ -142,6 +153,9 @@ Sous Linux (Ubuntu 22.04 ou plus, WebKitGTK sans WebCodecs : export par le `ffmp
 - [ ] `sudo apt install ffmpeg`, relancer : MP4 (H.264) annoncé ; export 1080p 30 i/s d'un film avec musique, fichier lu
       par VLC et le lecteur du système, son présent et calé, couleurs identiques à l'aperçu.
 - [ ] Qualité standard / maximale : tailles différentes, aucune image manquante (nombre d'images = celui du tiroir).
+- [ ] Ligne de commande : `openflyover --rendu <dossier> --sortie <dossier> --formats 16:9@720p` (puis avec
+      `--prereglage`) : un film par trace, `rendu-en-lot.txt`, fenêtre fermée, code de sortie 0 (`echo $?`) ; option
+      inconnue ou dossier vide : message et code 2. Sous Windows aussi (`openflyover.exe` du dossier d'installation).
 - [ ] Annuler pendant l'export : fichier supprimé, plus de processus `ffmpeg`, rien de `openflyover-*.wav` dans `/tmp`.
 - [ ] Rendu en lot dans un dossier (plusieurs formats, dont 9:16) ; 4K si la machine le permet.
 - [ ] Échec simulé (`pkill ffmpeg` pendant l'export) : l'export s'arrête avec un message sur ffmpeg, pas de fichier

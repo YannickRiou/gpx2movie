@@ -23,6 +23,7 @@
  * injected elements and the film length fitted to the music are pure and tested.
  */
 import { create } from 'zustand'
+import { clamp } from '../core/math'
 import { FLYOVER_DURATION_RANGE } from '../flyover/cameraSettings'
 import { getSettingsHistory } from '../project/history'
 import { editFilm, getFilmSource } from '../scene/usePacing'
@@ -35,7 +36,7 @@ import { buildFilmClock, filmClockFor, filmClockInputFor } from './clock'
 import { AUDIO_TYPES, MAX_AUDIO_BYTES, MAX_PEAKS, dataUrlToBlob, useMediaStore } from './media'
 import type { MediaAsset } from './media'
 import { clipHasSound } from './model'
-import type { Film, FilmAudio, FilmMedia, FilmStop } from './model'
+import type { Film, FilmAudio, FilmMedia, FilmSpeed, FilmStop } from './model'
 import { blobToDataUrl, decodeClipSound } from './video'
 
 type AudioType = (typeof AUDIO_TYPES)[number]
@@ -346,14 +347,14 @@ export function filmMixPlan(
  * Found by the secant method from `current`; the nearest end of the range when `endS` is out of reach.
  */
 export function durationForFilmEnd(endS: number, totalFor: (durationS: number) => number, current: number, range: { min: number; max: number }): number {
-  const clamp = (d: number) => Math.min(range.max, Math.max(range.min, d))
-  let d0 = clamp(current)
+  const inRange = (d: number) => clamp(d, range.min, range.max)
+  let d0 = inRange(current)
   let t0 = totalFor(d0)
-  let d1 = clamp(d0 + endS - t0)
+  let d1 = inRange(d0 + endS - t0)
   let t1 = totalFor(d1)
   for (let k = 0; k < 12 && Math.abs(t1 - endS) > 0.005; k++) {
     const slope = d1 !== d0 ? (t1 - t0) / (d1 - d0) : 1
-    const next = clamp(d1 + (endS - t1) / (slope > 0 ? slope : 1))
+    const next = inRange(d1 + (endS - t1) / (slope > 0 ? slope : 1))
     if (next === d1) break
     d0 = d1
     t0 = t1
@@ -467,8 +468,9 @@ export async function snapFilmToMusic(): Promise<{ kind: 'success' | 'info'; tex
   const film = track ? materializeStops(source.film, { track, landmarks, pacing }) : source.film
   const input = filmClockInputFor({ ...source, film })
   const clockOf = (stops: readonly FilmStop[]) => buildFilmClock({ ...input, stops })
-  const snapped = snapFilmToBeats(film, beats, { clockOf, lengthM: input.lengthM })
-  if (snapped.moved === 0) return { kind: 'info', text: `Arrêts et titres déjà sur le rythme, ou trop loin d’un temps (${tempo}).` }
+  const clockOfSpeeds = (stops: readonly FilmStop[], speeds: readonly FilmSpeed[]) => buildFilmClock({ ...input, stops, speeds })
+  const snapped = snapFilmToBeats(film, beats, { clockOf, clockOfSpeeds, lengthM: input.lengthM })
+  if (snapped.moved === 0) return { kind: 'info', text: `Arrêts, titres et portions de vitesse déjà sur le rythme, ou trop loin d’un temps (${tempo}).` }
   editFilm(() => ({ film: snapped.film }))
   const n = snapped.moved
   return { kind: 'success', text: `${n} élément${n > 1 ? 's' : ''} calé${n > 1 ? 's' : ''} sur le rythme (${tempo}).` }

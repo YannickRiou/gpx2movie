@@ -22,8 +22,10 @@ import {
   WIDGET_SIZE_MAX,
   WIDGET_SIZE_MIN,
   withOverrides,
+  withWidgetOverrides,
+  widgetOverrides,
 } from '../overlay/settings'
-import type { CounterId, CreditsPosition, OverlayAnchor, OverlayFontId, OverlayOverrides, OverlaySettings } from '../overlay/settings'
+import type { CounterId, CreditsPosition, OverlayAnchor, OverlayFontId, OverlayOverrides, OverlaySettings, StyledWidget } from '../overlay/settings'
 import { panelColorOf, resolveOverlayTheme, toHex } from '../overlay/themes'
 import { getPlatform } from '../platform'
 import { useAppStore } from '../state/store'
@@ -123,15 +125,40 @@ const SizeField = ({ value, onChange }: { value: number; onChange(v: number): vo
 )
 
 /** One widget: a checkbox that shows its options while it is enabled. */
-function WidgetGroup({ label, enabled, onToggle, children }: { label: string; enabled: boolean; onToggle(v: boolean): void; children: ReactNode }) {
+function WidgetGroup({
+  label,
+  enabled,
+  onToggle,
+  styled,
+  children,
+}: {
+  label: string
+  enabled: boolean
+  onToggle(v: boolean): void
+  /** its own colours and fonts (« Couleurs et polices » at the end of its settings) */
+  styled?: StyledWidget
+  children: ReactNode
+}) {
   const id = useId()
+  const overlay = useAppStore((s) => s.settings.overlay)
   return (
     <div className="overlay-widget" role="group" aria-labelledby={id}>
       <label className="checkbox checkbox--switch" id={id}>
         <input type="checkbox" checked={enabled} onChange={(e) => onToggle(e.currentTarget.checked)} />
         {label}
       </label>
-      {enabled && <div className="overlay-widget__body">{children}</div>}
+      {enabled && (
+        <div className="overlay-widget__body">
+          {children}
+          {styled && (
+            <StyleOverrides
+              overlay={overlay}
+              widget={styled}
+              onChange={(patch) => useAppStore.getState().setSetting('overlay', withWidgetOverrides(overlay, styled, patch))}
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -175,7 +202,17 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
 }
 
 /** Font of the titles or figures: the style's own, or one of the short list. */
-function FontField({ label, value, onChange }: { label: string; value: OverlayFontId | undefined; onChange(v: OverlayFontId | undefined): void }) {
+function FontField({
+  label,
+  value,
+  inherit = 'Celle du style',
+  onChange,
+}: {
+  label: string
+  value: OverlayFontId | undefined
+  inherit?: string
+  onChange(v: OverlayFontId | undefined): void
+}) {
   const id = useId()
   return (
     <div className="field">
@@ -188,7 +225,7 @@ function FontField({ label, value, onChange }: { label: string; value: OverlayFo
         value={value ?? ''}
         onChange={(e) => onChange((e.currentTarget.value || undefined) as OverlayFontId | undefined)}
       >
-        <option value="">Celle du style</option>
+        <option value="">{inherit}</option>
         {OVERLAY_FONT_IDS.map((font) => (
           <option key={font} value={font}>
             {OVERLAY_FONT_LABELS[font]}
@@ -201,14 +238,25 @@ function FontField({ label, value, onChange }: { label: string; value: OverlayFo
 
 /**
  * « Couleurs et polices »: accent, text, panel and fonts changed on top of the style; the pickers show the colours
- * drawn (the style's until changed). « Revenir au style » drops every change.
+ * drawn (the style's until changed). « Revenir au style » drops every change. For one widget (`widget`): the same,
+ * on top of the overlay's own changes, and « Comme le reste de l'habillage » drops the widget's.
  */
-function StyleOverrides({ overlay, onChange }: { overlay: OverlaySettings; onChange(patch: OverlayOverrides | null): void }) {
-  const theme = resolveOverlayTheme(overlay.style, overlay.overrides)
+function StyleOverrides({
+  overlay,
+  widget,
+  onChange,
+}: {
+  overlay: OverlaySettings
+  widget?: StyledWidget
+  onChange(patch: OverlayOverrides | null): void
+}) {
+  const theme = resolveOverlayTheme(overlay.style, widget ? widgetOverrides(overlay, widget) : overlay.overrides)
   const panel = panelColorOf(theme)
-  const overrides = overlay.overrides ?? {}
+  const own = (widget ? overlay[widget].overrides : overlay.overrides) ?? {}
+  const inherit = widget ? "Celle de l'habillage" : 'Celle du style'
   return (
-    <MoreSettings paths={['overlay.overrides']} label="Couleurs et polices">
+    // a widget's own changes: no « modifié » badge (the paths stop at the widget, which has its other settings)
+    <MoreSettings paths={widget ? [] : ['overlay.overrides']} label="Couleurs et polices">
       <ColorField label="Accent" value={toHex(theme.accent)} onChange={(accent) => onChange({ accent })} />
       <ColorField label="Texte" value={toHex(theme.text)} onChange={(text) => onChange({ text })} />
       {panel ? (
@@ -227,10 +275,10 @@ function StyleOverrides({ overlay, onChange }: { overlay: OverlaySettings; onCha
       ) : (
         <p className="field__hint">Ce style pose le texte sur l'image, sans fond d'encart.</p>
       )}
-      <FontField label="Police des titres" value={overrides.titleFont} onChange={(titleFont) => onChange({ titleFont })} />
-      <FontField label="Police des chiffres" value={overrides.numberFont} onChange={(numberFont) => onChange({ numberFont })} />
-      <button type="button" className="btn btn--secondary" disabled={!overlay.overrides} onClick={() => onChange(null)}>
-        Revenir au style
+      <FontField label="Police des titres" value={own.titleFont} inherit={inherit} onChange={(titleFont) => onChange({ titleFont })} />
+      <FontField label="Police des chiffres" value={own.numberFont} inherit={inherit} onChange={(numberFont) => onChange({ numberFont })} />
+      <button type="button" className="btn btn--secondary" disabled={Object.keys(own).length === 0} onClick={() => onChange(null)}>
+        {widget ? "Comme le reste de l'habillage" : 'Revenir au style'}
       </button>
     </MoreSettings>
   )
@@ -309,7 +357,7 @@ export function OverlayPanel() {
       {overlay.enabled && (
         <>
           <PanelSection title="Titres">
-            <WidgetGroup label="Titre d'ouverture" enabled={overlay.title.enabled} onToggle={(enabled) => setWidget('title', { enabled })}>
+            <WidgetGroup label="Titre d'ouverture" enabled={overlay.title.enabled} onToggle={(enabled) => setWidget('title', { enabled })} styled="title">
               <TextField label="Titre" value={overlay.title.title} placeholder={track?.name ?? 'Nom de la trace'} onChange={(title) => setWidget('title', { title })} />
               <TextField label="Sous-titre" value={overlay.title.subtitle} placeholder="Lieu, occasion…" onChange={(subtitle) => setWidget('title', { subtitle })} />
               <label className="checkbox">
@@ -334,7 +382,7 @@ export function OverlayPanel() {
               <SizeField value={overlay.title.size} onChange={(size) => setWidget('title', { size })} />
             </WidgetGroup>
 
-            <WidgetGroup label="Carte de clôture" enabled={overlay.end.enabled} onToggle={(enabled) => setWidget('end', { enabled })}>
+            <WidgetGroup label="Carte de clôture" enabled={overlay.end.enabled} onToggle={(enabled) => setWidget('end', { enabled })} styled="end">
               <TextField label="Titre" value={overlay.end.title} placeholder={track?.name ?? 'Nom de la trace'} onChange={(title) => setWidget('end', { title })} />
               <label className="checkbox">
                 <input
@@ -360,7 +408,7 @@ export function OverlayPanel() {
           </PanelSection>
 
           <PanelSection title="Compteurs">
-            <WidgetGroup label="Afficher les compteurs" enabled={overlay.counters.enabled} onToggle={(enabled) => setWidget('counters', { enabled })}>
+            <WidgetGroup label="Afficher les compteurs" enabled={overlay.counters.enabled} onToggle={(enabled) => setWidget('counters', { enabled })} styled="counters">
               <fieldset className="field fieldset">
                 <legend className="field__label">Valeurs</legend>
                 <div className="chips">
@@ -382,7 +430,7 @@ export function OverlayPanel() {
             </WidgetGroup>
 
             {severalTracks && (
-              <WidgetGroup label="Classement (course fantôme)" enabled={overlay.leaderboard.enabled} onToggle={(enabled) => setWidget('leaderboard', { enabled })}>
+              <WidgetGroup label="Classement (course fantôme)" enabled={overlay.leaderboard.enabled} onToggle={(enabled) => setWidget('leaderboard', { enabled })} styled="leaderboard">
                 <p className="field__hint">
                   {raceOn
                     ? 'Rang, nom et écart au premier de chaque trace, au marqueur.'
@@ -395,7 +443,7 @@ export function OverlayPanel() {
           </PanelSection>
 
           <PanelSection title="Profil et mini-carte">
-            <WidgetGroup label="Profil altimétrique" enabled={overlay.profile.enabled} onToggle={(enabled) => setWidget('profile', { enabled })}>
+            <WidgetGroup label="Profil altimétrique" enabled={overlay.profile.enabled} onToggle={(enabled) => setWidget('profile', { enabled })} styled="profile">
               {!hasEle && track && <p className="field__hint">Cette trace n'a pas d'altitude enregistrée.</p>}
               <RangeField
                 label="Largeur (% de l'image)"
@@ -418,7 +466,7 @@ export function OverlayPanel() {
               <AnchorField value={overlay.profile.anchor} onChange={(anchor) => setWidget('profile', { anchor })} />
             </WidgetGroup>
 
-            <WidgetGroup label="Mini-carte" enabled={overlay.minimap.enabled} onToggle={(enabled) => setWidget('minimap', { enabled })}>
+            <WidgetGroup label="Mini-carte" enabled={overlay.minimap.enabled} onToggle={(enabled) => setWidget('minimap', { enabled })} styled="minimap">
               <p className="field__hint">Tout le tracé vu de dessus, nord en haut, avec la position.</p>
               <label className="checkbox">
                 <input
@@ -434,7 +482,7 @@ export function OverlayPanel() {
           </PanelSection>
 
           <PanelSection title="Météo, logo et texte">
-            <WidgetGroup label="Météo" enabled={overlay.weather.enabled} onToggle={(enabled) => setWidget('weather', { enabled })}>
+            <WidgetGroup label="Météo" enabled={overlay.weather.enabled} onToggle={(enabled) => setWidget('weather', { enabled })} styled="weather">
               <p className="field__hint">
                 {hasWeather
                   ? 'Ciel, température et vent au marqueur.'
@@ -464,7 +512,7 @@ export function OverlayPanel() {
               <SizeField value={overlay.logo.size} onChange={(size) => setWidget('logo', { size })} />
             </WidgetGroup>
 
-            <WidgetGroup label="Texte libre" enabled={overlay.text.enabled} onToggle={(enabled) => setWidget('text', { enabled })}>
+            <WidgetGroup label="Texte libre" enabled={overlay.text.enabled} onToggle={(enabled) => setWidget('text', { enabled })} styled="text">
               <TextField label="Texte" value={overlay.text.text} placeholder="Ex. : avec Marie et Paul" onChange={(text) => setWidget('text', { text })} />
               <AnchorField value={overlay.text.anchor} onChange={(anchor) => setWidget('text', { anchor })} />
               <SizeField value={overlay.text.size} onChange={(size) => setWidget('text', { size })} />

@@ -14,6 +14,7 @@
  * selection and the last run.
  */
 import { create } from 'zustand'
+import { errorMessage } from '../core/errors'
 import { supportedExtension } from '../import'
 import type { FolderFile, WritableFolder } from '../platform/folder'
 import { VIDEO_ASPECTS, VIDEO_RESOLUTIONS, videoSize } from './schedule'
@@ -157,10 +158,6 @@ export interface BatchRunner {
   canceled(): boolean
   /** every change of the job list */
   report(jobs: readonly BatchJobState[]): void
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 /**

@@ -7,6 +7,7 @@
  * or a music clip (unique across the film).
  * Times are film times (seconds at ×1 from the first frame, opening included).
  */
+import { clamp } from '../core/math'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import type { CameraSettings } from '../flyover/cameraSettings'
 import { distanceAtTime, nearestOnPath, recordedTimeAt } from '../flyover/path'
@@ -33,7 +34,6 @@ export type TimelineItem = 'opening' | 'closing' | string
 /** part of a block a gesture holds: its body (move) or one of its edges */
 export type Grip = 'move' | 'start' | 'end'
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 /** times and durations kept at 1/100 s: clean values in the project file */
 const roundS = (s: number) => Math.round(s * 100) / 100
 
@@ -131,7 +131,7 @@ const BISECTION_STEPS = 32
  * Position in [lo, hi] at which `timeOf` (non-decreasing) reaches `targetS`, by bisection; the nearest end when the
  * target is out of reach.
  */
-function positionAtTime(timeOf: (m: number) => number, targetS: number, lo: number, hi: number): number {
+export function positionAtTime(timeOf: (m: number) => number, targetS: number, lo: number, hi: number): number {
   if (!(hi > lo) || targetS <= timeOf(lo)) return lo
   if (targetS >= timeOf(hi)) return hi
   for (let k = 0; k < BISECTION_STEPS; k++) {
@@ -394,6 +394,25 @@ export function addCameraKey(film: Film, atM: number, framing: Pick<CameraSettin
   const { distance, pitchDeg, headingOffsetDeg } = framing
   const key: FilmCameraKey = { id, atM: at, distance, pitchDeg, headingOffsetDeg }
   return { film: updateCameraKey({ ...film, cameraKeys: [...film.cameraKeys, key] }, id, {}), id }
+}
+
+/**
+ * A camera of its own for a text or a photo shown from film time `startS` to `endS`: a camera key where the marker is at
+ * its start (the framing there, to adjust: it is the key returned) and, when the marker moves meanwhile, one at its end
+ * keeping the framing that was there, so that the rest of the film is unchanged. `framingAt` gives the framing the
+ * film has at a position (camera keys included), `atTime` the position at a film time.
+ */
+export function addItemCamera(
+  film: Film,
+  startS: number,
+  endS: number,
+  atTime: (timeS: number) => number,
+  framingAt: (atM: number) => Pick<CameraSettings, 'distance' | 'pitchDeg' | 'headingOffsetDeg'>,
+): { film: Film; id: string } {
+  const fromM = Math.round(atTime(startS))
+  const toM = Math.round(atTime(endS))
+  const after = toM > fromM ? addCameraKey(film, toM, framingAt(toM)).film : film
+  return addCameraKey(after, fromM, framingAt(fromM))
 }
 
 /** Length of a text added on the timeline (seconds). */

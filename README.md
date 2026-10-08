@@ -27,7 +27,7 @@ services ouverts.
 Deux façons de l'utiliser :
 
 - comme **site web statique**, en local ou sur votre propre serveur ;
-- plus tard, comme **application de bureau** ([voir plus bas](#application-de-bureau)).
+- comme **application de bureau** Windows, macOS ou Linux ([voir plus bas](#application-de-bureau)).
 
 Ce qui existe aujourd'hui :
 
@@ -40,12 +40,13 @@ Ce qui existe aujourd'hui :
 | Lumière | ciel et brume physiques, soleil à l'heure réelle de la sortie, ombres du relief, nuit étoilée, exposition automatique |
 | Météo | météo historique du jour de la sortie (Open-Meteo), visible dans un panneau et dans la scène ; nuages en volume tirés de la nébulosité basse, moyenne et haute (ou réglés à la main), poussés par le vent |
 | Repères | sommets, cols, refuges, lacs… tirés d'OpenStreetMap ; montées détectées et classées (cat. 4 à HC) ; étiquettes 3D ; le film ralentit aux cols, sommets et refuges sur la trace et affiche leur nom |
+| Reconnaissance | une sortie pas encore faite, tracée en posant des points sur le relief : l'itinéraire suit les chemins d'OpenStreetMap, avec ses altitudes, et se survole comme une trace |
 | Points d'intérêt | vos propres lieux (« Pique-nique », « Le chalet de Paul »), posés d'un clic droit sur le relief ou au marqueur, affichés comme les repères dans la vue et le film |
 | Trace | colorée selon la vitesse, la pente, l'altitude, le cardio, la cadence, la puissance ou la température ; épaisseur, tirets ou points, halo lumineux, trace qui se dessine au passage du marqueur |
 | Marqueur | boule, figurine (randonneur, coureur, cycliste, VTT, skieur, parapente, voiture) tournée dans le sens de la marche, ou votre photo en rond ; taille réglable |
 | Course fantôme | plusieurs traces rejouées ensemble, avec un classement en direct |
 | Enchaînement | plusieurs traces (une par jour, ou une sortie enregistrée en deux fichiers) réunies en un seul parcours, survolé d'un trait |
-| Habillage | titres, compteurs, profil, mini-carte, météo, logo, texte, classement de la course fantôme, textes, photos et vidéos de la timeline incrustés dans le film, crédits des sources ; trois styles, dont on peut changer les couleurs et les polices |
+| Habillage | titres, compteurs, profil, mini-carte, météo, logo, texte, classement de la course fantôme, textes, photos et vidéos de la timeline incrustés dans le film, crédits des sources ; trois styles, dont on peut changer les couleurs et les polices, pour tout l'habillage ou élément par élément |
 | Musique | une ou plusieurs musiques sur la timeline (MP3, M4A, OGG, WAV, FLAC), avec volume et fondus ; jouées pendant la lecture et mixées dans la vidéo exportée, avec le son des vidéos ; musique baissée sous les vidéos au choix |
 | Export | vidéo MP4 ou WebM en 16:9, 9:16, 1:1, 4:5 ou 21:9, de 720p à 4K, à 24, 30 ou 60 images/s, avec la musique et le son des vidéos ; image fixe PNG ou JPEG |
 | Affiche | affiche imprimable de la sortie en A4 ou A3 (300 dpi, portrait ou paysage) ou carrée : vue 3D de toute la trace, titre, date, chiffres clés, profil, météo du jour, crédits ; trois styles ; plusieurs traces sur la même affiche, chacune dans sa couleur, avec leur liste ou leur total ; « Carte à plat » pour une carte vue d'en haut |
@@ -125,6 +126,15 @@ vidéos se déposent, elles, sur la timeline.
 
 La vue se cadre sur la trace. Si la trace est entièrement en France ou en Suisse, l'imagerie passe à l'IGN ou à swisstopo, sauf si vous avez déjà choisi une source.
 
+### Préparer une sortie (reconnaissance)
+
+Pour survoler un itinéraire avant d'y aller, tapez un lieu (« Chamonix ») ou des coordonnées (« 45.92, 6.87 ») dans
+**« Préparer une sortie »** de l'accueil ou de l'onglet Trace : le relief s'affiche sans trace. Faites un clic droit sur
+le relief › **« Point de passage ici »** pour le départ, les étapes puis l'arrivée, dans l'ordre. **« Calculer
+l'itinéraire »** relie les points par les chemins d'OpenStreetMap (sentiers et pistes avant les routes) et ajoute une
+trace, sans heures, avec ses altitudes : le film se monte comme pour une sortie faite. « Modifier » reprend ses points
+pour la recalculer. Les points doivent tenir dans une trentaine de kilomètres et être à moins de 500 m d'un chemin.
+
 La liste des traces affiche vos traces ; le bouton × en supprime une. Le survol, la météo, les repères et les montées
 suivent la première trace. Dès deux traces, « Enchaîner en un seul parcours » les réunit en une seule (dans l'ordre des
 heures de départ) ; le message propose « Annuler ».
@@ -158,13 +168,14 @@ heures de départ) ; le message propose « Annuler ».
   musique » change la durée du survol pour que le film finisse avec elle. « Baisser la musique sous les vidéos » la baisse
   de 10 dB pendant les vidéos qui ont du son. La musique joue pendant la lecture ; le bouton haut-parleur de la barre
   coupe le son de la lecture, musique et vidéos (la vidéo exportée le garde). Elle est enregistrée dans le projet.
-  « Caler sur le rythme » pose les arrêts et les titres sur les temps de la musique (de petites marques en haut du bloc).
+  « Caler sur le rythme » pose les arrêts, les titres et les débuts des portions de vitesse (ralentis) sur les temps de la musique (de petites marques en haut du bloc).
 - « Vitesse » fait passer 1 km de trace deux fois plus vite, à partir du marqueur (ou clic droit sur la trace, « Accélérer /
   ralentir ici ») ; tirez les bords du bloc, choisissez de ×0,25 à ×4 dans le panneau.
 - Dans le panneau d'un arrêt, « Caméra pendant l'arrêt » : comme le film, tour lent autour du point, vue large ou fixe.
-- Dans le panneau de l'ouverture, le style « Depuis la région » part de très haut au-dessus de la région, puis plonge vers la trace ; en clôture, la caméra y remonte.
+- Dans le panneau de l'ouverture, le style « Depuis la région » part de très haut au-dessus de la région, puis plonge vers la trace ; en clôture, la caméra y remonte. Le style « Balayage » fait tourner lentement la vue d'ensemble autour de la trace, puis descend vers le survol (en clôture : l'inverse).
 - Onglet Survol, « Garder ce cadrage ici » pose un cadrage au marqueur (losange de la piste « Plans ») : réglez sa distance,
   son inclinaison et sa visée dans son panneau. La caméra passe en douceur d'un cadrage à l'autre, le reste du film ne change pas.
+  Dans le panneau d'un texte ou d'une photo, « Cadrer la caméra pendant cet élément » fait de même pour la durée de l'élément.
 - Clic droit sur la trace, dans la vue 3D : « Ajouter un arrêt ici » ou « Ajouter un texte ici ».
 - Le curseur de zoom et « Ajuster » règlent la largeur de la timeline. « Options » règle les arrêts automatiques.
 
@@ -373,10 +384,11 @@ AddType font/woff2 .woff2
 ### Limites connues
 
 - Le site doit être servi **à la racine du domaine**. Quelques chemins sont écrits en dur : `/samples/` dans
-  `src/ui/ImportPanel.tsx`, `/favicon.svg` dans `src/App.tsx` et `/fonts/` dans `src/ui/fonts.css`. Pour un sous-dossier,
+  `src/ui/projectActions.ts`, `/favicon.svg` dans `src/App.tsx` et `/fonts/` dans `src/ui/fonts.css`. Pour un sous-dossier,
   il faut construire avec `vite build --base=/sous-dossier/` et préfixer ces chemins par `import.meta.env.BASE_URL`.
 - Un site public reste soumis aux conditions des sources ([voir plus bas](#sources-de-données-et-attributions)).
-- Une longue vidéo prend beaucoup de mémoire (environ deux fois sa taille). L'écriture directe sur disque est prévue.
+- Une longue vidéo prend beaucoup de mémoire (environ deux fois sa taille) là où elle ne peut pas être écrite
+  directement sur le disque (Firefox, Safari) ; Chrome, Edge et l'application de bureau l'écrivent au fil de l'export.
 
 ## Application de bureau
 
@@ -415,6 +427,24 @@ npm run tauri:build   # construit dist/ puis l'application et ses installeurs
 `.rpm` et `.AppImage` sous Linux. Chaque système construit ses propres installeurs. Ils ne sont pas signés : Windows et
 macOS affichent un avertissement au premier lancement.
 
+### Rendu en lot en ligne de commande
+
+L'application de bureau peut faire un film par trace d'un dossier, sans clic :
+
+```bash
+openflyover --rendu ~/Traces/2026 --sortie ~/Films --prereglage "Montagne" --formats 16:9@1080p,9:16@1080p
+```
+
+- `--rendu` : dossier des traces GPX et FIT (seuls les fichiers directement dedans sont lus).
+- `--sortie` : dossier des films, créé s'il manque ; par défaut, celui des traces.
+- `--prereglage` : un préréglage enregistré dans l'application ; sans lui, les réglages gardés par l'application.
+- `--formats` : format@résolution, séparés par des virgules (`16:9`, `9:16`, `1:1`, `4:5`, `21:9` ; `720p` à `4K`) ;
+  sans lui, le format de « Vidéo ».
+
+La fenêtre s'ouvre, rend chaque trace, écrit `rendu-en-lot.txt` à côté des films, puis se ferme. Code de sortie : 0
+quand tous les films sont faits, 1 si l'un a échoué, 2 si la commande ne peut pas tourner (option inconnue, préréglage
+ou format inconnu, aucune trace).
+
 GitHub construit aussi les installeurs des trois systèmes (*Actions* › « Installeurs » › *Run workflow*, ou une étiquette
 `v0.x.y` qui prépare une version brouillon), signés dès que les certificats sont ajoutés aux secrets du dépôt : voir
 [`docs/installeurs.md`](docs/installeurs.md).
@@ -425,7 +455,8 @@ Les icônes de `src-tauri/icons/` viennent de `public/favicon.svg`. Pour les ref
 ### Limites actuelles
 
 - **Export vidéo sous Linux** : WebKitGTK n'a pas WebCodecs ; l'application encode alors le film avec le `ffmpeg` du
-  système, à installer (`sudo apt install ffmpeg`) : MP4 H.264, avec le son en AAC. Sans ffmpeg, le panneau d'export
+  système, à installer (`sudo apt install ffmpeg`) : MP4 H.264, avec le son en AAC (WebM VP9 et Opus si le nom finit
+  par « .webm »). Sans ffmpeg, le panneau d'export
   le dit et l'image fixe fonctionne ; l'habillage seul (WebM transparent) n'est pas encore possible
   ([`ARCHITECTURE.md`](ARCHITECTURE.md), « Export vidéo sans WebCodecs (Linux) » ; pas encore vérifié). Sous Windows (Edge)
   et sous macOS (WebKit, WebCodecs depuis Safari 16.4), l'export vidéo devrait passer par WebCodecs comme dans le
@@ -446,7 +477,7 @@ Les icônes de `src-tauri/icons/` viennent de `public/favicon.svg`. Pour les ref
 | `npm run lint` | analyse du code (oxlint) |
 | `npm run e2e` | tests de bout en bout dans un vrai navigateur (voir plus bas) |
 
-La suite compte **environ 1 200 tests** (8 octobre 2026). Chaque fichier de test est rangé à côté de son module
+La suite compte **environ 1 450 tests** (8 octobre 2026). Chaque fichier de test est rangé à côté de son module
 (`src/**/*.test.ts`). Les appels réseau et l'encodeur vidéo y sont simulés.
 
 Les vérifications à faire à la main sur une machine avec une vraie carte graphique sont listées dans
@@ -455,13 +486,15 @@ Les vérifications à faire à la main sur une machine avec une vraie carte grap
 ### Tests de bout en bout
 
 `npm run e2e` lance l'application dans un Chromium sans fenêtre et la pilote comme un utilisateur (`e2e/run.mjs`,
-puppeteer-core). Le script démarre son propre serveur Vite sur un port libre. Cinq scénarios :
+puppeteer-core). Le script démarre son propre serveur Vite sur un port libre. Six scénarios :
 
 1. l'accueil vide, puis l'exemple chargé (plans Ouverture, Survol, Clôture) ;
 2. chaque onglet du rail, puis l'aide des raccourcis (bouton et touche « ? », fermée par Échap) ;
 3. la timeline : T ajoute un texte, Ctrl+Z le retire, S ajoute un arrêt ;
 4. le projet enregistré, puis rouvert dans une page neuve (mêmes arrêts et textes) ;
-5. l'export d'une petite vidéo (320 × 180, 2 s, 10 images par seconde) et d'une image fixe.
+5. l'export d'une petite vidéo (320 × 180, 2 s, 10 images par seconde) et d'une image fixe ;
+6. la reconnaissance : coordonnées tapées, relief sans trace, deux « Point de passage ici » au clic droit, itinéraire
+   calculé et film monté (la réponse d'Overpass est simulée dans la page : une grille de chemins).
 
 Un scénario échoue sur toute erreur de la console, sauf les erreurs réseau des tuiles, de la météo et d'OpenStreetMap.
 Les tests utilisent les vrais serveurs de tuiles : il faut Internet. Une image dont les tuiles manquent est acceptée.
@@ -473,7 +506,7 @@ Réglages par variables d'environnement :
 |---|---|
 | `OPENFLYOVER_CHROME` | chemin de Chromium ou Chrome (par défaut, le Chromium de Playwright s'il est installé) |
 | `OPENFLYOVER_E2E_SKIP_EXPORT=1` | saute l'export, le scénario le plus long |
-| `OPENFLYOVER_E2E_ONLY=accueil,export` | ne lance que ces scénarios (`accueil`, `onglets`, `timeline`, `projet`, `export`) |
+| `OPENFLYOVER_E2E_ONLY=accueil,export` | ne lance que ces scénarios (`accueil`, `onglets`, `timeline`, `projet`, `export`, `reconnaissance`) |
 
 Sans carte graphique, le rendu passe par SwiftShader. Sur la machine de développement (WSL, sans GPU), la suite dure
 environ 7 à 8 minutes, dont 5 à 6 pour l'export ; sans l'export, moins de 1 min 30. Les fichiers téléchargés et les captures des
@@ -496,7 +529,8 @@ Toutes les sources sont ouvertes et sans clé. Le code les déclare dans `src/te
 | EOX Sentinel-2 cloudless 2025 | images satellite du monde, 10 m | `tiles.maps.eox.at` | « EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0 » |
 | OpenTopoMap | carte topographique du monde | `tile.opentopomap.org` | « Données : © contributeurs OpenStreetMap, SRTM \| Rendu : © OpenTopoMap (CC BY-SA) » |
 | Open-Meteo | météo historique | `archive-api.open-meteo.com` | « Données météo : Open-Meteo.com (CC BY 4.0) » |
-| OpenStreetMap (API Overpass) | repères, plans d'eau (lacs et rivières reflétants) | `overpass-api.de`, secours `maps.mail.ru` | « © contributeurs OpenStreetMap (ODbL) » |
+| OpenStreetMap (API Overpass) | repères, plans d'eau (lacs et rivières reflétants), chemins de la reconnaissance | `overpass-api.de`, secours `maps.mail.ru` | « © contributeurs OpenStreetMap (ODbL) » |
+| OpenStreetMap (Nominatim) | lieu tapé dans « Préparer une sortie » (une recherche à la validation, jamais à la frappe) | `nominatim.openstreetmap.org` | « © contributeurs OpenStreetMap (ODbL) » |
 
 La bande d'état, en bas de l'écran, affiche les attributions du relief et de l'imagerie en cours. Celles d'Open-Meteo et d'OpenStreetMap
 s'ajoutent quand la météo ou les repères sont chargés. Les mêmes lignes sont incrustées dans les vidéos et images exportées
@@ -605,7 +639,7 @@ Conventions :
 | 3 — Atmosphère (fait) | fait : ciel et diffusion atmosphérique (modèle Takram), brume de distance, soleil et heure solaire, ciel de nuit étoilé, exposition automatique et correction, ombres portées du relief, météo réelle dans la scène (soleil voilé, brume, brouillard, ombres adoucies), nuages volumétriques (Takram, pilotés par la météo ou à la main), eau réfléchissante (lacs et rivières d'OpenStreetMap : reflets du ciel et du soleil, vaguelettes, fondu sur la rive), fonds de carte topographiques (Plan IGN, carte nationale suisse, OpenTopoMap), hauteurs calées sur le niveau de la mer (géoïde EGM96 pour l'atmosphère et les nuages) — l'aquarelle (Stadia) exige une clé, exclue |
 | 4 — Personnalisation (en cours) | fait : document de projet (enregistrer / ouvrir un fichier autonome), annuler / rétablir, préréglages, pastille « modifié » et bouton rétablir par panneau, modèle du film et son moteur, timeline de montage sous la vue, ses textes, ses photos et ses vidéos dans le film (incréments 1 à 4 sur 4), vitesse par portion de trace, son des vidéos ; à venir : tout le film est réglable : caméra, rythme, titres, données affichées, style de trace, points d'intérêt, rendu, format (détail ci-dessous) |
 | 5 — Export vidéo (en cours) | fait : rendu hors écran image par image, formats paysage, vertical, carré, portrait, cinéma × résolutions 720p à 4K (24 / 30 / 60 i/s ; trois qualités), attente des seules tuiles visibles et préchargement, habillage incrusté, encodage MP4 H.264 (repli HEVC, WebM VP9 / VP8) via WebCodecs, progression, temps restant, annulation, téléchargement, image fixe PNG / JPEG de la vue courante aux mêmes formats × résolutions, habillage compris, écriture directe sur le disque (Chrome, Edge, application de bureau ; repli en mémoire ailleurs) ; reste : mesure de la vitesse sur une machine avec GPU |
-| 6 — Application de bureau (en cours) | fait : projet Tauri 2 (`src-tauri/`), couche plateforme commune au site et au bureau (`src/platform/`), fenêtres natives pour ouvrir et enregistrer projets, traces et exports, films écrits directement sur le disque, packs de tuiles hors ligne (couloir autour de la trace, site et bureau) ; encodeur vidéo par le ffmpeg du système sous Linux (WebKitGTK n'a pas WebCodecs, à vérifier) ; reste : stockage local des projets et préréglages, installeurs signés |
+| 6 — Application de bureau (en cours) | fait : projet Tauri 2 (`src-tauri/`), couche plateforme commune au site et au bureau (`src/platform/`), fenêtres natives pour ouvrir et enregistrer projets, traces et exports, films écrits directement sur le disque, packs de tuiles hors ligne (couloir autour de la trace, site et bureau) ; encodeur vidéo par le ffmpeg du système sous Linux (WebKitGTK n'a pas WebCodecs ; MP4, ou WebM si le nom finit par « .webm »), « Mes projets » gardés par l'application, installeurs construits sur GitHub (`desktop.yml`) ; reste : premier lancement des workflows, signature (certificat) |
 | 7 — Au-delà du survol | fonctionnalités propres à OpenFlyover : lumière et météo réelles de la sortie, trace colorée par les données, course fantôme, vidéo embarquée synchronisée, repères automatiques, rendu en lot, affiche, calage musical, reconnaissance (détail ci-dessous) |
 
 ### Phase 4 — Personnalisation
@@ -617,16 +651,16 @@ ce qui sera rendu.
 | Domaine | Réglages |
 |---|---|
 | Timeline (montage) | comme un logiciel de montage, la base est le survol continu de la trace, avec des pistes séparées au-dessus : arrêts (orbite ou caméra fixe), titres et textes placés et étirés librement dans le temps, points d'intérêt avec arrêt, médias (images, vidéos) ; film assemblé automatiquement au chargement (ouverture en vue d'ensemble → survol avec arrêts aux sommets, cols et montées → clôture en vue d'ensemble), puis retouché. Quatre incréments : 1 — modèle du film et moteur (horloge du film, plans d'ouverture et de clôture « descente » ou « saut », arrêts, aperçu et export identiques) **fait** ; 2 — timeline sous la vue (pistes plans / arrêts / textes, glisser pour déplacer et étirer avec aimantation, zoom, inspecteur, film assemblé avec un arrêt en orbite à chaque temps fort) **fait** ; 3 — piste des textes dessinée dans l'habillage (aperçu et export, fondus, empilés par position ; cartes d'ouverture et de clôture calées sur le temps du film) **fait** ; 4 — piste des médias : photos plein écran (mouvement lent) ou en carte encadrée, placées là où elles ont été prises (position GPS ou heure de la photo), enregistrées dans le projet **fait** ; vidéos (MP4, WebM, MOV de 50 Mo au plus, découpables, image exacte à l'export) **fait** ; son des vidéos (volume, musique baissée dessous au choix, mixé à l'export) **fait** |
-| Rythme | **fait** : durée totale réglable (15 s–10 min) ; ralentis et pauses aux temps forts (sommets des montées, cols franchis, sommets proches), durée du film conservée ou allongée ; vitesse par portion choisie à la main (piste « Vitesse », ×0,25 à ×4, transitions douces) ; plan de situation (ouverture « Depuis la région » qui plonge vers la trace) ; à faire : ouverture et fermeture « balayage » ou « saut », transitions entre sections réglables |
-| Caméra | **fait** : styles poursuite, balancement (hélicoptère), orbite, vue du dessus, plan cinématique ; préréglages nommés ; distance, tangage, cap, lissage ; caméra de chaque arrêt (comme le film, tour lent, vue large, fixe) et cadrages le long de la trace (losanges de la piste « Plans ») ; à faire : caméra propre à une photo ou une note |
-| Titres et textes | titre d'ouverture, sous-titres, générique de fin, étiquettes posées sur le relief (sommets, cols, villages) ; police, couleur, position, apparition et durée |
-| Données à l'écran | **fait** : habillage dessiné sur canvas (même rendu en aperçu et à l'export), trois styles (éditorial, diffusion sombre, application claire), carte d'ouverture, carte de clôture (distance, D+, altitude max, durée, vitesse max, météo), compteurs au choix, profil de dimensions réglables, mini-carte (partie parcourue, flèche du nord), météo au marqueur, logo, texte libre, 9 positions et une taille par widget ; étiquettes 3D effacées derrière les cartes ; à faire : couleurs et polices par widget. Prévu à l'origine : compteurs (distance, altitude, D+, vitesse, fréquence cardiaque, temps), profil altimétrique (dimensions réglables), mini-carte, logo, texte libre, carte de clôture (altitude max, vitesse max…) ; styles d'habillage prédéfinis (éditorial, diffusion sombre, application claire) ; position, taille et style de chaque widget |
-| Trace | couleur, épaisseur, style (pleine, pointillée, lumineuse sans perte de teinte), trace qui se dessine au fil du survol, enchaînement de plusieurs traces, trace affichée mais exclue du survol ; marqueurs départ / progression / arrivée en figurines 3D animées selon la vitesse et la pente (randonneur, coureur, alpiniste, skieur de randonnée, cycliste route et VTT, bikepacking, moto, parapente, avion léger) ou en autocollant / avatar personnel |
-| Points d'intérêt | ajout manuel ou depuis les waypoints GPX, photos géolocalisées, icônes, types d'épingles ; un seul réglage de timing (apparition / disparition) pour waypoints, photos, bornes kilométriques, départ et arrivée |
-| Rendu | sources de relief et d'imagerie, exagération, atmosphère (date, heure, brume), étalonnage (exposition, contraste, saturation, vignettage) |
-| Format | ratio 16:9 / 9:16 / 1:1 / 4:5, résolution, cadence, zones de sécurité affichées |
-| Thèmes | habillage du film (polices, couleurs des titres et widgets) indépendant de l'interface, thèmes fournis et personnalisés ; styles de carte, d'éléments et d'habillage enregistrables séparément |
-| Éditeur | une page, cinq modes (Trajet, Carte, Habillage, Survol, Prises de vue) sans recharger la scène ; onglets Contenu / Style / Visibilité par élément ; pastille « modifié » et bouton rétablir sur tout réglage qui s'écarte du style ; prises de vue enregistrées (caméra, cadrage, lumière) pour des images fixes |
+| Rythme | **fait** : durée totale réglable (15 s–10 min) ; ralentis et pauses aux temps forts (sommets des montées, cols franchis, sommets proches), durée du film conservée ou allongée ; vitesse par portion choisie à la main (piste « Vitesse », ×0,25 à ×4, transitions douces) ; plan de situation (ouverture « Depuis la région » qui plonge vers la trace) ; ouverture et clôture « descente », « saut », « depuis la région » et « balayage » ; à faire : transitions entre sections réglables |
+| Caméra | **fait** : styles poursuite, balancement (hélicoptère), orbite, vue du dessus, plan cinématique ; préréglages nommés ; distance, tangage, cap, lissage ; caméra de chaque arrêt (comme le film, tour lent, vue large, fixe) et cadrages le long de la trace (losanges de la piste « Plans »), y compris un cadrage propre à une photo ou un texte (« Cadrer la caméra pendant cet élément ») |
+| Titres et textes | **fait** : titre d'ouverture (titre, sous-titre, date), textes et sous-titres de la timeline, étiquettes posées sur le relief (sommets, cols, villages), 9 positions, apparition et durée de chaque texte, couleurs et polices de l'habillage ou par élément ; partiel : carte de clôture sans générique déroulant ; à faire : police et couleur par texte, réglage d'apparition des étiquettes 3D |
+| Données à l'écran | **fait** : habillage dessiné sur canvas (même rendu en aperçu et à l'export), trois styles (éditorial, diffusion sombre, application claire), carte d'ouverture, carte de clôture (distance, D+, altitude max, durée, vitesse max, météo), compteurs au choix, profil de dimensions réglables, mini-carte (partie parcourue, flèche du nord), météo au marqueur, logo, texte libre, 9 positions et une taille par widget ; étiquettes 3D effacées derrière les cartes ; couleurs et polices modifiables par-dessus le style, pour tout l'habillage ou par widget. Prévu à l'origine : compteurs (distance, altitude, D+, vitesse, fréquence cardiaque, temps), profil altimétrique (dimensions réglables), mini-carte, logo, texte libre, carte de clôture (altitude max, vitesse max…) ; styles d'habillage prédéfinis (éditorial, diffusion sombre, application claire) ; position, taille et style de chaque widget |
+| Trace | **fait** : épaisseur, style (pleine, tirets, points, halo lumineux), trace qui se dessine au fil du survol, enchaînement de plusieurs traces, marqueur boule, figurine (randonneur, coureur, cycliste, VTT, skieur, parapente, voiture) ou image personnelle ; partiel : couleur attribuée automatiquement (pas de choix), seule la première trace est survolée ; à faire : choix de la couleur et de la trace survolée, marqueurs de départ et d'arrivée réglables, figurines animées et activités manquantes (alpiniste, bikepacking, moto, avion léger) |
+| Points d'intérêt | **fait** : ajout manuel (clic droit ou au marqueur), waypoints GPX affichés ; partiel : photos placées par leur GPS dans le temps du film, mais pas épinglées sur le relief ; à faire : icônes et types d'épingles, bornes kilométriques, réglage commun d'apparition (waypoints, photos, bornes, départ, arrivée) |
+| Rendu | **fait** : sources de relief et d'imagerie, exagération, heure du soleil, exposition, étalonnage (contraste, saturation, température, vignettage) ; partiel : date du soleil (celle de la trace, sinon aujourd'hui), brume pilotée par la météo seulement ; à faire : choix de la date, curseur de brume |
+| Format | **fait** : 16:9, 9:16, 1:1, 4:5 et 21:9, 720p à 4K, 24 / 30 / 60 i/s, zones de sécurité affichées |
+| Thèmes | **fait** : habillage indépendant de l'interface, trois styles fournis, couleurs et polices modifiables ; partiel : un thème personnalisé ne s'enregistre que dans un préréglage complet ; à faire : styles de carte, d'éléments et d'habillage enregistrables séparément |
+| Éditeur | **fait** : une page sans recharger la scène, cinq onglets (Trace, Carte, Survol, Habillage, Projet) ; partiel : pastille « modifié » et « Par défaut » par section (pas par réglage, comparés aux valeurs par défaut) ; à faire : onglets Contenu / Style / Visibilité par élément, prises de vue enregistrées (caméra, cadrage, lumière) |
 
 ### Phase 7 — Au-delà du survol
 
@@ -635,12 +669,12 @@ Ce qui distingue OpenFlyover : tout reste local, et les données de la sortie (h
 | Fonctionnalité | Contenu | État |
 |---|---|---|
 | Lumière réelle de la sortie | le soleil suit l'horodatage de chaque point : on revit le lever ou le coucher de soleil au bon endroit, ombres portées comprises | fait |
-| Météo historique | température, ressenti, vent et rafales, nuages (3 couches), pluie et neige heure par heure sur la trace, du jour de la sortie (archive Open-Meteo depuis 1940, sans clé, cache local) : bilan de la sortie et conditions au marqueur dans le panneau ; rendu dans la scène (voile, brume, ombres) et widget du film | fait ; nuages volumétriques à faire |
+| Météo historique | température, ressenti, vent et rafales, nuages (3 couches), pluie et neige heure par heure sur la trace, du jour de la sortie (archive Open-Meteo depuis 1940, sans clé, cache local) : bilan de la sortie et conditions au marqueur dans le panneau ; rendu dans la scène (voile, brume, ombres) et widget du film | fait (nuages volumétriques compris) |
 | Trace colorée par une donnée | vitesse, pente, fréquence cardiaque, puissance, en échelle séquentielle perceptuellement uniforme (viridis, magma…) avec légende | fait (vitesse, pente, altitude, FC, cadence, puissance, température) |
-| Course fantôme | plusieurs traces rejouées ensemble sur leur temps réel : comparer des amis, ou ses sorties successives sur un même parcours | marqueurs synchronisés (temps écoulé, heure réelle, même distance) et classement en direct : fait ; classement dans l'habillage du film à faire |
-| Vidéo embarquée synchronisée | incrustation d'une vidéo GoPro / Insta360 calée sur l'horodatage ; export de l'habillage seul sur fond transparent pour le montage | vidéo calée sur l'heure de la trace (heure lue dans le fichier, décalage réglable, défilement au rythme du survol) : fait ; export de l'habillage seul à faire |
-| Repères automatiques | sommets, cols, refuges et lacs tirés d'OpenStreetMap avec leur altitude ; montées détectées et catégorisées, qui déclenchent ralentis et titres | montées (cat. 4 à HC), waypoints GPX et repères OpenStreetMap (sommets, cols, refuges, lacs… à 0,1–3 km, une requête Overpass par trace en cache) étiquetés en 3D : fait ; ralentis et titres à faire |
-| Rendu en lot | le même film en plusieurs formats d'un coup ; un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface | plusieurs formats (format × résolution, image fixe, affiche) en une fois, dans un dossier choisi : fait ; une vidéo par trace d'un dossier, depuis l'interface : fait ; en ligne de commande à faire |
-| Affiche imprimable | la trace sur le relief en très haute résolution, avec titre et chiffres, pour un tirage | A4 / A3 à 300 dpi (portrait, paysage) et carré, vue d'ensemble 3D, titre, date, chiffres clés, profil, météo, crédits, trois styles : fait ; plusieurs traces, carte à plat à faire |
-| Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale | piste « Musique » (volume, fondus, forme d'onde), jouée dans l'aperçu, mixée à l'export, durée du film calée sur la musique, arrêts et titres calés sur le rythme : fait ; caler les ralentis sur le rythme à faire |
-| Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller | à faire |
+| Course fantôme | plusieurs traces rejouées ensemble sur leur temps réel : comparer des amis, ou ses sorties successives sur un même parcours | marqueurs synchronisés (temps écoulé, heure réelle, même distance), classement en direct et dans l'habillage du film : fait |
+| Vidéo embarquée synchronisée | incrustation d'une vidéo GoPro / Insta360 calée sur l'horodatage ; export de l'habillage seul sur fond transparent pour le montage | vidéo calée sur l'heure de la trace (heure lue dans le fichier, décalage réglable, défilement au rythme du survol) et export de l'habillage seul sur fond transparent : fait |
+| Repères automatiques | sommets, cols, refuges et lacs tirés d'OpenStreetMap avec leur altitude ; montées détectées et catégorisées, qui déclenchent ralentis et titres | montées (cat. 4 à HC), waypoints GPX et repères OpenStreetMap (sommets, cols, refuges, lacs… à 0,1–3 km, une requête Overpass par trace en cache) étiquetés en 3D, ralentis et titres aux cols, sommets et refuges : fait |
+| Rendu en lot | le même film en plusieurs formats d'un coup ; un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface | plusieurs formats (format × résolution, image fixe, affiche) en une fois, dans un dossier choisi : fait ; une vidéo par trace d'un dossier, depuis l'interface ou en ligne de commande (application de bureau) : fait |
+| Affiche imprimable | la trace sur le relief en très haute résolution, avec titre et chiffres, pour un tirage | A4 / A3 à 300 dpi (portrait, paysage) et carré, vue d'ensemble 3D, titre, date, chiffres clés, profil, météo, crédits, trois styles, plusieurs traces, carte à plat : fait |
+| Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale | piste « Musique » (volume, fondus, forme d'onde), jouée dans l'aperçu, mixée à l'export, durée du film calée sur la musique, arrêts, titres et portions de vitesse (ralentis) calés sur le rythme : fait |
+| Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller | points posés sur le relief, sans trace ; itinéraire calculé dans le navigateur sur les chemins OSM, altitudes du relief : fait ; profils (vélo, VTT) à faire |

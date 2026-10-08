@@ -3,6 +3,7 @@
  * file, import GPX / FIT tracks and the sample, chain tracks into one, save an export on the desktop (src/platform).
  * Outcomes are shown as toasts.
  */
+import { errorMessage } from '../core/errors'
 import type { Track } from '../core/types'
 import { useMediaStore } from '../film/media'
 import { importFile, importText } from '../import'
@@ -13,7 +14,7 @@ import { applyProject } from '../project/apply'
 import { parseProject, projectFileName, serializeProject } from '../project/document'
 import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
-import { errorMessage, importFiles } from './importFlow'
+import { importFiles } from './importFlow'
 import type { ImportJob } from './importFlow'
 import { flushAutosave, setOpenEntry } from './library'
 import { effectiveProjectName, routeOpenedFiles } from './shell'
@@ -34,8 +35,7 @@ export async function saveProject(): Promise<void> {
     state.markProjectSaved()
     showToast({ kind: 'success', text: `Projet enregistré : ${outcome.fileName}` })
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err)
-    showToast({ kind: 'error', text: `Impossible d'enregistrer le projet : ${reason}` })
+    showToast({ kind: 'error', text: `Impossible d'enregistrer le projet : ${errorMessage(err)}` })
   }
 }
 
@@ -45,8 +45,7 @@ export async function saveExportedFile(url: string, fileName: string): Promise<v
     const outcome = await getPlatform().saveUrl(url, { fileName })
     if (outcome.saved) showToast({ kind: 'success', text: `Enregistré : ${outcome.fileName}` })
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err)
-    showToast({ kind: 'error', text: `Impossible d'enregistrer « ${fileName} » : ${reason}` })
+    showToast({ kind: 'error', text: `Impossible d'enregistrer « ${fileName} » : ${errorMessage(err)}` })
   }
 }
 
@@ -70,8 +69,7 @@ export async function openProject(file: File, entry: ProjectEntry | null = null)
     if (project.warnings.length > 0) showToast({ kind: 'info', text: `${opened}.\n${project.warnings.join('\n')}` })
     else showToast({ kind: 'success', text: opened })
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err)
-    showToast({ kind: 'error', text: `Impossible d'ouvrir « ${file.name} » : ${reason}` })
+    showToast({ kind: 'error', text: `Impossible d'ouvrir « ${file.name} » : ${errorMessage(err)}` })
   }
 }
 
