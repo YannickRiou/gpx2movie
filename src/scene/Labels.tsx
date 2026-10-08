@@ -42,6 +42,7 @@ import {
 import { externalLabels, useLabelSources } from './labelSources'
 import { useFilmClock } from './usePacing'
 import { useTerrainContext } from './TerrainLayer'
+import { wakeScene } from './renderOnDemand'
 import {
   REDRAPE_DEBOUNCE_MS,
   REDRAPE_MAX_WAIT_MS,
@@ -293,6 +294,7 @@ export function Labels() {
   const drape = useCallback(
     (current: TerrainEngine | null, factor: number) => {
       if (setRef.current) drapeLabelSet(setRef.current, current, factor)
+      wakeScene()
     },
     [],
   )
@@ -301,6 +303,7 @@ export function Labels() {
   useEffect(() => {
     const group = groupRef.current
     if (!group) return
+    wakeScene()
     disposeLabelSet(setRef.current)
     setRef.current = null
     const textures = texturesRef.current
