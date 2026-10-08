@@ -31,7 +31,7 @@ import { getPlatform } from '../platform'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
 import { formatNumber } from './format'
-import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
+import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
 
 const COUNTER_LABELS: Record<CounterId, string> = {
   distance: 'Distance',
@@ -45,43 +45,6 @@ const COUNTER_LABELS: Record<CounterId, string> = {
 type WidgetKey = Exclude<keyof OverlaySettings, 'enabled' | 'style' | 'overrides'>
 
 const percent = (v: number) => `${formatNumber(v * 100)} %`
-
-interface RangeFieldProps {
-  label: string
-  min: number
-  max: number
-  step: number
-  value: number
-  format(value: number): string
-  onChange(value: number): void
-}
-
-function RangeField({ label, min, max, step, value, format, onChange }: RangeFieldProps) {
-  const id = useId()
-  return (
-    <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
-      <div className="range-row">
-        <input
-          id={id}
-          className="range"
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.currentTarget.value))}
-          aria-valuetext={format(value)}
-        />
-        <output className="range-row__value range-row__value--wide" htmlFor={id}>
-          {format(value)}
-        </output>
-      </div>
-    </div>
-  )
-}
 
 function TextField({ label, value, placeholder, onChange }: { label: string; value: string; placeholder?: string; onChange(v: string): void }) {
   const id = useId()
