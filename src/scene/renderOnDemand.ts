@@ -10,7 +10,7 @@
  * The video export drives its frames itself (`frameloop` 'never', see ExportController).
  */
 import { useEffect } from 'react'
-import { invalidate, useFrame } from '@react-three/fiber'
+import { invalidate, useFrame, useThree } from '@react-three/fiber'
 import { DefaultLoadingManager } from 'three'
 import { useExportStore } from '../export/store'
 import { useAppStore } from '../state/store'
@@ -24,10 +24,18 @@ export const WAKE_FRAMES = 30
 export const MAX_FRAME_DELTA_S = 0.25
 
 let remaining = 0
+/** true once no frame was asked for: the clock still counts the pause */
+let idle = false
+let sceneClock: { getDelta(): number } | null = null
 
 /** Draw the next `frames` frames (default WAKE_FRAMES). */
 export function wakeScene(frames = WAKE_FRAMES): void {
   remaining = Math.max(remaining, frames)
+  // the first frame after a pause would get the whole pause as its time step: start the step from now
+  if (idle) {
+    sceneClock?.getDelta()
+    idle = false
+  }
   invalidate()
 }
 
@@ -42,11 +50,19 @@ const QUIET_KEYS = new Set(['terrainStats', 'loading'])
 /** Mounted once inside the terrain layer: keeps frames coming while needed (see above). */
 export function useRenderOnDemand(): void {
   const { engine } = useTerrainContext()
+  const clock = useThree((s) => s.clock)
+  useEffect(() => {
+    sceneClock = clock
+    return () => {
+      if (sceneClock === clock) sceneClock = null
+    }
+  }, [clock])
 
   useFrame(() => {
     const busy = useAppStore.getState().playback.playing || (engine?.stats.pendingTiles ?? 0) > 0
     if (remaining > 0) remaining--
     if (busy || remaining > 0) invalidate()
+    else idle = true
   })
 
   useEffect(() => {

@@ -156,4 +156,14 @@ describe('gpxUtcOffset', () => {
     expect(parseGpx(gpx('2025-07-12T09:00:00+02:00'), 'a.gpx').map((t) => t.utcOffsetMin)).toEqual([120, 120])
     expect(parseGpx(gpx('2025-07-12T07:00:00Z'), 'a.gpx')[0]).not.toHaveProperty('utcOffsetMin')
   })
+
+  it('reads a time written without a zone as UTC (GPX), whatever the zone of the browser', () => {
+    const gpx = `<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+      <trkpt lat="45.86" lon="6.78"><time>2025-07-12T09:00:00</time></trkpt>
+      <trkpt lat="45.87" lon="6.79"><time>2025-07-12T09:00:10+02:00</time></trkpt>
+    </trkseg></trk></gpx>`
+    const [a, b] = parseGpx(gpx, 'a.gpx')[0].segments[0].points
+    expect(a.time).toBe(Date.UTC(2025, 6, 12, 9, 0, 0))
+    expect(b.time).toBe(Date.UTC(2025, 6, 12, 7, 0, 10))
+  })
 })

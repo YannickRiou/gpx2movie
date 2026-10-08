@@ -67,3 +67,8 @@ export function formatDistanceGap(metres: number): string {
   if (Math.round(metres) === 0) return '0 m'
   return `${metres > 0 ? '+' : MINUS}${formatDistance(Math.abs(metres))}`
 }
+
+/** -30 -> "−30°" */
+export function formatDegrees(deg: number): string {
+  return `${deg < 0 ? '−' : ''}${formatNumber(Math.abs(deg))}°`
+}

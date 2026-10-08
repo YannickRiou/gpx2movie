@@ -8,7 +8,7 @@ import { getPlatform } from '../platform'
 import { setStoredTileReader } from '../terrain/fetch'
 import { createDailyQuota, startPackDownload } from './download'
 import type { DownloadProgress, PackDownload } from './download'
-import { createPackRegistry, createStoredTileReader, packIdFor, sourcePrefix } from './packs'
+import { createPackRegistry, createStoredTileReader, packIdFor, sourcePrefixes } from './packs'
 import type { PackInfo, PackRegistry } from './packs'
 import type { OfflinePlan } from './plan'
 
@@ -70,7 +70,7 @@ export async function preparePack({ plan, name, terrain, imagery, corridorM }: P
     tiles: plan.tiles.length,
     bytes: previous?.bytes ?? 0,
     complete: false,
-    prefixes: [terrain, ...(imagery ? [imagery] : [])].map(sourcePrefix),
+    prefixes: [terrain, ...(imagery ? [imagery] : [])].flatMap(sourcePrefixes),
   }
   reg.save(info)
   let lastSave = 0

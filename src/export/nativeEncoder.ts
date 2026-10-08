@@ -55,6 +55,12 @@ export async function exportCodec(
   return !options.transparent && (await nativeVideoAvailable(invoke)) ? NATIVE_CODEC : null
 }
 
+/** `BatchContext.containerOf` for the frame rate and quality of « Vidéo »: the container a film of that size would get. */
+export function containerFor(video: Pick<VideoEncodeOptions, 'fps' | 'quality'>) {
+  return async (job: { width: number; height: number }): Promise<string | null> =>
+    (await exportCodec({ width: job.width, height: job.height, fps: video.fps, quality: video.quality }))?.container ?? null
+}
+
 /** Encoding session of an export: WebCodecs, or the native encoder on a desktop without it. */
 export function createExportEncoder(
   canvas: OffscreenCanvas,

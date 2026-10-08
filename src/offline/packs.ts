@@ -32,10 +32,16 @@ export function packIdFor(tiles: readonly PlannedTile[]): string {
   return `p${tileFileName(tiles.map((t) => t.url).join('\n'))}`
 }
 
-/** The fixed start of a source's URLs: its template up to the first placeholder. */
-export function sourcePrefix(source: Pick<TileSourceBase, 'urlTemplate'>): string {
-  const brace = source.urlTemplate.indexOf('{')
-  return brace < 0 ? source.urlTemplate : source.urlTemplate.slice(0, brace)
+/**
+ * The fixed starts of a source's URLs: its template up to the first placeholder other than `{s}`, once per subdomain
+ * (`https://{s}.tile…` would otherwise give `https://`, which every URL starts with).
+ */
+export function sourcePrefixes(source: Pick<TileSourceBase, 'urlTemplate' | 'subdomains'>): string[] {
+  const template = source.urlTemplate
+  const variable = template.search(/\{(?!s\})/)
+  const fixed = variable < 0 ? template : template.slice(0, variable)
+  if (!fixed.includes('{s}')) return [fixed]
+  return (source.subdomains ?? []).map((s) => fixed.replaceAll('{s}', s))
 }
 
 function isPackInfo(value: unknown): value is PackInfo {

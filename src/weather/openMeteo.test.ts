@@ -222,7 +222,7 @@ describe('createWeatherCache', () => {
     expect(cache.get('x')).toBe(day)
   })
 
-  it('evicts the least recently stored days beyond the limit', () => {
+  it('evicts the least recently stored days beyond the limit, written once after a burst', async () => {
     const storage = memoryStorage()
     const cache = createWeatherCache(storage, 2)
     const now = vi.spyOn(Date, 'now')
@@ -231,15 +231,18 @@ describe('createWeatherCache', () => {
       cache.set(weatherCacheKey({ lon: 6.8, lat: 45.9 }, `2025-07-1${i}`), day, true)
     }
     now.mockRestore()
+    expect(storage.getItem('openflyover.weather.v1')).toBeNull()
+    await Promise.resolve()
     const stored = JSON.parse(storage.getItem('openflyover.weather.v1')!) as Record<string, unknown>
     expect(Object.keys(stored)).toEqual(['45.90,6.80,@2025-07-11', '45.90,6.80,@2025-07-12'])
   })
 
-  it('persists in the platform storage by default, under the localStorage key of before', () => {
+  it('persists in the platform storage by default, under the localStorage key of before', async () => {
     localStorage.setItem('openflyover.weather.v1', JSON.stringify({ old: { at: 1, day } }))
     const cache = createWeatherCache()
     expect(cache.get('old')).toEqual(day)
     cache.set('new', day, true)
+    await Promise.resolve()
     const stored = JSON.parse(localStorage.getItem('openflyover.weather.v1')!) as Record<string, unknown>
     expect(Object.keys(stored)).toEqual(['old', 'new'])
     localStorage.removeItem('openflyover.weather.v1')

@@ -49,10 +49,6 @@ export function useTerrainContext(): TerrainContextValue {
   return useContext(TerrainEngineContext)
 }
 
-export function useTerrainEngine(): TerrainEngine | null {
-  return useContext(TerrainEngineContext).engine
-}
-
 // ---------------------------------------------------------------------------
 // Pure helpers (unit-tested)
 // ---------------------------------------------------------------------------

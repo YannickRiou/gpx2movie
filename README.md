@@ -52,11 +52,6 @@ Ce qui existe aujourd'hui :
 | Affiche | affiche imprimable de la sortie en A4 ou A3 (300 dpi, portrait ou paysage) ou carrée : vue 3D de toute la trace, titre, date, chiffres clés, profil, météo du jour, crédits ; trois styles ; plusieurs traces sur la même affiche, chacune dans sa couleur, avec leur liste ou leur total ; « Carte à plat » pour une carte vue d'en haut |
 | Projet | fichier de projet à enregistrer et rouvrir, annuler / rétablir, préréglages |
 
-**En cours** sur la branche `timeline` : la timeline de montage, sous la vue 3D. Elle montre le film en pistes (plans,
-arrêts, textes, médias) que vous déplacez et étirez à la souris. Le film est monté automatiquement au chargement : plan
-d'ensemble, survol avec un arrêt à chaque temps fort, plan de clôture. Les textes, les photos et les vidéos s'affichent
-dans le film.
-
 ## Captures d'écran
 
 ![L'interface : barre du haut, onglets à gauche, vue 3D du Tour du Mont-Blanc, timeline en bas](docs/images/interface.jpg)
@@ -89,7 +84,7 @@ npm ci
 npm run dev
 ```
 
-Ouvrez <http://127.0.0.1:5173> et cliquez sur « Charger l'exemple ».
+Ouvrez <http://127.0.0.1:5173> et cliquez sur « Essayer avec l'exemple (Tour du Mont-Blanc) ».
 
 Pour tester la version de production : `npm run build`, puis `npm run preview` (<http://localhost:4173>).
 
@@ -335,7 +330,7 @@ hébergement mutualisé (OVH par exemple) suffit. Votre serveur envoie seulement
 chaque visiteur va chercher lui-même les tuiles, la météo et les repères.
 
 1. Construisez le site : `npm ci && npm run build`.
-2. Copiez le contenu de `dist/` (environ 13 Mo) à la racine du site.
+2. Copiez le contenu de `dist/` (environ 17 Mo) à la racine du site.
 3. Servez-le en HTTPS.
 
 ### HTTPS obligatoire
@@ -384,7 +379,7 @@ AddType font/woff2 .woff2
 ### Limites connues
 
 - Le site doit être servi **à la racine du domaine**. Quelques chemins sont écrits en dur : `/samples/` dans
-  `src/ui/projectActions.ts`, `/favicon.svg` dans `src/App.tsx` et `/fonts/` dans `src/ui/fonts.css`. Pour un sous-dossier,
+  `src/ui/projectActions.ts`, `/favicon.svg` dans `src/ui/TopBar.tsx` et `index.html` et `/fonts/` dans `src/ui/fonts.css`. Pour un sous-dossier,
   il faut construire avec `vite build --base=/sous-dossier/` et préfixer ces chemins par `import.meta.env.BASE_URL`.
 - Un site public reste soumis aux conditions des sources ([voir plus bas](#sources-de-données-et-attributions)).
 - Une longue vidéo prend beaucoup de mémoire (environ deux fois sa taille) là où elle ne peut pas être écrite
@@ -394,11 +389,12 @@ AddType font/woff2 .woff2
 
 C'est le même code que le site, dans une fenêtre native [Tauri 2](https://v2.tauri.app/) (dossier `src-tauri/`). Les
 boutons « Ouvrir » et « Enregistrer » et la fin d'un export ouvrent les fenêtres de fichiers du système. L'application
-lit et écrit seulement les fichiers choisis dans ces fenêtres, et ses packs hors ligne dans son propre dossier
-(`tiles/` du dossier de données de l'application). Tuiles, météo et repères viennent des mêmes sources qu'en ligne : il
+lit et écrit seulement les fichiers choisis dans ces fenêtres, ses packs hors ligne et « Mes projets » dans son propre
+dossier (`tiles/` et `projects/` du dossier de données de l'application), et les deux dossiers donnés en ligne de
+commande (`--rendu`, `--sortie`). Tuiles, météo et repères viennent des mêmes sources qu'en ligne : il
 faut Internet, sauf pour une trace préparée hors ligne.
 
-Elle en est au premier incrément (phase 6). Elle n'a pas encore été lancée ni empaquetée sur une vraie machine.
+Elle n'a pas encore été lancée ni empaquetée sur une vraie machine.
 
 ### Prérequis
 
@@ -438,7 +434,7 @@ openflyover --rendu ~/Traces/2026 --sortie ~/Films --prereglage "Montagne" --for
 - `--rendu` : dossier des traces GPX et FIT (seuls les fichiers directement dedans sont lus).
 - `--sortie` : dossier des films, créé s'il manque ; par défaut, celui des traces.
 - `--prereglage` : un préréglage enregistré dans l'application ; sans lui, les réglages gardés par l'application.
-- `--formats` : format@résolution, séparés par des virgules (`16:9`, `9:16`, `1:1`, `4:5`, `21:9` ; `720p` à `4K`) ;
+- `--formats` : format@résolution, séparés par des virgules (`16:9`, `9:16`, `1:1`, `4:5`, `21:9` ; `720p`, `1080p`, `1440p`, `4k`) ;
   sans lui, le format de « Vidéo ».
 
 La fenêtre s'ouvre, rend chaque trace, écrit `rendu-en-lot.txt` à côté des films, puis se ferme. Code de sortie : 0

@@ -24,7 +24,7 @@ import type {
 } from '../core/types'
 import { boundsIntersect, tileGroundSizeM, tileKeyString } from '../geo/mercator'
 import { decodeDem as defaultDecodeDem } from './dem'
-import { TileFetchError, createTileFetcher } from './fetch'
+import { createTileFetcher, isNoDataError } from './fetch'
 import { HeightField } from './heightField'
 import { loadImageryTexture as defaultLoadImageryTexture } from './imagery'
 import { buildTileGeometry } from './mesh'
@@ -116,15 +116,6 @@ export const DEFAULT_ERROR_TARGET_PX = 3
 export const DEFAULT_IMAGERY_ZOOM_OFFSET = 1
 /** material colour when a tile has no imagery (neutral grey) */
 export const NO_IMAGERY_COLOR = 0x8a8f94
-
-/**
- * A 4xx answer on a DEM tile means the source has no data there (Mapterhorn stops at z12 where
- * only Copernicus 30 m exists, swisstopo answers 400 out of bounds...). Such a tile is a leaf:
- * the parent keeps being rendered, nothing is retried and it is not an error for the user.
- */
-export function isNoDataError(error: unknown): boolean {
-  return error instanceof TileFetchError && error.status >= 400 && error.status < 500
-}
 
 interface ResolvedOptions {
   frame: TerrainEngineOptions['frame']

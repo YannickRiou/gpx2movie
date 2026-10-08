@@ -24,7 +24,7 @@ import { isValidPoster, withPosterDefaults } from '../poster/settings'
 import { isValidGrading } from '../scene/grading'
 import { TRACK_COLOR_MODES } from '../flyover/trackColor'
 import { isValidMarker, isValidTrackStyle, withMarkerDefaults, withTrackStyleDefaults } from '../scene/markerSettings'
-import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS } from '../state/store'
+import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS, PLAYBACK_SPEEDS } from '../state/store'
 import type { AppState, Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
 import { isValidClouds } from '../weather/sceneClouds'
@@ -402,7 +402,7 @@ export function parseProject(text: string): LoadedProject {
   const media = sanitizeMediaTable(doc.media)
   settings.film = dropMissingMedia(settings.film, media, warnings)
   const rawSpeed = isRecord(doc.playback) ? doc.playback.speed : undefined
-  const speedValid = typeof rawSpeed === 'number' && Number.isFinite(rawSpeed) && rawSpeed > 0
+  const speedValid = typeof rawSpeed === 'number' && PLAYBACK_SPEEDS.includes(rawSpeed)
   if (rawSpeed !== undefined && !speedValid) warnings.push('Vitesse de lecture invalide : vitesse ×1 utilisée.')
 
   return {

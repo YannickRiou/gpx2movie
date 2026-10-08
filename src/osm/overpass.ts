@@ -16,6 +16,7 @@
  * The POST body is form-encoded so the browser sends a "simple" CORS request: overpass-api.de answers the
  * OPTIONS preflight with 406.
  */
+import { cyrb53 } from '../core/math'
 import type { LonLat, LonLatBounds, Track } from '../core/types'
 import { getPlatform, type KeyValueStore } from '../platform'
 
@@ -302,18 +303,9 @@ const defaultDeps = (): OverpassDeps => ({
   now: () => Date.now(),
 })
 
-/** 53-bit string hash (cyrb53), as hex: the cache key of a query. */
+/** The cache key of a query: its 53-bit hash, as hex. */
 export function hashQuery(text: string): string {
-  let h1 = 0xdeadbeef
-  let h2 = 0x41c6ce57
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i)
-    h1 = Math.imul(h1 ^ c, 2654435761)
-    h2 = Math.imul(h2 ^ c, 1597334677)
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
-  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16)
+  return cyrb53(text).toString(16)
 }
 
 function retryAfterMs(response: Response): number {
@@ -418,6 +410,8 @@ export function cachedOverpassQuery<T>(
   queue = promise.catch(() => undefined)
   memoryCache.set(key, promise)
   promise.catch(() => memoryCache.delete(key))
+  // the promise is tied to this caller's signal: once aborted, a later caller must not get its AbortError
+  signal?.addEventListener('abort', () => memoryCache.get(key) === promise && memoryCache.delete(key), { once: true })
   return promise
 }
 
