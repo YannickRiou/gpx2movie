@@ -227,6 +227,11 @@ export function panelColorOf(theme: OverlayTheme): { color: string; opacity: num
 /** Opacity of the secondary text (labels, units) derived from a chosen text colour. */
 const SOFT_TEXT_ALPHA = 0.8
 
+/** Secondary text (labels, units, subtitles) of a chosen text colour '#rrggbb'. */
+export function softTextOf(hex: string): string {
+  return withAlpha(hex, SOFT_TEXT_ALPHA)
+}
+
 /**
  * Theme drawn for a style and the user's overrides, the same for the preview and the export. The accent also
  * recolours what the style drew in its accent (profile, mini-map), the text colour the secondary text, and the
@@ -246,7 +251,7 @@ export function resolveOverlayTheme(style: OverlayStyleId, overrides: OverlayOve
   }
   if (text) {
     theme.text = text
-    theme.textSoft = withAlpha(text, SOFT_TEXT_ALPHA)
+    theme.textSoft = softTextOf(text)
   }
   const stylePanel = panelColorOf(base)
   if (base.panel && stylePanel && (overrides.panel || overrides.panelOpacity !== undefined)) {

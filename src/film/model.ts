@@ -24,8 +24,8 @@
  * an item across edits. Pure module (no DOM, no React, no Three, no store).
  */
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
-import { OVERLAY_ANCHORS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
-import type { OverlayAnchor } from '../overlay/settings'
+import { OVERLAY_ANCHORS, OVERLAY_FONT_IDS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN, isHexColor } from '../overlay/settings'
+import type { OverlayAnchor, OverlayFontId } from '../overlay/settings'
 
 export const SHOT_STYLES = ['aucune', 'descente', 'saut', 'situation', 'balayage'] as const
 /**
@@ -75,6 +75,9 @@ export interface FilmText {
   /** same placement as the overlay text widget: one of the nine anchors, size multiplier */
   anchor: OverlayAnchor
   size: number
+  /** its own text colour '#rrggbb' and font; absent = those of the overlay */
+  color?: string
+  font?: OverlayFontId
 }
 
 export const AUTO_STOP_MODES = ['temps-forts', 'rythme'] as const
@@ -383,7 +386,9 @@ export function isValidText(text: unknown): text is FilmText {
     typeof text.text === 'string' &&
     optionalString(text.subtitle) &&
     oneOf(OVERLAY_ANCHORS, text.anchor) &&
-    within(text.size, WIDGET_SIZE_MIN, WIDGET_SIZE_MAX)
+    within(text.size, WIDGET_SIZE_MIN, WIDGET_SIZE_MAX) &&
+    (text.color === undefined || isHexColor(text.color)) &&
+    (text.font === undefined || oneOf(OVERLAY_FONT_IDS, text.font))
   )
 }
 
