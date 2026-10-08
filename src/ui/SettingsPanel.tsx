@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react'
-import { SUN_CHIP_LABELS, SUN_CHIPS, SUN_HOUR_RANGE, clockHourOfSolar, solarDay, sunChipHour } from '../flyover/sun'
+import { SUN_CHIP_LABELS, SUN_CHIPS, SUN_HOUR_RANGE, clockHourOfSolar, solarDay, sunChipHour, sunDayMs } from '../flyover/sun'
 import type { SolarDay } from '../flyover/sun'
 import { TRACK_COLOR_MODES, TRACK_METRICS, hasMetric } from '../flyover/trackColor'
 import { getSettingsHistory } from '../project/history'
@@ -75,6 +75,7 @@ function SunTimeControl() {
   const id = useId()
   const sunHour = useAppStore((s) => s.settings.sunHour)
   const sunFromTrack = useAppStore((s) => s.settings.sunFromTrack)
+  const sunDate = useAppStore((s) => s.settings.sunDate)
   const setSetting = useAppStore((s) => s.setSetting)
   const startTime = useAppStore((s) => s.tracks[0]?.stats.startTime)
   const utcOffsetMin = useAppStore((s) => s.tracks[0]?.utcOffsetMin)
@@ -84,10 +85,10 @@ function SunTimeControl() {
   const follows = sunFromTrack && trackHasTime
   const lat = origin?.lat
   const lon = origin?.lon
-  // same place and day as the scene: frame origin, UTC day of the first track's start (today without time)
+  // same place and day as the scene: frame origin, the day chosen, else the UTC day of the first track's start
   const day = useMemo(
-    () => (lat === undefined || lon === undefined ? null : solarDay(lat, lon, startTime ?? today)),
-    [lat, lon, startTime, today],
+    () => (lat === undefined || lon === undefined ? null : solarDay(lat, lon, sunDayMs(sunDate, startTime, today))),
+    [lat, lon, sunDate, startTime, today],
   )
   const shown = day ?? PLAIN_DAY
   const setHour = (hour: number) => getSettingsHistory().transaction(() => setSetting('sunHour', hour))
@@ -176,6 +177,26 @@ function SunTimeControl() {
           <p id={`${id}-sun-day`} className="field__hint">
             {dayHint}
           </p>
+          <div className="field__label-row">
+            <label className="field__label" htmlFor={`${id}-sun-date`}>
+              Jour
+            </label>
+            <InfoTip text="Vide : le jour de la sortie (aujourd’hui pour une trace sans heure). Une autre saison change la hauteur du soleil et l’heure du lever." />
+          </div>
+          <div className="sun-date">
+            <input
+              id={`${id}-sun-date`}
+              className="input"
+              type="date"
+              value={sunDate}
+              onChange={(e) => setSetting('sunDate', e.currentTarget.value)}
+            />
+            {sunDate && (
+              <button type="button" className="btn btn--secondary" onClick={() => setSetting('sunDate', '')}>
+                Jour de la sortie
+              </button>
+            )}
+          </div>
           <div className="sun-chips" role="group" aria-label="Moments de la journée">
             {SUN_CHIPS.map((chip) => {
               const hour = sunChipHour(chip, shown)
