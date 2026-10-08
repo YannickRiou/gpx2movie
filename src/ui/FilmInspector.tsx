@@ -46,12 +46,14 @@ const SHOT_STYLE_LABELS: Record<ShotStyle, string> = {
   descente: 'Descente',
   saut: 'Saut',
   situation: 'Depuis la région',
+  balayage: 'Balayage',
 }
 const SHOT_HINTS: Record<ShotStyle, string> = {
   aucune: 'Le film commence ou finit directement sur le survol.',
   descente: "La caméra glisse entre la vue d'ensemble de la trace et le survol.",
   saut: "La vue d'ensemble est tenue, puis la caméra rejoint vite le survol.",
   situation: 'La caméra glisse entre une vue de très haut sur la région et le survol.',
+  balayage: "La vue d'ensemble tourne lentement autour de la trace, puis la caméra glisse vers le survol (à la fin : l'inverse).",
 }
 const STOP_CAMERA_HINTS: Record<StopCamera, string> = {
   film: 'La caméra du survol continue, sans mouvement ajouté.',
