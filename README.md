@@ -2,14 +2,14 @@
 
 [![CI](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml/badge.svg)](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml)
 [![Desktop installers](https://github.com/YannickRiou/gpx2movie/actions/workflows/desktop.yml/badge.svg)](https://github.com/YannickRiou/gpx2movie/actions/workflows/desktop.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-113B54.svg)](LICENSE)
-[![Node 24](https://img.shields.io/badge/node-24-113B54?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![TypeScript 6](https://img.shields.io/badge/TypeScript-6.0-113B54?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React 19](https://img.shields.io/badge/React-19-113B54?logo=react&logoColor=white)](https://react.dev/)
-[![three.js r186](https://img.shields.io/badge/three.js-r186-113B54?logo=threedotjs&logoColor=white)](https://threejs.org/)
-[![Vite 8](https://img.shields.io/badge/Vite-8-113B54?logo=vite&logoColor=white)](https://vite.dev/)
-[![Tauri 2](https://img.shields.io/badge/Tauri-2-113B54?logo=tauri&logoColor=white)](https://v2.tauri.app/)
-[![Tested with Vitest](https://img.shields.io/badge/tested_with-Vitest-113B54?logo=vitest&logoColor=white)](https://vitest.dev/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1C2A33.svg)](LICENSE)
+[![Node 24](https://img.shields.io/badge/node-24-1C2A33?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TypeScript 6](https://img.shields.io/badge/TypeScript-6.0-1C2A33?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React 19](https://img.shields.io/badge/React-19-1C2A33?logo=react&logoColor=white)](https://react.dev/)
+[![three.js r186](https://img.shields.io/badge/three.js-r186-1C2A33?logo=threedotjs&logoColor=white)](https://threejs.org/)
+[![Vite 8](https://img.shields.io/badge/Vite-8-1C2A33?logo=vite&logoColor=white)](https://vite.dev/)
+[![Tauri 2](https://img.shields.io/badge/Tauri-2-1C2A33?logo=tauri&logoColor=white)](https://v2.tauri.app/)
+[![Tested with Vitest](https://img.shields.io/badge/tested_with-Vitest-1C2A33?logo=vitest&logoColor=white)](https://vitest.dev/)
 
 OpenFlyover makes a 3D flyover movie from a GPX or FIT track, over the real terrain, with open data.
 
