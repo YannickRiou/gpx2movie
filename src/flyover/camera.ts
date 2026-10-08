@@ -9,6 +9,7 @@
  * (orbit, cinematic swing) follow the film time, so they keep moving while the pacing holds the progress.
  */
 import { Vector3 } from 'three'
+import { clamp, lastIndexAtOrBelow } from '../core/math'
 import type { LocalFrame } from '../core/types'
 import type { HeightSampler } from '../scene/TrackLines'
 import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings, type CameraStyle } from './cameraSettings'
@@ -55,14 +56,14 @@ export const CINEMATIC_PERIOD_S = 40
 
 const DEG = Math.PI / 180
 const NORTH = new Vector3(0, 0, -1)
+/** Scratch vectors of the per-frame helpers (never returned). */
+const _behind = new Vector3()
+const _ahead = new Vector3()
+const _sight = new Vector3()
 
 // ---------------------------------------------------------------------------
 // Path measures
 // ---------------------------------------------------------------------------
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
 
 /** Heading window (half chord length) for `path`, before the smoothing multiplier. */
 export function headingWindowM(path: TrackPath): number {
@@ -81,23 +82,11 @@ export function autoDistanceM(path: TrackPath): number {
 export function headingAt(path: TrackPath, d: number, w: number, frame: LocalFrame): Vector3 {
   const behind = samplePath(path, d - w)
   const ahead = samplePath(path, d + w)
-  const a = frame.toLocal(behind.lon, behind.lat, 0)
-  const b = frame.toLocal(ahead.lon, ahead.lat, 0)
+  const a = frame.toLocal(behind.lon, behind.lat, 0, _behind)
+  const b = frame.toLocal(ahead.lon, ahead.lat, 0, _ahead)
   const heading = new Vector3(b.x - a.x, 0, b.z - a.z)
   if (heading.lengthSq() < 1) return NORTH.clone()
   return heading.normalize()
-}
-
-/** Last index whose cumulative distance is <= d (0 when d is before the start). */
-function indexAtOrBefore(dist: Float64Array, count: number, d: number): number {
-  let lo = 0
-  let hi = count - 1
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1
-    if (dist[mid] <= d) lo = mid
-    else hi = mid - 1
-  }
-  return lo
 }
 
 /**
@@ -112,7 +101,7 @@ export function smoothedTurn(path: TrackPath, d: number, window: number): number
   const cosLat = Math.cos(lat[0] * DEG)
 
   // start one non-empty step before the window, for the direction coming into its first vertex
-  let k = indexAtOrBefore(dist, count, d - window)
+  let k = Math.max(0, lastIndexAtOrBelow(dist, d - window))
   while (k > 0 && dist[k] - dist[k - 1] <= 0) k--
   k = Math.max(0, k - 1)
 
@@ -242,33 +231,42 @@ export function computeCameraView(
   const ground = (sample?.(at.lon, at.lat) ?? at.ele ?? 0) * exaggeration
   const target = frame.toLocal(at.lon, at.lat, ground + liftM)
 
-  const { reference, pitchDeg, distance, ...rest } = placement(path, d, timeS, frame, camera)
-  const viewAngle = rest.viewAngle + (options.orbitRad ?? 0)
+  const place = placement(path, d, timeS, frame, camera)
+  place.viewAngle += options.orbitRad ?? 0
+  const position = positionAround(target, place)
+  if (sample) position.y = lowestClearY(position, target, frame, sample, exaggeration)
+  return { target, position }
+}
+
+/** Camera on the sphere around `target` given by the placement (pitch clamped to PITCH_MIN_DEG..PITCH_MAX_DEG). */
+function positionAround(target: Vector3, { reference, viewAngle, pitchDeg, distance }: Placement): Vector3 {
   const pitch = clamp(pitchDeg, PITCH_MIN_DEG, PITCH_MAX_DEG) * DEG
   // viewing direction = reference turned clockwise (seen from above) by viewAngle; right = (-z, 0, x)
   const cos = Math.cos(viewAngle)
   const sin = Math.sin(viewAngle)
   const look = new Vector3(reference.x * cos - reference.z * sin, 0, reference.z * cos + reference.x * sin)
-  const position = target
+  return target
     .clone()
     .addScaledVector(look, -distance * Math.cos(pitch))
     .setY(target.y + distance * Math.sin(pitch))
+}
 
-  if (sample) {
-    // The sight line at fraction f (0 = camera) has height y + (target.y - y) * f; keep it above the ground.
-    const point = new Vector3()
-    let minY = position.y
-    for (let i = 0; i <= LINE_OF_SIGHT_SAMPLES; i++) {
-      const f = (i / LINE_OF_SIGHT_SAMPLES) * LINE_OF_SIGHT_MAX_FRACTION
-      point.lerpVectors(position, target, f).setY(target.y)
-      const at = frame.toLonLat(point)
-      const ground = sample(at.lon, at.lat)
-      if (ground === undefined) continue
-      const clearance = MIN_GROUND_CLEARANCE_M * (1 - f)
-      const floorY = frame.toLocal(at.lon, at.lat, ground * exaggeration + clearance, point).y
-      minY = Math.max(minY, (floorY - target.y * f) / (1 - f))
-    }
-    position.y = minY
+/**
+ * Lowest camera height (local y, at least `position.y`) that keeps the sight line to `target` above the
+ * (exaggerated) terrain: the line at fraction f (0 = camera) has height y + (target.y - y) · f and must clear the
+ * ground there by MIN_GROUND_CLEARANCE_M · (1 - f).
+ */
+function lowestClearY(position: Vector3, target: Vector3, frame: LocalFrame, sample: HeightSampler, exaggeration: number): number {
+  let minY = position.y
+  for (let i = 0; i <= LINE_OF_SIGHT_SAMPLES; i++) {
+    const f = (i / LINE_OF_SIGHT_SAMPLES) * LINE_OF_SIGHT_MAX_FRACTION
+    _sight.lerpVectors(position, target, f).setY(target.y)
+    const at = frame.toLonLat(_sight)
+    const ground = sample(at.lon, at.lat)
+    if (ground === undefined) continue
+    const clearance = MIN_GROUND_CLEARANCE_M * (1 - f)
+    const floorY = frame.toLocal(at.lon, at.lat, ground * exaggeration + clearance, _sight).y
+    minY = Math.max(minY, (floorY - target.y * f) / (1 - f))
   }
-  return { target, position }
+  return minY
 }

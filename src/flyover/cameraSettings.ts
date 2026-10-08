@@ -31,7 +31,7 @@ export interface CameraSettings {
   northUp: boolean
 }
 
-/** Today's chase view. */
+/** Default camera: the chase view. */
 export const DEFAULT_CAMERA: CameraSettings = {
   style: 'chase',
   distance: 1,

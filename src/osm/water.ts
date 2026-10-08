@@ -9,7 +9,16 @@
  * rounded; only that compact result is cached (localStorage, 30 days).
  */
 import type { LonLat, Track } from '../core/types'
-import { cachedOverpassQuery, corridorBoxes, OverpassError, QUERY_TIMEOUT_S, simplifyLine, type OverpassDeps } from './overpass'
+import {
+  M_PER_DEG,
+  QUERY_TIMEOUT_S,
+  cachedOverpassQuery,
+  corridorBoxes,
+  overpassBbox,
+  overpassElements,
+  simplifyLine,
+  type OverpassDeps,
+} from './overpass'
 
 /** Corridor around the track (metres): the lakes seen from the flyover, not only those it passes by. */
 export const WATER_MARGIN_M = 8000
@@ -42,7 +51,7 @@ const RIVER_WATER = new Set(['river', 'stream', 'canal', 'ditch', 'drain', 'stre
 /** Overpass QL query of the water areas inside the corridor of `track` (full geometry). */
 export function waterQuery(track: Track): string {
   const lines = corridorBoxes(track, WATER_MARGIN_M).flatMap((b) => {
-    const bbox = `(${b.south.toFixed(5)},${b.west.toFixed(5)},${b.north.toFixed(5)},${b.east.toFixed(5)})`
+    const bbox = overpassBbox(b)
     return [
       `  way["natural"="water"]${bbox};`,
       `  relation["natural"="water"]["type"="multipolygon"]${bbox};`,
@@ -69,8 +78,6 @@ interface WaterElement {
 }
 
 type Ring = LonLat[]
-
-const M_PER_DEG = 111_320
 
 function kindOf(tags: Record<string, string> = {}): WaterPolygon['kind'] {
   return tags.waterway === 'riverbank' || RIVER_WATER.has(tags.water ?? '') ? 'river' : 'lake'
@@ -155,10 +162,7 @@ function polygonsOf(id: string, kind: WaterPolygon['kind'], outers: Ring[], inne
 
 /** Water polygons of an Overpass `out geom` response, largest first; throws on a server-side error. */
 export function parseWater(json: unknown): WaterPolygon[] {
-  const record = json as { elements?: unknown; remark?: unknown }
-  if (typeof record?.remark === 'string' && /error/i.test(record.remark)) throw new OverpassError(record.remark, 0)
-  if (!Array.isArray(record?.elements)) throw new OverpassError('réponse Overpass inattendue', 0)
-  const elements = record.elements as WaterElement[]
+  const elements = overpassElements(json) as WaterElement[]
   // a way that is also a member of a returned relation is drawn by the relation
   const members = new Set(elements.flatMap((e) => (e.type === 'relation' ? (e.members ?? []).map((m) => m.ref) : [])))
   const polygons: WaterPolygon[] = []

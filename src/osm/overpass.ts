@@ -9,8 +9,9 @@
  * or the distance later only filters the cached result and never sends a new query.
  *
  * Usage policy: requests are sent one at a time (module queue), results are cached in memory and in the
- * platform storage (`getPlatform().storage`, localStorage on both targets) keyed by a hash of the query, a busy server (HTTP 429 / 504) is retried once after a delay
- * and then the next endpoint of `OVERPASS_ENDPOINTS` is tried.
+ * platform storage (`getPlatform().storage`, localStorage on both targets) keyed by a hash of the query, a busy
+ * server (HTTP 429 / 504) is retried once after a delay and then the next endpoint of `OVERPASS_ENDPOINTS` is tried.
+ * The query builder, the response guard and the planar distances are shared with `water.ts` and `landmarks.ts`.
  *
  * The POST body is form-encoded so the browser sends a "simple" CORS request: overpass-api.de answers the
  * OPTIONS preflight with 406.
@@ -65,7 +66,14 @@ export interface OsmFeature {
 // Query
 // ---------------------------------------------------------------------------
 
-const M_PER_DEG = 111_320
+/** Metres per degree of latitude (and of longitude at the equator), for the planar approximations below. */
+export const M_PER_DEG = 111_320
+
+/** Distance (metres) between two nearby points, equirectangular around `a`. */
+export function planarDistanceM(a: LonLat, b: LonLat): number {
+  const k = Math.cos((a.lat * Math.PI) / 180)
+  return Math.hypot((b.lon - a.lon) * k, b.lat - a.lat) * M_PER_DEG
+}
 
 /** Perpendicular distance (metres) of p to segment ab, equirectangular around a. */
 function segmentDistanceM(p: LonLat, a: LonLat, b: LonLat): number {
@@ -105,11 +113,6 @@ export function simplifyLine(points: readonly LonLat[], toleranceM: number): Lon
   return points.filter((_, i) => keep[i] === 1)
 }
 
-function segmentLengthM(a: LonLat, b: LonLat): number {
-  const k = Math.cos((a.lat * Math.PI) / 180)
-  return Math.hypot((b.lon - a.lon) * k, b.lat - a.lat) * M_PER_DEG
-}
-
 /** Insert points so that no segment is longer than `stepM` (a straight track still gets several boxes). */
 function subdivide(points: readonly LonLat[], stepM: number): LonLat[] {
   const out: LonLat[] = []
@@ -117,7 +120,7 @@ function subdivide(points: readonly LonLat[], stepM: number): LonLat[] {
     const p = points[i]
     if (i > 0) {
       const a = points[i - 1]
-      const n = Math.ceil(segmentLengthM(a, p) / stepM)
+      const n = Math.ceil(planarDistanceM(a, p) / stepM)
       for (let k = 1; k < n; k++) out.push({ lon: a.lon + ((p.lon - a.lon) * k) / n, lat: a.lat + ((p.lat - a.lat) * k) / n })
     }
     out.push(p)
@@ -182,10 +185,15 @@ const STATEMENTS: readonly string[] = [
   'nwr["natural"="glacier"]["name"]',
 ]
 
+/** Overpass bounding box filter `(south,west,north,east)`, 1e-5° (~1 m). */
+export function overpassBbox(b: LonLatBounds): string {
+  return `(${b.south.toFixed(5)},${b.west.toFixed(5)},${b.north.toFixed(5)},${b.east.toFixed(5)})`
+}
+
 /** Overpass QL query for the landmarks inside `boxes` (ways and relations reduced to their centre). */
 export function buildOverpassQuery(boxes: readonly LonLatBounds[]): string {
   const lines = boxes.flatMap((b) => {
-    const bbox = `(${b.south.toFixed(5)},${b.west.toFixed(5)},${b.north.toFixed(5)},${b.east.toFixed(5)})`
+    const bbox = overpassBbox(b)
     return STATEMENTS.map((s) => `  ${s}${bbox};`)
   })
   return `[out:json][timeout:${QUERY_TIMEOUT_S}];\n(\n${lines.join('\n')}\n);\nout center tags qt;\n`
@@ -223,13 +231,18 @@ function classify(tags: Record<string, string>): { kind: OsmKind; detail?: strin
   return null
 }
 
-/** Named, classified features of an Overpass JSON response; throws on a server-side error. */
-export function parseOverpass(json: unknown): OsmFeature[] {
+/** Elements of an Overpass JSON response; throws an `OverpassError` on a server-side error or an unexpected shape. */
+export function overpassElements(json: unknown): unknown[] {
   const record = json as { elements?: unknown; remark?: unknown }
   if (typeof record?.remark === 'string' && /error/i.test(record.remark)) throw new OverpassError(record.remark, 0)
   if (!Array.isArray(record?.elements)) throw new OverpassError('réponse Overpass inattendue', 0)
+  return record.elements
+}
+
+/** Named, classified features of an Overpass JSON response; throws on a server-side error. */
+export function parseOverpass(json: unknown): OsmFeature[] {
   const out: OsmFeature[] = []
-  for (const element of record.elements as OverpassElement[]) {
+  for (const element of overpassElements(json) as OverpassElement[]) {
     const tags = element.tags
     if (!tags) continue
     const name = (tags['name:fr'] ?? tags.name ?? '').trim()
