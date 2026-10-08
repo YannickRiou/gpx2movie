@@ -8,13 +8,18 @@
  * Lifecycle of a node: empty -> loading -> ready | failed. `update()` renders the selection,
  * starts loads within a concurrency budget, rebuilds dirty geometries (exaggeration change) with a
  * per-frame budget and periodically unloads nodes that have not been visited for a while.
+ *
+ * Epochs (`setEpoch`): a second imagery source blended over the drawn tiles by one shared uniform (cross-fades of
+ * the film's dated orthophotos). Its textures are a slot per node, loaded for the drawn nodes only, freed with the
+ * node or when the source changes; the tile material samples both (`patchEpochShader`), one program for all tiles.
  */
 import { FrontSide, Group, Mesh, MeshStandardMaterial } from 'three'
-import type { PerspectiveCamera, Texture } from 'three'
+import type { PerspectiveCamera, Texture, WebGLProgramParametersWithUniforms } from 'three'
 import type {
   BuildTileGeometryOptions,
   DemEncoding,
   HeightGrid,
+  ImagerySource,
   LoadImageryTexture,
   TerrainEngine,
   TerrainEngineOptions,
@@ -126,6 +131,38 @@ export function isNoDataError(error: unknown): boolean {
   return error instanceof TileFetchError && error.status >= 400 && error.status < 500
 }
 
+// ---------------------------------------------------------------------------
+// Epoch blend (second imagery source over the tiles)
+// ---------------------------------------------------------------------------
+
+/** Per-material uniforms of the epoch blend: the node's dated texture and whether it is ready (0 / 1). */
+interface EpochUniforms {
+  epochMap: { value: Texture | null }
+  epochOn: { value: number }
+}
+
+const EPOCH_VERTEX_HEAD = 'varying vec2 vEpochUv;\n'
+const EPOCH_FRAGMENT_HEAD = 'uniform sampler2D epochMap;\nuniform float epochOn;\nuniform float epochMix;\nvarying vec2 vEpochUv;\n'
+/** after the base colour (imagery or grey): premultiplied dated texel over it, its alpha keeping the gaps current */
+const EPOCH_FRAGMENT_BODY = `
+  vec4 epochTexel = texture2D( epochMap, vEpochUv );
+  float epochK = epochOn * epochMix;
+  diffuseColor.rgb = diffuseColor.rgb * ( 1.0 - epochK * epochTexel.a ) + epochK * epochTexel.rgb;`
+
+/** Extend the standard material's shaders with the epoch blend (exported for tests). */
+export function patchEpochShader(shader: Pick<WebGLProgramParametersWithUniforms, 'uniforms' | 'vertexShader' | 'fragmentShader'>, uniforms: Record<string, { value: unknown }>): void {
+  Object.assign(shader.uniforms, uniforms)
+  shader.vertexShader = EPOCH_VERTEX_HEAD + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vEpochUv = uv;')
+  shader.fragmentShader = EPOCH_FRAGMENT_HEAD + shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>${EPOCH_FRAGMENT_BODY}`)
+}
+
+/** The dated texture of one node: loading, ready (texture, possibly none for a tile it does not cover) or failed. */
+interface EpochSlot {
+  state: 'loading' | 'ready' | 'failed'
+  abort: AbortController
+  texture: Texture | undefined
+}
+
 interface ResolvedOptions {
   frame: TerrainEngineOptions['frame']
   area: TerrainEngineOptions['area']
@@ -212,6 +249,12 @@ export function createTerrainEngine(
   let changed = false
   let disposed = false
 
+  /** blended source (null: none) and its weight, shared by every tile material */
+  let epochSource: ImagerySource | null = null
+  const epochMix = { value: 0 }
+  const epochSlots = new Map<TileNode, EpochSlot>()
+  let epochLoading = 0
+
   // --- tree -------------------------------------------------------------------
 
   function buildTree(): void {
@@ -231,7 +274,7 @@ export function createTerrainEngine(
   }
 
   function createMaterial(texture: Texture | undefined): MeshStandardMaterial {
-    return new MeshStandardMaterial({
+    const material = new MeshStandardMaterial({
       map: texture ?? null,
       color: texture ? 0xffffff : NO_IMAGERY_COLOR,
       roughness: 1,
@@ -239,6 +282,65 @@ export function createTerrainEngine(
       wireframe: opts.wireframe,
       side: FrontSide,
     })
+    const epoch: EpochUniforms = { epochMap: { value: null }, epochOn: { value: 0 } }
+    material.userData.epoch = epoch
+    material.onBeforeCompile = (shader) => patchEpochShader(shader, { ...epoch, epochMix })
+    material.customProgramCacheKey = () => 'openflyover-terrain-epoch'
+    return material
+  }
+
+  function epochUniformsOf(node: TileNode): EpochUniforms | undefined {
+    return node.mesh?.material.userData.epoch as EpochUniforms | undefined
+  }
+
+  // --- epoch textures --------------------------------------------------------------
+
+  function startEpochLoad(node: TileNode, rank: number, source: ImagerySource): void {
+    const slot: EpochSlot = { state: 'loading', abort: new AbortController(), texture: undefined }
+    epochSlots.set(node, slot)
+    if (source.coverage && !boundsIntersect(source.coverage, node.bounds)) {
+      slot.state = 'ready' // nothing to blend there: the current imagery stays
+      return
+    }
+    epochLoading++
+    const { signal } = slot.abort
+    io.loadImageryTexture(node.key, source, io.fetcher, { zoomOffset: opts.imageryZoomOffset, signal, priority: rank, transparent: true }).then(
+      (texture) => {
+        if (epochSlots.get(node) !== slot || disposed) {
+          texture.dispose()
+          return
+        }
+        epochLoading--
+        slot.state = 'ready'
+        slot.texture = texture
+        const uniforms = epochUniformsOf(node)
+        if (uniforms) {
+          uniforms.epochMap.value = texture
+          uniforms.epochOn.value = 1
+        }
+      },
+      () => {
+        if (epochSlots.get(node) !== slot) return
+        epochLoading--
+        slot.state = 'failed' // the current imagery stays on that tile
+      },
+    )
+  }
+
+  function cancelEpoch(node: TileNode): void {
+    const slot = epochSlots.get(node)
+    if (!slot) return
+    epochSlots.delete(node)
+    if (slot.state === 'loading') {
+      slot.abort.abort()
+      epochLoading--
+    }
+    const uniforms = epochUniformsOf(node)
+    if (uniforms) {
+      uniforms.epochMap.value = null
+      uniforms.epochOn.value = 0
+    }
+    slot.texture?.dispose()
   }
 
   // --- height field cache ----------------------------------------------------
@@ -399,6 +501,7 @@ export function createTerrainEngine(
   /** Free GPU resources and cached grid of one node; the node stays in the tree. */
   function unloadNode(node: TileNode): void {
     cancelLoad(node)
+    cancelEpoch(node)
     if (node.mesh) {
       group.remove(node.mesh)
       node.mesh.material.dispose()
@@ -616,8 +719,39 @@ export function createTerrainEngine(
     if (dirtyCount > 0) rebuildDirty()
     if (frame % cfg.sweepEveryFrames === 0) sweep()
 
-    refreshStats(loadingCount + (toLoad.length - started), selection.pendingVisible)
+    const epochPending = updateEpochs()
+    refreshStats(loadingCount + (toLoad.length - started) + epochPending, selection.pendingVisible + epochPending)
     flushChange()
+  }
+
+  /**
+   * Start the dated textures of the drawn nodes that have none, within the load budget, highest priority first (the
+   * order of the selection). Returns how many drawn nodes still wait for theirs while the blend shows (weight > 0).
+   */
+  function updateEpochs(): number {
+    const source = epochSource
+    if (!source) return 0
+    let waiting = 0
+    for (let i = 0; i < rendered.length; i++) {
+      const node = rendered[i]
+      if (!epochSlots.has(node) && epochLoading < cfg.maxConcurrentLoads) startEpochLoad(node, i, source)
+      const state = epochSlots.get(node)?.state
+      if (epochMix.value > 0 && state !== 'ready' && state !== 'failed') waiting++
+    }
+    return waiting
+  }
+
+  function clearEpochs(): void {
+    for (const node of [...epochSlots.keys()]) cancelEpoch(node)
+  }
+
+  function setEpoch(imagery: ImagerySource | null, mix: number): void {
+    if (disposed) return
+    if ((imagery?.id ?? null) !== (epochSource?.id ?? null)) {
+      clearEpochs()
+      epochSource = imagery
+    }
+    epochMix.value = imagery ? Math.min(1, Math.max(0, mix)) : 0
   }
 
   /** Fetch ranks of prefetches start here: after any request of the current view (lower rank = sooner). */
@@ -659,6 +793,7 @@ export function createTerrainEngine(
       opts.segments !== prev.segments
     if (sourcesChanged) {
       disposeTree()
+      clearEpochs()
       if (terrainChanged) clearHeightField()
       buildTree()
       refreshStats(0)
@@ -685,6 +820,7 @@ export function createTerrainEngine(
     if (disposed) return
     disposed = true
     disposeTree()
+    clearEpochs()
     listeners.clear()
     clearHeightField()
     if (ownsFetcher) io.fetcher.clear()
@@ -694,5 +830,5 @@ export function createTerrainEngine(
 
   buildTree()
 
-  return { group, update, sampleHeight, setOptions, onChange, stats, prefetch, dispose }
+  return { group, update, sampleHeight, setOptions, onChange, stats, prefetch, setEpoch, dispose }
 }

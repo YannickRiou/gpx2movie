@@ -6,6 +6,7 @@ import {
   warnsInMemory,
   estimateRemainingS,
   exportRenderScale,
+  filmRate,
   flushDrapes,
   isExportBusy,
   registerDrapeFlush,
@@ -222,6 +223,36 @@ describe('render scale and timings', () => {
     store().start(REQUEST)
     store().begin(store().request!.id, 10, 0)
     expect(store().timings).toEqual(EMPTY_TIMINGS)
+  })
+
+  it('keeps the speed of the last film (per frame and megapixel) across exports, not from a still', () => {
+    expect(filmRate(EMPTY_TIMINGS, 10, 1000, 1000)).toBeNull()
+    expect(filmRate({ ...EMPTY_TIMINGS, renderMs: 3000, waitMs: 1000, encodeMs: 1000 }, 10, 1000, 500)).toBeCloseTo(1)
+    const store = useExportStore.getState
+    expect(store().secondsPerMegapixel).toBeNull()
+    store().start(REQUEST) // 320 × 180
+    store().begin(store().request!.id, 10, 0)
+    store().reportFrame(10, 100, { ...EMPTY_TIMINGS, rendered: 10, renderMs: 576 })
+    store().complete(RESULT)
+    expect(store().secondsPerMegapixel).toBeCloseTo(1)
+    store().start({ ...REQUEST, still: { progress: 0, type: 'image/png' } })
+    store().begin(store().request!.id, 1, 0)
+    store().reportFrame(1, 100, { ...EMPTY_TIMINGS, rendered: 1, renderMs: 5000 })
+    store().complete(RESULT)
+    store().reset()
+    expect(store().secondsPerMegapixel).toBeCloseTo(1)
+  })
+
+  it('hands its result over without revoking it', () => {
+    const store = useExportStore.getState
+    store().start(REQUEST)
+    store().begin(store().request!.id, 1, 0)
+    store().complete(RESULT)
+    expect(store().takeResult()).toEqual(RESULT)
+    expect(store()).toMatchObject({ phase: 'done', result: null })
+    expect(store().takeResult()).toBeNull()
+    store().start(REQUEST)
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
   })
 })
 

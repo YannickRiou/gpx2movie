@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
+import { useBatchStore } from './export/batch'
 import { isExportBusy, useExportStore } from './export/store'
 import { addStop, addText } from './film/timeline'
 import { getPlatform } from './platform'
@@ -17,6 +18,7 @@ import { Icon } from './ui/icons'
 import type { IconName } from './ui/icons'
 import { LandmarkPanel } from './ui/LandmarkPanel'
 import { ModifiedMarker } from './ui/ModifiedMarker'
+import { OfflinePanel } from './ui/OfflinePanel'
 import { OverlayPanel } from './ui/OverlayPanel'
 import { chooseFilesToOpen, openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
@@ -59,7 +61,8 @@ const isNarrow = () => window.innerWidth < ONE_SIDE_MAX_WIDTH
 /** below this width the panel is a drawer over the view (shell.css): it starts closed and closes on Escape or outside */
 const DRAWER_MAX_WIDTH = 1024
 const isDrawer = () => window.innerWidth < DRAWER_MAX_WIDTH
-const isExporting = () => isExportBusy(useExportStore.getState().phase)
+// a batch keeps the shell locked between its jobs too (the export store is idle for a moment between two)
+const isExporting = () => isExportBusy(useExportStore.getState().phase) || useBatchStore.getState().phase === 'running'
 /** a modal dialog (help, sources) is open: it takes the keyboard, Escape closes it */
 const isDialogOpen = () => document.querySelector('dialog[open]') !== null
 
@@ -126,7 +129,9 @@ function Fold({ title, keys, hidden, children }: { title: string; keys?: (keyof 
 
 export default function App() {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
-  const exporting = useExportStore((s) => isExportBusy(s.phase))
+  const exportBusy = useExportStore((s) => isExportBusy(s.phase))
+  const batchRunning = useBatchStore((s) => s.phase === 'running')
+  const exporting = exportBusy || batchRunning
   const selected = useAppStore((s) => s.filmSelection !== null && s.tracks.length > 0)
   const [shell, dispatch] = useReducer(shellReducer, undefined, () => ({
     ...loadPrefs(),
@@ -373,6 +378,9 @@ export default function App() {
               </Fold>
               <Fold title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
                 <WeatherPanel />
+              </Fold>
+              <Fold title="Hors ligne" hidden={!hasTracks}>
+                <OfflinePanel />
               </Fold>
             </>,
           )}

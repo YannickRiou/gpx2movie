@@ -13,6 +13,8 @@
  *   table of the project document (`film/media.ts`), so the settings and the undo history stay light.
  * - `audio`: music clips of the soundtrack, in film time too, on the « Musique » lane: played along by the preview
  *   and mixed into the exported film (`film/audio.ts`); their files are in the media table as well.
+ * - `epochs`: blocks of film time during which the terrain shows dated orthophotos (« Remonter le temps »), cross-faded
+ *   in and out by the terrain engine (`epochAt`), with an optional badge drawn by the overlay.
  *
  * Part of `Settings` (key `film`): saved in the project document, undone, read the same way by the preview and
  * the export. Ids are stable (`stop-3`, `text-1`, `auto-4520` for a generated stop) so the timeline can select
@@ -165,6 +167,22 @@ export const MEDIA_DEFAULTS: Pick<FilmMedia, 'layout' | 'anchor' | 'size' | 'ken
   kenBurns: true,
 }
 
+/**
+ * A block of film time during which the terrain shows a dated imagery source of the catalogue (`HISTORICAL_IMAGERY`
+ * in terrain/sources.ts) instead of the current one, cross-faded at both ends (`epochMixAt`).
+ */
+export interface FilmEpoch {
+  id: string
+  startS: number
+  durationS: number
+  /** id of the dated imagery source (an unknown id is ignored: the current imagery stays) */
+  imagerySourceId: string
+  /** text of the badge (default: the years of the source, « 1950–1965 ») */
+  label?: string
+  /** the overlay draws the badge (label and « Photos aériennes ») while the block is shown */
+  badge: boolean
+}
+
 export interface Film {
   opening: FilmShot
   closing: FilmShot
@@ -178,6 +196,8 @@ export interface Film {
   media: FilmMedia[]
   /** music of the soundtrack (they may overlap: mixed) */
   audio: FilmAudio[]
+  /** dated imagery blocks (they may overlap: the one started last is shown) */
+  epochs: FilmEpoch[]
 }
 
 /** Slider ranges (also the validity ranges of a loaded project), seconds. */
@@ -197,6 +217,7 @@ export const DEFAULT_FILM: Film = {
   texts: [],
   media: [],
   audio: [],
+  epochs: [],
 }
 
 /**
@@ -213,6 +234,43 @@ export function clipTimeS(media: Pick<FilmMedia, 'startS' | 'inS' | 'outS' | 'sy
   return media.outS === undefined ? t : Math.min(t, media.outS)
 }
 
+/** Cross-fade at both ends of an epoch block (seconds of film time, at most a quarter of its duration each). */
+export const EPOCH_FADE_S = 1
+/** The dated imagery of an upcoming block starts loading this long before it (seconds of film time). */
+export const EPOCH_LEAD_S = 2
+
+const smoothstep = (x: number) => {
+  const t = Math.min(1, Math.max(0, x))
+  return t * t * (3 - 2 * t)
+}
+
+/** Weight of the dated imagery of `epoch` at film time `timeS`: 0 outside the block, smooth fades at both ends. */
+export function epochMixAt(epoch: Pick<FilmEpoch, 'startS' | 'durationS'>, timeS: number): number {
+  const local = timeS - epoch.startS
+  if (local < 0 || local >= epoch.durationS) return 0
+  const fade = Math.min(EPOCH_FADE_S, epoch.durationS / 4)
+  return fade > 0 ? smoothstep(local / fade) * smoothstep((epoch.durationS - local) / fade) : 1
+}
+
+/**
+ * The epoch block the terrain shows at film time `timeS` and its weight: the block started last among those that
+ * contain it; else the next one starting within `EPOCH_LEAD_S` with weight 0 (its tiles load ahead); else null.
+ * Pure function of the time: the preview and the export show the same imagery at the same film time.
+ */
+export function epochAt(epochs: readonly FilmEpoch[], timeS: number): { epoch: FilmEpoch; mix: number } | null {
+  let current: FilmEpoch | null = null
+  let next: FilmEpoch | null = null
+  for (const e of epochs) {
+    if (timeS >= e.startS && timeS < e.startS + e.durationS) {
+      if (!current || e.startS >= current.startS) current = e
+    } else if (e.startS > timeS && e.startS - timeS <= EPOCH_LEAD_S && (!next || e.startS < next.startS)) {
+      next = e
+    }
+  }
+  if (current) return { epoch: current, mix: epochMixAt(current, timeS) }
+  return next ? { epoch: next, mix: 0 } : null
+}
+
 /** Film time taken by an opening or closing shot. */
 export function shotDurationS(shot: FilmShot): number {
   return shot.style === 'aucune' ? 0 : shot.durationS
@@ -222,11 +280,11 @@ export function shotDurationS(shot: FilmShot): number {
 // Ids
 // ---------------------------------------------------------------------------
 
-export type FilmItemKind = 'stop' | 'speed' | 'text' | 'media' | 'music'
+export type FilmItemKind = 'stop' | 'speed' | 'text' | 'media' | 'music' | 'epoch'
 
 /** Next free id `<kind>-<n>` of the film (one more than the highest number used by that kind). */
 export function nextFilmId(film: Film, kind: FilmItemKind): string {
-  const lanes = { stop: film.stops, speed: film.speeds, text: film.texts, media: film.media, music: film.audio }
+  const lanes = { stop: film.stops, speed: film.speeds, text: film.texts, media: film.media, music: film.audio, epoch: film.epochs }
   const items: readonly { id: string }[] = lanes[kind]
   const pattern = new RegExp(`^${kind}-(\\d+)$`)
   let max = 0
@@ -340,6 +398,10 @@ export function isValidAudio(audio: unknown): audio is FilmAudio {
   )
 }
 
+export function isValidEpoch(epoch: unknown): epoch is FilmEpoch {
+  return isRecord(epoch) && isValidTimed(epoch) && isId(epoch.imagerySourceId) && optionalString(epoch.label) && typeof epoch.badge === 'boolean'
+}
+
 /**
  * Value checks of a film whose top-level shape already matches `DEFAULT_FILM` (see `SETTING_CHECKS` in the
  * project document): shots, every item of every lane, speed portions apart, ids unique across the film.
@@ -349,14 +411,16 @@ export function isValidFilm(film: Film): boolean {
   if (!oneOf(AUTO_STOP_MODES, film.autoMode)) return false
   if (!film.stops.every(isValidStop) || !film.texts.every(isValidText) || !film.media.every(isValidMedia)) return false
   if (!film.speeds.every(isValidSpeed) || !apart(film.speeds) || !film.audio.every(isValidAudio)) return false
-  const ids = [...film.stops, ...film.speeds, ...film.texts, ...film.media, ...film.audio].map((item) => item.id)
+  if (!film.epochs.every(isValidEpoch)) return false
+  const ids = [...film.stops, ...film.speeds, ...film.texts, ...film.media, ...film.audio, ...film.epochs].map((item) => item.id)
   return new Set(ids).size === ids.length
 }
 
 /**
  * Fill-in of a film saved before a field existed (`SETTING_UPGRADES`): missing fields from `DEFAULT_FILM`, except
  * `autoMode`, which keeps the automatic stops of those films following the pacing ('rythme') as they did; media
- * saved before their placement get `MEDIA_DEFAULTS`; a film saved before the music gets no music (`audio: []`).
+ * saved before their placement get `MEDIA_DEFAULTS`; a film saved before the music gets no music (`audio: []`), one
+ * saved before the epochs none (`epochs: []`).
  */
 export function withFilmDefaults(raw: unknown): unknown {
   if (!isRecord(raw)) return raw

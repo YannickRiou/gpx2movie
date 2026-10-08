@@ -11,6 +11,8 @@
  *   A waiter whose AbortSignal fires is rejected with a DOMException("AbortError"); the underlying network
  *   request is only cancelled when its last waiter leaves.
  *   Evicted bitmaps are closed (`ImageBitmap.close()`) to release GPU/CPU memory promptly.
+ *   Cache first: when a registered reader of stored tiles (offline packs, `setStoredTileReader`) covers the URL,
+ *   the stored copy is decoded instead of asking the network; a miss or an unreadable copy falls back to the network.
  */
 import type { TileFetcher, TileFetcherStats } from '../core/types'
 
@@ -21,6 +23,23 @@ export interface TileFetcherOptions {
   maxEntries?: number
   /** Pause before the first automatic retry, in milliseconds (×4 before each next one). Default 250. */
   retryDelayMs?: number
+  /** Stored tiles read before the network. Default: the reader given to `setStoredTileReader`, read at each request. */
+  storedTiles?: StoredTileReader | null
+}
+
+/** Tiles kept on this device (offline packs). `covers` is synchronous and cheap: it gates the asynchronous lookup. */
+export interface StoredTileReader {
+  /** true when a stored pack may hold this URL (its source is in a pack) */
+  covers(url: string): boolean
+  /** the stored tile, null when none holds it */
+  get(url: string): Promise<Blob | null>
+}
+
+let storedTileReader: StoredTileReader | null = null
+
+/** Reader used by every fetcher created without `storedTiles` (the offline packs register here at start-up). */
+export function setStoredTileReader(reader: StoredTileReader | null): void {
+  storedTileReader = reader
 }
 
 /** Thrown when the server answers with a non-2xx status. Carries the status and the URL. */
@@ -74,6 +93,21 @@ export async function fetchTileBlob(url: string, signal?: AbortSignal, reload = 
   const response = await fetch(url, reload ? { signal, cache: 'reload' } : { signal })
   if (!response.ok) throw new TileFetchError(url, response.status)
   return response.blob()
+}
+
+/**
+ * `fetchTileBlob` with the retry policy of the fetcher (network errors, 5xx, 429, 400; 3 retries after
+ * `retryDelayMs`, ×4 each time, outside the HTTP cache). Shared by the fetcher and the offline packs.
+ */
+export async function downloadTile(url: string, signal?: AbortSignal, retryDelayMs = 250): Promise<Blob> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetchTileBlob(url, signal, attempt > 0)
+    } catch (error) {
+      if (signal?.aborted || attempt >= MAX_RETRIES || !isRetryable(error)) throw error
+      if (retryDelayMs > 0) await delay(retryDelayMs * 4 ** attempt)
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -258,15 +292,19 @@ export function createTileFetcher(options: TileFetcherOptions = {}): TileFetcher
 
   async function loadWithRetry(request: PendingRequest): Promise<ImageBitmap> {
     const signal = request.controller.signal
-    for (let attempt = 0; ; attempt++) {
+    // no await before the network when no pack covers the URL (same timing as without packs)
+    const stored = options.storedTiles === undefined ? storedTileReader : options.storedTiles
+    if (stored?.covers(request.url)) {
       try {
-        const blob = await fetchTileBlob(request.url, signal, attempt > 0)
-        return await decodeBlob(blob)
+        const blob = await stored.get(request.url)
+        if (signal.aborted) throw createAbortError()
+        if (blob) return await decodeBlob(blob)
       } catch (error) {
-        if (signal.aborted || attempt >= MAX_RETRIES || !isRetryable(error)) throw error
-        if (retryDelayMs > 0) await delay(retryDelayMs * 4 ** attempt)
+        if (signal.aborted) throw error
+        // unreadable stored copy: the network below
       }
     }
+    return decodeBlob(await downloadTile(request.url, signal, retryDelayMs))
   }
 
   async function run(request: PendingRequest): Promise<void> {

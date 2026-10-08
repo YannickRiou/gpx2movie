@@ -23,11 +23,16 @@ import { overlayExtras, photoAssets } from './exportOverlay'
  * the landmarks, a decoded photo, a video frame or the view size change (store subscriptions, no React render per
  * frame). Video clips are video elements playing along during the playback, seeked to the film time when scrubbing
  * (none during an export, which decodes its own frames). Rendered while the overlay or the source credits are
- * enabled, or the film has photos or clips.
+ * enabled, or the film has photos, clips or epoch badges.
  */
 export function OverlayCanvas() {
   const enabled = useAppStore(
-    (s) => (s.settings.overlay.enabled || s.settings.overlay.credits.enabled || s.settings.film.media.length > 0) && s.tracks.length > 0,
+    (s) =>
+      (s.settings.overlay.enabled ||
+        s.settings.overlay.credits.enabled ||
+        s.settings.film.media.length > 0 ||
+        s.settings.film.epochs.some((e) => e.badge)) &&
+      s.tracks.length > 0,
   )
   return enabled ? <OverlayPreview /> : null
 }

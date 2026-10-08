@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TileFetchError, createTileFetcher, fetchTileBlob } from './fetch'
+import { TileFetchError, createTileFetcher, downloadTile, fetchTileBlob, setStoredTileReader } from './fetch'
+import type { StoredTileReader } from './fetch'
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -366,5 +367,94 @@ describe('createTileFetcher', () => {
     expect(typeof bitmap.close).toBe('function')
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:tile')
+  })
+
+  describe('stored tiles first (offline packs)', () => {
+    const reader = (stored: Record<string, Blob>, covered = (url: string) => url.startsWith('pack/')) => {
+      const get = vi.fn(async (url: string) => stored[url] ?? null)
+      return { covers: vi.fn(covered), get } satisfies StoredTileReader
+    }
+
+    afterEach(() => setStoredTileReader(null))
+
+    it('decodes a stored tile without asking the network', async () => {
+      const stored = reader({ 'pack/1': new Blob(['tile']) })
+      const fetcher = createTileFetcher({ storedTiles: stored })
+      const bitmap = await fetcher.fetchBitmap('pack/1')
+      expect(bitmap).toBe(bitmaps[0])
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(stored.get).toHaveBeenCalledWith('pack/1')
+    })
+
+    it('goes to the network on a miss, and never asks the cache for a URL no pack covers', async () => {
+      const stored = reader({})
+      const fetcher = createTileFetcher({ storedTiles: stored })
+      const missed = fetcher.fetchBitmap('pack/2')
+      await flush()
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      pending[0].d.resolve(okResponse())
+      await missed
+      // not covered: the network at once, as without packs (same timing)
+      const other = fetcher.fetchBitmap('elsewhere/1')
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      pending[1].d.resolve(okResponse())
+      await other
+      expect(stored.get).toHaveBeenCalledTimes(1)
+    })
+
+    it('falls back to the network when the stored copy cannot be read or decoded', async () => {
+      const stored = reader({ 'pack/3': new Blob(['bad']) })
+      stored.get.mockRejectedValueOnce(new Error('disk'))
+      const fetcher = createTileFetcher({ storedTiles: stored, maxEntries: 1 })
+      const first = fetcher.fetchBitmap('pack/3')
+      await flush()
+      pending[0].d.resolve(okResponse())
+      await first
+      fetcher.clear()
+      vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValueOnce(new DOMException('bad', 'InvalidStateError')).mockResolvedValue({ close: vi.fn() }))
+      const second = fetcher.fetchBitmap('pack/3')
+      await flush()
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      pending[1].d.resolve(okResponse())
+      await expect(second).resolves.toBeDefined()
+    })
+
+    it('uses the reader registered for the app when none is given, read at each request', async () => {
+      const fetcher = createTileFetcher()
+      const stored = reader({ 'pack/4': new Blob(['tile']) })
+      setStoredTileReader(stored)
+      await fetcher.fetchBitmap('pack/4')
+      expect(fetchMock).not.toHaveBeenCalled()
+      setStoredTileReader(null)
+      const later = fetcher.fetchBitmap('pack/5')
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      pending[0].d.resolve(okResponse())
+      await later
+    })
+
+    it('stops on abort while reading the stored copy', async () => {
+      const stored = reader({ 'pack/6': new Blob(['tile']) })
+      const fetcher = createTileFetcher({ storedTiles: stored })
+      const controller = new AbortController()
+      const promise = fetcher.fetchBitmap('pack/6', { signal: controller.signal })
+      controller.abort()
+      await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+      await flush()
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+  })
+})
+
+describe('downloadTile', () => {
+  it('retries transient errors like the fetcher and gives up on a 404', async () => {
+    const blob = downloadTile('u', undefined, 0)
+    pending[0].d.resolve(httpResponse(503))
+    await flush()
+    pending[1].d.resolve(okResponse())
+    expect(await blob).toBeInstanceOf(Blob)
+    const missing = downloadTile('v', undefined, 0)
+    pending[2].d.resolve(httpResponse(404))
+    await expect(missing).rejects.toMatchObject({ status: 404 })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })

@@ -7,7 +7,8 @@
  * scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile and its stops, closing),
  * « Vitesse » (portions of the track flown faster or slower, added at the marker), « Arrêts », « Textes », « Médias » (photos and video clips, also dropped onto the timeline; photos taken along the
  * track can then be placed where they were taken, clips filmed during the outing synced with it), « Musique » (sound files with their waveform, added from the
- * « Options » menu or dropped; played along by the preview, muted by the bar's button, mixed into the export): drag a block to move it, an edge to stretch it, snapping to the other edges, the
+ * « Options » menu or dropped; played along by the preview, muted by the bar's button, mixed into the export), « Époques »
+ * (dated orthophotos shown for a while, added from the « Options » menu where the track has some): drag a block to move it, an edge to stretch it, snapping to the other edges, the
  * highlights and the playhead (Alt: no snapping); Ctrl+wheel zooms. Keyboard on a block: arrows nudge (Shift:
  * finer), Delete removes (Escape deselects: `App`); Space plays / pauses anywhere outside a control. The selection
  * lives in the store (`filmSelection`): the inspector of the selected block is in the right dock (`FilmInspector`).
@@ -23,9 +24,10 @@ import { buildFilmClock, filmClockFor, filmClockInputFor } from '../film/clock'
 import { photoTimeMs } from '../film/exif'
 import { useMediaStore } from '../film/media'
 import { isMediaFile, readMedia } from '../film/video'
-import type { Film, FilmMedia, FilmSpeed, FilmStop } from '../film/model'
+import type { Film, FilmEpoch, FilmMedia, FilmSpeed, FilmStop } from '../film/model'
 import {
   ZOOM_RANGE,
+  addEpoch,
   addMedia,
   addMusic,
   addSpeed,
@@ -48,6 +50,7 @@ import {
 import type { DragContext, Grip, TimelineItem } from '../film/timeline'
 import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath, type ElevationProfile } from '../flyover/path'
 import { getPlatform } from '../platform'
+import { getHistoricalImagery, historicalImageryFor } from '../terrain/sources'
 import { modifiedSettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
 import { editFilm, getFilmSource, useFilmClock, useFilmSource } from '../scene/usePacing'
@@ -87,6 +90,9 @@ const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : 
 type Gesture =
   | { kind: 'scrub' }
   | { kind: 'edit'; item: TimelineItem; grip: Grip; x0: number; start: Film; ctx: DragContext; result: Film | null }
+
+/** Name of an epoch block: its label, else the years of its source. */
+const epochLabel = (e: FilmEpoch) => e.label?.trim() || getHistoricalImagery(e.imagerySourceId)?.label || 'Époque'
 
 /** Recorded instant -> "14 h 32", in the browser time zone. */
 function formatClock(ms: number): string {
@@ -152,11 +158,14 @@ function FilmOptions({
   autoStops,
   onAutoStops,
   onAddMusic,
+  onAddEpoch,
   reading,
 }: {
   autoStops: boolean
   onAutoStops(on: boolean): void
   onAddMusic(): void
+  /** null: no dated imagery covers the track */
+  onAddEpoch: (() => void) | null
   reading: boolean
 }) {
   const [open, setOpen] = useState(false)
@@ -224,6 +233,23 @@ function FilmOptions({
             Ajouter une musique…
           </button>
           <p className="film-tl__menu-hint">MP3, M4A, OGG, WAV ou FLAC, 30 Mo au plus. Ou glissez le fichier sur la timeline.</p>
+          <button
+            type="button"
+            className="btn btn--secondary btn--small"
+            disabled={!onAddEpoch}
+            onClick={() => {
+              setOpen(false)
+              onAddEpoch?.()
+            }}
+          >
+            <Icon name="history" size={16} />
+            Ajouter une époque
+          </button>
+          <p className="film-tl__menu-hint">
+            {onAddEpoch
+              ? 'Le paysage d’autrefois à la tête de lecture : photos aériennes IGN de 1950 à 2005.'
+              : 'Photos aériennes d’autrefois disponibles en France seulement (IGN).'}
+          </p>
           <label className="film-tl__check">
             <input type="checkbox" checked={autoStops} onChange={(e) => onAutoStops(e.currentTarget.checked)} />
             Arrêts automatiques
@@ -505,6 +531,9 @@ export function Timeline() {
     void getPlatform()
       .openFiles({ filters: MUSIC_FILTERS, multiple: true })
       .then((files) => (files.length > 0 ? addMusicFiles(files) : undefined))
+  const epochSources = historicalImageryFor(track.bounds)
+  /** a block of the oldest dated imagery covering the track at the playhead (one undo step, selected) */
+  const addEpochHere = epochSources.length > 0 ? () => editFilm((f) => addEpoch(f, playheadS, epochSources[0].id)) : null
   const toggleAutoStops = (on: boolean) =>
     commit(on ? { ...film, autoStops: true, autoMode: 'temps-forts', stops: [] } : withOwnStops(film))
 
@@ -791,7 +820,7 @@ export function Timeline() {
           />
           <BarButton icon="move-horizontal" label="Ajuster" name="Ajuster : voir tout le film" tip="Voir tout le film" onClick={fitZoom} disabled={zoom <= ZOOM_RANGE.min} />
         </div>
-        <FilmOptions autoStops={film.autoStops} onAutoStops={toggleAutoStops} onAddMusic={pickMusic} reading={reading} />
+        <FilmOptions autoStops={film.autoStops} onAutoStops={toggleAutoStops} onAddMusic={pickMusic} onAddEpoch={addEpochHere} reading={reading} />
         <button
           type="button"
           className="icon-btn"
@@ -812,7 +841,7 @@ export function Timeline() {
           <div className="film-tl__heads">
             <div className="film-tl__head film-tl__head--ruler" />
             {/* the lanes carry the same names */}
-            {['Plans', 'Vitesse', 'Arrêts', 'Textes', 'Médias', 'Musique'].map((name) => (
+            {['Plans', 'Vitesse', 'Arrêts', 'Époques', 'Textes', 'Médias', 'Musique'].map((name) => (
               <div key={name} className="film-tl__head" aria-hidden="true">
                 {name}
               </div>
@@ -916,6 +945,17 @@ export function Timeline() {
                     ['move', 'end'],
                   )
                 })}
+              </div>
+
+              <div className="film-tl__lane" role="group" aria-label="Époques">
+                {shownFilm.epochs.length === 0 && addEpochHere && (
+                  <span className="film-tl__empty" style={{ left: xOf(0) }}>
+                    Le paysage d’autrefois : Options › Ajouter une époque
+                  </span>
+                )}
+                {shownFilm.epochs.map((e) =>
+                  block(e.id, e.startS, e.startS + e.durationS, epochLabel(e), `Époque : photos ${epochLabel(e)}`, 'film-tl__block--epoch', ['start', 'move', 'end'], undefined, 'history'),
+                )}
               </div>
 
               <div className="film-tl__lane" role="group" aria-label="Textes">

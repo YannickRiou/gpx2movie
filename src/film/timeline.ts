@@ -3,8 +3,8 @@
  * by its gestures (drag a block, drag an edge, nudge, add, remove), as pure functions of the film. The component
  * only turns pointer and keyboard events into these calls and commits the result as one undo step.
  *
- * Items are selected by id: 'opening', 'closing', or the id of a stop, a speed portion, a text, a medium or a music
- * clip (unique across the film).
+ * Items are selected by id: 'opening', 'closing', or the id of a stop, a speed portion, a text, a medium, a music
+ * clip or an epoch block (unique across the film).
  * Times are film times (seconds at ×1 from the first frame, opening included).
  */
 import { distanceAtTime, nearestOnPath, recordedTimeAt } from '../flyover/path'
@@ -24,7 +24,7 @@ import {
   clipTimeS,
   nextFilmId,
 } from './model'
-import type { Film, FilmAudio, FilmMedia, FilmShot, FilmSpeed, FilmStop, FilmText, MediaSync } from './model'
+import type { Film, FilmAudio, FilmEpoch, FilmMedia, FilmShot, FilmSpeed, FilmStop, FilmText, MediaSync } from './model'
 
 export type TimelineItem = 'opening' | 'closing' | string
 /** part of a block a gesture holds: its body (move) or one of its edges */
@@ -98,7 +98,7 @@ export function snapTime(t: number, targets: readonly number[], thresholdS: numb
 
 /**
  * Times a dragged edge snaps to: start and end of the film, edges of the shots, of the stops, speed portions, texts,
- * media and music clips (but those of `except`), highlights (progress values), playhead.
+ * media, music clips and epochs (but those of `except`), highlights (progress values), playhead.
  */
 export function snapTargets(
   clock: FilmClock,
@@ -110,7 +110,7 @@ export function snapTargets(
   const total = clock.totalTime()
   const out = [0, total, clock.openingS, total - clock.closingS, playheadS]
   for (const s of [...clock.stops, ...clock.speeds]) if (s.id !== except) out.push(s.startS, s.endS)
-  for (const t of [...film.texts, ...film.media, ...film.audio]) if (t.id !== except) out.push(t.startS, t.startS + t.durationS)
+  for (const t of [...film.texts, ...film.media, ...film.audio, ...film.epochs]) if (t.id !== except) out.push(t.startS, t.startS + t.durationS)
   for (const h of highlights) out.push(clock.timeAtProgress(h))
   return out
 }
@@ -271,7 +271,7 @@ function dragSpeed(film: Film, own: FilmSpeed, grip: Grip, deltaS: number, ctx: 
  * The film after dragging `grip` of `item` by `deltaS` seconds from the gesture start (`film` is the film at the
  * start, stops written out for a stop): opening end, closing start, stop moved along the track (hold start
  * follows the pointer) or stretched (end edge), speed portion moved or stretched by either edge (in metres along
- * the track), text or medium moved or stretched by either edge. Edges snap to `ctx.targets`; values are clamped
+ * the track), text, medium or epoch moved or stretched by either edge. Edges snap to `ctx.targets`; values are clamped
  * to the model ranges. Unknown items and grips leave the film as is.
  */
 export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: number, ctx: DragContext): Film {
@@ -310,8 +310,8 @@ export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: num
     return { ...film, audio: film.audio.map((a) => (a.id === item ? next : a)) }
   }
 
-  const lane = film.texts.some((t) => t.id === item) ? 'texts' : 'media'
-  const timed: FilmText | FilmMedia | undefined = film[lane].find((t) => t.id === item)
+  const lane = film.texts.some((t) => t.id === item) ? 'texts' : film.epochs.some((e) => e.id === item) ? 'epochs' : 'media'
+  const timed: FilmText | FilmMedia | FilmEpoch | undefined = film[lane].find((t) => t.id === item)
   if (!timed) return film
   const start = timed.startS
   const end = timed.startS + timed.durationS
@@ -330,12 +330,12 @@ export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: num
   } else {
     next = { startS: start, durationS: itemDuration(snap(end + deltaS) - start) }
   }
-  return lane === 'texts'
-    ? { ...film, texts: film.texts.map((t) => (t.id === item ? { ...t, ...next } : t)) }
-    : { ...film, media: film.media.map((m) => (m.id === item ? { ...m, ...next } : m)) }
+  if (lane === 'texts') return { ...film, texts: film.texts.map((t) => (t.id === item ? { ...t, ...next } : t)) }
+  if (lane === 'epochs') return { ...film, epochs: film.epochs.map((e) => (e.id === item ? { ...e, ...next } : e)) }
+  return { ...film, media: film.media.map((m) => (m.id === item ? { ...m, ...next } : m)) }
 }
 
-/** What a gesture changes on a text or a medium (and the start in the file of a video). */
+/** What a gesture changes on a text, a medium or an epoch (and the start in the file of a video). */
 type Timed = Pick<FilmMedia, 'startS' | 'durationS' | 'inS'>
 
 // ---------------------------------------------------------------------------
@@ -426,6 +426,37 @@ export function addMusic(film: Film, sources: readonly { src: string; fileS: num
     at += durationS
   }
   return { film: next, ids }
+}
+
+/** Length of an epoch block added at the playhead (seconds). */
+export const NEW_EPOCH_S = 6
+
+/**
+ * A block of dated imagery `imagerySourceId` added at film time `startS`, `durationS` long (`NEW_EPOCH_S` by default,
+ * clamped to the item range), its badge shown; with its new id.
+ */
+export function addEpoch(film: Film, startS: number, imagerySourceId: string, durationS = NEW_EPOCH_S): { film: Film; id: string } {
+  const id = nextFilmId(film, 'epoch')
+  const epoch: FilmEpoch = { id, startS: roundS(Math.max(0, startS)), durationS: itemDuration(durationS), imagerySourceId, badge: true }
+  return { film: { ...film, epochs: [...film.epochs, epoch] }, id }
+}
+
+/** « Avant / après » on a stop: a block of dated imagery over the whole window of `stop` (entry and exit included). */
+export function addEpochOverStop(film: Film, stop: Pick<ClockStop, 'startS' | 'endS'>, imagerySourceId: string): { film: Film; id: string } {
+  return addEpoch(film, stop.startS, imagerySourceId, stop.endS - stop.startS)
+}
+
+/** Epoch `id` with `patch`, start and duration clamped to their ranges; an empty label goes back to the source's years. */
+export function updateEpoch(film: Film, id: string, patch: Partial<Omit<FilmEpoch, 'id'>>): Film {
+  return {
+    ...film,
+    epochs: film.epochs.map((e) => {
+      if (e.id !== id) return e
+      const { label, ...rest } = { ...e, ...patch }
+      const next: FilmEpoch = { ...rest, startS: roundS(Math.max(0, rest.startS)), durationS: itemDuration(rest.durationS) }
+      return label?.trim() ? { ...next, label } : next
+    }),
+  }
 }
 
 /** Farthest a geotagged photo may be from the track to be placed on it (metres). */
@@ -537,7 +568,7 @@ export function clipRateAt(media: FilmMedia, path: TrackPath, clock: Pick<FilmCl
   return Math.max(0, (clipTimeS(media, timeS + FOLLOW_RATE_STEP_S, b) - clipTimeS(media, timeS, a)) / FOLLOW_RATE_STEP_S)
 }
 
-/** `film` without the stop, speed portion, text, medium or music clip `id`; a shot cannot be removed: it goes to style 'aucune'. */
+/** `film` without the stop, speed portion, text, medium, music clip or epoch `id`; a shot cannot be removed: it goes to style 'aucune'. */
 export function removeFilmItem(film: Film, id: TimelineItem): Film {
   if (id === 'opening' || id === 'closing') return updateShot(film, id, { style: 'aucune' })
   return {
@@ -547,16 +578,17 @@ export function removeFilmItem(film: Film, id: TimelineItem): Film {
     texts: film.texts.filter((t) => t.id !== id),
     media: film.media.filter((m) => m.id !== id),
     audio: film.audio.filter((a) => a.id !== id),
+    epochs: film.epochs.filter((e) => e.id !== id),
   }
 }
 
 /**
  * `item` is in the film: a shot (always there), one of the clock's `stops` (generated ones included), a speed portion,
- * a text, a medium or a music clip.
+ * a text, a medium, a music clip or an epoch.
  */
 export function hasFilmItem(film: Film, stops: readonly { id: string }[], item: TimelineItem): boolean {
   if (item === 'opening' || item === 'closing') return true
-  return [stops, film.speeds, film.texts, film.media, film.audio].some((lane) => lane.some((s) => s.id === item))
+  return [stops, film.speeds, film.texts, film.media, film.audio, film.epochs].some((lane) => lane.some((s) => s.id === item))
 }
 
 /** Stop `id` with `patch`, duration clamped to its range. */

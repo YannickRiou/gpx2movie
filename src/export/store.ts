@@ -102,11 +102,15 @@ export interface ExportState {
   timings: ExportTimings
   /** multiplier of pixel-sized scene elements: `exportRenderScale` during an export, 1 otherwise */
   renderScale: number
+  /** seconds per frame and per megapixel of the last film exported (time hint of a batch), kept by `start` and `reset` */
+  secondsPerMegapixel: number | null
 
   start(request: Omit<ExportRequest, 'id'>): void
   cancel(): void
   /** forget the last result (revokes its URL) or error */
   reset(): void
+  /** hand the last result over without revoking its URL (a batch keeps every file of its run) */
+  takeResult(): ExportResult | null
 
   // reported by the controller
   begin(id: number, frameCount: number, now: number): boolean
@@ -196,8 +200,16 @@ export async function chooseVideoDestination(
   }
 }
 
+/** Seconds per frame and per megapixel of a finished film, null when nothing was measured. */
+export function filmRate(timings: ExportTimings, frameCount: number, width: number, height: number): number | null {
+  const spentMs = timings.renderMs + timings.waitMs + timings.encodeMs
+  const megapixels = (width * height) / 1e6
+  return frameCount > 0 && spentMs > 0 && megapixels > 0 ? spentMs / 1000 / frameCount / megapixels : null
+}
+
 export const useExportStore = create<ExportState>()((set, get) => ({
   ...IDLE,
+  secondsPerMegapixel: null,
 
   start(request) {
     if (isExportBusy(get().phase)) return drop(request)
@@ -221,6 +233,12 @@ export const useExportStore = create<ExportState>()((set, get) => ({
     set({ ...IDLE })
   },
 
+  takeResult() {
+    const { result } = get()
+    if (result) set({ result: null })
+    return result
+  },
+
   begin(id, frameCount, now) {
     const { phase, request } = get()
     if (phase !== 'starting' || request?.id !== id) return false
@@ -242,7 +260,9 @@ export const useExportStore = create<ExportState>()((set, get) => ({
   },
 
   complete(result) {
-    set({ phase: 'done', request: null, cancelRequested: false, etaS: null, result })
+    const { request, timings, frameCount, secondsPerMegapixel } = get()
+    const rate = request && !request.still ? filmRate(timings, frameCount, request.width, request.height) : null
+    set({ phase: 'done', request: null, cancelRequested: false, etaS: null, result, secondsPerMegapixel: rate ?? secondsPerMegapixel })
   },
 
   fail(message) {
@@ -257,7 +277,7 @@ export const useExportStore = create<ExportState>()((set, get) => ({
 /** Back to the initial state (tests). */
 export function resetExportStore(): void {
   revoke(useExportStore.getState().result)
-  useExportStore.setState({ ...IDLE })
+  useExportStore.setState({ ...IDLE, secondsPerMegapixel: null })
 }
 
 // ---------------------------------------------------------------------------

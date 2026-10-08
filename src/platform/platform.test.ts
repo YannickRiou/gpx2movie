@@ -4,14 +4,17 @@ import {
   detectCapabilities,
   extensionOf,
   fileNameOf,
+  imageTypeOf,
   isTauriRuntime,
   keyValueStore,
   mimeTypeOf,
   pickerTypes,
   saveFilters,
   selectPlatform,
+  tileFileName,
   videoEncoderMissingHint,
 } from './index'
+import { DESKTOP_TILE_ROOT, WEB_TILE_CACHE_PREFIX, createDesktopTileCache, createWebTileCache } from './tileCache'
 
 const dialog = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn() }))
 const fs = vi.hoisted(() => ({
@@ -319,3 +322,156 @@ describe('desktop platform', () => {
     expect(fs.open).not.toHaveBeenCalled()
   })
 })
+
+describe('offline tile cache', () => {
+  const URL_A = 'https://tiles.mapterhorn.com/14/1/2.webp'
+  const URL_B = 'https://data.geopf.fr/wmts?SERVICE=WMTS&TILEMATRIX=15&TILEROW=3&TILECOL=4'
+
+  it('names a tile file after its URL', () => {
+    expect(tileFileName(URL_A)).toMatch(/^[0-9a-f]{28}$/)
+    expect(tileFileName(URL_A)).toBe(tileFileName(URL_A))
+    expect(tileFileName(URL_A)).not.toBe(tileFileName(URL_A.replace('14/1/2', '14/2/1')))
+  })
+
+  it('recognises PNG, JPEG and WebP from their first bytes', () => {
+    const bytes = (...values: (number | string)[]) =>
+      new Uint8Array(values.flatMap((v) => (typeof v === 'string' ? [...v].map((c) => c.charCodeAt(0)) : [v])))
+    expect(imageTypeOf(bytes(0x89, 'PNG', 13, 10))).toBe('image/png')
+    expect(imageTypeOf(bytes(0xff, 0xd8, 0xff))).toBe('image/jpeg')
+    expect(imageTypeOf(bytes('RIFF', 0, 0, 0, 0, 'WEBP'))).toBe('image/webp')
+    expect(imageTypeOf(bytes('GIF8'))).toBe('')
+  })
+
+  /** Cache Storage in memory. */
+  function fakeCaches() {
+    const caches = new Map<string, Map<string, Response>>()
+    return {
+      caches,
+      keys: vi.fn(async () => [...caches.keys()]),
+      delete: vi.fn(async (name: string) => caches.delete(name)),
+      open: vi.fn(async (name: string) => {
+        let entries = caches.get(name)
+        if (!entries) caches.set(name, (entries = new Map()))
+        const store = entries
+        return {
+          match: async (url: string) => store.get(url)?.clone(),
+          put: async (url: string, response: Response) => void store.set(url, response),
+        } as unknown as Cache
+      }),
+    }
+  }
+
+  it('web: one cache per pack, the URL as key, a pack deleted with its cache', async () => {
+    // jsdom's Blob is not Node's: a Response that keeps the Blob as it is
+    vi.stubGlobal(
+      'Response',
+      class {
+        readonly body: Blob
+        readonly headers: Record<string, string>
+        constructor(body: Blob, init: { headers: Record<string, string> }) {
+          this.body = body
+          this.headers = init.headers
+        }
+        blob = async () => this.body
+        clone = () => this
+      },
+    )
+    const storage = fakeCaches()
+    storage.caches.set('autre-cache', new Map())
+    const persist = vi.fn(async () => true)
+    const cache = createWebTileCache(storage, { persist, estimate: async () => ({ usage: 5, quota: 100 }) })
+    expect(await cache.get(URL_A)).toBeNull()
+    await cache.put('p1', URL_A, new Blob(['aa'], { type: 'image/webp' }))
+    await cache.put('p2', URL_B, new Blob(['bbb']))
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect([...storage.caches.keys()]).toContain(`${WEB_TILE_CACHE_PREFIX}p1`)
+    expect(await (await cache.get(URL_A))?.text()).toBe('aa')
+    expect(await cache.has('p1', URL_A)).toBe(true)
+    expect(await cache.has('p2', URL_A)).toBe(false)
+    expect(await cache.packs()).toEqual(['p1', 'p2'])
+    await cache.deletePack('p1')
+    expect(await cache.get(URL_A)).toBeNull()
+    expect(await cache.get(URL_B)).not.toBeNull()
+    expect(await cache.packs()).toEqual(['p2'])
+    expect(storage.caches.has('autre-cache')).toBe(true)
+    expect(await cache.size()).toEqual({ usedBytes: 5, quotaBytes: 100 })
+    await expect(cache.put('../x', URL_A, new Blob())).rejects.toThrow(/invalide/)
+    vi.unstubAllGlobals()
+  })
+
+  it('web: no tile cache without Cache Storage (page not served over HTTPS)', () => {
+    expect(selectPlatform({}).tileCache).toBeNull()
+  })
+
+  /** plugin-fs over a map of paths (relative to the app data folder). */
+  function fakeFs() {
+    const files = new Map<string, Uint8Array>()
+    const dirs = new Set<string>()
+    const calls: string[] = []
+    const fake = {
+      files,
+      dirs,
+      calls,
+      BaseDirectory: { AppData: 14 },
+      exists: vi.fn(async (path: string) => dirs.has(path)),
+      readDir: vi.fn(async (path: string) => {
+        calls.push(`readDir ${path}`)
+        const names = new Set<string>()
+        for (const p of [...dirs, ...files.keys()]) if (p.startsWith(`${path}/`)) names.add(p.slice(path.length + 1).split('/')[0])
+        return [...names].map((name) => ({ name, isDirectory: dirs.has(`${path}/${name}`), isFile: files.has(`${path}/${name}`), isSymlink: false }))
+      }),
+      readFile: vi.fn(async (path: string) => {
+        calls.push(`readFile ${path}`)
+        const bytes = files.get(path)
+        if (!bytes) throw new Error('missing')
+        return bytes
+      }),
+      writeFile: vi.fn(async (path: string, data: Uint8Array) => void files.set(path, data)),
+      mkdir: vi.fn(async (path: string) => {
+        dirs.add(DESKTOP_TILE_ROOT)
+        dirs.add(path)
+      }),
+      remove: vi.fn(async (path: string) => {
+        dirs.delete(path)
+        for (const p of [...files.keys()]) if (p.startsWith(`${path}/`)) files.delete(p)
+      }),
+    }
+    return fake
+  }
+
+  it('desktop: one file per tile under the app data folder, an index read once', async () => {
+    const fs = fakeFs()
+    const loadFs = async () => fs as never
+    const cache = createDesktopTileCache(loadFs)
+    expect(await cache.get(URL_A)).toBeNull()
+    await cache.put('p1', URL_A, new Blob([new Uint8Array([0xff, 0xd8, 1])]))
+    const path = `${DESKTOP_TILE_ROOT}/p1/${tileFileName(URL_A)}`
+    expect(fs.files.has(path)).toBe(true)
+    expect(fs.writeFile).toHaveBeenCalledWith(path, expect.any(Uint8Array), { baseDir: 14 })
+    expect(fs.mkdir).toHaveBeenCalledWith(`${DESKTOP_TILE_ROOT}/p1`, { baseDir: 14, recursive: true })
+    const blob = await cache.get(URL_A)
+    expect(blob?.type).toBe('image/jpeg')
+
+    // a new session reads the folders once; a tile no pack holds costs no call to the disk
+    const again = createDesktopTileCache(loadFs)
+    fs.calls.length = 0
+    expect(await again.has('p1', URL_A)).toBe(true)
+    expect(await again.get(URL_B)).toBeNull()
+    expect(await again.get(URL_B)).toBeNull()
+    expect(fs.calls).toEqual([`readDir ${DESKTOP_TILE_ROOT}`, `readDir ${DESKTOP_TILE_ROOT}/p1`])
+    expect(await again.packs()).toEqual(['p1'])
+
+    await again.put('p2', URL_A, new Blob(['x']))
+    await again.deletePack('p1')
+    expect(fs.remove).toHaveBeenCalledWith(`${DESKTOP_TILE_ROOT}/p1`, { baseDir: 14, recursive: true })
+    expect(await (await again.get(URL_A))?.text()).toBe('x')
+    await again.deletePack('p2')
+    expect(await again.get(URL_A)).toBeNull()
+    expect(await again.size()).toBeNull()
+  })
+
+  it('desktop: the platform keeps its tiles behind the same contract', () => {
+    expect(selectPlatform({ isTauri: true }).tileCache).not.toBeNull()
+  })
+})
+

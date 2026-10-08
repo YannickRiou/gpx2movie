@@ -1,9 +1,11 @@
 /**
  * Web platform: file input, download through an object URL, localStorage (the behaviour of the static site); files
- * written while produced through `showSaveFilePicker` (File System Access, Chrome and Edge).
+ * written while produced through `showSaveFilePicker` (File System Access, Chrome and Edge); offline tiles in Cache
+ * Storage (HTTPS or localhost only).
  */
 import { acceptAttribute, droppedFiles, keyValueStore, pickerTypes, saveFilters } from './platform'
 import type { Capabilities, Platform, SaveFileOptions, WritableFile } from './platform'
+import { createWebTileCache } from './tileCache'
 
 /** The part of File System Access used here (not in the DOM typings yet). */
 type SaveFilePicker = (options: {
@@ -23,6 +25,12 @@ async function createWritableFile(options: SaveFileOptions): Promise<WritableFil
     if (error instanceof DOMException && error.name === 'AbortError') return null
     throw error
   }
+  // the picker created the file: removed by `discard` (Chrome 110+)
+  return writableOf(handle, async () => handle.remove?.())
+}
+
+/** A file handle open for writing; `remove` deletes the partial file when the export does not finish. */
+export async function writableOf(handle: FileSystemFileHandle, remove: () => Promise<void>): Promise<WritableFile> {
   const writable = await handle.createWritable()
   let state: 'open' | 'closed' | 'discarded' = 'open'
   return {
@@ -36,8 +44,7 @@ async function createWritableFile(options: SaveFileOptions): Promise<WritableFil
       if (state !== 'open') return
       state = 'discarded'
       await writable.abort().catch(() => undefined)
-      // the picker created the file: remove it (Chrome 110+)
-      await handle.remove?.().catch(() => undefined)
+      await remove().catch(() => undefined)
     },
   }
 }
@@ -94,5 +101,6 @@ export function createWebPlatform(capabilities: Capabilities): Platform {
     },
     createWritableFile,
     droppedFiles,
+    tileCache: globalThis.caches ? createWebTileCache(globalThis.caches, globalThis.navigator?.storage) : null,
   }
 }

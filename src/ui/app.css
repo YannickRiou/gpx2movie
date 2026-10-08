@@ -383,6 +383,20 @@
   flex: none;
 }
 
+/* « Hors ligne » packs: name and figures, then « Supprimer » */
+.offline__packs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.offline__packs > li > button {
+  flex: none;
+  align-self: center;
+}
+
 /* Film overlay (« habillage ») ------------------------------------------- */
 /* 2D canvas over the 3D view; never catches the pointer */
 .view__stage > .overlay-canvas {
@@ -648,6 +662,13 @@
   color: var(--color-white);
 }
 
+/* epochs: sand block like an old print, clock-back icon before the years */
+.film-tl__block--epoch {
+  gap: 4px;
+  background: var(--color-line);
+  color: var(--color-ink);
+}
+
 /* photos: paper block, thumbnail at its start */
 .film-tl__block--media {
   gap: 4px;
@@ -863,6 +884,47 @@
   width: 100%;
   height: 10px;
   accent-color: var(--color-accent);
+}
+
+/* batch export: one row of resolution chips per aspect, then the list of the files */
+.batch-formats {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.batch-formats__row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.batch-formats__aspect {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.batch-results {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.batch-results__item {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.batch-results__label {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 /* Weather of the outing --------------------------------------------------- */

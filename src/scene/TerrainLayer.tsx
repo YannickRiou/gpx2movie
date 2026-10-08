@@ -6,16 +6,21 @@
  * "create in the effect body, dispose in its cleanup" is the only pattern that cannot leak GPU resources.
  *
  * The engine is recreated only when the local frame changes or when the tracks grow outside the area the
- * current engine was built for; settings changes are forwarded with `engine.setOptions`.
+ * current engine was built for; settings changes are forwarded with `engine.setOptions`. Before each update, the
+ * epoch block of the film at the playback's film time sets the dated imagery blended over the terrain
+ * (`epochImageryAt`): the preview and the export (which sets the film time of every frame) show the same.
  */
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { PerspectiveCamera } from 'three'
-import type { LocalFrame, LonLatBounds, TerrainEngine, TerrainEngineOptions, TerrainStats } from '../core/types'
+import type { ImagerySource, LocalFrame, LonLatBounds, TerrainEngine, TerrainEngineOptions, TerrainStats } from '../core/types'
+import { epochAt } from '../film/model'
+import type { FilmEpoch } from '../film/model'
 import { createLocalFrame, expandBounds } from '../geo/ellipsoid'
 import { createTerrainEngine } from '../terrain/engine'
-import { getImagerySource, getTerrainSource } from '../terrain/sources'
+import { getHistoricalImagery, getImagerySource, getTerrainSource } from '../terrain/sources'
 import { useAppStore, type Settings } from '../state/store'
+import { useFilmClock } from './usePacing'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -127,6 +132,16 @@ export function diffEngineOptions(
   return changed ? partial : null
 }
 
+/**
+ * Dated imagery the terrain blends at film time `timeS` and its weight (`epochAt`), null outside any block or for a
+ * source that is not in the catalogue of dated imagery any more.
+ */
+export function epochImageryAt(epochs: readonly FilmEpoch[], timeS: number): { source: ImagerySource; mix: number } | null {
+  const at = epochAt(epochs, timeS)
+  const dated = at && getHistoricalImagery(at.epoch.imagerySourceId)
+  return at && dated ? { source: dated.source, mix: at.mix } : null
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -172,6 +187,12 @@ export function TerrainLayer({ children }: TerrainLayerProps) {
   const appliedRef = useRef<AppliedOptions | null>(null)
   const lastStatsRef = useRef<TerrainStats | null>(null)
   const statsClockRef = useRef(0)
+  // film clock for the film time of a progress without one (epochs)
+  const clock = useFilmClock()
+  const clockRef = useRef(clock)
+  useEffect(() => {
+    clockRef.current = clock
+  }, [clock])
 
   useEffect(() => {
     if (!frame || !area) return undefined
@@ -210,6 +231,10 @@ export function TerrainLayer({ children }: TerrainLayerProps) {
     if (!engine) return
     const perspective = camera as PerspectiveCamera
     if (!perspective.isPerspectiveCamera) return
+    const { settings: current, playback } = useAppStore.getState()
+    const epochs = current.film.epochs
+    const epoch = epochs.length > 0 ? epochImageryAt(epochs, playback.timeS ?? clockRef.current.timeAtProgress(playback.progress)) : null
+    engine.setEpoch?.(epoch?.source ?? null, epoch?.mix ?? 0)
     engine.update(perspective, size.height)
 
     statsClockRef.current += delta

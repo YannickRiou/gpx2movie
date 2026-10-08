@@ -12,7 +12,7 @@ import type {
 } from '../core/types'
 import { createLocalFrame } from '../geo/ellipsoid'
 import { tileKeyString, tilesForBounds, zoomForTileBudget } from '../geo/mercator'
-import { NO_IMAGERY_COLOR, createTerrainEngine, type EngineDeps, type EngineTuning, type HeightFieldLike } from './engine'
+import { NO_IMAGERY_COLOR, createTerrainEngine, patchEpochShader, type EngineDeps, type EngineTuning, type HeightFieldLike } from './engine'
 import { TileFetchError } from './fetch'
 
 // The engine wires these as defaults; the tests inject every dependency, so keep them inert.
@@ -665,5 +665,78 @@ describe('createTerrainEngine', () => {
     engine.update(camera, 1000)
     expect(deps.loadImageryTexture).not.toHaveBeenCalled()
     expect(engine.stats.loadedTiles).toBe(ROOT_KEYS.length)
+  })
+
+  it('blends a dated imagery source over the drawn tiles, waited for while it shows, freed when it goes', async () => {
+    const deps = createFakeDeps()
+    const engine = engineWith(deps)
+    const camera = cameraAbove(600_000)
+    engine.update(camera, 1000)
+    await settle()
+    engine.update(camera, 1000)
+    const base = deps.textures.length
+    expect(engine.stats.pendingVisibleTiles).toBe(0)
+    const dated: ImagerySource = { ...IMAGERY, id: 'fake-1950', urlTemplate: 'https://old.test/{z}/{x}/{y}.png' }
+    const load = deps.loadImageryTexture as ReturnType<typeof vi.fn>
+
+    // ahead of the block (weight 0): the textures load, nothing is waited for
+    engine.setEpoch?.(dated, 0)
+    engine.update(camera, 1000)
+    expect(engine.stats.pendingVisibleTiles).toBe(0)
+    const calls = load.mock.calls.slice(base)
+    expect(calls).toHaveLength(ROOT_KEYS.length)
+    for (const call of calls) {
+      expect(call[1]).toBe(dated)
+      expect(call[3]).toMatchObject({ transparent: true, zoomOffset: 1 })
+    }
+
+    // shown and still loading: the view waits for them
+    engine.setEpoch?.(dated, 0.5)
+    engine.update(camera, 1000)
+    expect(engine.stats.pendingVisibleTiles).toBe(ROOT_KEYS.length)
+    await settle()
+    engine.update(camera, 1000)
+    expect(engine.stats.pendingVisibleTiles).toBe(0)
+    for (const mesh of meshesOf(engine)) {
+      const epoch = (mesh.material as MeshStandardMaterial).userData.epoch
+      expect(epoch.epochOn.value).toBe(1)
+      expect(deps.textures.slice(base)).toContain(epoch.epochMap.value)
+    }
+    // no second load for the same source
+    engine.update(camera, 1000)
+    expect(load.mock.calls).toHaveLength(base + ROOT_KEYS.length)
+
+    // gone: textures freed, the tiles back to their imagery alone
+    engine.setEpoch?.(null, 1)
+    for (const texture of deps.textures.slice(base)) expect(deps.disposedTextures).toContain(texture)
+    for (const mesh of meshesOf(engine)) expect((mesh.material as MeshStandardMaterial).userData.epoch.epochOn.value).toBe(0)
+    engine.update(camera, 1000)
+    expect(load.mock.calls).toHaveLength(base + ROOT_KEYS.length)
+  })
+
+  it('keeps the current imagery where the dated source has no tile', async () => {
+    const deps = createFakeDeps()
+    const engine = engineWith(deps)
+    const camera = cameraAbove(600_000)
+    engine.update(camera, 1000)
+    await settle()
+    engine.update(camera, 1000)
+    const base = deps.textures.length
+    engine.setEpoch?.({ ...IMAGERY, id: 'elsewhere', coverage: { west: -10, south: 30, east: -5, north: 35 } }, 1)
+    engine.update(camera, 1000)
+    expect(deps.textures).toHaveLength(base)
+    expect(engine.stats.pendingVisibleTiles).toBe(0)
+    for (const mesh of meshesOf(engine)) expect((mesh.material as MeshStandardMaterial).userData.epoch.epochOn.value).toBe(0)
+  })
+
+  it('patches the tile shaders with the epoch blend after the base colour', () => {
+    const shader = { uniforms: {}, vertexShader: 'void main() {\n#include <begin_vertex>\n}', fragmentShader: 'void main() {\n#include <map_fragment>\n}' }
+    const mix = { value: 0.5 }
+    patchEpochShader(shader, { epochMix: mix })
+    expect(shader.uniforms).toEqual({ epochMix: mix })
+    expect(shader.vertexShader).toMatch(/^varying vec2 vEpochUv;/)
+    expect(shader.vertexShader).toContain('#include <begin_vertex>\n  vEpochUv = uv;')
+    expect(shader.fragmentShader).toContain('uniform sampler2D epochMap;')
+    expect(shader.fragmentShader.indexOf('epochTexel')).toBeGreaterThan(shader.fragmentShader.indexOf('#include <map_fragment>'))
   })
 })

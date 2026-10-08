@@ -232,6 +232,17 @@ describe('loadImageryTexture', () => {
     expect(texture.version).toBeGreaterThan(0) // needsUpdate was set (write-only setter bumping version)
   })
 
+  it('leaves the gaps transparent and premultiplies the texels for dated imagery blended over the current one', async () => {
+    const fetcher = fakeFetcher((url) => Promise.resolve(bitmapFor(url)))
+    const texture = await loadImageryTexture(KEY, source(), fetcher, { zoomOffset: 1, transparent: true })
+    const canvas = texture.image as FakeOffscreenCanvas
+    expect(canvas.ctx.fillRect).not.toHaveBeenCalled()
+    expect(canvas.ctx.drawImage).toHaveBeenCalledTimes(4)
+    expect(texture.premultiplyAlpha).toBe(true)
+    const opaque = await loadImageryTexture(KEY, source(), fetcher, { zoomOffset: 1 })
+    expect(opaque.premultiplyAlpha).toBe(false)
+  })
+
   it('leaves failed sub-tiles grey without rejecting', async () => {
     const src = source()
     const fetcher = fakeFetcher((url) =>

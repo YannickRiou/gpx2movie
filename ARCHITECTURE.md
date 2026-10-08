@@ -15,7 +15,11 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 
 ## Conventions de coordonnées (voir `src/core/types.ts`)
 
-- WGS84 lon/lat en degrés, hauteurs en mètres au-dessus de l'ellipsoïde.
+- WGS84 lon/lat en degrés. Hauteurs de la scène en mètres **au-dessus du niveau de la mer** (tuiles d'élévation,
+  GPX / FIT), placées par le repère local comme des hauteurs ellipsoïdales : toute la scène est N (ondulation du géoïde)
+  trop bas, ce qui ne compte que pour ce qui la lit en vrai ECEF. L'atmosphère et les nuages prennent donc
+  `mslLocalToEcef(frame)` (repère remonté de N à son origine) et les altitudes des nuages + N ; le reste (relief, trace,
+  libellés, caméra) reste en MSL, cohérent entre lui. N varie de ~0,4 m / 10 km autour du Mont-Blanc : décalage constant.
 - Scène Three.js dans un **repère local tangent** centré sur le centroïde du trip : +X est, +Y haut, +Z sud.
   Les conversions ECEF → local sont faites en doubles JS, jamais dans le shader.
 - Tuiles Web Mercator, schéma XYZ (y = 0 au nord).
@@ -26,18 +30,19 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 |---|---|---|
 | `src/core/types.ts` | contrats partagés | (figé) |
 | `src/geo/ellipsoid.ts` | WGS84 ↔ ECEF, repère local | `WGS84`, `lonLatToEcef(lon,lat,h,target?)`, `ecefToLonLat(v)`, `createLocalFrame(lon,lat): LocalFrame`, `haversineM(a: LonLat, b: LonLat)`, `centroid(bounds)`, `expandBounds(bounds, marginM, minSizeM?)` |
+| `src/geo/geoid.ts` | géoïde EGM96 | `geoidUndulation(lon,lat)` (m, grille 1° bilinéaire, `egm96Grid.ts` généré par `scripts/gen-geoid.mjs` depuis la grille 15' de la NGA redistribuée par PROJ-data, domaine public ; 170 Ko ; 0,45 m RMS face à la grille 15', jusqu'à ~14 m sur les îles volcaniques), `mslToEllipsoidHeight`, `ellipsoidToMslHeight`, `mslLocalToEcef(frame, target?)` |
 | `src/geo/mercator.ts` | maths de tuiles | `lonLatToTileFrac(lon,lat,z)`, `tileBounds(key): LonLatBounds`, `tileCenter(key)`, `tilesForBounds(bounds,z): TileKey[]`, `tileCountForBounds(bounds,z)`, `zoomForTileBudget(bounds, maxTiles, minZoom, maxZoom)`, `tileGroundSizeM(key)`, `childrenOf(key)`, `parentOf(key)`, `tileKeyString(key)`, `parseTileKey(s)` (lève sur clé invalide), `tileContains(key, lon, lat)`, `lonLatToTileUV(key, lon, lat): {u,v}` (u,v ∈ [0,1], v=0 au nord), `tileUVToLonLat(key,u,v)`, `boundsIntersect(a,b)` |
 | `src/import/gpx.ts` | parse GPX | `parseGpx(text: string, fileName: string): Track[]` |
 | `src/import/fit.ts` | parse FIT | `parseFit(buffer: ArrayBuffer, fileName: string): Promise<Track[]>` |
 | `src/import/stats.ts` | stats & bounds, assemblage | `computeStats(segments): TrackStats`, `computeBounds(segments): LonLatBounds`, `densify(points, maxStepM): TrackPoint[]`, `buildTrack(init): Track`, `stripExtension(fileName)` (partagés par les deux parseurs) |
 | `src/import/index.ts` | point d'entrée | `importFile(file: File, colorIndex?): Promise<Track[]>`, `importText(text, fileName, colorIndex?)`, `TRACK_COLORS`, `assignColors` |
-| `src/terrain/sources.ts` | catalogue de sources | `TERRAIN_SOURCES: TerrainSource[]`, `IMAGERY_SOURCES: ImagerySource[]`, `buildTileUrl(source, key): string`, `getTerrainSource(id)`, `getImagerySource(id)`, `sourceCovers(source, bounds \| point)` |
-| `src/terrain/fetch.ts` | fetch + cache bitmaps | `createTileFetcher(opts?: {concurrency?, maxEntries?, retryDelayMs?}): TileFetcher`, `TileFetchError` (`status`, `url`), `isAbortError(e)` |
+| `src/terrain/sources.ts` | catalogue de sources | `TERRAIN_SOURCES: TerrainSource[]`, `IMAGERY_SOURCES: ImagerySource[]`, `buildTileUrl(source, key): string`, `getTerrainSource(id)`, `getImagerySource(id)`, `sourceCovers(source, bounds \| point)`, `HISTORICAL_IMAGERY` (orthophotos datées et leurs années), `getHistoricalImagery(id)`, `historicalImageryFor(bounds \| point)` |
+| `src/terrain/fetch.ts` | fetch + cache bitmaps | `createTileFetcher(opts?: {concurrency?, maxEntries?, retryDelayMs?, storedTiles?}): TileFetcher`, `TileFetchError` (`status`, `url`), `isAbortError(e)`, `downloadTile(url, signal?, retryDelayMs?)` (même politique de réessais), `setStoredTileReader(reader)` + `StoredTileReader` (`covers`, `get` : packs hors ligne lus avant le réseau) |
 | `src/terrain/dem.ts` | décodage élévation | `decodeDem(bitmap, encoding): HeightGrid`, `sampleGrid(grid, u, v): number` (bilinéaire, NaN-safe) |
 | `src/terrain/heightField.ts` | champ de hauteur multi-niveaux | `class HeightField { set(key, grid); delete(key); has(key); sampleHeight(lon, lat): number \| undefined }` (tuile la plus profonde contenant le point) |
 | `src/terrain/imagery.ts` | texture composée | `loadImageryTexture: LoadImageryTexture` |
 | `src/terrain/mesh.ts` | géométrie d'une tuile | `buildTileGeometry(key, grid, frame, opts: BuildTileGeometryOptions): TileGeometryResult` |
-| `src/terrain/quadtree.ts` + `engine.ts` | LOD, chargement, groupe Three | `createTerrainEngine(options: TerrainEngineOptions, deps?: Partial<EngineDeps>, tuning?: Partial<EngineTuning>): TerrainEngine` (deps injectables pour les tests) |
+| `src/terrain/quadtree.ts` + `engine.ts` | LOD, chargement, groupe Three | `createTerrainEngine(options: TerrainEngineOptions, deps?: Partial<EngineDeps>, tuning?: Partial<EngineTuning>): TerrainEngine` (deps injectables pour les tests ; `setEpoch(imagerie \| null, poids)`, voir « Époques »), `patchEpochShader` |
 | `src/scene/*.tsx` | composants R3F | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `TrackPicker` (+ `TrackMenu`, DOM), `CameraRig`, `FlyoverRig`, `useDebouncedCallback` |
 | `src/flyover/path.ts` | chemin de survol | `buildTrackPath(track): TrackPath` (segments concaténés, distances cumulées, `time` en ms ou NaN), `samplePath(path, distanceM): PathSample` (`ele` et `time` interpolés seulement si les deux voisins les ont), `recordedTimeAt(path, distanceM)` (comble les points sans heure), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)`, `pickProjectedPath(screen, distM, px, py, maxPx)` (point de la trace projetée le plus proche du pointeur) |
 | `src/flyover/camera.ts` | caméra de survol | `computeCameraView(path, progress, frame, sampler, exaggeration, camera, durationS)`, `smoothedTurn` |
@@ -45,7 +50,7 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/flyover/climbs.ts` | montées détectées | `detectClimbs`, `climbsOf(track)` (cache par trace), seuils exportés, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
 | `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses données par le film) ; `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
-| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits (`removeFilmItem` passe un plan à « aucune »), `hasFilmItem`, `addMedia`, `updateMedia`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt` ; `model.ts` : `clipTimeS`, `MediaSync`, `SYNC_OFFSET_RANGE` ; `exif.ts` : `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs` ; `media.ts` et `video.ts` (seuls modules non purs du dossier) : `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` ; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `createPreviewVideos`, `getPreviewVideos` |
+| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits (`removeFilmItem` passe un plan à « aucune »), `hasFilmItem`, `addMedia`, `updateMedia`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`, `addEpoch`, `addEpochOverStop`, `updateEpoch` ; `model.ts` : `clipTimeS`, `MediaSync`, `SYNC_OFFSET_RANGE`, `FilmEpoch`, `epochMixAt`, `epochAt`, `EPOCH_FADE_S`, `EPOCH_LEAD_S` ; `exif.ts` : `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs` ; `media.ts` et `video.ts` (seuls modules non purs du dossier) : `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` ; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `createPreviewVideos`, `getPreviewVideos` |
 | `src/flyover/filmCamera.ts` | caméra du film | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `blendViews`, `shotBlend`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | date du soleil, lever / coucher | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
@@ -53,14 +58,15 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 | `src/weather/*` | météo historique de la sortie | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
 | `src/osm/*` | repères OpenStreetMap | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures` ; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `LANDMARK_DISTANCE_RANGE` ; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
 | `src/overlay/*` | habillage du film | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (pont vers l'export), `OverlayCanvas` |
-| `src/export/*` | export vidéo | `buildFrameSchedule`, `VIDEO_FORMATS`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `settle`, `renderSettledFrame`, `composeFrame`, `useExportStore`, `videoFileName`, `chooseVideoDestination`, `warnsInMemory`, `ExportController` |
+| `src/export/*` | export vidéo | `buildFrameSchedule`, `VIDEO_FORMATS`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `settle`, `renderSettledFrame`, `composeFrame`, `useExportStore`, `videoFileName`, `chooseVideoDestination`, `warnsInMemory`, `filmRate`, `ExportController` ; `batch.ts` (rendu en lot) : purs, testés : `buildBatchJobs`, `formatKey`, `batchBaseName`, `estimateBatch`, `runBatch`, `batchProgressLabel`, `batchSummary` ; `exportJob`, `settledExport`, `useBatchStore` |
 | `src/poster/*` | affiche (voir « Affiche ») | purs, testés : `PosterSettings`, `DEFAULT_POSTER`, `POSTER_FORMATS`, `posterSize`, `isValidPoster` ; `posterContent`, `posterFigure`, `availableFigures` ; `posterLayout` (boîtes), `fitText`, `fitLines`, `wrapText`, `truncate` ; `drawPoster`, `coverCrop`, `POSTER_THEMES`, `POSTER_FONTS` ; non purs : `currentPosterContent`, `startPoster`, `usePosterPreview` (`export.ts`), `PosterPanel` |
 | `src/flyover/race.ts` | course fantôme | `RACE_SYNC_MODES`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers` ; `useRace`, `RaceMarkers` |
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | météo dans la scène | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction` ; `WeatherEffect` |
 | `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | eau réfléchissante | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater` ; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH` ; `WaterLayer`, `WATER_LIFT_M` ; `useWaterStore` (`osm/store.ts`) |
 | `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | nuages volumétriques | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `cloudCoversAt`, `sceneCloudsFrom`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor` ; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
 | `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
-| `src/platform/*` | site / bureau (voir « Application de bureau ») | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`), `selectPlatform(scope)`, `videoEncoderMissingHint` ; purs, testés : `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore` |
+| `src/platform/*` | site / bureau (voir « Application de bureau ») | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`), `selectPlatform(scope)`, `videoEncoderMissingHint` ; purs, testés : `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf` ; `tileCache.ts` : `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache` ; `folder.ts` : `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath` |
+| `src/offline/*` | packs de tuiles hors ligne (voir « Packs hors ligne ») | purs, testés : `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`) ; `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`) ; `startPackDownload`, `createDailyQuota` (`download.ts`) ; `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefix` (`packs.ts`) ; non purs : `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `shellShortcut`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `loadSample`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
 
@@ -93,7 +99,8 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
 2. **Fetch** (`fetch.ts`) : `fetch()` + `createImageBitmap`, file de priorité, concurrence ~12, dédoublonnage des requêtes en vol,
    LRU ~600 bitmaps, support `AbortSignal`, 3 réessais (250 ms, 1 s, 4 s, hors cache HTTP) sur erreur réseau, 5xx, 429
    et 400 (la Géoplateforme IGN a renvoyé en rafales « Layer … unknown » en 400 pour des tuiles valides, avec un
-   `max-age` de 21 jours) : une sous-tuile d'imagerie en échec reste grise tant que sa tuile de relief vit.
+   `max-age` de 21 jours) : une sous-tuile d'imagerie en échec reste grise tant que sa tuile de relief vit. Avant le
+   réseau, la copie d'un pack hors ligne quand un pack contient la source de l'URL (voir « Packs hors ligne »).
 3. **DEM** (`dem.ts`) : Terrarium `h = (R*256 + G + B/256) - 32768` ; Mapbox `h = -10000 + (R*65536 + G*256 + B) * 0.1`.
    Décodage via `OffscreenCanvas` (fallback `HTMLCanvasElement`). Échantillonnage bilinéaire.
 4. **Imagerie** (`imagery.ts`) : pour la tuile terrain (z,x,y) et `zoomOffset = k`, récupérer les `2^k × 2^k` sous-tuiles
@@ -118,6 +125,18 @@ personnalisation complète via un document de projet unique, export vidéo WebCo
      garde ~400 grilles équivalent 256 px (LRU, soit ~100 Mo ; une grille 512 px compte pour quatre).
    - Sphère englobante : depuis la géométrie si chargée, sinon depuis les bornes de la tuile avec hauteurs [-500, 9000] m.
    - Matériau : `MeshStandardMaterial({ map, roughness: 1, metalness: 0 })`, `side: FrontSide`. Option `wireframe`.
+     Étendu par `onBeforeCompile` (`patchEpochShader`, un seul programme pour toutes les tuiles,
+     `customProgramCacheKey`) d'un second échantillonneur `epochMap` et de `epochOn` (par matériau) et `epochMix`
+     (partagé) : après `map_fragment`, `couleur × (1 − k·a) + k·texel` avec k = `epochOn × epochMix` (texels
+     prémultipliés) ; voir « Époques ».
+   - **Époques** (`engine.setEpoch(source | null, poids)`, film « Remonter le temps ») : une seconde imagerie, une
+     texture par nœud dans une table du moteur (`EpochSlot` : chargement, prête, échec), demandée pour les seuls nœuds
+     dessinés (au plus `maxConcurrentLoads` à la fois, rang = ordre de la sélection), même composition que l'imagerie
+     courante avec `transparent: true` (pas de gris : trous, tuiles en échec et hors couverture laissent voir l'imagerie
+     courante ; `premultiplyAlpha` pour qu'un bord filtré s'efface au lieu de noircir). Poids > 0 : les nœuds dessinés
+     sans leur texture datée comptent dans `pendingVisibleTiles` (et `pendingTiles`), donc l'export les attend ; poids 0
+     (bloc à venir) : elles se chargent sans être attendues. Changer de source ou passer à null libère toutes les textures
+     datées ; un nœud déchargé libère la sienne ; une texture en échec n'est pas réessayée (l'imagerie courante reste).
    - `onChange` déclenché (coalescé par frame) quand une tuile devient prête ou est retirée → la trace se replaque.
 7. **Scène** (`scene/`) :
    - `FlyoverCanvas` : `<Canvas gl={{ antialias: true, logarithmicDepthBuffer: true, alpha: true }} camera={{ fov: 50, near: 1, far: 5e6 }} flat>`
@@ -196,7 +215,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   (`getPlatform().storage` `openflyover.shell.v1`, `parseShellPrefs`), pas par le projet.
 - **Dock droit** (300 px) : tiroir d'export non modal (`ExportPanel` : formats en tuiles, résolution, estimation, « Exporter
   la vidéo », « Image fixe », « Plus de réglages » : images par seconde, qualité, type d'image ; résumé durée · images · codec ·
-  taille sur une ligne) ; sinon l'**inspecteur** du bloc
+  taille sur une ligne ; modes « Vidéo », « Plusieurs formats » : pastilles de résolution par format, image fixe, affiche,
+  estimation du lot, « Tout exporter », avancement « 2 / 4 · 16:9 1080p · 42 % », liste des fichiers, et « Affiche ») ;
+  sinon l'**inspecteur** du bloc
   sélectionné sur la timeline (`FilmInspector`, deux `<aside class="dock">` dont un seul visible : le tiroir passe devant,
   l'inspecteur revient à sa fermeture si le bloc est encore sélectionné). Sous 1360 px de large, un seul côté ouvert à la
   fois : ce qui remplit le dock (tiroir ou inspecteur) replie le panneau, qui revient quand le dock se vide ; déplier le
@@ -324,10 +345,11 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   aire SVG, partie jouée en rouge clair. Amplitude verticale d'au moins 100 m pour ne pas grossir le bruit GPS ; profil masqué
   si la trace n'a aucune altitude.
 
-## Atmosphère (phase 3, en cours)
+## Atmosphère (phase 3)
 
 - **`AtmosphereLayer`** (`src/scene/AtmosphereLayer.tsx`, dans `TerrainLayer`) : modèle de diffusion précalculé de Takram
-  (`@takram/three-atmosphere`). `worldToECEFMatrix` = `frame.localToEcef`. Éclairage **par sources** (`SunLight` +
+  (`@takram/three-atmosphere`). `worldToECEFMatrix` = `mslLocalToEcef(frame)` (repère local remonté de l'ondulation du
+  géoïde : +51 m à Chamonix, voir « Conventions de coordonnées »). Éclairage **par sources** (`SunLight` +
   `SkyLight` placées à l'origine, 1000 m) : le terrain garde son `MeshStandardMaterial`. Post-process (`EffectComposer`) :
   perspective aérienne (brume selon la distance réelle), tone mapping **Khronos Neutral** (garde les teintes des
   orthophotos), SMAA. Exposition 5.
@@ -422,7 +444,7 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   les préréglages) avec `'rythme'` ; un projet v1 sans film reçoit `{ autoMode: 'rythme' }` par la migration v1 → v2
   (`MIGRATIONS[1]`), complété de même : leurs arrêts restent ceux de leur rythme.
 - **Préréglages** : seuls les plans d'ouverture et de clôture du film sont enregistrés ; `stops`, `speeds`, `texts`, `media`,
-  `audio` (et `autoStops`) appartiennent à la trace et restent ceux du projet courant à l'application (`presetSettings`, y compris pour
+  `audio`, `epochs` (et `autoStops`) appartiennent à la trace et restent ceux du projet courant à l'application (`presetSettings`, y compris pour
   un préréglage enregistré avec tout le film).
 - **Horloge du film** (`src/film/clock.ts`, `buildFilmClock` / `filmClockFor`, hook `useFilmClock` dans
   `src/scene/usePacing.ts`, alias `usePacing` pour les panneaux ; au même endroit `getFilmSource` hors React et
@@ -475,7 +497,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   clavier (flèches ±1 s, Maj ±5 s, Page ±10 s, Début / Fin). Pistes « Plans » (ouverture, survol avec profil, clôture ;
   « aucune » = amorce pointillée sélectionnable ; les arrêts y sont aussi marqués sur la barre du survol, fenêtre teintée
   et bord haut à l'accent, blanc pour l'arrêt sélectionné), « Arrêts » (fenêtre de chaque arrêt, entrée et sortie
-  comprises ; pointillés tant qu'ils sont générés), « Textes », « Médias » (photos et vidéos, avec leur vignette ; une
+  comprises ; pointillés tant qu'ils sont générés), « Époques » (bloc sable, icône d'horloge à rebours et années, voir
+  « Époques »), « Textes », « Médias » (photos et vidéos, avec leur vignette ; une
   vidéo porte en plus une petite icône de caméra). Piste « Vitesse » sous « Plans » : un bloc par portion, de son entrée à
   sa sortie en temps du film, libellé « ×2 » (cadre plein si accélérée, pointillé si ralentie) ; « Vitesse » de la barre
   (`addSpeed` : ×2 sur 1 km à partir du marqueur, raccourcie ou avancée pour rester sur la trace et hors des autres
@@ -509,7 +532,10 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   taille, début, durée), photo (vignette, affichage plein écran / carte, Ken Burns, légende, position, taille, début, durée),
   vidéo (les mêmes sans Ken Burns, plus « Début dans la vidéo », longueur du fichier et mention « muette », qui renvoie à
   la musique, et « Calage sur le parcours » quand l'heure du tournage est connue), musique (nom du fichier, volume en %, fondus d'entrée et de sortie 0–10 s, début, durée, « Début dans le
-  fichier », bornés par `updateMusic` à la longueur du fichier, « Caler la durée du film sur la musique »).
+  fichier », bornés par `updateMusic` à la longueur du fichier, « Caler la durée du film sur la musique »), époque (photos
+  parmi celles qui couvrent la trace, liste désactivée avec une explication hors de France ; libellé, vide = années de la
+  source en indication ; case « Afficher le libellé dans le film » ; début, durée) ; un arrêt propose aussi « Avant /
+  après » quand des photos datées couvrent la trace.
   Position : grille 3 × 3 (`radiogroup` de 9 `role="radio"`, focus itinérant, flèches qui déplacent et choisissent,
   `nextGridIndex`, libellé de la position à côté). Les modifications passent par `editFilm(…, { step: false })` (frappes
   fusionnées en un pas) ; retoucher un arrêt généré écrit d'abord tous les arrêts.
@@ -598,6 +624,25 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   dernière musique, trouvée par la méthode de la sécante sur l'horloge du film (`durationForFilmEnd` : arrêts, portions
   de vitesse et plans compris) ; un pas d'annulation, toast avec la nouvelle durée ou les bornes atteintes. Le son des
   vidéos reste hors champ.
+- **Époques** (phase 7, « Remonter le temps ») : `film.epochs[]` `{ id, startS, durationS, imagerySourceId, label?, badge }`
+  (`epoch-<n>`, `isValidEpoch` : temps comme un texte, source non vide, `badge` booléen ; un film enregistré avant reçoit
+  `[]`, hors préréglages). Sources : `HISTORICAL_IMAGERY` (`ign-ortho-1950-1965`, `-1965-1980`, `-2000-2005`, la plus
+  ancienne d'abord, avec ses années « 1950–1965 ») ; une source inconnue est ignorée (l'imagerie courante reste).
+  `epochAt(epochs, t)` (pur) : le bloc qui contient t et qui a commencé le dernier (des blocs qui se chevauchent : le
+  dernier prend la main, sans fondu entre eux), avec son poids `epochMixAt` (smoothstep sur `EPOCH_FADE_S` = 1 s à chaque
+  bord, au plus un quart du bloc) ; sinon le prochain qui commence dans `EPOCH_LEAD_S` (2 s), poids 0, pour charger ses
+  tuiles d'avance. `TerrainLayer` le lit à chaque image, avant `engine.update`, au temps du film de la lecture
+  (`playback.timeS`, sinon `clock.timeAtProgress`) et le passe au moteur (`epochImageryAt` → `setEpoch`) : l'aperçu et
+  l'export (qui fixe le temps du film de chaque image) montrent la même imagerie au même temps. Ajout : « Options » ›
+  « Ajouter une époque » (`addEpoch` à la tête de lecture, 6 s, source la plus ancienne qui couvre la trace,
+  `historicalImageryFor(track.bounds)` ; bouton désactivé avec l'explication hors de France ; la piste vide le rappelle) ;
+  « Avant / après » dans l'inspecteur d'un arrêt (`addEpochOverStop` : toute la fenêtre de l'arrêt, entrée et sortie
+  comprises). Gestes, clavier, aimantation, suppression et annulation comme un texte (`dragFilm`, `snapTargets`,
+  `removeFilmItem`, `hasFilmItem`, `updateEpoch` qui remet le libellé vide aux années de la source). Libellé dans le film :
+  voir « Habillage du film ». Crédit des photos datées dans la bande d'état et l'image exportée tant que le film en a
+  (`overlayCredits({ epochSourceIds })`). Limites : un bloc posé sur un arrêt ne le suit pas quand l'arrêt bouge ; une
+  seule source datée à la fois (pas de fondu d'une époque à l'autre) ; revenir dans un bloc après l'avoir quitté
+  recompose ses textures (tuiles en cache du chargeur).
 - **Table des médias** (`src/film/media.ts`) : les octets ne sont pas dans les réglages (historique et préréglages
   légers) mais dans une table du document `{ id: { data, thumb, width, height, name?, durationS? } }` (data URL JPEG ;
   vidéo : data URL du fichier `video/mp4 | webm | quicktime` et sa longueur `durationS`, avec l'heure de début du tournage `recordedMs` / `recordedApprox` quand elle est connue ; son : data URL `audio/…`,
@@ -766,6 +811,11 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   (l'aperçu monte `OverlayCanvas` dès que l'un des deux est actif). Crédits désactivés, le crédit Open-Meteo reste dessiné
   seul quand la météo est affichée (comme avant) ; activés, il rejoint la ligne. Les désactiver revient à citer les sources
   ailleurs (texte du panneau Habillage).
+- **Libellé d'une époque** (`extras.epochs` = `settings.film.epochs`, `epochBadgeAt`) : pendant le bloc montré par le
+  relief (`epochAt`), son libellé, sinon les années de sa source, avec « Photos aériennes » en sous-titre, dessiné comme un
+  texte de la timeline en haut au centre (`EPOCH_BADGE_ANCHOR`), à l'opacité du poids de l'imagerie datée (mêmes fondus
+  que le relief) ; même habillage désactivé, comme les photos (l'aperçu monte `OverlayCanvas` dès qu'une époque a son
+  libellé) ; case décochée (`badge: false`) : rien.
 - **Polices** : un canvas ne déclenche pas seul le téléchargement des polices web ; `loadOverlayFonts()` les demande avant la
   première image, l'export doit l'attendre aussi. Polices embarquées (`src/ui/fonts.css`, `public/fonts/`) :
   Fraunces 300–700, IBM Plex Sans et Sans Condensed disponibles hors ligne.
@@ -785,8 +835,9 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   l'aperçu ; les images tenues réutilisent l'image déjà composée, sauf quand la vue bouge avec le temps : plans d'ouverture
   et de clôture, arrêts en orbite, styles orbite et cinéma, ou quand l'habillage minuté change (`overlayTimedState` :
   opacités des cartes, des textes, des photos et des vidéos de la timeline, plus le temps du film pendant qu'une photo
-  plein écran bouge ou qu'une vidéo est visible ; un texte qui apparaît pendant un arrêt fixe est donc rendu, une vidéo
-  pendant un arrêt aussi) ; les images des photos et des vidéos visibles sont décodées avant le rendu de l'image
+  plein écran bouge ou qu'une vidéo est visible, et le poids de l'imagerie datée d'une époque, habillage affiché ou non ;
+  un texte qui apparaît pendant un arrêt fixe est donc rendu, une vidéo pendant un arrêt aussi, et le fondu d'une époque
+  posée sur un arrêt fixe) ; les images des photos et des vidéos visibles sont décodées avant le rendu de l'image
   (`loadFrameMedia`, la composition devant suivre le rendu dans la même tâche ; `releaseFrameMedia` en fin d'export).
   Vidéos : image exacte et reproductible, jamais de lecture en temps réel ; `createExportVideos` ouvre chaque vidéo
   visible avec mediabunny (`CanvasSink`, rotation appliquée, 3 canvas tournants) et `createClipReader` donne la dernière
@@ -795,7 +846,8 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   message ; les images tenues du début et de la fin restent figées sur les
   temps 0 et durée).
 - Pour chaque progression (`renderSettledFrame`, `src/export/capture.ts`), `advance` jusqu'à ce que la vue n'attende plus
-  aucune tuile réellement dessinée (`stats.pendingVisibleTiles`, limite 5 s par image, comptée « incomplète »), puis les
+  aucune tuile réellement dessinée (`stats.pendingVisibleTiles`, textures datées d'une époque visible comprises, limite 5 s
+  par image, comptée « incomplète »), puis les
   replaquages en attente de la trace et des étiquettes sont exécutés tout de suite (`flushDrapes`, au lieu de leur délai) et
   l'image est rendue une fois de plus. La caméra n'est replacée (progression décalée de 1e-9) que si le relief final la déplace
   de plus d'1 m, jamais après un dépassement de délai. Toutes les 5 images rendues, les tuiles des images +5 à +40 sont
@@ -848,6 +900,26 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   `OffscreenCanvas.convertToBlob` (JPEG qualité 0,92 ; extension d'après le type obtenu). Nom : `<trace> <progression> %`.
   Restauration identique au film.
 - Image fixe d'ensemble (affiche) : `still.overview` et `still.compose` (voir « Affiche »).
+- **Rendu en lot** (`src/export/batch.ts`, mode « Plusieurs formats » du tiroir) : `buildBatchJobs(sélection, format de
+  l'image fixe)` donne les films cochés (format × résolution, dans l'ordre de `VIDEO_ASPECTS` puis `VIDEO_RESOLUTIONS`,
+  clés `16:9@1080p`), puis l'image fixe (position de lecture, PNG, au format du mode « Vidéo ») et l'affiche (ses
+  réglages, `startPoster`). Images par seconde et qualité : celles de `settings.video`. Noms : `batchBaseName` →
+  « <projet> – 16x9-1080p », « <projet> – image 16x9-1080p », « <projet> – affiche » (`effectiveProjectName`).
+  `runBatch` exécute les tâches une à une (un échec n'arrête pas les suivantes ; une tâche annulée, ou une annulation
+  demandée entre deux, annule toutes celles qui restent), chacune par `exportJob` : la même demande et le même
+  `ExportController` qu'un export seul (vue restaurée après chacune, cache de tuiles partagé), attente de la fin par
+  `settledExport` (abonnement au store), puis `takeResult` (le store rend le résultat sans révoquer son URL : le lot
+  garde chaque fichier). « Annuler » de la barre du haut annule la tâche en cours, donc tout le lot ; « Tout annuler »
+  aussi (`useBatchStore.cancel`). Le tiroir « Vidéo » ne télécharge ni n'annonce rien pendant un lot : le lot le fait.
+- Destination du lot : avec l'écriture directe et un sélecteur de dossier (`canPickFolder` : bureau, ou
+  `showDirectoryPicker` de Chrome / Edge), un dossier est demandé au clic « Tout exporter » (avant tout `await`) ;
+  chaque film y est écrit au fil de l'encodage (`WritableFolder.createFile` → `WritableFile`, extension d'après
+  `pickCodec`), images et affiche copiées à la fin (un fichier du même nom est remplacé). Dossier refusé = pas d'export ;
+  échec du sélecteur ou sans sélecteur = chaque fichier gardé en mémoire et enregistré dès qu'il est prêt (téléchargement,
+  `saveUrl` sur le bureau), son URL gardée pour « Enregistrer à nouveau » jusqu'au lot suivant.
+- Estimation du lot (`estimateBatch`) : fichiers, images à rendre (chaque film compté), taille des films dont le codec est
+  connu, et durée de rendu = images × mégapixels × `secondsPerMegapixel`, la vitesse du dernier film exporté dans la
+  session (`filmRate`, mesurée par le store à la fin d'un film ; rien avant le premier).
 - La console affiche en fin d'export le temps de rendu, d'attente des tuiles et d'encodage, et le nombre de délais dépassés.
   « Encodage » inclut la copie de l'image WebGL, qui attend la fin du rendu GPU.
 - Limites : sans écriture directe (Firefox, Safari), fichier gardé en mémoire (~2× sa taille) ; onglet à garder ouvert, vitesse liée au GPU (mesure à faire sur une
@@ -1008,6 +1080,11 @@ diffère passe par `src/platform/`.
   `createWritableFile` : `showSaveFilePicker` (types tirés des filtres, `pickerTypes`) puis `createWritable()` (Chrome
   écrit dans un fichier temporaire `.crswap` déplacé à la fermeture) ; `discard` = `abort()` puis `handle.remove()`
   (Chrome 110+), car le sélecteur a déjà créé le fichier ; `AbortError` (fenêtre fermée) → null.
+- **Dossier** (`folder.ts`, rendu en lot) : `pickFolder` → `WritableFolder { name, createFile(fileName) }` ou null. Site :
+  `showDirectoryPicker({ mode: 'readwrite' })`, puis `getFileHandle(nom, { create: true })` et le même flux que
+  `createWritableFile` (`writableOf`) ; `discard` = `removeEntry`. Bureau : fenêtre `open({ directory: true, recursive:
+  false })` (le plugin dialog ouvre le dossier au scope fs, fichiers directs seulement), puis `openWritablePath(chemin)`
+  de `desktop.ts`, partagé avec `createWritableFile`.
 - **Bureau** (`desktop.ts`) : `@tauri-apps/plugin-dialog` (`open`, `save`) et `@tauri-apps/plugin-fs` (`readFile`,
   `writeFile`), importés dynamiquement au premier appel : le site les embarque dans des morceaux séparés jamais chargés.
   Un fichier lu devient un `File` (nom, type déduit de l'extension), donc `openFiles`, `openProject`, `readPhoto` et les
@@ -1033,8 +1110,9 @@ diffère passe par `src/platform/`.
   1440 × 900 (au moins 1024 × 700). `dragDropEnabled: false` : sinon Tauri intercepte les dépôts et le HTML ne reçoit plus
   `drop`. Droits (`capabilities/default.json`) : `dialog:allow-open`, `dialog:allow-save`, `fs:allow-read-file`,
   `fs:allow-write-file`, `fs:allow-open`, `fs:allow-seek`, `fs:allow-write`, `fs:allow-remove` (film écrit au fil de
-  l'eau), sans portée : l'extension dialog ajoute chaque chemin choisi à la portée de fs, rien d'autre n'est
-  lisible. CSP : `connect-src` / `img-src` listent les hôtes de tuiles (`src/terrain/sources.ts`), Open-Meteo et les deux
+  l'eau), `fs:allow-mkdir`, `fs:allow-read-dir`, `fs:allow-exists` (packs hors ligne) ; une seule portée fixe,
+  `$APPDATA/tiles` et ce qu'il contient (`fs:scope`), en plus des chemins que l'extension dialog ajoute pour chaque
+  fichier choisi : rien d'autre n'est lisible. CSP : `connect-src` / `img-src` listent les hôtes de tuiles (`src/terrain/sources.ts`), Open-Meteo et les deux
   serveurs Overpass, plus `ipc:` et `blob:` ; `style-src 'unsafe-inline'` avec `dangerousDisableAssetCspModification:
   ["style-src"]` (Tauri ajouterait sinon un nonce qui annule `unsafe-inline`). **Toute nouvelle source doit aussi entrer
   dans la CSP de `tauri.conf.json`.**
@@ -1066,3 +1144,48 @@ WebKitGTK n'a pas `VideoEncoder` ; Edge (WebView2) l'a, WebKit sous macOS aussi 
 4. **Côté JavaScript** : un `createNativeVideoEncoder` au même contrat que `VideoEncodeSession` (`addFrame`, `finish`,
    `cancel`), choisi par `src/export` quand `capabilities` dit `native`. `Capabilities.canEncodeVideo` deviendra
    `videoEncoder: 'webcodecs' | 'native' | null`, le natif annoncé par une commande `video_available`.
+
+## Packs hors ligne (phase 6)
+
+« Préparer hors ligne » (onglet Trace, section « Hors ligne », `src/ui/OfflinePanel.tsx`) télécharge une fois les tuiles
+d'un survol des traces chargées ; la vue et l'export les lisent ensuite sans réseau.
+
+- **Plan** (`plan.ts`, pur) : les tuiles que le moteur charge pendant le survol, avec sa propre règle. Une tuile de
+  taille G est découpée quand une maille (G / 64) dépasse 3 px : caméra à moins de r = G / 64 · H / (6 · tan 25°)
+  ≈ 6 G pour H = 1080 px (×2 en 4K) ; un découpage charge les quatre enfants. La caméra de suivi reste près de la
+  trace, à h = distance automatique × réglage « distance » × sin(inclinaison) au-dessus : une tuile est découpée si
+  √(d² + h²) < r, d = distance de la trace à la tuile (points densifiés à 25 m, grille de 1 km). Parcours depuis les
+  racines du moteur (même zone : boîte des traces + 25 km, 40 km au moins, ≤ 16 racines) : les deux niveaux sous les
+  racines sur toute la zone (le paysage lointain), plus profond seulement les enfants des tuiles qui touchent le
+  couloir (2, 5 ou 10 km de large, centré sur la trace). Hors du couloir le moteur garde le niveau plus grossier du
+  pack (le remplacement attend les quatre enfants, d'où les enfants entiers). Imagerie : `planImagerySubtiles` de
+  chaque tuile de relief, même décalage de zoom que la vue (recadrage au-delà du zoom max de la source). Estimation
+  = nombre de tuiles × taille moyenne mesurée par source (`policy.ts`). Ordre de grandeur, trace droite de 20 km dans
+  les Alpes, Mapterhorn + IGN, décalage 1, h = 400 m : 2 km → 10 500 tuiles, ~450 Mo ; 5 km → 22 000, ~930 Mo ;
+  10 km → 28 000, ~1,2 Go (Mapterhorn : ~150 Ko par tuile de 512 px). Au-delà de 150 000 tuiles, refusé. Hors du
+  plan : plans d'ensemble et orbites hautes (niveaux grossiers, déjà là), export 4K (un niveau de plus dans un couloir
+  large).
+- **Politique** (`policy.ts`) : une décision par source, motifs et liens dans le README ; une source absente de la
+  table est refusée. Refusées : OpenTopoMap, Esri World Imagery, swisstopo (photos et carte). Une imagerie refusée
+  n'empêche pas le pack : il ne contient alors que le relief et l'imagerie reste en ligne. Limite par jour et par
+  appareil : Mapterhorn 20 000, IGN 50 000 (toutes couches), EOX 20 000 ; AWS sans limite.
+- **Téléchargement** (`download.ts`) : 4 requêtes à la fois, réessais de `downloadTile` (ceux du fetcher), tuiles déjà
+  dans le pack sautées, 4xx = « pas de donnée ici » (Mapterhorn au-delà de z12 hors zones fines), arrêt après 20 échecs
+  réseau de suite ou si le stockage refuse une tuile, pause (les requêtes en cours finissent), reprise, annulation
+  (pack neuf supprimé). Compteur du jour par fournisseur dans `storage` (`openflyover.offline.quota.v1`).
+- **Packs** (`packs.ts`, `store.ts`) : identifiant = empreinte des URL du plan, donc mêmes traces + mêmes réglages =
+  même pack, et le relancer termine un pack incomplet. Liste dans `storage` (`openflyover.offline.v1` : nom, sources,
+  couloir, tuiles, octets, complet, débuts d'URL des sources). `installOfflineTiles()` (`main.tsx`) enregistre le
+  lecteur du fetcher : `covers(url)` compare l'URL aux débuts d'URL des packs (synchrone, sans attente quand aucun
+  pack ne contient la source : même chemin qu'avant), puis `tileCache.get`. Une copie illisible ou absente → réseau.
+- **Stockage** (`src/platform/tileCache.ts`) : site = Cache Storage, un cache par pack `openflyover-tiles-v1:<pack>`,
+  l'URL comme clé (supprimer un pack = supprimer son cache ; une tuile commune à deux packs est gardée deux fois),
+  `navigator.storage.persist()` demandé à la première tuile, `size()` = `navigator.storage.estimate()` ; absent sans
+  HTTPS (`tileCache` null, la section le dit). Bureau = un fichier par tuile, `<app data>/tiles/<pack>/<tileFileName(url)>`
+  (deux empreintes de 53 bits), plugin-fs avec `baseDir: AppData` ; index des noms lu une fois (`readDir`) : une
+  tuile absente ne coûte aucun appel au disque ; type d'image reconnu aux premiers octets.
+- **Coût du cache d'abord** : bureau, rien pour une tuile absente (index en mémoire) ; site, un `match` par pack qui
+  contient la source (non mesuré ici, faute de navigateur ; négligeable devant une requête réseau de 50 à 300 ms).
+- **Limites** : hors ligne, une tuile hors du pack échoue après les réessais (le parent reste affiché) ; l'export attend
+  ces échecs comme en ligne. Le pack suit la trace et les réglages du moment : changer de source ou de décalage de
+  zoom demande un autre pack.
