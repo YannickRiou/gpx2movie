@@ -9,7 +9,7 @@ import {
   useBatchStore,
   type BatchJobState,
 } from '../export/batch'
-import { pickCodec, videoBitrate, type CodecCandidate } from '../export/encoder'
+import { ALPHA_CANDIDATES, pickCodec, videoBitrate, type CodecCandidate } from '../export/encoder'
 import {
   EXPORT_HOLD_END_S,
   EXPORT_HOLD_START_S,
@@ -24,6 +24,7 @@ import {
 import {
   chooseVideoDestination,
   isExportBusy,
+  overlayBaseName,
   stillBaseName,
   useExportStore,
   videoFileName,
@@ -96,8 +97,8 @@ interface CodecProbe {
 
 /**
  * "Exporter" drawer: aspect (tiles), resolution, codec and estimated size, start / cancel, progress and download;
- * also a still image of the current progress at the same size; frame rate, quality and image type under
- * « Plus de réglages ».
+ * also a still image of the current progress at the same size, or the overlay alone over a transparent background;
+ * frame rate, quality and image type under « Plus de réglages ».
  */
 function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; modes: ReactNode; hidden: boolean }) {
   const video = useAppStore((s) => s.settings.video)
@@ -109,6 +110,8 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   const { phase, frame, frameCount, etaS, result, error, timings } = useExportStore()
   const id = useId()
   const [stillType, setStillType] = useState<StillType>('image/png')
+  /** « Habillage seul »: the overlay alone, transparent WebM to lay over one's own footage */
+  const [overlayOnly, setOverlayOnly] = useState(false)
   const downloadedRef = useRef<ExportResult | null>(null)
   const streams = getPlatform().capabilities.canStreamToDisk
 
@@ -122,19 +125,22 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
   }).length
 
   // Ask the browser which codec it can use at this size (H.264 may refuse large or tall frames).
-  const probeKey = `${width}x${height}@${video.fps}/${video.quality}`
+  const probeKey = `${width}x${height}@${video.fps}/${video.quality}${overlayOnly ? '/alpha' : ''}`
   const [probe, setProbe] = useState<CodecProbe | null>(null)
   useEffect(() => {
     let alive = true
-    void pickCodec({ width, height, fps: video.fps, quality: video.quality }).then((codec) => {
+    const candidates = overlayOnly ? ALPHA_CANDIDATES : undefined
+    void pickCodec({ width, height, fps: video.fps, quality: video.quality }, undefined, candidates).then((codec) => {
       if (alive) setProbe({ key: probeKey, codec })
     })
     return () => {
       alive = false
     }
-  }, [probeKey, width, height, video.fps, video.quality])
+  }, [probeKey, width, height, video.fps, video.quality, overlayOnly])
   const codec = probe?.key === probeKey ? probe.codec : undefined
-  const estimatedBytes = codec ? (videoBitrate(width, height, video.fps, video.quality, codec.codec) * totalFrames) / video.fps / 8 : 0
+  // no size estimate for the overlay alone: mostly empty frames come out far below the bitrate
+  const estimatedBytes =
+    codec && !overlayOnly ? (videoBitrate(width, height, video.fps, video.quality, codec.codec) * totalFrames) / video.fps / 8 : 0
   const secondsPerImage =
     timings.rendered > 0 ? (timings.renderMs + timings.waitMs + timings.encodeMs) / timings.rendered / 1000 : null
 
@@ -177,10 +183,11 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
 
   const start = () => {
     if (!trackName || !codec) return
+    const baseName = overlayOnly ? overlayBaseName(trackName) : trackName
     // asked now: the browser's save picker needs this click
-    const fileName = videoFileName(trackName, `.${codec.container}`)
+    const fileName = videoFileName(baseName, `.${codec.container}`)
     void chooseVideoDestination(getPlatform(), fileName).then(({ start: go, destination }) => {
-      if (go) useExportStore.getState().start({ ...request, baseName: trackName, destination })
+      if (go) useExportStore.getState().start({ ...request, baseName, destination, overlayOnly })
     })
   }
 
@@ -269,9 +276,23 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         </p>
       </div>
 
+      <div className="field">
+        <label className="checkbox">
+          <input type="checkbox" checked={overlayOnly} disabled={busy} onChange={(e) => setOverlayOnly(e.currentTarget.checked)} />
+          Habillage seul (fond transparent)
+        </label>
+        {overlayOnly && (
+          <p className="field__hint">
+            Compteurs, profil, carte, titres et crédits sans la vue 3D, en WebM transparent, à poser sur vos propres images
+            dans un logiciel de montage. Mêmes images que la vidéo, sans le son.
+          </p>
+        )}
+      </div>
+
       <p className="export__summary" title="Chaque image est rendue une fois le relief visible chargé.">
         {formatClock(totalFrames / video.fps)} · {formatNumber(totalFrames)} images
-        {codec && ` · ${CODEC_LABELS[`${codec.container}/${codec.codec}`]} · ≈ ${formatMegabytes(estimatedBytes)}`}
+        {codec && ` · ${CODEC_LABELS[`${codec.container}/${codec.codec}`]}`}
+        {estimatedBytes > 0 && ` · ≈ ${formatMegabytes(estimatedBytes)}`}
       </p>
       {codec && streams && <p className="field__hint">Enregistrement direct sur le disque</p>}
       {codec && warnsInMemory(estimatedBytes, streams) && (
@@ -280,7 +301,14 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
           le disque.
         </p>
       )}
-      {codec === null && (
+      {codec === null && overlayOnly && (
+        <p className="field__hint" role="alert">
+          Ce navigateur ne sait pas encoder une vidéo WebM (VP9) de {formatNumber(width)} × {formatNumber(height)} pixels,
+          nécessaire à l'habillage transparent :{' '}
+          {videoEncoderMissingHint() ?? 'exportez-le depuis Chrome ou Edge, ou choisissez une résolution plus petite.'}
+        </p>
+      )}
+      {codec === null && !overlayOnly && (
         <p className="field__hint" role="alert">
           Ce navigateur ne sait pas encoder une vidéo de {formatNumber(width)} × {formatNumber(height)} pixels :
           {videoEncoderMissingHint() ?? 'choisissez une résolution plus petite.'}
@@ -291,7 +319,7 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         <div className="export__actions">
           <button type="button" className="btn btn--primary" onClick={start} disabled={!trackName || !codec}>
             <Icon name="download" size={18} />
-            Exporter la vidéo
+            {overlayOnly ? "Exporter l'habillage" : 'Exporter la vidéo'}
           </button>
           <button
             type="button"

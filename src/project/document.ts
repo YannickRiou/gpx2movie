@@ -23,6 +23,7 @@ import { isValidOverlay, withOverlayDefaults } from '../overlay/settings'
 import { isValidPoster } from '../poster/settings'
 import { isValidGrading } from '../scene/grading'
 import { TRACK_COLOR_MODES } from '../flyover/trackColor'
+import { isValidMarker, isValidTrackStyle, withMarkerDefaults, withTrackStyleDefaults } from '../scene/markerSettings'
 import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS } from '../state/store'
 import type { AppState, Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
@@ -118,6 +119,8 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   poster: isValidPoster,
   landmarks: (v) => v.maxDistanceM >= LANDMARK_DISTANCE_RANGE.min && v.maxDistanceM <= LANDMARK_DISTANCE_RANGE.max,
   race: isValidRace,
+  trackStyle: isValidTrackStyle,
+  marker: isValidMarker,
 }
 
 /**
@@ -128,6 +131,8 @@ export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unkno
   overlay: withOverlayDefaults,
   video: withVideoDefaults,
   film: withFilmDefaults,
+  trackStyle: withTrackStyleDefaults,
+  marker: withMarkerDefaults,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

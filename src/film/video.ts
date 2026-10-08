@@ -6,17 +6,19 @@
  *   Blob read from disk, or later a path, behind the same call. A clip is kept as is (no cheap way to downscale it
  *   in the page), so its file must stay under `MAX_VIDEO_BYTES`; it must be an MP4, WebM or QuickTime file whose
  *   video the browser decodes (WebCodecs, the same decoder as the export).
- * - Preview (`getPreviewVideos`): one muted HTMLVideoElement per clip, playing along during the playback and
+ * - Preview (`getPreviewVideos`): one HTMLVideoElement per clip, playing along during the playback and
  *   paused on the film time when scrubbing; the last frame seeked to is kept while the next seek runs. A clip
  *   following the flight (`sync.follow`) plays at the rate the recorded time passes under the marker, held during
- *   a stop.
+ *   a stop. Its sound is heard only while it plays at ×1 (`clipHasSound`): muted when scrubbing, at any other speed
+ *   and when following the flight, where the browser would resample it.
  * - Export (`createExportVideos`): frame-exact and deterministic, never real-time playback: before every frame the
  *   frame of each visible clip at its time in the file is decoded by mediabunny (the last frame starting at or
- *   before that time), reading forward from the previous one.
+ *   before that time), reading forward from the previous one. Its sound is decoded once, before the first frame
+ *   (`decodeClipSound`), for the mix of the soundtrack (`film/audio.ts`).
  *
  * Browser module (DOM, WebCodecs); the frame logic is written over injected sources and tested.
  */
-import { BlobSource, CanvasSink, Input, MP4, QTFF, WEBM } from 'mediabunny'
+import type { Input } from 'mediabunny'
 import { fitWithin } from '../overlay/assets'
 import type { OverlayImage } from '../overlay/draw'
 import { useAppStore } from '../state/store'
@@ -24,10 +26,11 @@ import { mp4CreationTimeMs, quickTimeDateMs } from './exif'
 import type { PhotoExif } from './exif'
 import { MAX_VIDEO_BYTES, THUMB_JPEG_QUALITY, THUMB_MAX_SIDE_PX, dataUrlToBlob, encodeJpeg, readPhoto, useMediaStore } from './media'
 import type { MediaAsset } from './media'
-import { clipTimeS } from './model'
+import { clipHasSound, clipTimeS } from './model'
 import type { FilmMedia } from './model'
 
-const VIDEO_FORMATS = [MP4, QTFF, WEBM]
+/** The demuxer (mediabunny, ~700 KB) is loaded on the first clip read or exported, not at startup. */
+const mediabunny = () => import('mediabunny')
 const VIDEO_EXTENSIONS = /\.(mp4|m4v|mov|webm)$/i
 
 /** The file is a video (by its type, or its extension when the browser gives no type). */
@@ -81,7 +84,8 @@ export async function readVideo(file: Blob, name?: string): Promise<{ asset: Med
       `vidéo trop lourde (${megabytes(file.size)} Mo) : ${megabytes(MAX_VIDEO_BYTES)} Mo au plus, car elle est enregistrée dans le projet. Raccourcissez-la avant de l'ajouter.`,
     )
   }
-  const input = new Input({ source: new BlobSource(file), formats: VIDEO_FORMATS })
+  const { BlobSource, CanvasSink, Input, MP4, QTFF, WEBM } = await mediabunny()
+  const input = new Input({ source: new BlobSource(file), formats: [MP4, QTFF, WEBM] })
   try {
     const format = await input.getFormat().catch(() => null)
     if (!format) throw new Error('format non pris en charge (MP4, WebM ou MOV).')
@@ -188,19 +192,23 @@ export interface OpenedClip {
 
 /** Frames of a clip of the media table through mediabunny (canvases at the display size, rotation applied). */
 function openClip(asset: MediaAsset): OpenedClip {
-  const input = new Input({ source: new BlobSource(clipBlob(asset)), formats: VIDEO_FORMATS })
-  const sink = input.getPrimaryVideoTrack().then((track) => {
-    if (!track) throw new Error('aucune image')
-    // a frame shown and the one after it are held, and mediabunny reuses its canvases in turn
-    return new CanvasSink(track, { poolSize: 3 })
+  const opened = mediabunny().then(({ BlobSource, CanvasSink, Input, MP4, QTFF, WEBM }) => {
+    const input = new Input({ source: new BlobSource(clipBlob(asset)), formats: [MP4, QTFF, WEBM] })
+    const sink = input.getPrimaryVideoTrack().then((track) => {
+      if (!track) throw new Error('aucune image')
+      // a frame shown and the one after it are held, and mediabunny reuses its canvases in turn
+      return new CanvasSink(track, { poolSize: 3 })
+    })
+    return { input, sink }
   })
   return {
     async *frames(startS) {
+      const { sink } = await opened
       for await (const c of (await sink).canvases(startS)) {
         yield { image: c.canvas, width: c.canvas.width, height: c.canvas.height, timestamp: c.timestamp }
       }
     },
-    dispose: () => input.dispose(),
+    dispose: () => void opened.then(({ input }) => input.dispose(), () => undefined),
   }
 }
 
@@ -256,6 +264,66 @@ export function createExportVideos(source: (src: string) => MediaAsset | undefin
 }
 
 // ---------------------------------------------------------------------------
+// Export: sound decoded at once
+// ---------------------------------------------------------------------------
+
+/** Decoded samples of a clip's sound starting at `timestamp` (seconds in the file), one array per channel. */
+export interface SoundChunk {
+  timestamp: number
+  channels: Float32Array[]
+}
+
+/**
+ * The chunks of a clip's sound joined into `lengthS` seconds from `fromS` in its file, at `sampleRate`: each chunk
+ * at its own sample position (so a gap in the file stays silent and the sound never drifts from the frames), the
+ * parts before `fromS` or after the end left out. As many channels as the first chunk.
+ */
+export function joinSoundChunks(chunks: readonly SoundChunk[], fromS: number, lengthS: number, sampleRate: number): Float32Array<ArrayBuffer>[] {
+  const length = Math.max(0, Math.ceil(lengthS * sampleRate))
+  const out = Array.from({ length: chunks[0]?.channels.length ?? 0 }, () => new Float32Array(length))
+  for (const chunk of chunks) {
+    const offset = Math.round((chunk.timestamp - fromS) * sampleRate)
+    out.forEach((target, c) => {
+      const samples = chunk.channels[c]
+      if (!samples) return
+      const skip = Math.max(0, -offset)
+      const at = Math.max(0, offset)
+      const n = Math.min(samples.length - skip, length - at)
+      if (n > 0) target.set(samples.subarray(skip, skip + n), at)
+    })
+  }
+  return out
+}
+
+/**
+ * The sound of a clip of the media table from `fromS` for `lengthS` seconds of its file, as one AudioBuffer at the
+ * rate of its sound track (mediabunny over WebCodecs, the same decoders as the frames); null for a clip without a
+ * sound track. Throws when the browser cannot decode it.
+ */
+export async function decodeClipSound(asset: MediaAsset, fromS: number, lengthS: number): Promise<AudioBuffer | null> {
+  const { AudioBufferSink, BlobSource, Input, MP4, QTFF, WEBM } = await mediabunny()
+  const input = new Input({ source: new BlobSource(clipBlob(asset)), formats: [MP4, QTFF, WEBM] })
+  try {
+    const track = await input.getPrimaryAudioTrack()
+    if (!track) return null
+    if (!(await track.canDecode())) throw new Error('son illisible')
+    const chunks: SoundChunk[] = []
+    let sampleRate = 0
+    for await (const { buffer, timestamp } of new AudioBufferSink(track).buffers(fromS, fromS + lengthS)) {
+      sampleRate ||= buffer.sampleRate
+      chunks.push({ timestamp, channels: Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c)) })
+    }
+    if (chunks.length === 0) return null
+    const channels = joinSoundChunks(chunks, fromS, lengthS, sampleRate)
+    const sound = new AudioBuffer({ numberOfChannels: channels.length, length: Math.max(1, channels[0].length), sampleRate })
+    channels.forEach((samples, c) => sound.copyToChannel(samples, c))
+    return sound
+  } finally {
+    input.dispose()
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Preview: video elements
 // ---------------------------------------------------------------------------
 
@@ -269,6 +337,8 @@ export interface PreviewElement {
   readonly videoWidth: number
   readonly videoHeight: number
   playbackRate: number
+  muted: boolean
+  volume: number
   play(): Promise<void>
   pause(): void
   addEventListener(type: 'loadeddata' | 'seeked', listener: () => void): void
@@ -283,13 +353,20 @@ export const PLAYBACK_RATE_RANGE = { min: 0.0625, max: 16 } as const
 /** HTMLMediaElement.HAVE_CURRENT_DATA */
 const HAVE_CURRENT_DATA = 2
 
+/** State of the playback a preview frame is asked for; `muted`: the sound of the preview is cut (timeline button). */
+export interface PreviewPlayback {
+  playing: boolean
+  speed: number
+  muted?: boolean
+}
+
 export interface PreviewVideos {
   /**
    * frame of `item` at `clipS` in its file: plays along while `playing` (at `rate` seconds of the file per second of
    * film times the playback speed: `clipRateAt` for a clip following the flight; held below the lowest rate), else
-   * seeks there; undefined until ready
+   * seeks there; undefined until ready. Its sound is heard only while playing at ×1 (`clipHasSound`, not `muted`).
    */
-  frame(item: FilmMedia, clipS: number, playback: { playing: boolean; speed: number }, rate?: number): OverlayImage | undefined
+  frame(item: FilmMedia, clipS: number, playback: PreviewPlayback, rate?: number): OverlayImage | undefined
   /** pause the clips not asked for since the last call */
   settle(): void
   /** drop the elements of the media that are not in `ids` */
@@ -325,7 +402,7 @@ export function createPreviewVideos(
     entries.delete(id)
   }
   return {
-    frame(item, clipS, { playing, speed }, rate = 1) {
+    frame(item, clipS, { playing, speed, muted = false }, rate = 1) {
       const asset = source(item.src)
       if (!asset) return undefined
       let entry = entries.get(item.id)
@@ -346,7 +423,10 @@ export function createPreviewVideos(
       const el = entry.el
       const end = Math.min(item.outS ?? Infinity, Number.isFinite(el.duration) ? el.duration : Infinity)
       const playRate = Math.round(speed * rate * 100) / 100
-      if (playing && clipS < end - SEEK_TOLERANCE_S && playRate >= PLAYBACK_RATE_RANGE.min) {
+      const plays = playing && clipS < end - SEEK_TOLERANCE_S && playRate >= PLAYBACK_RATE_RANGE.min
+      // any other speed would resample the sound: heard at ×1 only
+      setSound(el, plays && speed === 1 && !muted && clipHasSound(item), item.volume ?? 1)
+      if (plays) {
         el.playbackRate = Math.min(PLAYBACK_RATE_RANGE.max, playRate)
         if (el.paused) {
           el.currentTime = clipS
@@ -379,10 +459,16 @@ export function createPreviewVideos(
   }
 }
 
+/** Unmute an element at `volume`, or mute it (only what changed is written). */
+function setSound(el: PreviewElement, heard: boolean, volume: number) {
+  if (el.muted === heard) el.muted = !heard
+  if (heard && el.volume !== volume) el.volume = volume
+}
+
 /** Largest side of the frame kept while a seek runs (pixels). */
 const STILL_MAX_SIDE_PX = 1920
 
-/** A muted video element playing a clip of the media table, with the copy of its current frame. */
+/** A video element playing a clip of the media table (muted until heard), with the copy of its current frame. */
 function videoElement(asset: MediaAsset) {
   const blob = clipBlob(asset)
   // QuickTime files are read by the MP4 demuxer of the browsers

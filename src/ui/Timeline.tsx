@@ -4,7 +4,8 @@
  * Bar (icon buttons with tooltips): play / pause, stop (back to the first frame), film time, distance, altitude and
  * recorded time at the marker, add a stop (at the playhead or at a highlight), a text or media, speed, zoom (− / slider
  * / + / « Ajuster »), « Options » menu (automatic stops, « modifié » marker of the film), fold. Ruler: click or drag to
- * scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile and its stops, closing),
+ * scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile, its stops and its camera
+ * keys as diamonds, closing),
  * « Vitesse » (portions of the track flown faster or slower, added at the marker), « Arrêts », « Textes », « Médias » (photos and video clips, also dropped onto the timeline; photos taken along the
  * track can then be placed where they were taken, clips filmed during the outing synced with it), « Musique » (sound files with their waveform, added from the
  * « Options » menu or dropped; played along by the preview, muted by the bar's button, mixed into the export): drag a block to move it, an edge to stretch it, snapping to the other edges, the
@@ -23,6 +24,7 @@ import { buildFilmClock, filmClockFor, filmClockInputFor } from '../film/clock'
 import { photoTimeMs } from '../film/exif'
 import { useMediaStore } from '../film/media'
 import { isMediaFile, readMedia } from '../film/video'
+import { STOP_CAMERA_LABELS, clipHasSound } from '../film/model'
 import type { Film, FilmMedia, FilmSpeed, FilmStop } from '../film/model'
 import {
   ZOOM_RANGE,
@@ -286,6 +288,7 @@ export function Timeline() {
             closing: draft.closing,
             stops: draft.autoStops ? input.stops : draft.stops,
             speeds: draft.speeds,
+            cameraKeys: draft.cameraKeys,
           })
         : clock,
     [draft, input, clock],
@@ -461,10 +464,9 @@ export function Timeline() {
         return { film: syncs.reduce((g, c) => syncClip(g, c.id, c.sync, path, clockNow, c.fileS) ?? g, placed) }
       })
     const what = [photos > 0 ? plural(photos, 'photo', 'photos') : '', videos > 0 ? plural(videos, 'vidéo', 'vidéos') : ''].filter(Boolean).join(' et ')
-    const silent = videos > 0 ? ' Les vidéos sont muettes : leur son n’est pas repris.' : ''
     showToast({
       kind: errors || unsupported ? 'info' : 'success',
-      text: `${what} ${read.length > 1 ? 'ajoutées' : 'ajoutée'} à la tête de lecture.${silent}${located}${filmed}${errors}${unsupported}`,
+      text: `${what} ${read.length > 1 ? 'ajoutées' : 'ajoutée'} à la tête de lecture.${located}${filmed}${errors}${unsupported}`,
       action: n + syncs.length > 0 ? { label: n > 0 ? 'Placer sur le parcours' : 'Caler sur le parcours', run: place } : undefined,
     })
   }
@@ -748,11 +750,11 @@ export function Timeline() {
           disabled={reading}
         />
         <span className="film-tl__sep" aria-hidden="true" />
-        {film.audio.length > 0 && (
+        {(film.audio.length > 0 || film.media.some(clipHasSound)) && (
           <BarButton
             icon={muted ? 'volume-x' : 'volume-2'}
             name={muted ? 'Remettre le son' : 'Couper le son'}
-            tip={muted ? 'Remettre le son de la musique' : 'Couper le son de la musique pendant la lecture (le film exporté la garde)'}
+            tip={muted ? 'Remettre le son de la lecture' : 'Couper le son de la musique et des vidéos pendant la lecture (le film exporté le garde)'}
             onClick={() => useMusicPreview.getState().setMuted(!muted)}
           />
         )}
@@ -876,6 +878,21 @@ export function Timeline() {
                   ))}
                   <span className="film-tl__label">Survol · {formatDistance(lengthM)}</span>
                 </div>
+                {shownClock.cameraKeys.map((k) => (
+                  <div
+                    key={k.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={selected === k.id}
+                    aria-label={`Cadrage de la caméra à ${formatDistance(k.atM)}, à ${formatFilmTime(k.timeS)}`}
+                    title="Cadrage de la caméra"
+                    className={`film-tl__key${selected === k.id ? ' film-tl__key--selected' : ''}`}
+                    style={{ left: xOf(k.timeS) }}
+                    onPointerDown={(e) => startEdit(e, k.id, 'move')}
+                    onFocus={() => setSelected(k.id)}
+                    onKeyDown={(e) => onBlockKeyDown(e, k.id)}
+                  />
+                ))}
                 {block(
                   'closing',
                   flightEnd,
@@ -911,7 +928,7 @@ export function Timeline() {
                     s.startS,
                     s.endS,
                     label,
-                    `Arrêt ${s.camera === 'orbite' ? 'en orbite' : 'caméra fixe'} : ${label}${shownFilm.autoStops ? ' (automatique)' : ''}`,
+                    `Arrêt (caméra : ${STOP_CAMERA_LABELS[s.camera].toLowerCase()}) : ${label}${shownFilm.autoStops ? ' (automatique)' : ''}`,
                     `film-tl__block--stop${shownFilm.autoStops ? ' film-tl__block--auto' : ''}`,
                     ['move', 'end'],
                   )

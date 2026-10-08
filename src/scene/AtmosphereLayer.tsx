@@ -13,6 +13,9 @@
  * The weather of the outing under the marker at that date (weather/sceneWeather.ts, `settings.weatherScene`)
  * then dims the sun and sky lights, fades the shadows, adds exposure, and drives the weather post-effect
  * (extra haze near the ground, veiled sky, desaturation: scene/weatherEffect.ts).
+ * The SMAA runs in a pass of its own, after the tone mapping: on the edges it blends the pass input, so merged into
+ * the pass of the other effects it would put back the raw HDR image (no haze, no tone mapping) along the ridges.
+ * The colour grading (`settings.grading`, scene/GradingComposer.tsx) closes the chain, in the same pass after the SMAA.
  * Volumetric clouds (`settings.clouds`, scene/CloudsLayer.tsx) are composited by the aerial perspective; while they
  * are shown, the veil over the sky pixels is lighter (the clouds themselves cover it).
  * The precomputed scattering textures ship with the package and are served locally at /atmosphere/ (see
@@ -22,8 +25,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Color, Vector3, type HemisphereLight } from 'three'
-import { EffectComposer, SMAA, ToneMapping } from '@react-three/postprocessing'
-import { ToneMappingMode } from 'postprocessing'
+import { EffectComposer, ToneMapping, disposePassWithoutEffects } from '@react-three/postprocessing'
+import { EffectPass, SMAAEffect, ToneMappingMode } from 'postprocessing'
 import type { AerialPerspectiveEffect, SkyLightProbe, SunDirectionalLight } from '@takram/three-atmosphere'
 import { AerialPerspective, Atmosphere, Sky, SkyLight, Stars, SunLight, type AtmosphereApi } from '@takram/three-atmosphere/r3f'
 import { buildTrackPath, samplePath } from '../flyover/path'
@@ -36,6 +39,7 @@ import { useWeatherStore } from '../weather/store'
 import { createCloudNoiseTexture } from './cloudNoise'
 import { CloudsLayer } from './CloudsLayer'
 import { DEFAULT_GROUND_HEIGHT_M } from './CameraRig'
+import { useGradingEffect } from './GradingComposer'
 import { nightFillIntensity, sceneExposure, sunElevation } from './exposure'
 import { useTerrainContext } from './TerrainLayer'
 import { SHADOW_MAP_SIZE, TerrainShadow } from './terrainShadow'
@@ -84,6 +88,15 @@ export function AtmosphereLayer() {
   useEffect(() => () => noise.dispose(), [noise])
   /** local vertical in ECEF, for the sun elevation */
   const up = useMemo(() => (frame ? new Vector3().setFromMatrixColumn(frame.localToEcef, 1).normalize() : null), [frame])
+  const grading = useGradingEffect()
+  const smaa = useMemo(() => new SMAAEffect(), [])
+  useEffect(() => () => smaa.dispose(), [smaa])
+  const antialiasPass = useMemo(
+    () => new EffectPass(camera, ...(grading.active ? [smaa, grading.effect] : [smaa])),
+    [camera, smaa, grading.active, grading.effect],
+  )
+  // the effects are owned above: dispose only the pass
+  useEffect(() => () => disposePassWithoutEffects(antialiasPass), [antialiasPass])
 
   // Restore the renderer exposure when the atmosphere is switched off.
   useLayoutEffect(() => {
@@ -213,7 +226,7 @@ export function AtmosphereLayer() {
         <AerialPerspective ref={aerialRef} stbnTexture={noise} />
         <primitive object={weatherEffect} mainCamera={camera} />
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />
-        <SMAA />
+        <primitive object={antialiasPass} />
       </EffectComposer>
     </Atmosphere>
   )

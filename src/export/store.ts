@@ -44,6 +44,8 @@ export interface ExportRequest {
   }
   /** film written to this file while encoding (removed if the export does not finish) */
   destination?: WritableFile
+  /** the overlay alone over a transparent background, same frames as the film, no 3D render and no sound (WebM / VP9) */
+  overlayOnly?: boolean
 }
 
 export interface ExportResult {
@@ -56,7 +58,7 @@ export interface ExportResult {
   codec: string
   /** frames captured before their terrain had finished loading (per-frame timeout) */
   incompleteFrames: number
-  /** about the soundtrack, shown with the result ('avec la musique (AAC)', 'sans la musique : …') */
+  /** about the soundtrack, shown with the result ('avec le son (AAC)', 'sans le son : …') */
   note?: string
 }
 
@@ -146,6 +148,11 @@ export function videoFileName(name: string, extension: string): string {
 /** Base name of a still image: `<name> <progress in %>`, e.g. 'Tour 42 %'. */
 export function stillBaseName(name: string, progress: number): string {
   return `${name} ${Math.round(progress * 100)} %`
+}
+
+/** Base name of the overlay alone: `<name> habillage`. */
+export function overlayBaseName(name: string): string {
+  return `${name} habillage`
 }
 
 let nextId = 1

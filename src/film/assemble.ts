@@ -52,7 +52,7 @@ export function stopCandidates({ track, landmarks = [], pacing }: AssembleInput)
 
 /**
  * Stops at the highlights, one per cluster (like the pauses they replace): 'temps-forts' `AUTO_STOP_S` each,
- * camera orbiting; 'rythme' only while the pacing is on, `pauseS` each, camera held.
+ * camera orbiting; 'rythme' only while the pacing is on, `pauseS` each, camera as in the film (as these pauses were).
  */
 export function autoStops(input: AssembleInput, mode: AutoStopMode): FilmStop[] {
   const { track, pacing } = input
@@ -63,7 +63,7 @@ export function autoStops(input: AssembleInput, mode: AutoStopMode): FilmStop[] 
   return pausePositions(positions, pacing.windowM).map((atM) => {
     const { label, source } = candidates.find((c) => c.atM === atM)!
     const durationS = legacy ? pacing.pauseS : AUTO_STOP_S
-    return { id: autoStopId(atM), atM, durationS, camera: legacy ? 'fixe' : 'orbite', label, source }
+    return { id: autoStopId(atM), atM, durationS, camera: legacy ? 'film' : 'orbite', label, source }
   })
 }
 

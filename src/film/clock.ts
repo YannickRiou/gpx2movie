@@ -18,7 +18,7 @@ import type { Pacing, PacingPosition, PacingSettings } from '../flyover/pacing'
 import type { Landmark } from '../osm/landmarks'
 import { filmStops } from './assemble'
 import { shotDurationS } from './model'
-import type { Film, FilmShot, FilmSpeed, FilmStop } from './model'
+import type { Film, FilmCameraKey, FilmShot, FilmSpeed, FilmStop } from './model'
 
 export type FilmPhase = 'opening' | 'flight' | 'stop' | 'closing'
 
@@ -38,6 +38,11 @@ export interface ClockStop extends FilmStop {
 export interface ClockSpeed extends FilmSpeed {
   startS: number
   endS: number
+}
+
+/** A camera key of the film placed on the clock: film time at which the marker passes it. */
+export interface ClockCameraKey extends FilmCameraKey {
+  timeS: number
 }
 
 /** What the film shows at a film time. */
@@ -70,6 +75,8 @@ export interface FilmClock {
   stops: readonly ClockStop[]
   /** speed portions, by position */
   speeds: readonly ClockSpeed[]
+  /** camera keys, by position */
+  cameraKeys: readonly ClockCameraKey[]
   /** film length at ×1 (seconds) */
   totalTime(): number
   /** progress at film time `tS` (0 during the opening, 1 during the closing); continuous and non-decreasing */
@@ -93,6 +100,8 @@ export interface FilmClockInput {
   stops: readonly FilmStop[]
   /** speed portions (none by default) */
   speeds?: readonly FilmSpeed[]
+  /** camera keys (none by default) */
+  cameraKeys?: readonly FilmCameraKey[]
   /** length of the first track (metres), 0 without track */
   lengthM: number
   /** pacing highlights (metres along the track), slowed down when `pacing.enabled` */
@@ -126,6 +135,8 @@ export function buildFilmClock(input: FilmClockInput): FilmClock {
   const flightTimeOf = (atM: number) => openingS + flight.timeAtProgress(Math.min(1, atM / input.lengthM))
   const clockSpeeds: ClockSpeed[] =
     input.lengthM > 0 ? speeds.map((s) => ({ ...s, startS: flightTimeOf(s.fromM), endS: flightTimeOf(s.toM) })) : []
+  const cameraKeys: ClockCameraKey[] =
+    input.lengthM > 0 ? [...(input.cameraKeys ?? [])].sort((a, b) => a.atM - b.atM).map((k) => ({ ...k, timeS: flightTimeOf(k.atM) })) : []
 
   const progressAtTime = (tS: number) => flight.progressAtTime(tS - openingS)
   const timeAtProgress = (progress: number) => (progress >= 1 ? total : openingS + flight.timeAtProgress(progress))
@@ -166,6 +177,7 @@ export function buildFilmClock(input: FilmClockInput): FilmClock {
     closingS,
     stops,
     speeds: clockSpeeds,
+    cameraKeys,
     totalTime: () => total,
     progressAtTime,
     timeAtProgress,
@@ -195,6 +207,7 @@ export function filmClockInputFor({ track, film, durationS, pacing, landmarks = 
     closing: film.closing,
     stops: track ? filmStops(film, { track, landmarks, pacing }) : [],
     speeds: track ? film.speeds : [],
+    cameraKeys: track ? film.cameraKeys : [],
     lengthM: track?.stats.distanceM ?? 0,
     highlightsM: track && pacing.enabled ? pacingHighlights(track, pacing, landmarks) : [],
     durationS,

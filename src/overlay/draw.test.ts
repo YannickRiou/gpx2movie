@@ -414,6 +414,34 @@ describe('mini-map', () => {
   })
 })
 
+describe('leaderboard', () => {
+  const rows = [
+    { rank: 1, name: 'Chloé', color: '#3F6B4A', gap: 'Tête' },
+    { rank: 2, name: 'Bob', color: '#A9CCD9', gap: '+1 min 20' },
+  ]
+  const drawBoard = (settings: OverlaySettings, leaderboard: OverlayExtras['leaderboard']) => {
+    const { ctx, texts } = fakeContext()
+    drawOverlay(ctx, overlayFrameAt(track, 0.5), settings, SIZE, {}, { leaderboard })
+    return texts.map((t) => t.text).join(' | ')
+  }
+  const on = enabled({ leaderboard: { ...DEFAULT_OVERLAY.leaderboard, enabled: true } })
+
+  it('is off by default', () => {
+    expect(drawBoard(enabled(), rows)).not.toMatch(/classement/i)
+  })
+
+  it.each(OVERLAY_STYLES)('style %s: one line per racer under its heading', (style) => {
+    const joined = drawBoard({ ...on, style }, rows)
+    expect(joined.toLowerCase()).toContain('classement')
+    for (const text of ['1', 'Chloé', 'Tête', '2', 'Bob', '+1 min 20']) expect(joined).toContain(text)
+  })
+
+  it('needs two racers', () => {
+    expect(drawBoard(on, rows.slice(0, 1))).not.toMatch(/classement/i)
+    expect(drawBoard(on, undefined)).not.toMatch(/classement/i)
+  })
+})
+
 describe('timeline texts', () => {
   const texts: FilmText[] = [
     { ...FILM_TEXT, startS: 0.4, durationS: 0.4, subtitle: 'Frontière' },

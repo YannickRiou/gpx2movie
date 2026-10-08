@@ -1,8 +1,8 @@
 /**
  * FlyoverRig — plays the film along the first track: advances the store's playback progress and film time on
  * the film clock (`film/clock.ts`: opening shot, flight over `settings.flyoverDurationS` at speed x1 with the
- * slow-downs of `settings.pacing` and the stops of `settings.film`, closing shot), moves a progress marker on the
- * draped track and drives the camera (`flyover/filmCamera.ts`: overview shots, stops, flight in the style of
+ * slow-downs of `settings.pacing` and the stops of `settings.film`, closing shot), moves the progress marker on the
+ * draped track (a sprite in the look of `settings.marker`, see `markerSprite.ts`) and drives the camera (`flyover/filmCamera.ts`: overview shots, stops, flight in the style of
  * `settings.camera`).
  *
  * The view is a pure function of the progress, the film time and the settings (no smoothing state), so they
@@ -14,18 +14,14 @@
  */
 import { useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import type { Mesh, Vector3 } from 'three'
+import type { Sprite, Vector3 } from 'three'
 import { computeFilmView, filmViewMovesWithTime } from '../flyover/filmCamera'
 import { buildTrackPath } from '../flyover/path'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
+import { headsLeft, LEAD_MARKER_COLORS, placeMarker, useMarkerImage } from './markerSprite'
 import { useFilmClock } from './usePacing'
 import { LINE_LIFT_M, type HeightSampler } from './TrackLines'
-
-/** Marker radius as a fraction of its distance to the camera (constant on-screen size, ~7 px at 1000 px). */
-export const MARKER_SCREEN_FACTOR = 0.007
-/** Unlit and drawn over the terrain: readable on the track colour and on dark forest alike. */
-export const MARKER_COLOR = '#FFFFFF'
 
 // ---------------------------------------------------------------------------
 // Component
@@ -46,7 +42,8 @@ export function FlyoverRig() {
   const clock = useFilmClock()
   /** clock the store's film time was computed with */
   const clockRef = useRef(clock)
-  const markerRef = useRef<Mesh>(null)
+  const markerRef = useRef<Sprite>(null)
+  const markerImage = useMarkerImage(useAppStore((s) => s.settings.marker.image))
   /** view the camera was last placed for; start at the mount values so the initial fit is kept */
   const { playback: mount, settings: mountSettings } = useAppStore.getState()
   const mountTimeS = mount.timeS ?? clock.timeAtProgress(mount.progress)
@@ -57,7 +54,7 @@ export function FlyoverRig() {
   })
   const appliedSettingsRef = useRef(mountSettings)
 
-  useFrame(({ camera, size }, delta) => {
+  useFrame(({ camera, size, gl }, delta) => {
     const store = useAppStore.getState()
     const { playing, speed } = store.playback
     const { settings } = store
@@ -98,7 +95,6 @@ export function FlyoverRig() {
       aspect: size.height > 0 ? size.width / size.height : 1,
     })
     marker.visible = true
-    marker.position.copy(view.marker)
 
     const applied = appliedSettingsRef.current
     const cameraChanged =
@@ -113,13 +109,16 @@ export function FlyoverRig() {
       camera.lookAt(view.target)
       controls?.target.copy(view.target)
     }
-    marker.scale.setScalar(Math.max(1, camera.position.distanceTo(view.marker) * MARKER_SCREEN_FACTOR))
+    // after the camera move: the figure faces the way the track runs in this very frame
+    const look = { marker: settings.marker, image: markerImage, allowImage: true }
+    const mirrored = settings.marker.kind === 'figurine' && headsLeft(path, progress * path.lengthM, view.marker, frame, camera)
+    placeMarker(marker, view.marker, camera, look, LEAD_MARKER_COLORS, mirrored, 1 / gl.toneMappingExposure)
   })
 
+  // unlit and drawn over the terrain: readable on the track colour and on dark forest alike
   return (
-    <mesh ref={markerRef} name="flyover-marker" visible={false} renderOrder={2}>
-      <sphereGeometry args={[1, 24, 16]} />
-      <meshBasicMaterial color={MARKER_COLOR} depthTest={false} depthWrite={false} />
-    </mesh>
+    <sprite ref={markerRef} name="flyover-marker" visible={false} renderOrder={2}>
+      <spriteMaterial depthTest={false} depthWrite={false} />
+    </sprite>
   )
 }

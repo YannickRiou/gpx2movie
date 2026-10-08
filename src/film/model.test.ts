@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { isValidSetting, parseProject, sanitizeSettings } from '../project/document'
 import { DEFAULT_SETTINGS } from '../state/store'
-import { AUDIO_DEFAULTS, DEFAULT_FILM, MEDIA_DEFAULTS, clipTimeS, isValidFilm, nextFilmId, shotDurationS } from './model'
-import type { Film, FilmAudio, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
+import { AUDIO_DEFAULTS, DEFAULT_FILM, MEDIA_DEFAULTS, VIDEO_SOUND_DEFAULTS, clipHasSound, clipTimeS, isValidFilm, nextFilmId, shotDurationS } from './model'
+import type { Film, FilmAudio, FilmCameraKey, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
 
 const stop = (id: string, patch: Partial<FilmStop> = {}): FilmStop => ({ id, atM: 1000, durationS: 3, camera: 'orbite', ...patch })
 const text = (id: string, patch: Partial<FilmText> = {}): FilmText => ({
@@ -96,6 +96,50 @@ describe('film model', () => {
     const { audio: _, ...saved } = film({ texts: [text('text-1')] })
     expect(sanitizeSettings({ film: saved }).settings.film).toEqual(film({ texts: [text('text-1')] }))
     expect(nextFilmId(good, 'music')).toBe('music-3')
+  })
+
+  it('camera of a stop: as in the film, slow turn, wide view or held', () => {
+    for (const camera of ['film', 'orbite', 'large', 'fixe'] as const) expect(isValidFilm(film({ stops: [stop('stop-1', { camera })] }))).toBe(true)
+  })
+
+  it('camera keys: framing within the camera ranges, unique ids; none in a film saved before', () => {
+    expect(DEFAULT_FILM.cameraKeys).toEqual([])
+    const key = (id: string, patch: Partial<FilmCameraKey> = {}): FilmCameraKey => ({ id, atM: 2000, distance: 2, pitchDeg: 60, headingOffsetDeg: -90, ...patch })
+    const good = film({ cameraKeys: [key('camera-2', { atM: 500 }), key('camera-1')] })
+    expect(isValidFilm(good)).toBe(true)
+    expect(isValidSetting('film', good)).toBe(true)
+    const bad: Film[] = [
+      film({ cameraKeys: [key('camera-1', { atM: -1 })] }),
+      film({ cameraKeys: [key('camera-1', { distance: 5 })] }),
+      film({ cameraKeys: [key('camera-1', { pitchDeg: 90 })] }),
+      film({ cameraKeys: [key('camera-1', { headingOffsetDeg: 200 })] }),
+      film({ cameraKeys: [key('')] }),
+      film({ cameraKeys: [key('a')], stops: [stop('a')] }),
+    ]
+    for (const f of bad) expect(isValidFilm(f)).toBe(false)
+    const { cameraKeys: _, ...saved } = film({ texts: [text('text-1')] })
+    expect(sanitizeSettings({ film: saved }).settings.film).toEqual(film({ texts: [text('text-1')] }))
+    expect(nextFilmId(good, 'camera')).toBe('camera-3')
+  })
+
+  it('sound of the clips: heard when not muted, silent when saved before it was handled or following the flight', () => {
+    const clip = media('media-1', { kind: 'video', src: 'video-1', ...VIDEO_SOUND_DEFAULTS })
+    expect(clipHasSound(clip)).toBe(true)
+    expect(clipHasSound({ ...clip, muted: true })).toBe(false)
+    expect(clipHasSound({ ...clip, muted: undefined })).toBe(false)
+    expect(clipHasSound({ ...clip, volume: 0 })).toBe(false)
+    expect(clipHasSound({ ...clip, volume: undefined })).toBe(true)
+    expect(clipHasSound({ ...clip, sync: { startMs: 0, offsetS: 0, follow: true } })).toBe(false)
+    expect(clipHasSound({ ...clip, sync: { startMs: 0, offsetS: 0, follow: false } })).toBe(true)
+    expect(clipHasSound({ ...clip, kind: 'image' })).toBe(false)
+    expect(isValidFilm(film({ media: [clip], duckMusic: true }))).toBe(true)
+    expect(isValidFilm(film({ media: [{ ...clip, volume: 1.5 }] }))).toBe(false)
+    expect(isValidFilm(film({ duckMusic: 'oui' as unknown as boolean }))).toBe(false)
+    // a film saved before: its clips stay silent, its music is not lowered; the clips saved since keep their sound
+    const { duckMusic: _, ...saved } = film({ media: [{ ...clip, muted: undefined, volume: undefined }, { ...clip, id: 'media-2' }] })
+    const loaded = sanitizeSettings({ film: saved }).settings.film
+    expect(loaded.duckMusic).toBe(false)
+    expect(loaded.media.map((m) => m.muted)).toEqual([true, false])
   })
 
   it('rejects bad shots, items and duplicate ids', () => {

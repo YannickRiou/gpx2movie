@@ -3,10 +3,12 @@
  * by its gestures (drag a block, drag an edge, nudge, add, remove), as pure functions of the film. The component
  * only turns pointer and keyboard events into these calls and commits the result as one undo step.
  *
- * Items are selected by id: 'opening', 'closing', or the id of a stop, a speed portion, a text, a medium or a music
- * clip (unique across the film).
+ * Items are selected by id: 'opening', 'closing', or the id of a stop, a speed portion, a camera key, a text, a medium
+ * or a music clip (unique across the film).
  * Times are film times (seconds at ×1 from the first frame, opening included).
  */
+import { CAMERA_RANGES } from '../flyover/cameraSettings'
+import type { CameraSettings } from '../flyover/cameraSettings'
 import { distanceAtTime, nearestOnPath, recordedTimeAt } from '../flyover/path'
 import type { TrackPath } from '../flyover/path'
 import type { ClockStop, FilmClock } from './clock'
@@ -21,10 +23,11 @@ import {
   SHOT_DURATION_RANGE,
   SPEED_FACTOR_RANGE,
   STOP_DURATION_RANGE,
+  VIDEO_SOUND_DEFAULTS,
   clipTimeS,
   nextFilmId,
 } from './model'
-import type { Film, FilmAudio, FilmMedia, FilmShot, FilmSpeed, FilmStop, FilmText, MediaSync } from './model'
+import type { Film, FilmAudio, FilmCameraKey, FilmMedia, FilmShot, FilmSpeed, FilmStop, FilmText, MediaSync } from './model'
 
 export type TimelineItem = 'opening' | 'closing' | string
 /** part of a block a gesture holds: its body (move) or one of its edges */
@@ -271,7 +274,7 @@ function dragSpeed(film: Film, own: FilmSpeed, grip: Grip, deltaS: number, ctx: 
  * The film after dragging `grip` of `item` by `deltaS` seconds from the gesture start (`film` is the film at the
  * start, stops written out for a stop): opening end, closing start, stop moved along the track (hold start
  * follows the pointer) or stretched (end edge), speed portion moved or stretched by either edge (in metres along
- * the track), text or medium moved or stretched by either edge. Edges snap to `ctx.targets`; values are clamped
+ * the track), camera key moved along the track, text or medium moved or stretched by either edge. Edges snap to `ctx.targets`; values are clamped
  * to the model ranges. Unknown items and grips leave the film as is.
  */
 export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: number, ctx: DragContext): Film {
@@ -296,6 +299,13 @@ export function dragFilm(film: Film, item: TimelineItem, grip: Grip, deltaS: num
     const added = snap(stop.endS + deltaS) - stop.endS
     const durationS = stopDuration(own.durationS + added / share)
     return { ...film, stops: film.stops.map((s) => (s.id === item ? { ...s, durationS } : s)) }
+  }
+
+  const key = clock.cameraKeys.find((k) => k.id === item)
+  if (key && grip === 'move') {
+    // the key follows the pointer in film time: its place is where the marker is then
+    const atM = Math.round(clamp(clock.progressAtTime(snap(key.timeS + deltaS)), 0, 1) * ctx.lengthM)
+    return { ...film, cameraKeys: film.cameraKeys.map((k) => (k.id === item ? { ...k, atM } : k)) }
   }
 
   const speed = film.speeds.find((s) => s.id === item)
@@ -372,6 +382,20 @@ export function addSpeed(film: Film, atM: number, lengthM: number): { film: Film
   return { film: { ...film, speeds: [...film.speeds, { id, fromM: from, toM: to, factor: NEW_SPEED_FACTOR }] }, id }
 }
 
+/**
+ * A camera key added at `atM` with `framing` (rounded); with its id. A key already at that metre takes the framing
+ * instead (one key per place).
+ */
+export function addCameraKey(film: Film, atM: number, framing: Pick<CameraSettings, 'distance' | 'pitchDeg' | 'headingOffsetDeg'>): { film: Film; id: string } {
+  const at = Math.max(0, Math.round(atM))
+  const there = film.cameraKeys.find((k) => k.atM === at)
+  if (there) return { film: updateCameraKey(film, there.id, framing), id: there.id }
+  const id = nextFilmId(film, 'camera')
+  const { distance, pitchDeg, headingOffsetDeg } = framing
+  const key: FilmCameraKey = { id, atM: at, distance, pitchDeg, headingOffsetDeg }
+  return { film: updateCameraKey({ ...film, cameraKeys: [...film.cameraKeys, key] }, id, {}), id }
+}
+
 /** Length of a text added on the timeline (seconds). */
 export const NEW_TEXT_S = 4
 
@@ -390,7 +414,7 @@ export const NEW_VIDEO_MAX_S = 30
 /**
  * Media added one after the other from film time `startS`, one per entry of the media table (`src`): a photo
  * `NEW_MEDIA_S` long, a video (`videoS`: its length in the file) its natural length up to `NEW_VIDEO_MAX_S`, without
- * Ken Burns; `MEDIA_DEFAULTS` placement otherwise. With their new ids.
+ * Ken Burns, with its sound (`VIDEO_SOUND_DEFAULTS`); `MEDIA_DEFAULTS` placement otherwise. With their new ids.
  */
 export function addMedia(film: Film, startS: number, sources: readonly { src: string; videoS?: number }[]): { film: Film; ids: string[] } {
   let next = film
@@ -401,7 +425,7 @@ export function addMedia(film: Film, startS: number, sources: readonly { src: st
     const video = videoS !== undefined
     const durationS = video ? itemDuration(Math.min(videoS, NEW_VIDEO_MAX_S)) : NEW_MEDIA_S
     const media: FilmMedia = { id, startS: roundS(at), durationS, kind: video ? 'video' : 'image', src, ...MEDIA_DEFAULTS }
-    if (video) media.kenBurns = false
+    if (video) Object.assign(media, { kenBurns: false, ...VIDEO_SOUND_DEFAULTS })
     next = { ...next, media: [...next.media, media] }
     ids.push(id)
     at += durationS
@@ -537,13 +561,14 @@ export function clipRateAt(media: FilmMedia, path: TrackPath, clock: Pick<FilmCl
   return Math.max(0, (clipTimeS(media, timeS + FOLLOW_RATE_STEP_S, b) - clipTimeS(media, timeS, a)) / FOLLOW_RATE_STEP_S)
 }
 
-/** `film` without the stop, speed portion, text, medium or music clip `id`; a shot cannot be removed: it goes to style 'aucune'. */
+/** `film` without the stop, speed portion, camera key, text, medium or music clip `id`; a shot cannot be removed: it goes to style 'aucune'. */
 export function removeFilmItem(film: Film, id: TimelineItem): Film {
   if (id === 'opening' || id === 'closing') return updateShot(film, id, { style: 'aucune' })
   return {
     ...film,
     stops: film.stops.filter((s) => s.id !== id),
     speeds: film.speeds.filter((s) => s.id !== id),
+    cameraKeys: film.cameraKeys.filter((k) => k.id !== id),
     texts: film.texts.filter((t) => t.id !== id),
     media: film.media.filter((m) => m.id !== id),
     audio: film.audio.filter((a) => a.id !== id),
@@ -552,11 +577,11 @@ export function removeFilmItem(film: Film, id: TimelineItem): Film {
 
 /**
  * `item` is in the film: a shot (always there), one of the clock's `stops` (generated ones included), a speed portion,
- * a text, a medium or a music clip.
+ * a camera key, a text, a medium or a music clip.
  */
 export function hasFilmItem(film: Film, stops: readonly { id: string }[], item: TimelineItem): boolean {
   if (item === 'opening' || item === 'closing') return true
-  return [stops, film.speeds, film.texts, film.media, film.audio].some((lane) => lane.some((s) => s.id === item))
+  return [stops, film.speeds, film.cameraKeys, film.texts, film.media, film.audio].some((lane) => lane.some((s) => s.id === item))
 }
 
 /** Stop `id` with `patch`, duration clamped to its range. */
@@ -594,6 +619,30 @@ export function updateSpeed(film: Film, id: string, patch: Partial<Omit<FilmSpee
   }
   const next = { ...own, ...patch, fromM, toM, factor: speedFactor(patch.factor ?? own.factor) }
   return { ...film, speeds: film.speeds.map((s) => (s.id === id ? next : s)) }
+}
+
+/**
+ * Camera key `id` with `patch`: distance and pitch clamped to the camera ranges, heading brought into -180°..180°
+ * (at 1/100 and 1/10°), position to the metre.
+ */
+export function updateCameraKey(film: Film, id: string, patch: Partial<Omit<FilmCameraKey, 'id'>>): Film {
+  const { distance, pitchDeg } = CAMERA_RANGES
+  const within = (v: number, r: { min: number; max: number }, per: number) => Math.round(clamp(v, r.min, r.max) * per) / per
+  const heading = (deg: number) => Math.round(((((deg + 180) % 360) + 360) % 360) * 10) / 10 - 180
+  return {
+    ...film,
+    cameraKeys: film.cameraKeys.map((k) => {
+      if (k.id !== id) return k
+      const next = { ...k, ...patch }
+      return {
+        ...next,
+        atM: Math.max(0, Math.round(next.atM)),
+        distance: within(next.distance, distance, 100),
+        pitchDeg: within(next.pitchDeg, pitchDeg, 10),
+        headingOffsetDeg: heading(next.headingOffsetDeg),
+      }
+    }),
+  }
 }
 
 /** Text `id` with `patch`, start and duration clamped to their ranges. */

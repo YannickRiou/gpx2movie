@@ -29,6 +29,9 @@ reproduire à côté de la case.
 - [ ] Firefox : export en mémoire, alerte au-delà de 1,5 Go estimés, téléchargement.
 - [ ] Nuages activés (réglage « Météo » ou « Manuel 50 % ») : coût de l'export, mêmes images d'un export à l'autre.
 - [ ] Image fixe PNG et JPEG, avec et sans habillage.
+- [ ] Habillage seul (fond transparent) : export rapide, sans attente des tuiles ; WebM lu avec sa transparence (Chrome
+      sur un fond coloré, Kdenlive ou Shotcut), posé sur la vidéo normale du même film : compteurs, profil, carte,
+      textes et photos tombent image pour image ; annuler ne laisse aucun fichier.
 - [ ] Rendu en lot : 16:9 1080p + 9:16 1080p + image fixe + affiche dans un dossier ; noms des fichiers, « Tout
       annuler » pendant le 2ᵉ film (fichier commencé supprimé), format refusé par l'encodeur marqué en échec.
 - [ ] Affiche A4 portrait puis A3 paysage : vue d'ensemble nord en haut, crédits lisibles à l'impression ; limite de taille
@@ -40,7 +43,7 @@ reproduire à côté de la case.
       ×2, ×0,5, fondus audibles, bouton haut-parleur, « Caler la durée du film sur la musique ».
 - [ ] Export avec musique : son calé sur l'image du début à la fin, AAC dans le MP4 (Windows / macOS), Opus dans le WebM ;
       lu partout.
-- [ ] Son des vidéos (en cours de réalisation) : son du clip à ×1, musique baissée sous le clip si l'option est cochée,
+- [ ] Son des vidéos : son du clip à ×1, réglage du volume en direct, pas de clic au début ni à la fin d'un clip, musique baissée sous le clip si l'option est cochée,
       clip qui suit la vitesse du survol muet ; export identique à l'aperçu.
 
 ## 3. Fluidité de l'aperçu
@@ -49,16 +52,25 @@ reproduire à côté de la case.
       doux, ouverture et clôture (descente depuis la vue d'ensemble).
 - [ ] Atmosphère, ombres, nuages (Météo / Manuel / Aucun) et eau : images par seconde acceptables ; nuages et eau au
       soleil rasant (reflets, vaguelettes), pas de taches grises sur l'imagerie.
-- [ ] Étalonnage (en cours de réalisation) : préréglages Naturel → Noir et blanc, aucun coût en « Naturel ».
-- [ ] Style de la trace et marqueur (en cours de réalisation) : épaisseur, tirets, halo, trace qui se dessine, figurines et
-      avatar.
-- [ ] Zones de sécurité (en cours de réalisation) : touche G, guides visibles en 9:16, absents de l'export.
+- [ ] Étalonnage (onglet Carte › Couleurs) : préréglages Naturel → Noir et blanc, avec et sans atmosphère ; aucun
+      coût en « Naturel » ; sans atmosphère, ciel étalonné sans raccord visible avec le relief ; vignette en 16:9 et 9:16.
+- [ ] Lissage des bords (atmosphère activée) : pas de liseré clair ni d'escalier sur les crêtes et la trace.
+- [ ] Trace et marqueur (onglet Survol) : épaisseur, tirets et points pendant le vol, halo sur forêt et sur neige, trace
+      qui se dessine collée au marqueur, figurines lisibles et retournées dans les virages, avatar rond ; « Boule » par
+      défaut identique à avant.
+- [ ] Zones de sécurité : bouton sous « Recadrer » ou touche G, bandes des réseaux en 9:16 et 4:5, marges en 16:9,
+      absentes de l'export.
 
 ## 4. Montage dans la timeline
 
 - [ ] Glisser un arrêt (aimantation, Alt sans aimantation), étirer un texte des deux bords, bord de l'ouverture, un Ctrl+Z
       par geste, Ctrl+molette, film long (défilement).
 - [ ] Vitesse par portion : bloc ×2 puis ×0,5, accélération sans à-coup aux bords, « garder la durée ».
+- [ ] Caméra des arrêts : « Tour lent » au sommet (le tour revient sans à-coup), « Vue large » (recul et montée
+      doux), « Fixe » avec le style Orbite (la caméra ralentit, s'arrête, repart), « Comme le film ».
+- [ ] Cadrages (« Garder ce cadrage ici », losanges de la piste « Plans ») : vue haute et large sur une longue portion,
+      passage doux d'un cadrage à l'autre et retour au réglage du film, sans à-coup aux bords ; losange glissé ; export
+      identique à l'aperçu.
 - [ ] Photos : ajout, miniatures, « Placer sur le parcours » (GPS), plein écran avec zoom lent, carte dans les 3 styles.
 - [ ] Vidéos : MP4, WebM, MOV ; refus au-delà de 50 Mo ; lecture synchronisée ×0,5 à ×4 ; bord gauche (début dans la
       vidéo) ; vidéo pendant un arrêt ; export image par image.
@@ -78,6 +90,10 @@ reproduire à côté de la case.
       infobulles jamais coupées, aide « ? ».
 - [ ] Heure du soleil : curseur aligné sur les repères lever / coucher, heure locale avec un FIT.
 - [ ] Course fantôme (deux traces), mini-carte dans les 3 styles d'habillage, étiquettes effacées sous les cartes.
+- [ ] Habillage › « Couleurs et polices » : nuanciers dans le panneau de 320 px, accent, texte et fond appliqués à
+      l'aperçu et à l'export, « Revenir au style » ; un seul Ctrl+Z après un glissé dans le sélecteur de couleur.
+- [ ] Classement de la course fantôme dans les 3 styles : points de couleur et écarts alignés, pas de saut de largeur,
+      « Tête » puis « Arrivée ».
 
 ## 6. Hors ligne
 
