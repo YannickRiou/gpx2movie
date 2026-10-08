@@ -19,8 +19,8 @@ import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import type { WeatherSummary } from '../weather/series'
 import { recordedAtProgress } from './data'
 import type { LeaderboardRow, OverlayFrame, OverlayTrack } from './data'
-import type { CounterId, CreditsPosition, OverlayAnchor, OverlaySettings } from './settings'
-import { COUNTER_IDS } from './settings'
+import type { CounterId, CreditsPosition, OverlayAnchor, OverlaySettings, StyledWidget } from './settings'
+import { COUNTER_IDS, widgetOverrides } from './settings'
 import { resolveOverlayTheme } from './themes'
 import type { OverlayTheme } from './themes'
 
@@ -1275,15 +1275,18 @@ export function drawOverlay(
     // live widgets give way to the cards and to the full-screen photos
     const live = 1 - Math.max(cardOpacityAt(time, settings), cover)
 
-    if (titleOpacity > 0) add(titleWidget(p, frame, settings, titleOpacity))
-    if (endOpacity > 0) add(endWidget(p, frame, settings, endOpacity))
-    if (settings.counters.enabled && live > 0) add(countersWidget(p, frame, settings, live))
-    if (settings.profile.enabled && live > 0) add(profileWidget(p, frame, settings, live))
-    weather = settings.weather.enabled && live > 0 ? weatherWidget(p, frame, settings, live) : null
+    // a widget with its own colours or fonts draws with its own theme
+    const of = (key: StyledWidget): Painter =>
+      settings[key].overrides ? { ...p, theme: resolveOverlayTheme(settings.style, widgetOverrides(settings, key)) } : p
+    if (titleOpacity > 0) add(titleWidget(of('title'), frame, settings, titleOpacity))
+    if (endOpacity > 0) add(endWidget(of('end'), frame, settings, endOpacity))
+    if (settings.counters.enabled && live > 0) add(countersWidget(of('counters'), frame, settings, live))
+    if (settings.profile.enabled && live > 0) add(profileWidget(of('profile'), frame, settings, live))
+    weather = settings.weather.enabled && live > 0 ? weatherWidget(of('weather'), frame, settings, live) : null
     add(weather)
-    if (settings.minimap.enabled && live > 0) add(minimapWidget(p, frame, settings, live))
-    if (settings.leaderboard.enabled && live > 0) add(leaderboardWidget(p, extras.leaderboard ?? [], settings, live))
-    if (settings.text.enabled) add(textWidget(p, settings))
+    if (settings.minimap.enabled && live > 0) add(minimapWidget(of('minimap'), frame, settings, live))
+    if (settings.leaderboard.enabled && live > 0) add(leaderboardWidget(of('leaderboard'), extras.leaderboard ?? [], settings, live))
+    if (settings.text.enabled) add(textWidget(of('text'), settings))
     if (settings.logo.enabled) add(logoWidget(p, settings, assets))
     // texts of the timeline inside their window
     for (const item of extras.texts ?? []) {

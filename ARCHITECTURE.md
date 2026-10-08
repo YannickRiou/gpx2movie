@@ -989,7 +989,11 @@ sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--
   fonction pure, `resolveOverlayTheme(style, overrides)` (`themes.ts`), appelée par `drawOverlay` : aperçu et export
   identiques. L'accent recolore aussi ce que le style dessinait dans son accent (profil, mini-carte), le texte donne le
   texte secondaire (même couleur à 80 %), le fond recolore aussi le passe-partout des photos ; un style sans encart
-  (Éditorial) garde son voile.
+  (Éditorial) garde son voile. Par élément (`STYLED_WIDGETS` : titre, clôture, compteurs, profil, météo, mini-carte,
+  classement, texte) : `overrides` facultatif sur l'élément, mêmes champs, par-dessus ceux de l'habillage
+  (`widgetOverrides`, `withWidgetOverrides`) ; `drawOverlay` dessine cet élément avec son propre thème ; validés par
+  `isValidOverlay` (un élément invalide rejette l'habillage, comme le reste). « Couleurs et polices » au bas de chaque
+  élément de l'onglet Habillage, « Comme le reste de l'habillage » retire ses changements.
 - **Classement de la course fantôme** (`settings.overlay.leaderboard`, éteint par défaut, ancrable, proposé dès deux
   traces, dessiné seulement course fantôme activée) : `leaderboardRows(raceAt(course, progression), traces)` (`data.ts`,
   pur) range les coureurs par `rankRacers` et donne rang (ex æquo au même point et au même écart : 1, 1, 3), nom, couleur
