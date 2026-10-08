@@ -83,7 +83,7 @@ export function cloudCoversAt(settings: CloudSettings, conditions: SceneConditio
 
 /** One cloud layer of the scene (`CloudLayer` of three-clouds); heightM 0 = layer off. */
 export interface CloudLayerParams {
-  /** base above the ellipsoid, terrain exaggeration applied (metres) */
+  /** base above sea level, terrain exaggeration applied (metres); CloudsLayer adds the geoid undulation */
   altitudeM: number
   heightM: number
   densityScale: number
