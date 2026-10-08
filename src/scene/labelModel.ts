@@ -5,7 +5,7 @@
  * No React, no renderer: everything here is unit-tested.
  */
 import type { Track } from '../core/types'
-import type { FilmPoi } from '../film/model'
+import type { FilmPoi, PoiIcon } from '../film/model'
 import type { Climb, ClimbCategory } from '../flyover/climbs'
 import { formatNumber } from '../ui/format'
 
@@ -23,6 +23,8 @@ export interface LandmarkLabel {
   kind: LandmarkKind
   /** when labels collide on screen, the highest priority is shown */
   priority: number
+  /** pictogram of a point of interest (kind 'poi') */
+  icon?: PoiIcon
 }
 
 /**
@@ -98,7 +100,7 @@ export function waypointLabels(tracks: readonly Track[]): LandmarkLabel[] {
 export function poiLabels(pois: readonly FilmPoi[]): LandmarkLabel[] {
   return pois
     .filter((poi) => poi.name.trim() !== '')
-    .map((poi) => ({ id: `poi:${poi.id}`, lon: poi.lon, lat: poi.lat, text: poi.name.trim(), kind: 'poi', priority: POI_PRIORITY }))
+    .map((poi) => ({ id: `poi:${poi.id}`, lon: poi.lon, lat: poi.lat, text: poi.name.trim(), kind: 'poi', priority: POI_PRIORITY, icon: poi.icon }))
 }
 
 // ---------------------------------------------------------------------------

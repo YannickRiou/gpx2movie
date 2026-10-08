@@ -1171,6 +1171,11 @@
   min-width: 0;
 }
 
+.poi__icon {
+  flex: 0 0 6.5rem;
+  min-width: 0;
+}
+
 /* Reconnaissance (RoutePanel): place to show, points placed on the relief */
 .place-form {
   display: flex;

@@ -84,10 +84,10 @@ describe('label texts and sources', () => {
 
   it('shows the points of interest placed by hand above every other label, not the blank ones', () => {
     const labels = poiLabels([
-      { id: 'poi-1', lon: 6.8, lat: 45.9, name: ' Pique-nique ' },
+      { id: 'poi-1', lon: 6.8, lat: 45.9, name: ' Pique-nique ', icon: 'repas' },
       { id: 'poi-2', lon: 6.9, lat: 45.9, name: '  ' },
     ])
-    expect(labels).toEqual([{ id: 'poi:poi-1', lon: 6.8, lat: 45.9, text: 'Pique-nique', kind: 'poi', priority: POI_PRIORITY }])
+    expect(labels).toEqual([{ id: 'poi:poi-1', lon: 6.8, lat: 45.9, text: 'Pique-nique', kind: 'poi', priority: POI_PRIORITY, icon: 'repas' }])
     expect(POI_PRIORITY).toBeGreaterThan(climbLabels(track('a'), [climb('HC', 2000)])[0].priority)
   })
 })
