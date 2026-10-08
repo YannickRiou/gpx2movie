@@ -1,230 +1,230 @@
-# État du projet et reprise
+# Project state and handover
 
-Mis à jour le 2026-10-08. Ce fichier suffit pour reprendre sans l'historique de conversation : lire
-d'abord ce fichier, puis `git status` et `npm run typecheck`.
+Updated 8 October 2026. This file is enough to resume work without the conversation history: read this file first,
+then run `git status` and `npm run typecheck`.
 
-## Branches, PR, dépôt
+## Branches, PRs, repository
 
-- `master` : tout ce qui est fusionné (PR #1 à #9 ; #8 le 2026-10-08 : petites suites, rendu à la demande, balayage,
-  ralentis sur le rythme, styles et cadrage par élément, rendu en ligne de commande, reconnaissance, doc technique ;
-  #9 le 2026-10-08 : vérification complète du projet et corrections).
-- `ai-dev/confident-darwin-83rxik` (session cloud) : dette technique laissée par la vérification, puis petites et
-  moyennes fonctions de la feuille de route (voir « Travail en cours »).
-- Méthode : une branche par lot, une PR avec procédure de test manuel, fusion (`gh pr merge N --merge`), puis nouvelle
-  branche partie de `origin/master`.
-- **Pousser** : `git push` tout simplement. Le remote `origin` est `git@github-yannickriou:YannickRiou/gpx2movie.git`,
-  alias SSH défini dans `~/.ssh/config` (clé dédiée `~/.ssh/id_ed25519_yannickriou`, enregistrée sur le compte perso
-  `YannickRiou`). Ne pas repasser par `git@github.com` : cette adresse authentifie le compte `yriouvortex`, sans droits
-  ici, et le push HTTPS avec le jeton `gh` renvoyait « Internal Server Error ». `~/.gitconfig` contient encore un jeton
-  d'accès personnel en clair du compte `yriouvortex` (règle `url.*.insteadOf`) : à révoquer et supprimer par l'utilisateur.
+- `master`: everything merged (PRs #1 to #9; #8 on 8 October 2026: small follow-ups, on-demand rendering, sweep,
+  slow-motion on the beat, per-element styles and framing, command-line rendering, reconnaissance, technical docs;
+  #9 on 8 October 2026: full project review and fixes).
+- `ai-dev/confident-darwin-83rxik` (cloud session): technical debt left by the review, then small and medium features
+  from the roadmap (see "Work in progress").
+- Method: one branch per batch, one PR with a manual test procedure, merge (`gh pr merge N --merge`), then a new
+  branch from `origin/master`.
+- **Push**: just `git push`. The `origin` remote is `git@github-yannickriou:YannickRiou/gpx2movie.git`, an SSH alias
+  defined in `~/.ssh/config` (dedicated key `~/.ssh/id_ed25519_yannickriou`, registered on the personal account
+  `YannickRiou`). Do not go back to `git@github.com`: this address authenticates the `yriouvortex` account, which has no
+  rights here, and the HTTPS push with the `gh` token returned "Internal Server Error". `~/.gitconfig` still contains a
+  plain-text personal access token of the `yriouvortex` account (`url.*.insteadOf` rule): the user must revoke and remove it.
 
-## Session cloud (branche `ai-dev/confident-darwin-83rxik`)
+## Cloud session (branch `ai-dev/confident-darwin-83rxik`)
 
-- Hook de démarrage `.claude/hooks/session-start.sh` (déclaré dans `.claude/settings.json`, sessions cloud seulement) :
-  Node v24.21.0 (somme SHA-256 vérifiée) dans `/opt/node-v24.21.0` et mis en tête du PATH, `npm install` (le npm de
-  Node 24 laisse `package-lock.json` intact ; celui de Node 22 le réécrit), `OPENFLYOVER_CHROME` sur le headless shell
-  de `/opt/pw-browsers`, `LANG=C.UTF-8` (sans locale UTF-8, Chromium nomme « download » un téléchargement au nom
-  accentué), bibliothèques Tauri Linux par `apt-get` (WebKitGTK 4.1…). ~25 s la première fois, < 1 s ensuite.
-- Ici, `cargo test` tourne dans `src-tauri/` (Ubuntu 24.04, 2 min la première compilation) : 9 tests verts.
-- Réseau : la politique de l'environnement refuse les hôtes de tuiles (`tiles.mapterhorn.com`, `tile.openstreetmap.org`…,
-  403 du proxy). `npm run e2e` avec `OPENFLYOVER_E2E_SKIP_EXPORT=1` : 5/5 en ~20 s.
+- Startup hook `.claude/hooks/session-start.sh` (declared in `.claude/settings.json`, cloud sessions only):
+  Node v24.21.0 (SHA-256 checksum verified) in `/opt/node-v24.21.0`, put first in the PATH; `npm install` (the npm of
+  Node 24 leaves `package-lock.json` untouched; the one of Node 22 rewrites it); `OPENFLYOVER_CHROME` on the headless shell
+  in `/opt/pw-browsers`; `LANG=C.UTF-8` (without a UTF-8 locale, Chromium names a download with an accented name
+  "download"); Tauri Linux libraries via `apt-get` (WebKitGTK 4.1…). ~25 s the first time, < 1 s afterwards.
+- Here, `cargo test` runs in `src-tauri/` (Ubuntu 24.04, 2 min for the first build): 9 tests pass.
+- Network: the environment policy blocks tile hosts (`tiles.mapterhorn.com`, `tile.openstreetmap.org`…,
+  403 from the proxy). `npm run e2e` with `OPENFLYOVER_E2E_SKIP_EXPORT=1`: 5/5 in ~20 s.
 
-## Environnement et méthode (WSL)
+## Environment and method (WSL)
 
-- Node 24 via nvm : `source ~/.nvm/nvm.sh && nvm use 24` avant `npm …`.
-- Vérifications : `npm run typecheck`, `npm run lint` (0 erreur ; une quarantaine d'avertissements React préexistants, surtout dans `src/scene`),
-  `npx vitest run --maxWorkers=1` (chiffres à jour : « Travail en cours »), `npm run build`.
-- Tests de bout en bout : `npm run e2e` (`e2e/run.mjs`, puppeteer-core, Chromium de Playwright ou `OPENFLYOVER_CHROME`,
-  SwiftShader, serveur Vite lancé par le script sans surveillance des fichiers). 6 scénarios : accueil et exemple, onglets
-  et aide, T / Ctrl+Z / S, projet enregistré puis rouvert, export 320 × 180 + image fixe, reconnaissance (Overpass simulé). 7 à 8 min ici (export
-  5 à 6 min, nuages coupés) ; `OPENFLYOVER_E2E_SKIP_EXPORT=1` : moins de 1 min 30. Échoue sur toute erreur de console hors bruit
-  réseau. Un seul navigateur à la fois sur cette machine.
-- Vérifier le Rust de l'application de bureau (Linux impossible ici, Ubuntu 20.04 sans webkit2gtk-4.1) :
-  `rustup target add x86_64-pc-windows-msvc`, puis `RC_x86_64_pc_windows_msvc=<faux windres> cargo check -j 1 --target
-  x86_64-pc-windows-msvc` dans `src-tauri/`. Le faux `windres` est un script exécutable nommé `windres` qui répond à `-V`
-  par une ligne contenant « GNU windres » et, sinon, écrit un fichier vide à la sortie demandée (`-o`). `cargo test` ne
-  tourne pas ici.
-- Serveur de dev utilisé pour les captures : `npm run dev -- --port 5190` (à relancer).
-- Contrôle visuel sans écran : Chromium headless (`~/.cache/ms-playwright/chromium_headless_shell-1223/…`) piloté par
-  puppeteer-core (`~/.npm/_npx/e0b87bb3fb84adaa/node_modules/puppeteer-core`), GPU logiciel SwiftShader : 20–40 s par
-  capture, **un seul navigateur à la fois**. Script générique à recréer dans le répertoire temporaire de session : charge
-  `http://127.0.0.1:<port>/`, clique « Essayer avec l'exemple », exécute des étapes (`click` par texte de bouton, `check`
-  par libellé, `eval` JS, `shot`), viewport via `W`/`H`.
-- **Ne plus mesurer la vitesse de l'export sur cette machine** (décision de l'utilisateur, GPU logiciel) : il la mesure
-  sur une machine avec GPU. La console affiche en fin d'export `[export] N images … rendu … attente … encodage …`.
-- Sous-agents : interdiction totale de git (deux ont fait `git stash` / `pop` malgré la consigne, sans perte constatée).
-- Messages de commit neutres, sans trailer ni signature ; rien dans le code ou la doc sur les outils de développement. Charte « Carte alpine » (`src/ui/theme.css`),
-  pas la charte Vortex. Licence du code : MIT (`LICENSE`).
+- Node 24 via nvm: `source ~/.nvm/nvm.sh && nvm use 24` before `npm …`.
+- Checks: `npm run typecheck`, `npm run lint` (0 errors; about forty pre-existing React warnings, mostly in `src/scene`),
+  `npx vitest run --maxWorkers=1` (current figures: "Work in progress"), `npm run build`.
+- End-to-end tests: `npm run e2e` (`e2e/run.mjs`, puppeteer-core, Playwright's Chromium or `OPENFLYOVER_CHROME`,
+  SwiftShader, Vite server started by the script without file watching). 6 scenarios: home screen and sample, tabs
+  and help, T / Ctrl+Z / S, project saved then reopened, 320 × 180 export + still image, reconnaissance (mocked Overpass). 7 to 8 min here (export
+  5 to 6 min, clouds off); `OPENFLYOVER_E2E_SKIP_EXPORT=1`: under 1 min 30. Fails on any console error except network
+  noise. Only one browser at a time on this machine.
+- Checking the desktop app's Rust (Linux impossible here, Ubuntu 20.04 without webkit2gtk-4.1):
+  `rustup target add x86_64-pc-windows-msvc`, then `RC_x86_64_pc_windows_msvc=<fake windres> cargo check -j 1 --target
+  x86_64-pc-windows-msvc` in `src-tauri/`. The fake `windres` is an executable script named `windres` that answers `-V`
+  with a line containing "GNU windres" and, otherwise, writes an empty file to the requested output (`-o`). `cargo test` does
+  not run here.
+- Dev server used for screenshots: `npm run dev -- --port 5190` (restart it).
+- Visual check without a screen: headless Chromium (`~/.cache/ms-playwright/chromium_headless_shell-1223/…`) driven by
+  puppeteer-core (`~/.npm/_npx/e0b87bb3fb84adaa/node_modules/puppeteer-core`), SwiftShader software GPU: 20–40 s per
+  screenshot, **only one browser at a time**. Generic script to recreate in the session temporary directory: loads
+  `http://127.0.0.1:<port>/`, clicks "Essayer avec l'exemple" ("Try with the sample"), runs steps (`click` by button text,
+  `check` by label, `eval` JS, `shot`), viewport via `W`/`H`.
+- **Do not measure export speed on this machine any more** (user decision, software GPU): the user measures it
+  on a machine with a GPU. At the end of an export, the console shows `[export] N images … rendu … attente … encodage …`.
+- Sub-agents: git strictly forbidden (two ran `git stash` / `pop` despite the instruction, with no loss found).
+- Neutral commit messages, with no trailer or signature; nothing in the code or docs about the development tools. "Carte alpine" theme (`src/ui/theme.css`),
+  not the Vortex theme. Code licence: MIT (`LICENSE`).
 
-## Décisions prises par l'utilisateur (ne pas redemander)
+## Decisions made by the user (do not ask again)
 
-- Usage personnel, faible trafic ; hébergement non décidé (exe local, serveur perso ou type OVH). Deux cibles à garder
-  fonctionnelles : site statique et application de bureau Tauri (phase 6). Pas de clé d'API, sources ouvertes seulement.
-- Timeline façon logiciel de montage : la base est le survol du GPX ; pistes séparées pour arrêts, textes, photos (vidéos
-  plus tard) ; film monté automatiquement au chargement puis retouché. Préréglages sans arrêts / textes / médias.
-- Interface « hyper ergonomique comme les interfaces récentes » : MapDirector sert d'inspiration, pas de modèle.
-  Icônes Lucide (ISC, embarquées), cadre sombre (encre) autour de la vue avec panneaux clairs (papier), onglets
-  Trace · Carte · Survol · Habillage · Projet, export depuis la barre du haut.
-- README écrit simplement, phrases courtes, chaque chose dite une fois.
+- Personal use, low traffic; hosting not decided (local exe, personal server or OVH-like). Two targets to keep
+  working: static site and Tauri desktop app (phase 6). No API key, open sources only.
+- Timeline like video editing software: the base is the flyover of the GPX; separate tracks for stops, texts, photos (videos
+  later); film edited automatically on load, then adjusted. Presets without stops / texts / media.
+- Interface "hyper-ergonomic like recent interfaces": MapDirector is an inspiration, not a model.
+  Lucide icons (ISC, bundled), dark frame (ink) around the view with light panels (paper), tabs
+  Trace · Carte · Survol · Habillage · Projet (Track · Map · Flyover · Overlays · Project), export from the top bar.
+- README written simply, short sentences, each thing said once.
 
-## Fait et fusionné
+## Done and merged
 
-Voir `git log` et les PR #1 à #7 (vagues 3 et 4 : plan de situation, points d'intérêt, traces enchaînées, ralentis et
-titres aux repères, calage sur la musique, affiche à plusieurs traces et carte à plat, un film par trace d'un dossier,
-Mes projets, encodeur natif Linux, installeurs) ; détail technique dans `ARCHITECTURE.md`, fonctionnalités dans `README.md`.
+See `git log` and PRs #1 to #7 (waves 3 and 4: overview map, points of interest, chained tracks, slow-motion and
+titles at landmarks, sync to music, multi-track poster and flat map, one film per track in a folder,
+"Mes projets" ("My projects"), native Linux encoder, installers); technical details in `ARCHITECTURE.md`, features in `README.md`.
 
-## Travail en cours (branche `ai-dev/confident-darwin-83rxik`) : dette technique et feuille de route
+## Work in progress (branch `ai-dev/confident-darwin-83rxik`): technical debt and roadmap
 
-Vérifié : typecheck, lint (0 erreur), `npx vitest run --maxWorkers=1` (92 fichiers, 1 466 tests), `npm run build`,
-`npm run e2e` avec `OPENFLYOVER_E2E_SKIP_EXPORT=1` (accueil, onglets, timeline, projet ; la reconnaissance échoue ici
-faute de tuiles de relief, comme sur `master`). Contrôles d'écran faits en Chromium sans GPU : liste des traces,
-champ « Jour », « Étiquettes dans la vue », pictogrammes des points d'intérêt.
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (92 files, 1,466 tests), `npm run build`,
+`npm run e2e` with `OPENFLYOVER_E2E_SKIP_EXPORT=1` (home screen, tabs, timeline, project; reconnaissance fails here
+for lack of elevation tiles, as on `master`). Screen checks done in Chromium without a GPU: track list,
+"Jour" ("Day") field, "Étiquettes dans la vue" ("Labels in view"), point-of-interest icons.
 
-- **Dette technique** : `cargo test` dans la CI ; tests de `renderOnDemand` (`sceneChanged`) ; réserve LRU jamais
-  utilisée du moteur de terrain retirée ; un seul curseur réglable (`RangeField`, habillage, trace, inspecteur).
-- **Trace** : figurines alpiniste, bikepacking, moto et avion léger ; couleur de chaque trace (pastille de la liste) et
-  trace survolée au choix (flèche : elle passe en tête, `flyTrack`).
-- **Lumière** : `settings.sunDate` (`YYYY-MM-DD`, vide = jour de la sortie) en heure fixe (`sunDayMs`).
-- **Textes du film** : `FilmText.color` et `FilmText.font` (inspecteur › « Couleur et police »).
-- **Étiquettes** : pictogramme des points d'intérêt (`FilmPoi.icon`, 9 tracés Lucide dans `Labels.tsx`) ; bornes
-  kilométriques (`labels.kmStep`, `kmLabels`) ; taille et portée communes (`labels.size`, `labels.rangeKm`, la portée
-  remplace la fin du fondu de 70 km). Anciens projets complétés par `withLabelDefaults`.
-- **Laissé de côté** : `Fold` / `PanelSection` gardés séparés (mise en page différente) ; exports utilisés seulement par
-  les tests ; packs hors ligne OpenTopoMap enregistrés avant la correction du préfixe : à refaire.
+- **Technical debt**: `cargo test` in CI; tests for `renderOnDemand` (`sceneChanged`); never-used LRU reserve
+  of the terrain engine removed; a single adjustable slider (`RangeField`, overlays, track, inspector).
+- **Track**: mountaineer, bikepacking, motorbike and light aircraft figures; colour of each track (swatch in the list) and
+  choice of the flown track (arrow: it moves to the top, `flyTrack`).
+- **Light**: `settings.sunDate` (`YYYY-MM-DD`, empty = day of the outing) at a fixed time (`sunDayMs`).
+- **Film texts**: `FilmText.color` and `FilmText.font` (inspector › "Couleur et police" ("Colour and font")).
+- **Labels**: point-of-interest icon (`FilmPoi.icon`, 9 Lucide paths in `Labels.tsx`); kilometre
+  markers (`labels.kmStep`, `kmLabels`); shared size and range (`labels.size`, `labels.rangeKm`; the range
+  replaces the end of the 70 km fade). Old projects completed by `withLabelDefaults`.
+- **Left aside**: `Fold` / `PanelSection` kept separate (different layout); exports used only by
+  tests; OpenTopoMap offline packs saved before the prefix fix: to redo.
 
-## Contrôles visuels encore à faire (jamais vus à l'écran)
+## Visual checks still to do (never seen on screen)
 
-Liste à cocher pour la machine avec GPU, regroupée par priorité : [`docs/tests-gpu.md`](tests-gpu.md). Le détail ci-dessous
-reste la source de chaque chantier.
+Checklist for the machine with a GPU, grouped by priority: [`docs/tests-gpu.md`](tests-gpu.md). The details below
+remain the source for each work item.
 
-- Étalonnage : chaque préréglage avec et sans atmosphère (aucun changement visible en « Naturel » ; sans atmosphère, ciel
-  dégradé étalonné lui aussi, pas de bord ni de bande au raccord avec le relief, crénelage du SMAA comparable au MSAA),
-  Noir et blanc vraiment gris (trace et habillage compris : l'habillage 2D n'est **pas** étalonné, voulu), vignettage
-  identique en 16:9 et 9:16, image fixe et vidéo exportées identiques à l'aperçu (comparer une capture), pas d'à-coup en
-  glissant un curseur (seule la première sortie de « Naturel » compile le shader). À vérifier aussi dans la chaîne de
-  l'atmosphère : le SMAA, fusionné dans la même passe que le tone mapping, lit l'entrée de la passe (image avant
-  perspective aérienne et tone mapping) sur les bords détectés ; si des liserés clairs apparaissent sur les crêtes, le
-  sortir dans sa propre passe.
-- Zones de sécurité : bouton sous « Recadrer » (absent en « Libre »), G, étiquettes lisibles sur un aperçu étroit, bande des
-  boutons en 9:16 et 4:5, marges 93 % / 90 % en 16:9, rien dans l'export.
+- Colour grading: each preset with and without atmosphere (no visible change in "Naturel" ("Natural"); without atmosphere,
+  gradient sky graded too, no edge or band where it meets the terrain, SMAA aliasing comparable to MSAA),
+  "Noir et blanc" ("Black and white") truly grey (track and overlays included: the 2D overlay is **not** graded, by design), vignetting
+  identical in 16:9 and 9:16, exported still image and video identical to the preview (compare a screenshot), no stutter
+  when dragging a slider (only the first change away from "Naturel" compiles the shader). Also to check in the
+  atmosphere chain: SMAA, merged into the same pass as tone mapping, reads the pass input (image before
+  aerial perspective and tone mapping) on detected edges; if light fringes appear on ridges,
+  move it into its own pass.
+- Safe zones: button under "Recadrer" ("Reframe") (absent in "Libre" ("Free")), G, labels readable on a narrow preview, button
+  strip in 9:16 and 4:5, 93% / 90% margins in 16:9, nothing in the export.
 
-- Rendu en lot : les trois modes du tiroir sur une ligne à 300 px (« Plusieurs formats » assez court ?), pastilles des 5
-  formats × 4 résolutions, estimation (taille après le sondage des codecs, durée seulement après un premier film), « Tout
-  exporter » dans Chrome (dossier demandé une fois, fichiers qui grossissent dans le dossier, noms, image et affiche
-  copiées à la fin, un nom déjà présent remplacé), Firefox (un téléchargement par fichier, « Enregistrer à nouveau »),
-  bureau Windows (fenêtre de dossier, fichiers écrits sous le dossier sans refus du scope fs), vue remise entre deux films,
-  « Tout annuler » et « Annuler » de la barre du haut pendant le 2ᵉ film (fichier commencé supprimé, suivants annulés),
-  format refusé par l'encodeur (9:16 4K en H.264 ?) marqué en échec sans arrêter les autres, interface pendant le court
-  intervalle entre deux tâches (onglets brièvement déverrouillés).
+- Batch rendering: the three drawer modes on one line at 300 px ("Plusieurs formats" ("Several formats") short enough?), swatches for the 5
+  formats × 4 resolutions, estimate (size after the codec probe, duration only after a first film), "Tout
+  exporter" ("Export all") in Chrome (folder asked once, files growing in the folder, names, image and poster
+  copied at the end, an existing name replaced), Firefox (one download per file, "Enregistrer à nouveau" ("Save again")),
+  Windows desktop (folder dialog, files written under the folder without fs scope refusal), view reset between two films,
+  "Tout annuler" ("Cancel all") and "Annuler" ("Cancel") in the top bar during the 2nd film (started file deleted, following ones cancelled),
+  format refused by the encoder (9:16 4K in H.264?) marked as failed without stopping the others, interface during the short
+  gap between two jobs (tabs briefly unlocked).
 
-- Packs hors ligne : section « Hors ligne » (estimation qui change avec le couloir, la source et le niveau de détail ;
-  Esri permis en usage personnel avec mise en garde et 10 000 tuiles par jour ; « Trop de tuiles »), préparation de l'exemple en 2 km (progression,
-  Pause / Reprendre, Annuler qui retire le pack neuf), liste (taille, « incomplet », Supprimer), espace utilisé (site),
-  puis **hors ligne** (DevTools › Network › Offline, ou Wi-Fi coupé) : rechargement, vue et export sans trou dans le
-  couloir, relief plus grossier au-delà, temps d'attente de l'export sur les tuiles absentes ; Firefox (demande de
-  stockage persistant) ; Safari (quota) ; bureau Windows : dossier `%APPDATA%\io.github.yannickriou.openflyover\tiles`
-  créé, fichiers lus au redémarrage hors ligne, Supprimer qui vide le dossier.
+- Offline packs: "Hors ligne" ("Offline") section (estimate that changes with the corridor, the source and the level of detail;
+  Esri allowed for personal use with a warning and 10,000 tiles per day; "Trop de tuiles" ("Too many tiles")), preparing the sample at 2 km (progress,
+  "Pause" / "Reprendre" (Pause / Resume), "Annuler" that removes the new pack), list (size, "incomplet" ("incomplete"), "Supprimer" (Delete)), used space (site),
+  then **offline** (DevTools › Network › Offline, or Wi-Fi off): reload, view and export with no gap in the
+  corridor, coarser terrain beyond it, export wait time on missing tiles; Firefox (persistent storage
+  request); Safari (quota); Windows desktop: folder `%APPDATA%\io.github.yannickriou.openflyover\tiles`
+  created, files read on restart while offline, "Supprimer" that empties the folder.
 
-- Vidéo calée sur le parcours, avec de vrais fichiers et une trace horodatée de la même sortie : iPhone (date Apple),
-  Android, GoPro (heure locale écrite comme UTC : décalage d'heures trouvé seul ?), DJI, WebM (date du fichier) ; vérifier
-  sur chacun si l'heure lue est le **début** du tournage (certains appareils écrivent peut-être la fin dans `mvhd`) ;
-  toast « Caler sur le parcours » (seul ou avec des photos), inspecteur (heure, mention approximative, Recaler, décalage
-  au clavier, case « Suivre »), lecture à ×1 / ×2 / ×4 avec « Suivre » (image qui suit le marqueur sans saccade, figée
-  pendant un arrêt, plus rapide dans une portion ×2), export avec une vidéo qui suit (mêmes images que l'aperçu), Ctrl+Z,
-  projet enregistré puis rouvert (calage gardé). Préréglage avec un stockage plein (remplir `localStorage` à la main) :
-  toast d'erreur, préréglage utilisable jusqu'au rechargement.
+- Video synced to the route, with real files and a timestamped track from the same outing: iPhone (Apple date),
+  Android, GoPro (local time written as UTC: hour offset found automatically?), DJI, WebM (file date); check
+  on each one whether the time read is the **start** of the recording (some devices may write the end in `mvhd`);
+  "Caler sur le parcours" ("Sync to the route") toast (alone or with photos), inspector (time, approximate note, "Recaler" (Re-sync), keyboard
+  offset, "Suivre" ("Follow") checkbox), playback at ×1 / ×2 / ×4 with "Suivre" (image that follows the marker without stutter, frozen
+  during a stop, faster in a ×2 section), export with a following video (same images as the preview), Ctrl+Z,
+  project saved then reopened (sync kept). Preset with full storage (fill `localStorage` by hand):
+  error toast, preset usable until reload.
 
-- Musique (à écouter sur une vraie machine, avec des haut-parleurs) : ajout par « Options » et par dépôt (MP3, M4A, OGG,
-  WAV, FLAC ; refus au-delà de 30 Mo et d'un format non lu, message), forme d'onde du bloc, lecture synchronisée à ×1 / ×2
-  / ×0,5, pause et reprise au milieu, déplacement de la tête de lecture pendant la lecture, fondus audibles, haut-parleur,
-  « Caler la durée du film » (toast puis inspecteur, Ctrl+Z), glisser / couper les bords (le bord droit s'arrête à la fin du
-  fichier), deux musiques qui se chevauchent, enregistrer / rouvrir un projet avec musique ; export MP4 (AAC sous Windows
-  / macOS, Opus sous Linux) et WebM (Opus) en mémoire et sur le disque : son calé sur l'image du début à la fin, fondus,
-  lu par VLC, le lecteur du système et un logiciel de montage (Opus en MP4 n'est pas lu partout) ; navigateur sans
-  encodeur son : vidéo muette et note ; Safari : `play()` hors geste peut être refusé ; bureau Windows (WebView2).
+- Music (to listen to on a real machine, with speakers): adding via "Options" and by drop (MP3, M4A, OGG,
+  WAV, FLAC; refusal above 30 MB and for an unreadable format, message), block waveform, synced playback at ×1 / ×2
+  / ×0.5, pause and resume in the middle, moving the playhead during playback, audible fades, speaker,
+  "Caler la durée du film" ("Fit the film length") (toast then inspector, Ctrl+Z), drag / trim the edges (the right edge stops at the end of the
+  file), two overlapping music tracks, save / reopen a project with music; MP4 export (AAC on Windows
+  / macOS, Opus on Linux) and WebM (Opus) in memory and on disk: sound synced with the image from start to end, fades,
+  played by VLC, the system player and video editing software (Opus in MP4 does not play everywhere); browser without
+  an audio encoder: silent video and note; Safari: `play()` outside a gesture may be refused; Windows desktop (WebView2).
 
-- Affiche : vignette dans les 5 formats × 3 styles (titre long, sans heure, sans altitude), « Créer l'affiche » sur
-  l'exemple en A4 portrait puis A3 paysage (cadrage de toute la trace, nord en haut, marqueur absent, étiquettes et trace à
-  l'échelle, crédits lisibles à l'impression), vue remise comme avant après l'export, vignette qui reprend la vue rendue,
-  annulation pendant le rendu, préréglage appliqué (style seul), « Par défaut », Ctrl+Z sur le titre.
+- Poster: thumbnail in the 5 formats × 3 styles (long title, no time, no altitude), "Créer l'affiche" ("Create the poster") on
+  the sample in A4 portrait then A3 landscape (framing of the whole track, north up, no marker, labels and track
+  to scale, credits readable when printed), view restored as before after the export, thumbnail that reuses the rendered view,
+  cancel during rendering, preset applied (style only), "Par défaut" ("Default"), Ctrl+Z on the title.
 
-- Vitesse par portion : bouton « Vitesse » (bloc ×2 sous « Plans », inspecteur ouvert), barre de la timeline encore sur
-  une ligne à 1440 / 1280 px avec ce bouton de plus, glisser / étirer un bloc (il suit le pointeur, s'arrête contre ses
-  voisins, aimantation, Alt), pastilles et réglage fin (libellé et durée du film mis à jour), de / à au clavier, Suppr et
-  Ctrl+Z, lecture et export : accélération sans à-coup aux bords, portion ralentie en pointillés, menu du clic droit à
-  trois entrées (retourné près du bas), « garder la durée » activé puis désactivé.
+- Speed per section: "Vitesse" ("Speed") button (×2 block under "Plans" ("Shots"), inspector open), timeline bar still on
+  one line at 1440 / 1280 px with this extra button, drag / stretch a block (it follows the pointer, stops against its
+  neighbours, snapping, Alt), swatches and fine adjustment (label and film duration updated), from / to with the keyboard, Del and
+  Ctrl+Z, playback and export: acceleration without stutter at the edges, slowed section dotted, right-click menu with
+  three entries (flipped near the bottom), "garder la durée" ("keep the duration") turned on then off.
 
-- Passe clarté : interrupteurs (état, focus, désactivé), pastilles (coche, pointillés « absent de cette trace »), sections
-  de l'Habillage (en-têtes collants, filet des options sous chaque interrupteur), météo sur deux lignes à 280 px, onglets
-  sans trace, onglet Projet sans préréglage, bande d'état avant / pendant / après le chargement, résumé de l'export.
+- Clarity pass: switches (state, focus, disabled), swatches (check mark, dotted "absent de cette trace" ("not in this track")), Habillage
+  sections (sticky headers, options rule under each switch), weather on two lines at 280 px, tabs
+  without a track, Projet tab without a preset, status strip before / during / after loading, export summary.
 
-- Couche plateforme, sur le site : « Ouvrir » et Ctrl+O (champ créé à la volée : traces, projet, plusieurs fichiers,
-  Annuler), « Enregistrer » (téléchargement, toast), dépôt sur la fenêtre, téléchargement automatique d'un export, sous
-  Chrome et Firefox. Sur le bureau : les mêmes avec les fenêtres natives (Annuler n'enregistre rien et ne marque pas le
-  projet enregistré), tuiles / météo / Overpass sous la CSP, message « pas d'encodeur » sous Linux. Suite : « Choisir un
-  fichier » et « Ouvrir un projet… » de l'accueil, « Ajouter », logo, « Média » (filtres, Annuler, plusieurs fichiers),
-  onglet et panneau replié retrouvés au rechargement, préréglages et météo d'avant toujours là, « Enregistrer … » et action
-  du toast à la fin d'un export sur le bureau.
-- Timeline : glisser un arrêt (aimantation, Alt), étirer un texte des deux bords, bord de l'ouverture, Ctrl+Z par geste,
-  Ctrl+molette, un film long (défilement).
-- Photos : ajout, miniatures, plein écran avec zoom lent, carte dans les 3 styles, placement GPS, export avec photo.
-- Vidéos : ajout d'un MP4, d'un WebM et d'un MOV (bouton « Média » et dépôt), refus d'un fichier de plus de 50 Mo et d'un
-  format non lu (message), vignette et icône du bloc, lecture synchronisée (×0,5 à ×4), déplacement sur la règle en
-  pause (l'image suit, sans clignoter), bord gauche (début dans la vidéo), plein écran et carte, vidéo pendant un arrêt,
-  export (images exactes, vidéo qui avance pendant un arrêt), enregistrer / rouvrir un projet avec vidéo, Ctrl+Z.
-- Habillage : textes à plusieurs positions, cartons d'ouverture / clôture calés sur les plans, crédits dans les 4 coins,
-  en 9:16 et 720p.
-- Interface : 1280 et 1000 px de large (panneau en tiroir), tiroir d'export pendant un vrai export (« 42 % · Annuler »,
-  interface verrouillée), toasts (empilement, « Annuler » après « Par défaut »), dépôt d'un fichier (voile), onglet Projet,
-  heure du soleil : curseur aligné sur les repères lever / coucher, boutons sur deux lignes à 280 px.
-- Restes d'interface : toasts « Préréglage appliqué : … » et « Export annulé », section « Repères (OpenStreetMap) »
-  repliable (en-tête collant, « modifié »), glisser lent d'un curseur = un seul Ctrl+Z, lever / coucher à l'heure locale
-  avec un FIT (ou un GPX à décalage) et « en heure solaire » avec l'exemple.
-- Dernier chantier (inspecteur à droite, barre de la timeline, clic sur la trace) :
-  - inspecteur : à 1440 px panneau + vue + inspecteur côte à côte ; à 1280 px le panneau se replie à la sélection et revient
-    à la désélection ; tiroir d'export par-dessus puis inspecteur revenu à sa fermeture ; en-tête collant ; grille 3 × 3
-    (case choisie, focus visible, flèches, libellé à côté) ; Échap dans un champ ; glisser un bloc : la timeline ne saute pas
-    à l'appui, l'inspecteur s'ouvre au relâcher ;
-  - barre de la timeline à 1440 / 1280 / 1000 px (une ou deux lignes propres, libellés masqués à 1280 px), infobulles en
-    haut jamais coupées (bords gauche et droit), curseur de zoom et « Ajuster », ■, menu « Options » au-dessus de la barre
-    (point « modifié », Échap, clic dehors, Tab), arrêts teintés sur la barre du survol lisibles sur le profil (arrêt
-    sélectionné en blanc), toast des photos avec « Placer sur le parcours », S / T ;
-  - vue 3D : curseur main sur la trace seulement, clic = tête de lecture (pas après un glisser de caméra), clic droit sans
-    glisser = menu au pointeur (retourné près des bords droit et bas), clic droit glissé = déplacement de la caméra sans
-    menu, menu au clavier (flèches, Échap), ajout = bloc sélectionné + inspecteur, un Ctrl+Z par ajout ; rien pendant un
-    export ; Firefox (menu du navigateur bien remplacé).
-- Plus ancien : marqueurs de course fantôme, mini-carte dans les 3 styles, étiquettes effacées sous les cartes, ralentis.
-- Export réel sur machine avec GPU : vitesse (avant `c8a00ed` / après), film 60 s en 1080p puis 4K (mémoire), 9:16,
-  trace et étiquettes à l'échelle en 4K, crédits incrustés, image fixe.
-- Écriture directe (Chrome / Edge, puis bureau Windows) : fenêtre « Enregistrer » au clic, fichier qui grossit pendant
-  l'export (`.crswap` dans Chrome), MP4 lu par VLC, le lecteur du système et un logiciel de montage (durée, recherche),
-  WebM si « .webm » est tapé, annulation et fenêtre fermée (aucun fichier restant), disque plein / clé retirée (message
-  d'erreur, fichier supprimé), mémoire de l'onglet stable sur un film 4K long ; Firefox : alerte au-delà de 1,5 Go et
-  téléchargement comme avant.
+- Platform layer, on the site: "Ouvrir" ("Open") and Ctrl+O (input created on the fly: tracks, project, several files,
+  "Annuler"), "Enregistrer" ("Save") (download, toast), drop on the window, automatic download of an export, in
+  Chrome and Firefox. On the desktop: the same with the native dialogs ("Annuler" saves nothing and does not mark the
+  project as saved), tiles / weather / Overpass under the CSP, "pas d'encodeur" ("no encoder") message on Linux. Follow-up: "Choisir un
+  fichier" ("Choose a file") and "Ouvrir un projet…" ("Open a project…") on the home screen, "Ajouter" ("Add"), logo, "Média" ("Media") (filters, "Annuler", several files),
+  tab and collapsed panel restored on reload, earlier presets and weather still there, "Enregistrer …" and toast
+  action at the end of an export on the desktop.
+- Timeline: drag a stop (snapping, Alt), stretch a text from both edges, opening edge, Ctrl+Z per gesture,
+  Ctrl+wheel, a long film (scrolling).
+- Photos: adding, thumbnails, full screen with slow zoom, map in the 3 styles, GPS placement, export with a photo.
+- Videos: adding an MP4, a WebM and a MOV ("Média" button and drop), refusal of a file over 50 MB and of an
+  unreadable format (message), block thumbnail and icon, synced playback (×0.5 to ×4), moving on the ruler while
+  paused (the image follows, without flicker), left edge (start within the video), full screen and map, video during a stop,
+  export (exact images, video that advances during a stop), save / reopen a project with a video, Ctrl+Z.
+- Overlays (Habillage): texts at several positions, opening / closing cards aligned on the shots, credits in the 4 corners,
+  in 9:16 and 720p.
+- Interface: 1280 and 1000 px wide (drawer panel), export drawer during a real export ("42 % · Annuler",
+  interface locked), toasts (stacking, "Annuler" after "Par défaut"), file drop (overlay), Projet tab,
+  sun time: slider aligned with the sunrise / sunset marks, buttons on two lines at 280 px.
+- Interface leftovers: toasts "Préréglage appliqué : …" ("Preset applied: …") and "Export annulé" ("Export cancelled"), "Repères (OpenStreetMap)" ("Landmarks (OpenStreetMap)") section
+  collapsible (sticky header, "modifié" ("modified")), slow drag of a slider = a single Ctrl+Z, sunrise / sunset in local time
+  with a FIT (or a GPX with an offset) and "en heure solaire" ("in solar time") with the sample.
+- Last work item (inspector on the right, timeline bar, click on the track):
+  - inspector: at 1440 px panel + view + inspector side by side; at 1280 px the panel collapses on selection and comes back
+    on deselection; export drawer on top, then inspector back when it closes; sticky header; 3 × 3 grid
+    (chosen cell, visible focus, arrows, label next to it); Esc in a field; dragging a block: the timeline does not jump
+    on press, the inspector opens on release;
+  - timeline bar at 1440 / 1280 / 1000 px (one or two clean lines, labels hidden at 1280 px), tooltips at the
+    top never cut off (left and right edges), zoom slider and "Ajuster" ("Fit"), ■, "Options" menu above the bar
+    ("modifié" dot, Esc, click outside, Tab), tinted stops on the flyover bar readable on the profile (selected
+    stop in white), photos toast with "Placer sur le parcours" ("Place on the route"), S / T;
+  - 3D view: hand cursor on the track only, click = playhead (not after a camera drag), right-click without
+    dragging = menu at the pointer (flipped near the right and bottom edges), right-click drag = camera move without
+    menu, keyboard menu (arrows, Esc), adding = block selected + inspector, one Ctrl+Z per addition; nothing during an
+    export; Firefox (browser menu properly replaced).
+- Older: ghost race markers, mini-map in the 3 styles, labels hidden under the maps, slow-motion.
+- Real export on a machine with a GPU: speed (before `c8a00ed` / after), 60 s film in 1080p then 4K (memory), 9:16,
+  track and labels to scale in 4K, burnt-in credits, still image.
+- Direct write (Chrome / Edge, then Windows desktop): "Enregistrer" ("Save") dialog on click, file growing during
+  the export (`.crswap` in Chrome), MP4 played by VLC, the system player and video editing software (duration, seeking),
+  WebM if ".webm" is typed, cancel and dialog closed (no file left), disk full / drive removed (error
+  message, file deleted), tab memory stable on a long 4K film; Firefox: warning above 1.5 GB and
+  download as before.
 
-## Prochaines étapes proposées
+## Proposed next steps
 
-1. L'utilisateur : tests sur la machine avec GPU (`docs/tests-gpu.md`), premier lancement des workflows GitHub, certificat
-   de signature s'il en veut un.
-2. Fusionner la PR de cette branche après relecture ; lancer une fois le rendu en ligne de commande sur une vraie machine.
-3. Reste de la feuille de route (README, phase 4, lignes « à faire » ; à confirmer avant de construire) : « transitions
-   entre sections réglables » (sens à préciser avec l'utilisateur) ; étiquettes et marqueurs de départ et d'arrivée ;
-   curseur de brume ; figurines animées ; générique déroulant ; thèmes enregistrables séparément ; onglets Contenu /
-   Style / Visibilité ; prises de vue enregistrées (gros).
-   Reconnaissance : l'utilisateur doute de son utilité, ne pas l'étendre (profils vélo / VTT écartés) ; la retirer s'il
-   le demande.
-4. Petites suites : avertissement `THREE.Clock` (émis par `@react-three/fiber` lui-même, à revoir à sa prochaine version).
+1. The user: tests on the machine with a GPU (`docs/tests-gpu.md`), first run of the GitHub workflows, signing
+   certificate if wanted.
+2. Merge this branch's PR after review; run command-line rendering once on a real machine.
+3. Rest of the roadmap (README, phase 4, "to do" lines; to confirm before building): "adjustable transitions
+   between sections" (meaning to clarify with the user); start and finish labels and markers;
+   haze slider; animated figures; scrolling credits; themes savable separately; Content /
+   Style / Visibility tabs; saved camera shots (large).
+   Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if
+   asked.
+4. Small follow-ups: `THREE.Clock` warning (emitted by `@react-three/fiber` itself, to review at its next version).
 
-## Limites et points ouverts
+## Limits and open points
 
-- Licence du SDK Garmin FIT (non libre, redistribution « sauf cas prévus ») : à trancher avant diffusion publique ; usage
-  perso OK. Conditions Esri (sans clé) à relire pour l'usage en ligne. Open-Meteo et EOX non commerciaux ; OpenTopoMap,
-  Esri et swisstopo permis dans les packs hors ligne pour un usage personnel, avec une limite par jour basse (README,
-  « Sources »). Catalogue d'étoiles de Yale : licence non indiquée.
-- Photos HEIC refusées (le navigateur ne les décode pas) ; EXIF lu seulement dans les JPEG.
-- Vidéos : 50 Mo au plus (le projet les contient : ~1,33 × leur taille dans le fichier JSON), non placées
-  par GPS (calées seulement sur l'heure, la trace doit être horodatée) ; un ancien projet modifié à la main avec une vidéo absente de sa table la garde dans le film sans
-  l'afficher (`parseProject` ne retire que les photos sans image).
-- Firefox / Safari non testés pour l'export (WebCodecs). HTTPS obligatoire hors `localhost`.
-- Aucun test de rendu de composants (pas de Testing Library) ; `npm run e2e` vérifie les parcours principaux dans un
-  vrai navigateur, mais l'aspect se vérifie toujours à la main, par captures.
+- Garmin FIT SDK licence (not free, redistribution "except in the cases provided for"): to decide before public release; personal
+  use OK. Esri terms (no key) to re-read for online use. Open-Meteo and EOX non-commercial; OpenTopoMap,
+  Esri and swisstopo allowed in offline packs for personal use, with a low daily limit (README,
+  "Sources"). Yale star catalogue: licence not stated.
+- HEIC photos refused (the browser does not decode them); EXIF read only in JPEG files.
+- Videos: 50 MB at most (the project contains them: ~1.33 × their size in the JSON file), not placed
+  by GPS (synced only by time, the track must be timestamped); an old project edited by hand with a video missing from its table keeps it in the film without
+  showing it (`parseProject` only removes photos without an image).
+- Firefox / Safari not tested for export (WebCodecs). HTTPS required outside `localhost`.
+- No component rendering tests (no Testing Library); `npm run e2e` checks the main flows in a
+  real browser, but the look is still checked by hand, with screenshots.
