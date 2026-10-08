@@ -81,7 +81,7 @@ function readExtensions(extensions: Element, point: TrackPoint): void {
 }
 
 /** Parse a <trkpt> / <rtept>; returns undefined when lat/lon are missing or invalid. */
-export function parseGpxPoint(element: Element): TrackPoint | undefined {
+function parseGpxPoint(element: Element): TrackPoint | undefined {
   const lat = parseCoordinate(element.getAttribute('lat'), 90)
   const lon = parseCoordinate(element.getAttribute('lon'), 180)
   if (lat === undefined || lon === undefined) return undefined
@@ -190,7 +190,7 @@ export function parseGpx(text: string, fileName: string): Track[] {
 }
 
 /** <wpt> elements with valid coordinates; unnamed ones are called « Point n » (n = rank in the file). */
-export function parseWaypoints(elements: Element[]): Waypoint[] {
+function parseWaypoints(elements: Element[]): Waypoint[] {
   const waypoints: Waypoint[] = []
   elements.forEach((element, index) => {
     const point = parseGpxPoint(element)

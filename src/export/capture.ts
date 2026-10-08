@@ -93,7 +93,22 @@ export async function renderSettledFrame(
 }
 
 /** Sky gradient behind a transparent canvas (mirrors the CSS background of FlyoverCanvas: glacier → paper). */
-export const SKY_GRADIENT: readonly [string, string] = ['#A9CCD9', '#F5F2EA']
+const SKY_GRADIENT: readonly [string, string] = ['#A9CCD9', '#F5F2EA']
+
+/** Fill a box with the sky gradient, top to bottom (behind a film frame, or the poster's placeholder view). */
+export function fillSky(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  const sky = ctx.createLinearGradient(0, y, 0, y + height)
+  sky.addColorStop(0, SKY_GRADIENT[0])
+  sky.addColorStop(1, SKY_GRADIENT[1])
+  ctx.fillStyle = sky
+  ctx.fillRect(x, y, width, height)
+}
 
 /** Encoder canvas content for one frame: sky gradient, WebGL image scaled to the video size, overlay. */
 export function composeFrame(
@@ -104,11 +119,7 @@ export function composeFrame(
   height: number,
   drawOverlay?: DrawOverlay,
 ): void {
-  const sky = ctx.createLinearGradient(0, 0, 0, height)
-  sky.addColorStop(0, SKY_GRADIENT[0])
-  sky.addColorStop(1, SKY_GRADIENT[1])
-  ctx.fillStyle = sky
-  ctx.fillRect(0, 0, width, height)
+  fillSky(ctx, 0, 0, width, height)
   ctx.drawImage(source, 0, 0, width, height)
   if (!drawOverlay) return
   ctx.save()

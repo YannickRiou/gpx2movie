@@ -218,13 +218,12 @@ export const useExportStore = create<ExportState>()((set, get) => ({
   },
 
   cancel() {
-    const { phase } = get()
+    const { phase, request } = get()
     // not picked up by a controller yet: nothing to stop
     if (phase === 'starting') {
-      drop(get().request)
+      drop(request)
       set({ phase: 'canceled', request: null })
-    }
-    else if (phase === 'rendering' || phase === 'finalizing') set({ cancelRequested: true })
+    } else if (phase === 'rendering' || phase === 'finalizing') set({ cancelRequested: true })
   },
 
   reset() {

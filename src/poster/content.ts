@@ -4,6 +4,7 @@
  */
 import type { Track } from '../core/types'
 import { buildTrackPath, elevationProfile } from '../flyover/path'
+import type { TrackPath } from '../flyover/path'
 import { formatDateFr, weatherSummaryLine } from '../overlay/draw'
 import { formatDistance, formatDuration, formatNumber } from '../ui/format'
 import type { WeatherSummary } from '../weather/series'
@@ -51,6 +52,8 @@ export interface PosterContentInput {
   climbs: number
   weather?: WeatherSummary
   credits: readonly string[]
+  /** `buildTrackPath(track)` when the caller already has it */
+  path?: TrackPath
 }
 
 /** "12,4 km" -> value "12,4", unit "km" (the unit follows the last space). */
@@ -83,9 +86,10 @@ export function availableFigures(track: Track): Record<PosterFigureId, boolean> 
   return Object.fromEntries(POSTER_FIGURES.map((id) => [id, posterFigure(id, track, 0) !== null])) as Record<PosterFigureId, boolean>
 }
 
-export function posterContent({ track, poster, projectName, climbs, weather, credits }: PosterContentInput): PosterContent {
+export function posterContent(input: PosterContentInput): PosterContent {
+  const { track, poster, projectName, climbs, weather, credits } = input
   const date = track.stats.startTime === undefined ? '' : formatDateFr(track.stats.startTime)
-  const path = buildTrackPath(track)
+  const path = input.path ?? buildTrackPath(track)
   const profile = elevationProfile(path, POSTER_PROFILE_SAMPLES)
   return {
     title: poster.title.trim() || projectName.trim() || track.name,

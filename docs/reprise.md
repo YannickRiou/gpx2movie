@@ -22,6 +22,11 @@ d'abord ce fichier, puis `git status` et `npm run typecheck`.
 - Node 24 via nvm : `source ~/.nvm/nvm.sh && nvm use 24` avant `npm …`.
 - Vérifications : `npm run typecheck`, `npm run lint` (34 avertissements préexistants dans `src/scene`, 0 erreur),
   `npx vitest run --maxWorkers=1` (63 fichiers, 844 tests au dernier commit vert), `npm run build`.
+- Tests de bout en bout : `npm run e2e` (`e2e/run.mjs`, puppeteer-core, Chromium de Playwright ou `OPENFLYOVER_CHROME`,
+  SwiftShader, serveur Vite lancé par le script sans surveillance des fichiers). 5 scénarios : accueil et exemple, onglets
+  et aide, T / Ctrl+Z / S, projet enregistré puis rouvert, export 320 × 180 + image fixe. 7 à 8 min ici (export
+  5 à 6 min, nuages coupés) ; `OPENFLYOVER_E2E_SKIP_EXPORT=1` : moins de 1 min 30. Échoue sur toute erreur de console hors bruit
+  réseau. Un seul navigateur à la fois sur cette machine.
 - Serveur de dev utilisé pour les captures : `npm run dev -- --port 5190` (à relancer).
 - Contrôle visuel sans écran : Chromium headless (`~/.cache/ms-playwright/chromium_headless_shell-1223/…`) piloté par
   puppeteer-core (`~/.npm/_npx/e0b87bb3fb84adaa/node_modules/puppeteer-core`), GPU logiciel SwiftShader : 20–40 s par
@@ -66,6 +71,10 @@ Feuille de route et fonctionnalités : `README.md`.
 
 ## Travail en cours
 
+- Branche `lot-video-sync-phase7` : **chargement découpé** (non commité). Premier écran : ~510 kB (~170 kB gzip) au lieu de
+  3,1 MB (930 kB gzip) ; scène 3D, tiroir d'export, hors ligne, atmosphère, FIT et mediabunny chargés à part
+  (`ARCHITECTURE.md`, « Chargement »). Vérifié : tests, typecheck, lint, build. Non vu à l'écran : apparition de la scène
+  et du tiroir après le premier affichage, atmosphère à la première trace, import d'un .fit, export vidéo.
 - Branche `lot-videos-bureau-clarte` : **nuages volumétriques** (`@takram/three-clouds` 0.7.6, `src/weather/sceneClouds.ts`,
   `src/scene/CloudsLayer.tsx`, `cloudNoise.ts`, bloc « Nuages » de l'onglet Carte ; détail dans `ARCHITECTURE.md`,
   « Nuages volumétriques »). Vu à l'écran (aperçu, 1280 × 800) : manuel 50 % et 90 %, image fixe exportée avec nuages.
@@ -167,26 +176,7 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
   Vérifié : tests (liste des tâches, noms, estimation, enchaînement et annulation avec faux contrôleur, écriture dans un
   faux dossier, site et bureau), typecheck, lint, build. Jamais vu à l'écran. Détail : `ARCHITECTURE.md`, « Export vidéo ».
 
-- Branche `lot-video-sync-phase7`, phase 7, **remonter le temps** (non commité) : `film.epochs[]` (blocs de temps du film,
-  hors préréglages), piste « Époques », « Options » › « Ajouter une époque », « Avant / après » dans l'inspecteur d'un
-  arrêt, inspecteur (photos qui couvrent la trace, libellé, case du libellé, début, durée) ; moteur : seconde imagerie
-  par nœud mêlée par un uniforme partagé (`setEpoch`, `patchEpochShader`), fondu d'1 s aux bords, tuiles datées attendues
-  par l'export, chargées 2 s avant le bloc ; libellé « 1950–1965 » en haut au centre de l'habillage ; crédit des photos
-  datées. Petites retouches hors du lot : une ligne dans `ExportController` (poids de l'époque dans la clé des images
-  tenues) et dans `StatusBar` (crédit). Vérifié : tests (modèle, gestes, moteur avec faux chargeur, ancres du shader dans
-  three, libellé, crédits, préréglages), typecheck, lint, build. Jamais vu à l'écran ni compilé par un vrai GPU. Détail :
-  `ARCHITECTURE.md`, « Époques » (Film et timeline, moteur de terrain).
-
 ## Contrôles visuels encore à faire (jamais vus à l'écran)
-
-- Remonter le temps (exemple du Mont-Blanc, en France) : « Options » › « Ajouter une époque » (bloc sable sur la piste
-  « Époques », inspecteur ouvert), lecture à travers le bloc (fondu vers les photos 1950–1965 en niveaux de gris puis
-  retour, sans tuile grise ni saut), pause au milieu (photos d'époque à l'arrêt), changer pour 1965–1980 (trous laissant
-  voir l'imagerie actuelle) et 2000–2005, libellé « 1950–1965 » en haut au centre dans les 3 styles, habillage désactivé
-  compris, libellé personnalisé, case décochée ; glisser / étirer / Suppr / Ctrl+Z ; « Avant / après » sur un arrêt fixe
-  puis export (fondu rendu pendant l'arrêt, images identiques à l'aperçu, pas de tuile manquante) ; bande d'état et
-  crédits incrustés avec « Photos 1950–1965 » ; trace hors de France (bouton désactivé et son explication, liste
-  désactivée) ; projet enregistré puis rouvert ; console sans erreur de compilation du shader (Chrome, Firefox, bureau).
 
 - Rendu en lot : les trois modes du tiroir sur une ligne à 300 px (« Plusieurs formats » assez court ?), pastilles des 5
   formats × 4 résolutions, estimation (taille après le sondage des codecs, durée seulement après un premier film), « Tout
@@ -306,4 +296,5 @@ de la timeline sur une ligne avec l'inspecteur ouvert, tiroir d'export avec l'ha
   par GPS (calées seulement sur l'heure, la trace doit être horodatée) ; un ancien projet modifié à la main avec une vidéo absente de sa table la garde dans le film sans
   l'afficher (`parseProject` ne retire que les photos sans image).
 - Firefox / Safari non testés pour l'export (WebCodecs). HTTPS obligatoire hors `localhost`.
-- Aucun test de rendu de composants (pas de Testing Library) ; tout le visuel se vérifie à la main, par captures.
+- Aucun test de rendu de composants (pas de Testing Library) ; `npm run e2e` vérifie les parcours principaux dans un
+  vrai navigateur, mais l'aspect se vérifie toujours à la main, par captures.

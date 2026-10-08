@@ -20,8 +20,13 @@ export interface OfflinePolicy {
 const IGN = { provider: 'ign', allowed: true, reason: 'Licence ouverte Etalab 2.0', dailyLimit: 50_000 } as const
 // Personal, non-commercial project: these providers discourage bulk downloads, so they are allowed with a low daily
 // cap (a short corridor, once) and the caution is shown in the panel.
-const SWISSTOPO_REASON =
-  'Usage personnel : swisstopo préfère son service de téléchargement pour le hors ligne, gardez un couloir court.'
+const SWISSTOPO = {
+  provider: 'swisstopo',
+  allowed: true,
+  personalUse: true,
+  reason: 'Usage personnel : swisstopo préfère son service de téléchargement pour le hors ligne, gardez un couloir court.',
+  dailyLimit: 10_000,
+} as const
 
 export const OFFLINE_POLICIES: Readonly<Record<string, OfflinePolicy>> = {
   mapterhorn: {
@@ -49,8 +54,8 @@ export const OFFLINE_POLICIES: Readonly<Record<string, OfflinePolicy>> = {
     dailyLimit: 20_000,
     typicalTileBytes: 10_000,
   },
-  swisstopo: { provider: 'swisstopo', allowed: true, personalUse: true, reason: SWISSTOPO_REASON, dailyLimit: 10_000, typicalTileBytes: 20_000 },
-  'swisstopo-carte': { provider: 'swisstopo', allowed: true, personalUse: true, reason: SWISSTOPO_REASON, dailyLimit: 10_000, typicalTileBytes: 30_000 },
+  swisstopo: { ...SWISSTOPO, typicalTileBytes: 20_000 },
+  'swisstopo-carte': { ...SWISSTOPO, typicalTileBytes: 30_000 },
   'arcgis-world-imagery': {
     provider: 'esri',
     allowed: true,

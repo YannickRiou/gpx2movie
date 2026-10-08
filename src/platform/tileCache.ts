@@ -82,9 +82,20 @@ export function createWebTileCache(
 
 type DesktopFs = Pick<typeof TauriFs, 'exists' | 'readDir' | 'readFile' | 'writeFile' | 'mkdir' | 'remove' | 'BaseDirectory'>
 
+/** file name of a tile -> packs holding it */
+type TileIndex = Map<string, Set<string>>
+
+function addToIndex(index: TileIndex, fileName: string, pack: string): void {
+  let packs = index.get(fileName)
+  if (!packs) index.set(fileName, (packs = new Set()))
+  packs.add(pack)
+}
+
+/** folder of a pack, relative to the app data folder */
+const packDir = (pack: string) => `${DESKTOP_TILE_ROOT}/${pack}`
+
 export function createDesktopTileCache(loadFs: () => Promise<DesktopFs>): TileCache {
-  /** file name -> packs holding it */
-  let index: Promise<Map<string, Set<string>>> | null = null
+  let index: Promise<TileIndex> | null = null
   const madeDirs = new Set<string>()
 
   const fsAndOptions = async () => {
@@ -94,18 +105,15 @@ export function createDesktopTileCache(loadFs: () => Promise<DesktopFs>): TileCa
 
   const readIndex = () =>
     (index ??= (async () => {
-      const found = new Map<string, Set<string>>()
+      const found: TileIndex = new Map()
       const { fs, baseDir } = await fsAndOptions()
       try {
         if (!(await fs.exists(DESKTOP_TILE_ROOT, { baseDir }))) return found
         for (const dir of await fs.readDir(DESKTOP_TILE_ROOT, { baseDir })) {
           if (!dir.isDirectory || !PACK_ID.test(dir.name)) continue
           madeDirs.add(dir.name)
-          for (const file of await fs.readDir(`${DESKTOP_TILE_ROOT}/${dir.name}`, { baseDir })) {
-            if (!file.isFile) continue
-            let packs = found.get(file.name)
-            if (!packs) found.set(file.name, (packs = new Set()))
-            packs.add(dir.name)
+          for (const file of await fs.readDir(packDir(dir.name), { baseDir })) {
+            if (file.isFile) addToIndex(found, file.name, dir.name)
           }
         }
       } catch {
@@ -122,7 +130,7 @@ export function createDesktopTileCache(loadFs: () => Promise<DesktopFs>): TileCa
       const { fs, baseDir } = await fsAndOptions()
       for (const pack of packs) {
         try {
-          const bytes = await fs.readFile(`${DESKTOP_TILE_ROOT}/${pack}/${name}`, { baseDir })
+          const bytes = await fs.readFile(`${packDir(pack)}/${name}`, { baseDir })
           return new Blob([bytes as Uint8Array<ArrayBuffer>], { type: imageTypeOf(bytes) })
         } catch {
           // removed behind our back: try the next pack
@@ -138,20 +146,18 @@ export function createDesktopTileCache(loadFs: () => Promise<DesktopFs>): TileCa
       const found = await readIndex()
       const { fs, baseDir } = await fsAndOptions()
       if (!madeDirs.has(pack)) {
-        await fs.mkdir(`${DESKTOP_TILE_ROOT}/${pack}`, { baseDir, recursive: true })
+        await fs.mkdir(packDir(pack), { baseDir, recursive: true })
         madeDirs.add(pack)
       }
       const name = tileFileName(url)
-      await fs.writeFile(`${DESKTOP_TILE_ROOT}/${pack}/${name}`, new Uint8Array(await data.arrayBuffer()), { baseDir })
-      let packs = found.get(name)
-      if (!packs) found.set(name, (packs = new Set()))
-      packs.add(pack)
+      await fs.writeFile(`${packDir(pack)}/${name}`, new Uint8Array(await data.arrayBuffer()), { baseDir })
+      addToIndex(found, name, pack)
     },
     async deletePack(pack) {
       checkPack(pack)
       const found = await readIndex()
       const { fs, baseDir } = await fsAndOptions()
-      if (madeDirs.has(pack)) await fs.remove(`${DESKTOP_TILE_ROOT}/${pack}`, { baseDir, recursive: true })
+      if (madeDirs.has(pack)) await fs.remove(packDir(pack), { baseDir, recursive: true })
       madeDirs.delete(pack)
       for (const [name, packs] of found) {
         packs.delete(pack)
