@@ -5,6 +5,8 @@ import { useLabelSources } from '../scene/labelSources'
 import { DEFAULT_LANDMARK_SETTINGS } from './landmarks'
 import type { LandmarkSettings } from './landmarks'
 import { OverpassError } from './overpass'
+import { holdRegion, syncRegion, useRegionStore } from './region'
+import type { AdminRegion } from './region'
 import type { OsmFeature } from './overpass'
 import { resetLandmarkStore, syncLandmarks, useLandmarkStore } from './store'
 
@@ -134,5 +136,41 @@ describe('syncLandmarks', () => {
     expect(state.landmarks.a.map((l) => l.id)).toEqual(['node/1', 'node/2'])
     expect(state.hidden.a).toEqual([])
     expect(osmLabels().map((l) => l.id).sort()).toEqual(['osm:node/1', 'osm:node/2'])
+  })
+})
+
+describe('holdRegion', () => {
+  const box = { west: 7.0, south: 46.0, east: 7.1, north: 46.1 }
+  const region: AdminRegion = { id: 'relation/1', name: 'Valais/Wallis', bounds: { west: 6.7, south: 45.8, east: 8.5, north: 46.7 }, rings: [] }
+  const later = () => {
+    let resolve: (r: AdminRegion | null) => void = () => {}
+    const fetch = vi.fn(() => new Promise<AdminRegion | null>((r) => (resolve = r)))
+    return { fetch, resolve: (r: AdminRegion | null) => resolve(r) }
+  }
+
+  it('keeps a region arriving during an export aside until it ends', async () => {
+    syncRegion(null, false)
+    const { fetch, resolve } = later()
+    syncRegion(box, true, fetch)
+    holdRegion(true)
+    resolve(region)
+    await flush()
+    // the export renders the whole film without it
+    expect(useRegionStore.getState()).toMatchObject({ status: 'loading', region: null, frame: null })
+    holdRegion(false)
+    expect(useRegionStore.getState()).toMatchObject({ status: 'ready', region })
+    expect(useRegionStore.getState().frame).not.toBeNull()
+  })
+
+  it('drops a held answer once the region is no longer wanted', async () => {
+    syncRegion(null, false)
+    const { fetch, resolve } = later()
+    syncRegion(box, true, fetch)
+    holdRegion(true)
+    resolve(region)
+    await flush()
+    syncRegion(null, false)
+    holdRegion(false)
+    expect(useRegionStore.getState()).toMatchObject({ key: null, status: 'idle', region: null })
   })
 })

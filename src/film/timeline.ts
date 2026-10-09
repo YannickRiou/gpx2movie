@@ -18,11 +18,13 @@ import {
   AUDIO_DEFAULTS,
   AUDIO_DURATION_RANGE,
   AUTO_STOP_S,
+  DEFAULT_FILM,
   FADE_RANGE,
   ITEM_DURATION_RANGE,
   MEDIA_DEFAULTS,
   MIN_SPEED_SPAN_M,
   SHOT_DURATION_RANGE,
+  SITUATION_DURATION_S,
   SPEED_FACTOR_RANGE,
   STOP_DURATION_RANGE,
   VIDEO_SOUND_DEFAULTS,
@@ -728,9 +730,15 @@ export function updateMusic(film: Film, id: string, patch: Partial<Omit<FilmAudi
   }
 }
 
-/** Shot `key` with `patch`, duration clamped to its range. */
+/**
+ * Shot `key` with `patch`, duration clamped to its range. Switched to 'situation' with its default duration still,
+ * the shot gets `SITUATION_DURATION_S`: the dive from the region is long.
+ */
 export function updateShot(film: Film, key: 'opening' | 'closing', patch: Partial<FilmShot>): Film {
-  const shot = { ...film[key], ...patch }
+  const before = film[key]
+  const longer =
+    patch.style === 'situation' && before.style !== 'situation' && patch.durationS === undefined && before.durationS === DEFAULT_FILM[key].durationS
+  const shot = { ...before, ...patch, ...(longer && { durationS: SITUATION_DURATION_S }) }
   return { ...film, [key]: { ...shot, durationS: shotDuration(shot.durationS) } }
 }
 

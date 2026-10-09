@@ -10,6 +10,7 @@
  * `getSettingsHistory` binds one instance to `useAppStore`; `installHistoryShortcuts` adds the keyboard;
  * `resetSettings` puts a group of settings back to their defaults as one step (and returns its guarded undo).
  */
+import { followFlightTiming } from '../scene/usePacing'
 import { DEFAULT_SETTINGS, useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { applySettings } from './apply'
@@ -209,14 +210,18 @@ export function getSettingsHistory(): History {
 }
 
 /**
- * Put `keys` back to their values in `DEFAULT_SETTINGS`, as a single undo step. Returns the undo of this reset (the
+ * Put `keys` back to their values in `DEFAULT_SETTINGS`, as a single undo step; the texts and media attached to a stop
+ * follow it when the flyover duration or the pacing moves it (`followFlightTiming`). Returns the undo of this reset (the
  * « Annuler » of its message): it undoes only while the settings are still those the reset left, so it never undoes a
  * later step, nor an earlier one when the reset changed nothing; true when it undid.
  */
 export function resetSettings(keys: readonly (keyof Settings)[], history: History = getSettingsHistory()): () => boolean {
   const defaults = pick(DEFAULT_SETTINGS, keys)
   const before = useAppStore.getState().settings
-  history.transaction(() => applySettings({ ...before, ...defaults }))
+  history.transaction(() => {
+    applySettings({ ...before, ...defaults })
+    followFlightTiming(before)
+  })
   const after = useAppStore.getState().settings
   return () => {
     if (after === before || useAppStore.getState().settings !== after) return false
