@@ -6,6 +6,7 @@ import {
   CAMERA_STYLES,
   findCameraPreset,
   FLYOVER_DURATION_RANGE,
+  turnSmoothingM,
 } from '../flyover/cameraSettings'
 import type { CameraSettings, CameraStyle } from '../flyover/cameraSettings'
 import { DEFAULT_FILM, SITUATION_DURATION_S } from '../film/model'
@@ -41,14 +42,41 @@ interface Slider {
   label: string
   /** ⓘ next to the label */
   tip: string
-  format(value: number): string
+  /** `autoM`: the length « Lissage des virages » takes in Auto for the first track, when there is one */
+  format(value: number, autoM?: number): string
 }
+
+/** 0 -> `none`, else "2,5 s" */
+const formatSmoothingS = (none: string) => (v: number) => (v === 0 ? none : formatSecondsShort(v))
 
 const SLIDERS: Slider[] = [
   { key: 'distance', label: 'Distance', tip: 'Multiple de la distance automatique, choisie selon la longueur de la trace.', format: (v) => `×${formatNumber(v, 1)}` },
   { key: 'pitchDeg', label: 'Inclinaison', tip: 'Angle de la caméra au-dessus de l’horizon.', format: formatDegrees },
   { key: 'headingOffsetDeg', label: 'Visée', tip: 'Direction de la caméra par rapport au trajet ; positive = vers la droite.', format: formatDegrees },
-  { key: 'smoothing', label: 'Lissage des virages', tip: 'Plus haut : la caméra tourne plus calmement dans les virages.', format: (v) => `×${formatNumber(v, 2)}` },
+  {
+    key: 'turnSmoothingM',
+    label: 'Lissage des virages',
+    tip: 'Longueur de trace sur laquelle se mesure la direction du trajet : plus longue, la caméra tourne plus calmement dans les virages. Auto : selon la longueur de la trace.',
+    format: (v, autoM) => (v > 0 ? formatDistance(v) : autoM === undefined ? 'Auto' : `Auto · ${formatDistance(autoM)}`),
+  },
+  {
+    key: 'aimSmoothingS',
+    label: 'Lissage de la visée',
+    tip: 'Le point visé suit le marqueur en moyenne sur cette durée : arrêts et changements de vitesse ne secouent pas l’image.',
+    format: formatSmoothingS('Aucun'),
+  },
+  {
+    key: 'cameraSmoothingS',
+    label: 'Lissage de la caméra',
+    tip: 'La caméra suit le marqueur en moyenne sur cette durée : elle anticipe arrêts et changements de vitesse au lieu de freiner sec.',
+    format: formatSmoothingS('Aucun'),
+  },
+  {
+    key: 'endingS',
+    label: 'Fin en douceur',
+    tip: 'Pendant ces dernières secondes du survol, la caméra ralentit jusqu’à s’arrêter et regarde le marqueur finir.',
+    format: formatSmoothingS('Aucune'),
+  },
 ]
 
 interface PacingSlider {
@@ -152,6 +180,8 @@ export function CameraPanel() {
     const atM = useAppStore.getState().playback.progress * lengthM
     editFilm((f) => addCameraKey(f, atM, keyedCamera(camera, film.cameraKeys, atM, cameraKeyEaseM(lengthM, durationS))))
   }
+  /** « Lissage des virages » in Auto for the first track */
+  const autoTurnM = lengthM > 0 ? turnSmoothingM({ ...camera, turnSmoothingM: 0 }, lengthM) : undefined
 
   return (
     <>
@@ -217,10 +247,22 @@ export function CameraPanel() {
           </label>
         )}
 
-        <MoreSettings paths={['camera.distance', 'camera.pitchDeg', 'camera.headingOffsetDeg', 'camera.smoothing']}>
+        <MoreSettings
+          paths={[
+            'camera.distance',
+            'camera.pitchDeg',
+            'camera.headingOffsetDeg',
+            'camera.smoothing',
+            'camera.turnSmoothingM',
+            'camera.aimSmoothingS',
+            'camera.cameraSmoothingS',
+            'camera.endingS',
+          ]}
+        >
           {SLIDERS.map(({ key, label, tip, format }) => {
             const range = CAMERA_RANGES[key]
             const inputId = `${id}-${key}`
+            const value = format(camera[key], autoTurnM)
             return (
               <div key={key} className="field">
                 <div className="field__label-row">
@@ -239,10 +281,10 @@ export function CameraPanel() {
                     step={range.step}
                     value={camera[key]}
                     onChange={(e) => update({ [key]: Number(e.currentTarget.value) })}
-                    aria-valuetext={format(camera[key])}
+                    aria-valuetext={value}
                   />
                   <output className="range-row__value range-row__value--wide" htmlFor={inputId}>
-                    {format(camera[key])}
+                    {value}
                   </output>
                 </div>
               </div>

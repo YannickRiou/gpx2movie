@@ -170,7 +170,7 @@ describe('settings and misc', () => {
       trackColorBy: 'none',
       trackStyle: { width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 },
       marker: { kind: 'boule', figure: 'randonneur', image: '', size: 1, animated: false },
-      camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
+      camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false, turnSmoothingM: 0, aimSmoothingS: 0, cameraSmoothingS: 3, endingS: 0 },
       flyoverDurationS: 60,
       pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true, transitionS: 1.5 },
       film: {

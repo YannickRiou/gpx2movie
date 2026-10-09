@@ -399,7 +399,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       const progress = schedule[i]
       // held frames (holds, stops) repeat the composed image as is, unless the view, the scene (animated figurine,
       // drifting clouds, rippling water) or the overlay moves with time
-      const timed = sceneMovesWithTime || filmViewMovesWithTime(filmClock.stateAt(times[i]), settings.camera.style)
+      const timed = sceneMovesWithTime || filmViewMovesWithTime(filmClock.stateAt(times[i]), settings.camera)
       const overlayNow = overlayKey(progress, times[i])
       if (progress !== previous || ((timed || previousTimed) && times[i] !== frameTimeS) || overlayNow !== previousOverlay) {
         frameTimeS = times[i]

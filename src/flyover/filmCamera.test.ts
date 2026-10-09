@@ -7,7 +7,7 @@ import { situationTiming } from '../film/model'
 import { createLocalFrame } from '../geo/ellipsoid'
 import { buildTrack } from '../import/stats'
 import { computeCameraView, MIN_GROUND_CLEARANCE_M } from './camera'
-import { DEFAULT_CAMERA } from './cameraSettings'
+import { DEFAULT_CAMERA, type CameraStyle } from './cameraSettings'
 import {
   blendViews,
   CAMERA_KEY_EASE_S,
@@ -58,7 +58,9 @@ const path = buildTrackPath(
   }),
 )
 const flat = () => 1000
-const options: FilmViewOptions = { exaggeration: 1, liftM: 3, camera: DEFAULT_CAMERA, durationS: 60, aspect: 16 / 9 }
+/** without the smoothing in film time, so the views compare exactly with the flight camera (timeSmoothing.test.ts) */
+const CAMERA = { ...DEFAULT_CAMERA, cameraSmoothingS: 0 }
+const options: FilmViewOptions = { exaggeration: 1, liftM: 3, camera: CAMERA, durationS: 60, aspect: 16 / 9 }
 
 const clockOf = (opening: FilmShot, closing: FilmShot, stops: FilmStop[] = [], cameraKeys: FilmCameraKey[] = []) =>
   buildFilmClock({
@@ -412,18 +414,21 @@ describe('computeFilmView', () => {
     expectSameView(at(fixed.holdStartS + 1), at(fixed.holdEndS - 1))
   })
 
-  it('moves with time: shots and orbiting stops, the flight only for orbit / cinema', () => {
+  it('moves with time: shots and orbiting stops, every stop when smoothed in time, the flight only for orbit / cinema', () => {
     const clock = clockOf({ style: 'descente', durationS: 6 }, { style: 'saut', durationS: 4 }, [
       { id: 'o', atM: 1000, durationS: 6, camera: 'orbite' },
       { id: 'f', atM: 3000, durationS: 6, camera: 'fixe' },
     ])
     const [orbit, fixed] = clock.stops
-    expect(filmViewMovesWithTime(clock.stateAt(1), 'chase')).toBe(true)
-    expect(filmViewMovesWithTime(clock.stateAt(clock.totalTime()), 'chase')).toBe(true)
-    expect(filmViewMovesWithTime(clock.stateAt(orbit.holdStartS), 'chase')).toBe(true)
-    expect(filmViewMovesWithTime(clock.stateAt(fixed.holdStartS), 'chase')).toBe(false)
-    expect(filmViewMovesWithTime(clock.stateAt(fixed.holdStartS), 'orbit')).toBe(true)
-    expect(filmViewMovesWithTime(clock.stateAt(40), 'sway')).toBe(false)
+    const unsmoothed = (style: CameraStyle) => ({ ...CAMERA, style })
+    expect(filmViewMovesWithTime(clock.stateAt(1), unsmoothed('chase'))).toBe(true)
+    expect(filmViewMovesWithTime(clock.stateAt(clock.totalTime()), unsmoothed('chase'))).toBe(true)
+    expect(filmViewMovesWithTime(clock.stateAt(orbit.holdStartS), unsmoothed('chase'))).toBe(true)
+    expect(filmViewMovesWithTime(clock.stateAt(fixed.holdStartS), unsmoothed('chase'))).toBe(false)
+    expect(filmViewMovesWithTime(clock.stateAt(fixed.holdStartS), DEFAULT_CAMERA)).toBe(true)
+    expect(filmViewMovesWithTime(clock.stateAt(fixed.holdStartS), { ...unsmoothed('chase'), endingS: 2 })).toBe(true)
+    expect(filmViewMovesWithTime(clock.stateAt(fixed.holdStartS), unsmoothed('orbit'))).toBe(true)
+    expect(filmViewMovesWithTime(clock.stateAt(40), { ...DEFAULT_CAMERA, style: 'sway' })).toBe(false)
   })
 })
 
@@ -477,7 +482,7 @@ describe('camera keys', () => {
     expect(clock.cameraKeys[0].timeS).toBeCloseTo(clock.timeAtProgress(1000 / path.lengthM), 9)
     const t = clock.timeAtProgress(1000 / path.lengthM)
     const keyed = computeFilmView(path, clock, t, 1000 / path.lengthM, frame, flat, options)
-    const wanted = computeCameraView(path, 1000 / path.lengthM, frame, flat, { ...options, camera: { ...DEFAULT_CAMERA, distance: 2, pitchDeg: 60 }, timeS: t })
+    const wanted = computeCameraView(path, 1000 / path.lengthM, frame, flat, { ...options, camera: { ...CAMERA, distance: 2, pitchDeg: 60 }, timeS: t })
     expectSameView(keyed, wanted)
     const plain = clockOf(none, none)
     expectSameView(computeFilmView(path, plain, 10, plain.progressAtTime(10), frame, flat, options), flightAt(plain.progressAtTime(10), 10))
@@ -497,7 +502,7 @@ describe('camera keys', () => {
       [key('camera-1', 1500, 2.5, 70, 40), key('camera-2', 3000, 0.5, 15, -60)],
     )
     for (const style of ['chase', 'orbit'] as const) {
-      const opts = { ...options, camera: { ...DEFAULT_CAMERA, style } }
+      const opts = { ...options, camera: { ...CAMERA, style } }
       let previous = computeFilmView(path, clock, 0, 0, frame, flat, opts)
       for (let t = 1 / 30; t <= clock.totalTime(); t += 1 / 30) {
         const view = computeFilmView(path, clock, t, clock.progressAtTime(t), frame, flat, opts)
@@ -513,7 +518,7 @@ describe('stop cameras', () => {
   const none = { style: 'aucune', durationS: 1 } as const
   const stopsOf = (camera: FilmStop['camera']) => clockOf(none, none, [{ id: 's', atM: 2000, durationS: 6, camera }])
   const viewAt = (clock: ReturnType<typeof stopsOf>, t: number, style: 'chase' | 'orbit' = 'chase') =>
-    computeFilmView(path, clock, t, clock.progressAtTime(t), frame, flat, { ...options, camera: { ...DEFAULT_CAMERA, style } })
+    computeFilmView(path, clock, t, clock.progressAtTime(t), frame, flat, { ...options, camera: { ...CAMERA, style } })
   const distance = (view: { position: Vector3; target: Vector3 }) => view.position.distanceTo(view.target)
 
   it('« Vue large »: farther and higher at the middle, the flight view at both ends', () => {
@@ -525,7 +530,7 @@ describe('stop cameras', () => {
     expect(viewAt(wide, middle).position.y).toBeGreaterThan(viewAt(plain, middle).position.y)
     expectSameView(viewAt(wide, s.startS), viewAt(plain, s.startS))
     expectSameView(viewAt(wide, s.endS), viewAt(plain, s.endS))
-    expect(filmViewMovesWithTime(wide.stateAt(middle), 'chase')).toBe(true)
+    expect(filmViewMovesWithTime(wide.stateAt(middle), CAMERA)).toBe(true)
   })
 
   it('« Fixe » holds the orbit style, « Comme le film » lets it turn; both the same with the chase style', () => {

@@ -55,7 +55,7 @@ export function FlyoverRig() {
   const appliedRef = useRef({
     progress: mount.progress,
     timeS: mountTimeS,
-    timed: filmViewMovesWithTime(clock.stateAt(mountTimeS), mountSettings.camera.style),
+    timed: filmViewMovesWithTime(clock.stateAt(mountTimeS), mountSettings.camera),
   })
   const appliedSettingsRef = useRef(mountSettings)
   const appliedRegionRef = useRef(useRegionStore.getState().frame)
@@ -124,7 +124,7 @@ export function FlyoverRig() {
       settings.film !== applied.film ||
       region !== appliedRegionRef.current
     const placed = appliedRef.current
-    const timed = filmViewMovesWithTime(clock.stateAt(timeS), settings.camera.style)
+    const timed = filmViewMovesWithTime(clock.stateAt(timeS), settings.camera)
     const moved = progress !== placed.progress || ((timed || placed.timed) && timeS !== placed.timeS)
     if (playing || moved || cameraChanged) {
       appliedRef.current = { progress, timeS, timed }

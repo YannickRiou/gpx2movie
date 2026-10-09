@@ -14,17 +14,13 @@ import { Vector3 } from 'three'
 import { clamp, lastIndexAtOrBelow } from '../core/math'
 import type { LocalFrame } from '../core/types'
 import type { HeightSampler } from '../scene/TrackLines'
-import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings, type CameraStyle } from './cameraSettings'
+import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, turnSmoothingM, type CameraSettings, type CameraStyle } from './cameraSettings'
 import { samplePath, type TrackPath } from './path'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Heading = direction of the chord [d - w, d + w]; w = this fraction of the track, clamped, times `smoothing`. */
-export const HEADING_WINDOW_FRACTION = 0.02
-export const HEADING_WINDOW_MIN_M = 150
-export const HEADING_WINDOW_MAX_M = 1_500
 /** Automatic camera distance = this fraction of the track, clamped; times the `distance` setting. */
 export const CHASE_DISTANCE_FRACTION = 0.04
 export const CHASE_DISTANCE_MIN_M = 600
@@ -39,7 +35,7 @@ export const MIN_TERRAIN_CLEARANCE_M = 40
 /** The clearance floor takes over from the free height over this band (smooth maximum, at most a quarter above). */
 export const CLEARANCE_EASE_M = 80
 /**
- * Ground smoothing radius = this fraction of the heading window (× `smoothing` too), at most GROUND_WINDOW_MAX_M:
+ * Ground smoothing radius = this fraction of the heading window, at most GROUND_WINDOW_MAX_M:
  * the aim height is the tent-weighted mean of the terrain along the track over ± this radius, and the clearance
  * rules read the terrain on a grid of this cell size. Scaled like the heading window, so with the track length and
  * the marker's step per frame: a frame slides the weights by the same small share (37.5 m for a track under
@@ -84,9 +80,9 @@ const _corner = new Vector3()
 // Path measures
 // ---------------------------------------------------------------------------
 
-/** Heading window (half chord length) for `path`, before the smoothing multiplier. */
-export function headingWindowM(path: TrackPath): number {
-  return clamp(path.lengthM * HEADING_WINDOW_FRACTION, HEADING_WINDOW_MIN_M, HEADING_WINDOW_MAX_M)
+/** Heading window (half chord length) for `path` with the « Lissage des virages » of `camera`. */
+export function headingWindowM(path: TrackPath, camera: CameraSettings): number {
+  return turnSmoothingM(camera, path.lengthM) / 2
 }
 
 /** Automatic camera distance for `path`, before the distance multiplier. */
@@ -171,6 +167,10 @@ export interface CameraViewOptions {
   timeS?: number
   /** extra rotation of the viewing direction around the marker (radians, > 0 = right): orbit of a film stop */
   orbitRad?: number
+  /** progress of the aim point (time smoothing, `timeSmoothing.ts`); the marker's when absent */
+  aimProgress?: number
+  /** progress the camera is placed from (place along the track, heading); the marker's when absent */
+  cameraProgress?: number
 }
 
 /** Styles whose view also moves with the film time (they keep moving during a pause of the pacing). */
@@ -193,7 +193,7 @@ function placement(
   frame: LocalFrame,
   camera: CameraSettings,
 ): Placement {
-  const w = headingWindowM(path) * camera.smoothing
+  const w = headingWindowM(path, camera)
   const distance = autoDistanceM(path) * camera.distance
   const offset = camera.headingOffsetDeg * DEG
 
@@ -239,7 +239,8 @@ function placement(
  * the actual terrain) and until the sight line to the aim clears the terrain between.
  * Aim = marker x / z at the smoothed ground height (`trackGround`, at least the grid ground the clearance reads,
  * so the sight line ends above it) + `liftM`. Heights: terrain sample, else recorded elevation, else 0; times
- * `exaggeration`.
+ * `exaggeration`. Time smoothing (`aimProgress`, `cameraProgress`, see `timeSmoothing.ts`): the aim point and the
+ * camera follow their own progress; the camera then stands around its own point of the track, at the aim's height.
  */
 export function computeCameraView(
   path: TrackPath,
@@ -253,17 +254,24 @@ export function computeCameraView(
   const timeS = options.timeS ?? p * durationS
   const d = p * path.lengthM
 
+  const groundAt = (at: { lon: number; lat: number; ele?: number }) => (sample?.(at.lon, at.lat) ?? at.ele ?? 0) * exaggeration
   const at = samplePath(path, d)
-  const ground = (sample?.(at.lon, at.lat) ?? at.ele ?? 0) * exaggeration
-  const marker = frame.toLocal(at.lon, at.lat, ground + liftM)
-  const cellM = Math.min(headingWindowM(path) * camera.smoothing * GROUND_WINDOW_FRACTION, GROUND_WINDOW_MAX_M)
-  const gridAtMarker = sample ? gridGround(marker.x, marker.z, cellM, frame, sample) : undefined
-  const aimGround = Math.max(trackGround(path, d, cellM, sample), gridAtMarker ?? -Infinity) * exaggeration
-  const target = frame.toLocal(at.lon, at.lat, aimGround + liftM)
+  const marker = frame.toLocal(at.lon, at.lat, groundAt(at) + liftM)
+  // time smoothing: the aim and the camera may follow their own progress along the track
+  const dAim = options.aimProgress === undefined ? d : clamp(options.aimProgress, 0, 1) * path.lengthM
+  const dCamera = options.cameraProgress === undefined ? d : clamp(options.cameraProgress, 0, 1) * path.lengthM
+  const aimAt = dAim === d ? at : samplePath(path, dAim)
+  const aim = dAim === d ? marker : frame.toLocal(aimAt.lon, aimAt.lat, groundAt(aimAt) + liftM)
+  const cellM = Math.min(headingWindowM(path, camera) * GROUND_WINDOW_FRACTION, GROUND_WINDOW_MAX_M)
+  const gridAtAim = sample ? gridGround(aim.x, aim.z, cellM, frame, sample) : undefined
+  const aimGround = Math.max(trackGround(path, dAim, cellM, sample), gridAtAim ?? -Infinity) * exaggeration
+  const target = frame.toLocal(aimAt.lon, aimAt.lat, aimGround + liftM)
 
-  const place = placement(path, d, timeS, frame, camera)
+  const place = placement(path, dCamera, timeS, frame, camera)
   place.viewAngle += options.orbitRad ?? 0
-  const position = positionAround(target, place)
+  // placed around its own point of the track, at the aim's height
+  const from = dCamera === dAim ? target : anchorAt(path, dCamera, aimGround + liftM, frame)
+  const position = positionAround(from, place)
   if (sample) position.y = lowestClearY(position, target, frame, sample, exaggeration, cellM)
   return { target, position, marker }
 }
@@ -312,6 +320,12 @@ function gridGround(x: number, z: number, cellM: number, frame: LocalFrame, samp
     }
   }
   return weight > 0 ? sum / weight : undefined
+}
+
+/** Point of the track at `d` (local frame), `heightM` above the ellipsoid. */
+function anchorAt(path: TrackPath, d: number, heightM: number, frame: LocalFrame): Vector3 {
+  const at = samplePath(path, d)
+  return frame.toLocal(at.lon, at.lat, heightM)
 }
 
 /** max(a, b) eased over a band of `k`: never below the larger, at most k / 4 above it, with no kink. */

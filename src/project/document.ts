@@ -13,7 +13,7 @@ import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'
 import { sanitizeMediaTable, usedMedia } from '../film/media'
 import type { MediaTable } from '../film/media'
 import { isValidFilm, withFilmDefaults } from '../film/model'
-import { FLYOVER_DURATION_RANGE, isValidCamera } from '../flyover/cameraSettings'
+import { FLYOVER_DURATION_RANGE, isValidCamera, withCameraDefaults } from '../flyover/cameraSettings'
 import { isValidPacing, withPacingDefaults } from '../flyover/pacing'
 import { isValidRace } from '../flyover/race'
 import { isSunDate } from '../flyover/sun'
@@ -138,6 +138,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
  * validated (e.g. overlay widgets added since: older projects and presets keep loading).
  */
 export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unknown } = {
+  camera: withCameraDefaults,
   overlay: withOverlayDefaults,
   video: withVideoDefaults,
   film: withFilmDefaults,

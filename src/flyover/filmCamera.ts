@@ -27,9 +27,10 @@ import { SITUATION_DISTANCE_KM_RANGE, SITUATION_TILT_DEFAULT_DEG, SITUATION_TILT
 import type { FilmShot, ShotStyle, SituationFraming, StartHeight } from '../film/model'
 import type { HeightSampler } from '../scene/TrackLines'
 import { MIN_GROUND_CLEARANCE_M, computeCameraView, movesWithTime, type CameraView, type CameraViewOptions } from './camera'
-import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings, type CameraStyle } from './cameraSettings'
+import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings } from './cameraSettings'
 import type { TrackPath } from './path'
 import { cameraKeyEaseM, keyedCamera } from './cameraKeys'
+import { smoothsInTime, timeSmoothing } from './timeSmoothing'
 
 export { smootherstep }
 export { CAMERA_KEY_EASE_S, cameraKeyEaseM, keyedCamera } from './cameraKeys'
@@ -170,11 +171,14 @@ export function heldMotionTimeS(stop: Pick<ClockStop, 'startS' | 'holdStartS' | 
   return timeS + (middle - timeS) * weight
 }
 
-/** True when the view changes with the film time alone (progress unchanged): shots, orbiting or widening stops, orbit / cinema. */
-export function filmViewMovesWithTime(state: FilmState, style: CameraStyle): boolean {
+/**
+ * True when the view changes with the film time alone (progress unchanged): shots, orbiting or widening stops, every
+ * stop with a smoothing in time, orbit / cinema.
+ */
+export function filmViewMovesWithTime(state: FilmState, camera: CameraSettings): boolean {
   if (state.phase === 'opening' || state.phase === 'closing') return true
-  if (state.phase === 'stop' && (state.stop?.camera === 'orbite' || state.stop?.camera === 'large')) return true
-  return movesWithTime(style)
+  if (state.phase === 'stop' && (state.stop?.camera === 'orbite' || state.stop?.camera === 'large' || smoothsInTime(camera))) return true
+  return movesWithTime(camera.style)
 }
 
 // ---------------------------------------------------------------------------
@@ -447,7 +451,8 @@ export interface FilmView extends CameraView {
 /**
  * Camera at film time `timeS` and `progress` (the store's: the export nudges it to re-place the camera). The
  * time-based flight styles follow the flight time, so they start where the opening hands over. The camera keys
- * set the framing along the track, a stop's camera adds its own move.
+ * set the framing along the track, a stop's camera adds its own move. The aim and the camera follow the progress
+ * smoothed in film time (`timeSmoothing.ts`; the camera keys and the stops keep the marker's progress and time).
  */
 export function computeFilmView(
   path: TrackPath,
@@ -466,7 +471,8 @@ export function computeFilmView(
   const camera = stop?.camera === 'large' ? widenedCamera(keyed, stopBump(state.localS, state.lengthS)) : keyed
   const orbitRad = stop?.camera === 'orbite' ? stopOrbitRad(stop.addedS, state.localS, state.lengthS) : 0
   const motionS = stop?.camera === 'fixe' ? heldMotionTimeS(stop, state.timeS) - clock.openingS : state.flightTimeS
-  const flight = computeCameraView(path, progress, frame, sample, { ...flightOptions, camera, timeS: motionS, orbitRad })
+  const smoothing = timeSmoothing(clock, state.timeS, motionS, camera)
+  const flight = computeCameraView(path, progress, frame, sample, { ...flightOptions, camera, orbitRad, ...smoothing })
   if (state.phase !== 'opening' && state.phase !== 'closing') return flight
 
   const shot = state.phase === 'opening' ? clock.opening : clock.closing
