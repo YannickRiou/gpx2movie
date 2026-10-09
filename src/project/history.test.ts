@@ -184,12 +184,6 @@ describe('getSettingsHistory (app store)', () => {
     getSettingsHistory().clear()
   })
 
-  it('records no step for the regional imagery chosen with a plan area', () => {
-    useAppStore.getState().setPlanArea({ west: 6.8, south: 45.9, east: 6.95, north: 45.98 })
-    expect(useAppStore.getState().settings.imagerySourceId).not.toBe(DEFAULT_SETTINGS.imagerySourceId)
-    expect(getSettingsHistory().getState().canUndo).toBe(false)
-  })
-
   it('undoes any setting through setSetting', () => {
     const { setSetting } = useAppStore.getState()
     setSetting('wireframe', true)

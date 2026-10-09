@@ -52,8 +52,8 @@ then run `git status` and `npm run typecheck`.
 - Checks: `npm run typecheck`, `npm run lint` (0 errors; about forty pre-existing React warnings, mostly in `src/scene`),
   `npx vitest run --maxWorkers=1` (current figures: "Work in progress"), `npm run build`.
 - End-to-end tests: `npm run e2e` (`e2e/run.mjs`, puppeteer-core, Playwright's Chromium or `OPENFLYOVER_CHROME`,
-  SwiftShader, Vite server started by the script without file watching). 6 scenarios: home screen and sample, tabs
-  and help, T / Ctrl+Z / S, project saved then reopened, 320 × 180 export + still image, reconnaissance (mocked Overpass). 7 to 8 min here (export
+  SwiftShader, Vite server started by the script without file watching). 5 scenarios: home screen and sample, tabs
+  and help, T / Ctrl+Z / S, project saved then reopened, 320 × 180 export + still image. 7 to 8 min here (export
   5 to 6 min, clouds off); `OPENFLYOVER_E2E_SKIP_EXPORT=1`: under 1 min 30. Fails on any console error except network
   noise. Only one browser at a time on this machine.
 - Checking the desktop app's Rust (Linux impossible here, Ubuntu 20.04 without webkit2gtk-4.1):
@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (98 files, 1,608 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (97 files, 1,593 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -144,8 +144,7 @@ Done (tests green, never seen on screen):
   Naismith-like rule adapted to cycling, pace factor), "Prévoir la sortie" (plan the outing) in the card of a track
   without times (`TrackList.tsx`, `Track.timesEstimated`, "horaires estimés" (estimated times) chip, "Effacer les
   horaires" (clear the times)), weather from the Open-Meteo **forecast** (`api.open-meteo.com/v1/forecast`, 16 days,
-  3 h memory cache; desktop CSP widened). Works on a route computed by the scouting ("Préparer une sortie") as on an
-  imported one.
+  3 h memory cache; desktop CSP widened).
 - **Roadbook**: `src/plan/roadbook.ts`, `src/ui/RoadbookPanel.tsx` ("Trace" tab, under "Montées et étiquettes" (climbs and labels)): steep
   sections ≥ 15 % / ≥ 25 %, key points (climbs, passes, summits, huts, water points, points of interest), km /
   elevation / D+ / time, click = playhead, "Copier" (copy), "Enregistrer (.txt)" (save as text). New landmark type
@@ -363,7 +362,6 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    `timeline-polish`, `export-stream`, `timeline-videos`, `water`): the session cannot delete remote branches.
 12. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
    application); signing certificates if wanted; then a first `v0.1.0` tag (release published by `desktop.yml`).
-13. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.

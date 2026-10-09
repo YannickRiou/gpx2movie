@@ -320,8 +320,8 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
   <div class="facts">
     <span><b>2</b> targets: static website, desktop app</span>
     <span><b>0</b> servers or API keys shipped</span>
-    <span><b>1,589</b> unit tests in <b>98</b> files</span>
-    <span><b>6</b> end-to-end scenarios</span>
+    <span><b>1,574</b> unit tests in <b>97</b> files</span>
+    <span><b>5</b> end-to-end scenarios</span>
     <span>export up to <b>4K · 60 fps</b></span>
   </div>
 </header>
@@ -500,7 +500,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
       <article class="term">
         <h4>Open data services and caches</h4>
         <p>Some websites answer questions from programs: "what was the weather here on that day?", "which summits are near this line?". A cache is a local copy of an answer, kept so the same question is not asked twice.</p>
-        <p class="here"><b>Here:</b> weather from Open-Meteo, landmarks, lakes and paths from OpenStreetMap (Overpass), place names from Nominatim. None needs a key or an account; answers are cached in the browser.</p>
+        <p class="here"><b>Here:</b> weather from Open-Meteo, landmarks and lakes from OpenStreetMap (Overpass). None needs a key or an account; answers are cached in the browser.</p>
       </article>
     </div>
   </div>
@@ -542,7 +542,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
       <article class="term">
         <h4>Tests and end-to-end tests</h4>
         <p>Tests are small programs that check the code automatically. Unit tests call one module with known inputs and compare the answer. End-to-end (e2e) tests start the real app in a browser without a window and click through it like a user.</p>
-        <p class="here"><b>Here:</b> Vitest runs 1,589 unit tests in 98 files, in a simulated browser called jsdom. <code>npm run e2e</code> drives the app in headless Chromium with puppeteer-core. <code>cargo test</code> checks the Rust code.</p>
+        <p class="here"><b>Here:</b> Vitest runs 1,574 unit tests in 97 files, in a simulated browser called jsdom. <code>npm run e2e</code> drives the app in headless Chromium with puppeteer-core. <code>cargo test</code> checks the Rust code.</p>
       </article>
       <article class="term">
         <h4>Linting</h4>
@@ -998,10 +998,9 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
     </article>
 
     <article class="part" id="part-more">
-      <header><h3>Also in the code</h3><span class="where">src/route/ · src/plan/ · src/strava/ · src/import/chain.ts · src/flyover/race.ts</span></header>
+      <header><h3>Also in the code</h3><span class="where">src/plan/ · src/strava/ · src/import/chain.ts · src/flyover/race.ts</span></header>
       <dl>
-        <div><dt>Scouting</dt><dd>"Préparer une sortie" (plan an outing): type a place or coordinates, place waypoints with a right-click, and "Calculer l'itinéraire" (compute the route) links them along OpenStreetMap paths with a shortest-path search (A*) that prefers trails to roads. The result is a track without times, flown over like any other (<code>src/route/</code>, <code>src/osm/paths.ts</code>, <code>src/osm/geocode.ts</code>).</dd></div>
-        <div><dt>Planned outing</dt><dd>A track without times (a computed route, or one prepared on Komoot or Visorando) gets "Prévoir la sortie" (plan the outing): date, start time, activity and pace give estimated passing times, so the sun, the counters and the weather (Open-Meteo forecast instead of the archive) follow the planned day. The "Feuille de route" (roadbook) lists the steep sections, passes, summits, huts and water points with their km, elevation, D+ and passing time, to copy or save as text (<code>src/plan/timing.ts</code>, <code>src/plan/roadbook.ts</code>).</dd></div>
+        <div><dt>Planned outing</dt><dd>A track without times (usually one prepared on Komoot or Visorando) gets "Prévoir la sortie" (plan the outing): date, start time, activity and pace give estimated passing times, so the sun, the counters and the weather (Open-Meteo forecast instead of the archive) follow the planned day. The "Feuille de route" (roadbook) lists the steep sections, passes, summits, huts and water points with their km, elevation, D+ and passing time, to copy or save as text (<code>src/plan/timing.ts</code>, <code>src/plan/roadbook.ts</code>).</dd></div>
         <div><dt>Strava import</dt><dd>"Importer depuis Strava" reads your activities through your own Strava application: you create it once on Strava and type its client ID and secret in the app, which keeps them in this browser or on this computer and sends them only to Strava. No key ships with the code and there is no server in between (<code>src/strava/</code>, <code>src/ui/StravaImport.tsx</code>, <code>src/platform/oauthRedirect.ts</code>).</dd></div>
         <div><dt>Chaining</dt><dd>"Enchaîner en un seul parcours" merges several tracks (one per day, say) into one route; the jump between days is neither drawn nor counted (<code>src/import/chain.ts</code>).</dd></div>
         <div><dt>Ghost race</dt><dd>Several tracks replayed together, synchronized by elapsed time, clock time or distance, with a live ranking (<code>src/flyover/race.ts</code>, <code>src/scene/RaceMarkers.tsx</code>).</dd></div>
@@ -1033,8 +1032,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
         <tr><td><code>src/platform/</code></td><td>website or desktop behind one interface</td><td><code>index.ts</code>, <code>platform.ts</code>, <code>web.ts</code>, <code>desktop.ts</code>, <code>tileCache.ts</code>, <code>projectLibrary.ts</code></td></tr>
         <tr><td><code>src/offline/</code></td><td>offline tile packs</td><td><code>plan.ts</code>, <code>policy.ts</code>, <code>download.ts</code>, <code>store.ts</code></td></tr>
         <tr><td><code>src/weather/</code></td><td>historical and forecast weather and its effect on the scene</td><td><code>openMeteo.ts</code>, <code>series.ts</code>, <code>sceneWeather.ts</code>, <code>sceneClouds.ts</code></td></tr>
-        <tr><td><code>src/osm/</code></td><td>OpenStreetMap: landmarks, water, paths, place search</td><td><code>overpass.ts</code>, <code>landmarks.ts</code>, <code>water.ts</code>, <code>paths.ts</code>, <code>geocode.ts</code></td></tr>
-        <tr><td><code>src/route/</code></td><td>route planning for scouting</td><td><code>graph.ts</code>, <code>planner.ts</code></td></tr>
+        <tr><td><code>src/osm/</code></td><td>OpenStreetMap: landmarks, water</td><td><code>overpass.ts</code>, <code>landmarks.ts</code>, <code>water.ts</code></td></tr>
         <tr><td><code>src/plan/</code></td><td>planned outing: passing times and roadbook</td><td><code>timing.ts</code>, <code>roadbook.ts</code></td></tr>
         <tr><td><code>src/strava/</code></td><td>Strava import through your own Strava application</td><td><code>api.ts</code>, <code>track.ts</code></td></tr>
         <tr><td><code>src/state/</code></td><td>the main store</td><td><code>store.ts</code> (<code>useAppStore</code>, <code>Settings</code>, <code>Playback</code>)</td></tr>
@@ -1126,7 +1124,7 @@ npm run tauri:build   # desktop app and its installers, in src-tauri/target/rele
         <tr><td>EOX Sentinel-2 cloudless</td><td>world satellite images, 10 m</td><td>CC BY-NC-SA 4.0, no commercial use</td></tr>
         <tr><td>OpenTopoMap</td><td>world topographic map</td><td>CC BY-SA, volunteer-run server</td></tr>
         <tr><td>Open-Meteo</td><td>historical weather</td><td>CC BY 4.0, free non-commercial use</td></tr>
-        <tr><td>OpenStreetMap (Overpass, Nominatim)</td><td>landmarks, lakes and rivers, paths, place search</td><td>ODbL, moderate use of public servers</td></tr>
+        <tr><td>OpenStreetMap (Overpass)</td><td>landmarks, lakes and rivers</td><td>ODbL, moderate use of public servers</td></tr>
       </tbody>
     </table>
   </div>
@@ -1148,7 +1146,6 @@ npm run tauri:build   # desktop app and its installers, in src-tauri/target/rele
     <li><span class="tag">rendering</span><span>Shadows only from the loaded area; clouds do not shade the terrain; the weather of a single point applies to the whole scene; water reflects an average sky, not the mountains.</span></li>
     <li><span class="tag">editing</span><span>After chaining tracks, stops and framings placed on the old first track are not moved to the new one.</span></li>
     <li><span class="tag">tests</span><span>No tests that render interface components; the e2e tests cover the main flows, but the look is still checked by eye with screenshots.</span></li>
-    <li><span class="tag">scouting</span><span>Its usefulness is in doubt: it is not to be extended (bike profiles were dropped), and may be removed.</span></li>
   </ul>
 </section>
 

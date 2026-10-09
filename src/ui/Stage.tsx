@@ -27,7 +27,7 @@ export function Stage({ children }: { children?: ReactNode }) {
   })
   const aspectId = useAppStore((s) => s.settings.video.aspect)
   const safeZones = useSafeZonesStore((s) => s.visible)
-  const hasArea = useAppStore((s) => s.bounds !== null)
+  const hasTracks = useAppStore((s) => s.tracks.length > 0)
   const trackColored = useAppStore((s) => s.settings.trackColorBy !== 'none')
   const exporting = useExportStore((s) => isExportBusy(s.phase))
   const viewport = useRef<HTMLDivElement>(null)
@@ -56,7 +56,7 @@ export function Stage({ children }: { children?: ReactNode }) {
         {trackColored && <TrackLegend />}
         {rect && safeZones && <SafeZones aspect={aspectId} />}
       </div>
-      {hasArea && (
+      {hasTracks && (
         <button
           type="button"
           className="icon-btn icon-btn--float view__fit"

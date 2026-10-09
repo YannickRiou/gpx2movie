@@ -71,7 +71,6 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/poster/*` | poster (see "Poster") | pure, tested: `PosterSettings`, `DEFAULT_POSTER`, `POSTER_FORMATS`, `posterSize`, `isValidPoster`, `withPosterDefaults`; `posterContent`, `posterFigure`, `availableFigures`, `posterStats`, `totalStats`, `trackLine`, `POSTER_LIST_MAX`; `posterLayout` (boxes), `fitText`, `fitLines`, `fitTrackList`, `wrapText`, `truncate`; `drawPoster`, `coverCrop`, `POSTER_THEMES`, `POSTER_FONTS`; `framingPath`, `planFlatMap` (`view.ts`); not pure: `renderFlatMap` (`view.ts`), `currentPosterContent`, `startPoster`, `usePosterPreview`, `previewKey` (`export.ts`), `PosterPanel` |
 | `src/flyover/race.ts` | ghost race | `RACE_SYNC_MODES`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers`; `useRace`, `RaceMarkers` |
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | weather in the scene | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction`; `WeatherEffect` |
-| `src/osm/paths.ts` + `src/route/graph.ts` + `src/route/planner.ts` + `src/terrain/heightAt.ts` + `src/osm/geocode.ts` + `src/ui/RoutePanel.tsx` | scouting (future route) | `pathsQuery` (`highway` ways in a box aligned on a 0.02° grid, without motorways or private ways), `parsePaths`, `fetchPaths` (Overpass client, shared queue and cache); `buildGraph` (nodes = points shared by ways, cost = length × way-type factor: trails 1, main roads 3), `nearestNode`, `shortestPath` (A*), `routeThrough` (`RouteError`, point more than `MAX_SNAP_M` = 500 m from a path); `computeRouteTrack` (paths within 2 km of the points, route densified to 20 m, `fetchHeights` elevations at zoom 13, `gpx` track without times, points stored as waypoints "Départ" (start) / "Étape n" (stage n) / "Arrivée" (finish)), `useRouteStore` (draft outside the settings: no presets, no undo; pins `setLabelSource('route', …)`), `planAreaAround`, `isRouteTrack`; `findPlace` / `parseCoordinates` (Nominatim, on submit only, 1 request/s); store `planArea` / `setPlanArea`: terrain without a track (the scene mounts as soon as `bounds` exists; flyover, track, water and export only with a track); "Point de passage ici" (waypoint here) entry in `TrackMenu` |
 | `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | reflective water | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater`; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH`; `WaterLayer`, `WATER_LIFT_M`; `useWaterStore` (`osm/store.ts`) |
 | `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | volumetric clouds | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `withCloudDefaults`, `seaTopFor`, `cloudCoversAt`, `sceneCloudsFrom`, `seaOfClouds`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor`; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
 | `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | color grading | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms`; `GradingEffect`; `useGradingEffect`, `GradingComposer` |
@@ -1056,9 +1055,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
 
 ## Planned outing (route scouting)
 
-Before an outing: load a **planned** route (GPX from Komoot, Visorando, IGNrando…, usually without times, or a route
-computed in "Préparer une sortie"), fly over it, know at what time you will pass each point, where the sun will be
-and what the weather will be like.
+Before an outing: load a **planned** route (GPX from Komoot, Visorando, IGNrando…, usually without times), fly over
+it, know at what time you will pass each point, where the sun will be and what the weather will be like.
 
 - **Estimated times** (`src/plan/timing.ts`, pure, tested): `estimateElapsedS(segments, activity, pace)` gives the
   seconds since the start at each point, without breaks, step by step on the smoothed elevation as for the D+
@@ -1721,8 +1719,8 @@ differs goes through `src/platform/`.
   `https://www.strava.com/oauth/authorize*` (Strava import); two fixed
   scopes, `$APPDATA/tiles` and `$APPDATA/projects` with their contents (`fs:scope`), in addition to the paths the dialog plugin adds for each
   chosen file and the two folders of a command-line render: nothing else is readable. CSP: `connect-src` /
-  `img-src` list the tile hosts (`src/terrain/sources.ts`), Open-Meteo (archive and forecast), the two Overpass servers and
-  Nominatim, plus `https://www.strava.com` (`connect-src` only, Strava import), `ipc:` and `blob:`; `style-src 'unsafe-inline'` with `dangerousDisableAssetCspModification:
+  `img-src` list the tile hosts (`src/terrain/sources.ts`), Open-Meteo (archive and forecast), the two Overpass servers,
+  plus `https://www.strava.com` (`connect-src` only, Strava import), `ipc:` and `blob:`; `style-src 'unsafe-inline'` with `dangerousDisableAssetCspModification:
   ["style-src"]` (Tauri would otherwise add a nonce that cancels `unsafe-inline`). **Any new source must also be added
   to the CSP in `tauri.conf.json`.**
 - **Verified**: `cargo check --target x86_64-pc-windows-msvc` passes (configuration, permissions, icons, `generate_context!`),

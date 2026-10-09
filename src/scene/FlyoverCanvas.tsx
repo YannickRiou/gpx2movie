@@ -4,10 +4,9 @@
  * With the atmosphere setting on (default), AtmosphereLayer draws the sky, lights the terrain from the
  * real sun position and tone-maps the frame. Without it, the canvas is transparent (alpha) over a CSS sky
  * gradient (glacier blue at the top, map paper at the horizon) and lit by a fixed hemisphere + a sun from
- * the south-east. With neither a track nor a plan area (a route drawn on the relief alone) the scene is left empty;
- * otherwise the terrain layer provides the engine to the track lines, the camera rigs and the atmosphere (lines, flyover,
- * water and export only with a track). `TrackPicker` makes the first track clickable (playhead, right-click menu drawn
- * by `TrackMenu` over the canvas). Frames are drawn on demand only (`renderOnDemand.ts`).
+ * the south-east. With no track loaded the scene is left empty; otherwise the terrain layer provides the
+ * engine to the track lines, the camera rigs and the atmosphere. `TrackPicker` makes the first track clickable (playhead,
+ * right-click menu drawn by `TrackMenu` over the canvas). Frames are drawn on demand only (`renderOnDemand.ts`).
  *
  * Shadow maps are enabled (PCF) but only the atmosphere's sun casts them (terrainShadow.ts); the fixed lights do not.
  *
@@ -81,8 +80,6 @@ function RenderOnDemand() {
 
 export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
-  // relief without a track: the area of a route being drawn (`planArea`)
-  const hasArea = useAppStore((s) => s.bounds !== null)
   const atmosphere = useAppStore((s) => s.settings.atmosphere)
   const graded = useAppStore((s) => !isIdentityGrading(s.settings.grading))
   // the video export draws the film overlay through the same code as the preview
@@ -98,18 +95,14 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
             <directionalLight position={SUN_POSITION} intensity={SUN_INTENSITY} />
           </>
         )}
-        {hasArea && (
+        {hasTracks && (
           <TerrainLayer>
             <RenderOnDemand />
-            {hasTracks && (
-              <>
-                <TrackLines />
-                <WaterLayer />
-                <RegionHighlight />
-                <FlyoverRig />
-                <RaceMarkers />
-              </>
-            )}
+            <TrackLines />
+            <WaterLayer />
+            <RegionHighlight />
+            <FlyoverRig />
+            <RaceMarkers />
             <CameraRig />
             <Labels />
             <TrackPicker />
@@ -124,11 +117,11 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
                 <GradingComposer skyTop={SKY_TOP_COLOR} skyHorizon={SKY_HORIZON_COLOR} />
               </Suspense>
             )}
-            {hasTracks && <ExportController drawOverlay={overlayDrawer.draw} />}
+            <ExportController drawOverlay={overlayDrawer.draw} />
           </TerrainLayer>
         )}
       </Canvas>
-      {hasArea && <TrackMenu />}
+      {hasTracks && <TrackMenu />}
     </div>
   )
 }

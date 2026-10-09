@@ -150,34 +150,6 @@ describe('removeTrack / clearTracks', () => {
   })
 })
 
-describe('setPlanArea', () => {
-  it('shows an area without any track, kept when the tracks come and go', () => {
-    const area = FR.bounds
-    useAppStore.getState().setPlanArea(area)
-    let st = useAppStore.getState()
-    expect(st.bounds).toEqual(area)
-    expect(st.frameOrigin).toEqual({ lon: 6.88, lat: 45.94 })
-    expect(st.fitRequest).toBe(1)
-    expect(st.settings.imagerySourceId).toBe(pickRegionalImagery(area))
-
-    // a track far from the area gets its own origin, one inside it keeps the area's
-    st.addTracks([CH])
-    expect(useAppStore.getState().bounds).toEqual(CH.bounds)
-    expect(useAppStore.getState().frameOrigin).toEqual({ lon: 10.25, lat: 46.03 })
-    useAppStore.getState().removeTrack('ch')
-    expect(useAppStore.getState().frameOrigin).toEqual({ lon: 6.88, lat: 45.94 })
-    useAppStore.getState().addTracks([FR])
-    expect(useAppStore.getState().frameOrigin).toEqual({ lon: 6.88, lat: 45.94 })
-    useAppStore.getState().removeTrack('fr')
-    st = useAppStore.getState()
-    expect(st.bounds).toEqual(area)
-    expect(st.frameOrigin).toEqual({ lon: 6.88, lat: 45.94 })
-
-    useAppStore.getState().clearTracks()
-    expect(useAppStore.getState()).toMatchObject({ planArea: null, bounds: null, frameOrigin: null })
-  })
-})
-
 describe('settings and misc', () => {
   it('setSetting updates one key and keeps the others', () => {
     useAppStore.getState().setSetting('exaggeration', 1.5)

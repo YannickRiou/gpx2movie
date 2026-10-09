@@ -111,8 +111,6 @@ export interface Playback {
   speed: number
 }
 
-const overlaps = (a: LonLatBounds, b: LonLatBounds) => a.west <= b.east && b.west <= a.east && a.south <= b.north && b.south <= a.north
-
 /** Playback speeds offered (timeline) and accepted in a project. */
 export const PLAYBACK_SPEEDS: readonly number[] = [0.5, 1, 2, 4]
 
@@ -127,12 +125,7 @@ export interface AppState {
   setTrackColor(id: string, color: string): void
   /** the track flown over (the first one): `id` moved first, playback back to the start */
   flyTrack(id: string): void
-  /**
-   * area shown without any track (a route to draw on the relief, « Préparer une sortie »); cleared with the tracks
-   */
-  planArea: LonLatBounds | null
-  setPlanArea(area: LonLatBounds): void
-  /** union of track bounds, else the plan area; null when neither */
+  /** union of track bounds, null when no track */
   bounds: LonLatBounds | null
   /** fixed when the first track is added (its centroid rounded to 0.01°), null when cleared; the 3D local frame origin */
   frameOrigin: LonLat | null
@@ -259,7 +252,6 @@ let imageryChosenByUser = false
 
 export const useAppStore = create<AppState>()((set, get) => ({
   tracks: [],
-  planArea: null,
   bounds: null,
   frameOrigin: null,
   settings: { ...DEFAULT_SETTINGS },
@@ -273,10 +265,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const state = get()
     const tracks = [...state.tracks, ...incoming]
     const bounds = unionBounds(tracks)!
-    // the origin of a plan area stays for a track drawn in it, not for one elsewhere (the local frame would tilt)
-    const area = state.tracks.length === 0 ? state.planArea : null
-    const keepOrigin = state.frameOrigin !== null && (area === null || overlaps(area, bounds))
-    const frameOrigin = keepOrigin && state.frameOrigin ? state.frameOrigin : computeFrameOrigin(bounds)
+    const frameOrigin = state.frameOrigin ?? computeFrameOrigin(bounds)
 
     let settings = state.settings
     if (!imageryChosenByUser) {
@@ -289,18 +278,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
     set({ tracks, bounds, frameOrigin, settings, fitRequest: state.fitRequest + 1 })
   },
 
-  setPlanArea(area) {
-    const state = get()
-    if (state.tracks.length > 0) {
-      set({ planArea: area })
-      return
-    }
-    let settings = state.settings
-    const regional = imageryChosenByUser ? null : pickRegionalImagery(area)
-    if (regional && regional !== settings.imagerySourceId) settings = { ...settings, imagerySourceId: regional }
-    set({ planArea: area, bounds: area, frameOrigin: computeFrameOrigin(area), settings, fitRequest: state.fitRequest + 1 })
-  },
-
   removeTrack(id) {
     const state = get()
     const tracks = state.tracks.filter((t) => t.id !== id)
@@ -311,9 +288,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const state = get()
     set({
       tracks,
-      bounds: unionBounds(tracks) ?? state.planArea,
-      // back to the plan area alone: its own origin (the tracks removed may have been elsewhere)
-      frameOrigin: tracks.length > 0 ? state.frameOrigin : state.planArea ? computeFrameOrigin(state.planArea) : null,
+      bounds: unionBounds(tracks),
+      frameOrigin: tracks.length === 0 ? null : state.frameOrigin,
       playback: { ...state.playback, playing: false, progress: 0, timeS: null },
     })
   },
@@ -333,7 +309,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   clearTracks() {
     const playback = { ...get().playback, playing: false, progress: 0, timeS: null }
-    set({ tracks: [], planArea: null, bounds: null, frameOrigin: null, playback })
+    set({ tracks: [], bounds: null, frameOrigin: null, playback })
   },
 
   setSetting(key, value) {
@@ -398,7 +374,6 @@ export function resetAppStore(): void {
   imageryChosenByUser = false
   useAppStore.setState({
     tracks: [],
-    planArea: null,
     bounds: null,
     frameOrigin: null,
     settings: { ...DEFAULT_SETTINGS },

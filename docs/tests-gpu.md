@@ -87,10 +87,6 @@ reproduce it next to the box.
       animation); playback resumes without a jump after a long pause; export unchanged.
 - [ ] Preview clouds (fewer computation steps than the "bas" (low) preset): no visible bands or holes compared
       with before; the export keeps its quality.
-- [ ] Scouting: "Préparer une sortie" (plan an outing) ("Chamonix", then "45.92, 6.87"), terrain without a track, pins
-      "Départ" / "Étape" / "Arrivée" (start / waypoint / finish) on right-click, "Calculer l'itinéraire" (compute the route) on real paths (trails
-      preferred over roads, point more than 500 m away rejected), film assembled, "Modifier" (edit) then recompute (same color), project
-      saved then reopened ("Modifier" still offered); Windows desktop (Nominatim under the CSP).
 - [ ] Safe zones: button under "Recadrer" (reframe) or G key, social network bands in 9:16 and 4:5, margins in 16:9,
       absent from the export.
 

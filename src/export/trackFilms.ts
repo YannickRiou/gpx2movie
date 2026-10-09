@@ -69,7 +69,7 @@ export interface TrackFilmsSession {
 
 /** Start a run: what the app shows is kept to be put back by `restore`, the undo history stops recording. */
 export function beginTrackFilms(canceled: () => boolean): TrackFilmsSession {
-  const { tracks, planArea, bounds, frameOrigin, settings, playback } = useAppStore.getState()
+  const { tracks, bounds, frameOrigin, settings, playback } = useAppStore.getState()
   const film = trackFilm(settings.film)
   const resume = getSettingsHistory().suspend()
   return {
@@ -84,7 +84,7 @@ export function beginTrackFilms(canceled: () => boolean): TrackFilmsSession {
       await loadTrackData(canceled)
     },
     restore() {
-      useAppStore.setState({ tracks, planArea, bounds, frameOrigin, settings, playback })
+      useAppStore.setState({ tracks, bounds, frameOrigin, settings, playback })
       useAppStore.getState().requestFit()
       resume()
     },
