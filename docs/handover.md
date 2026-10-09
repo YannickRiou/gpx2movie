@@ -81,7 +81,7 @@ then run `git status` and `npm run typecheck`.
 
 See `git log` and PRs #1 to #7 (waves 3 and 4: overview map, points of interest, chained tracks, slow-motion and
 titles at landmarks, sync to music, multi-track poster and flat map, one film per track in a folder,
-"Mes projets" ("My projects"), native Linux encoder, installers); technical details in `ARCHITECTURE.md`, features in `README.md`.
+"Mes projets" ("My projects"), native Linux encoder, installers); technical details in `ARCHITECTURE.md`, features in `README.md`, usage in `docs/user-guide.html`.
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
@@ -157,7 +157,7 @@ list of activities, GPS / time / altitude / sensor streams), `src/strava/track.t
 `Cargo.toml`, `lib.rs` and `capabilities/default.json`), CSP for `www.strava.com`. Choice: "your own Strava
 application" (Client ID / Secret pasted once, kept in the platform storage of this browser or this computer, sent
 only to strava.com), because the token exchange requires the secret and the project has no server; no Strava key is
-in the code. Documented in the README ("Importing from Strava"), `ARCHITECTURE.md` ("Strava import") and
+in the code. Documented in the user guide (`docs/user-guide.html`, "Import a track"), `ARCHITECTURE.md` ("Strava import") and
 `docs/tests-gpu.md` (section 6 bis). Left: review the whole, real test (CORS of `www.strava.com/oauth/token` from the
 browser to be confirmed).
 
@@ -291,8 +291,8 @@ version on 9 October 2026); check again at its next release.
 
 - Garmin FIT SDK license (not free, redistribution "except in the cases provided for"): to decide before public release; personal
   use OK. Esri terms (no key) to re-read for online use. Open-Meteo and EOX non-commercial; OpenTopoMap,
-  Esri and swisstopo allowed in offline packs for personal use, with a low daily limit (README,
-  "Sources"). Yale star catalog: license not stated.
+  Esri and swisstopo allowed in offline packs for personal use, with a low daily limit (`docs/sources.md`,
+  "Attributions, licenses and offline use"). Yale star catalog: license not stated.
 - HEIC photos refused (the browser does not decode them); EXIF read only in JPEG files.
 - Videos: 50 MB at most (the project contains them: ~1.33 × their size in the JSON file), not placed
   by GPS (synced only by time, the track must be timestamped); an old project edited by hand with a video missing from its table keeps it in the film without

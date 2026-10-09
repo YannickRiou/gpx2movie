@@ -1,6 +1,6 @@
 /**
  * Which tile sources may be downloaded ahead for offline use, read from each provider's terms (October 2026, links
- * and reasons in README, « Sources de données »). A source missing from this table is refused.
+ * and reasons in docs/sources.md, « Attributions, licenses and offline use »). A source missing from this table is refused.
  */
 
 export interface OfflinePolicy {

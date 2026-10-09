@@ -1672,7 +1672,7 @@ of a flyover of the loaded tracks; the view and the export then read them withou
   10 km → 28,000, ~1.2 GB (Mapterhorn: ~150 KB per 512 px tile). Beyond 150,000 tiles, refused. Not in the
   plan: overview shots and high orbits (coarse levels, already there), 4K export (one more level in a wide
   corridor).
-- **Policy** (`policy.ts`): one decision per source, reasons and links in the README; a source missing from the
+- **Policy** (`policy.ts`): one decision per source, reasons and links in `docs/sources.md`; a source missing from the
   table is refused. OpenTopoMap, Esri World Imagery and swisstopo (photos and map) are allowed for personal use
   (`personalUse`, warning in the panel) with a low limit. A refused imagery source does not prevent the pack: it
   then only contains the terrain, and the imagery stays online. Limit per day and per device: Mapterhorn 20,000,

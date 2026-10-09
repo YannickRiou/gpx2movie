@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenFlyover user guide</title>
+<meta name="description" content="How to use OpenFlyover: import a track, plan an outing, choose the look, edit the film on the timeline, export a video or a poster, and work offline.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+
+/* "Carte alpine", the project's own palette (src/ui/theme.css): map paper, ink, trail-marker red, glacier, moss. */
+:root {
+  --paper: #f5f2ea;
+  --card: #eae4d6;
+  --band: #ece6d8;
+  --ink: #1c2a33;
+  --ink-soft: #55626b;
+  --line: #d6cdbb;
+  --accent: #c23b22;
+  --accent-ink: #a3301a;
+  --glacier: #a9ccd9;
+  --glacier-ink: #2f5d70;
+  --moss: #3f6b4a;
+  --contour: rgb(28 42 51 / 0.07);
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --step--1: 0.85rem;
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.6rem;
+  --step-3: clamp(2rem, 1.4rem + 2.6vw, 2.8rem);
+  --measure: 66ch;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #141d23;
+    --card: #1e2a32;
+    --band: #1a252c;
+    --ink: #ece6d8;
+    --ink-soft: #a6b1b8;
+    --line: #34434d;
+    --accent: #ff8a5c;
+    --accent-ink: #ff8a5c;
+    --glacier: #6f9fb2;
+    --glacier-ink: #8fc0d3;
+    --moss: #7fb08b;
+    --contour: rgb(236 230 216 / 0.05);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #141d23;
+  --card: #1e2a32;
+  --band: #1a252c;
+  --ink: #ece6d8;
+  --ink-soft: #a6b1b8;
+  --line: #34434d;
+  --accent: #ff8a5c;
+  --accent-ink: #ff8a5c;
+  --glacier: #6f9fb2;
+  --glacier-ink: #8fc0d3;
+  --moss: #7fb08b;
+  --contour: rgb(236 230 216 / 0.05);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  padding: 0 16px 64px;
+  overflow-wrap: break-word;
+}
+a { color: var(--accent-ink); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+code, kbd {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--band);
+  padding: 0.06em 0.32em;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+kbd { border: 1px solid var(--line); }
+pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  background: var(--band);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  max-width: 100%;
+}
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 650; line-height: 1.2; text-wrap: balance; margin: 0; }
+h2 { font-size: var(--step-2); }
+h3 { font-size: var(--step-1); font-weight: 500; }
+h4 { font-family: var(--font-body); font-size: var(--step-0); font-weight: 600; }
+p { margin: 0; }
+ul, ol { margin: 0; padding-left: 1.25em; display: grid; gap: 0.35em; }
+strong { font-weight: 600; }
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 32px;
+}
+@media (min-width: 1040px) {
+  .page { grid-template-columns: 220px minmax(0, 1fr); gap: 56px; }
+}
+
+/* masthead: contour lines, like a topographic map */
+.masthead {
+  grid-column: 1 / -1;
+  position: relative;
+  padding-block: 48px 28px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+  overflow: hidden;
+}
+.masthead::before {
+  content: "";
+  position: absolute;
+  inset: -40% -10% -40% 40%;
+  background: repeating-radial-gradient(ellipse at 60% 55%, transparent 0 22px, var(--contour) 22px 23px);
+  pointer-events: none;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  position: relative;
+}
+.masthead h1 { font-size: var(--step-3); max-width: 20ch; position: relative; }
+.masthead h1 em { font-style: normal; color: var(--accent-ink); }
+.lede { max-width: var(--measure); font-size: var(--step-1); color: var(--ink-soft); position: relative; }
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  position: relative;
+}
+.facts b { color: var(--ink); font-weight: 500; }
+
+/* contents: a compact list on top on small screens, a sticky rail on wide ones */
+.toc { font-size: 0.93rem; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--card); }
+.toc h2 { font-family: var(--font-mono); font-size: var(--step--1); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
+.toc ol { list-style: none; padding: 0; gap: 0; counter-reset: toc; }
+.toc li { counter-increment: toc; }
+.toc a { display: flex; gap: 8px; padding: 4px 0; color: var(--ink); text-decoration: none; }
+.toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 0.8em; color: var(--ink-soft); padding-top: 0.15em; }
+.toc a:hover { color: var(--accent-ink); }
+@media (min-width: 620px) and (max-width: 1039px) {
+  .toc ol { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+}
+@media (min-width: 1040px) {
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; max-height: calc(100vh - 48px); overflow-y: auto; background: none; border: 0; padding: 0; }
+  .toc a { padding: 4px 0 4px 10px; border-left: 2px solid var(--line); }
+  .toc a:hover { border-left-color: var(--accent); }
+}
+
+main { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 64px; }
+section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; scroll-margin-top: 24px; min-width: 0; }
+.faq { grid-template-columns: minmax(0, 1fr); }
+section > p, section > ul, section > ol, .prose { max-width: var(--measure); }
+.sec-head { display: grid; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.sec-head .num { font-family: var(--font-mono); font-size: var(--step--1); color: var(--accent-ink); letter-spacing: 0.06em; }
+h3.sub { margin-top: 10px; }
+
+/* figures that may be wider than the column scroll inside their own box */
+.figure { display: grid; gap: 8px; margin: 0; min-width: 0; }
+.figure .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 12px; }
+.figure svg { display: block; min-width: 680px; width: 100%; height: auto; }
+.figure figcaption { font-size: var(--step--1); color: var(--ink-soft); max-width: var(--measure); }
+.scroll-hint { display: none; }
+@media (max-width: 720px) { .scroll-hint { display: inline; } }
+
+/* ordered pipelines: the order is the information */
+.steps { list-style: none; padding: 0; counter-reset: step; display: grid; gap: 14px; max-width: var(--measure); }
+.steps > li { counter-increment: step; display: grid; grid-template-columns: 2.1em minmax(0, 1fr); gap: 12px; }
+.steps > li::before {
+  content: counter(step);
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  width: 1.9em; height: 1.9em;
+  display: grid; place-items: center;
+  margin-top: 0.1em;
+}
+.steps .who { display: block; font-family: var(--font-mono); font-size: 0.82rem; color: var(--ink-soft); margin-top: 2px; }
+
+/* tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; max-width: 100%; }
+table { border-collapse: collapse; width: 100%; font-size: 0.93rem; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--font-mono); font-size: var(--step--1); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); background: var(--card); }
+td:first-child { white-space: nowrap; }
+table.wide { min-width: 640px; }
+
+.note {
+  max-width: var(--measure);
+  border-left: 3px solid var(--glacier);
+  padding: 4px 0 4px 14px;
+  color: var(--ink-soft);
+}
+.key {
+  max-width: var(--measure);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 8px;
+}
+.key h3 { font-size: var(--step-1); }
+.tag { font-family: var(--font-mono); font-size: 0.78rem; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-soft); white-space: nowrap; }
+.tag.warn { border-color: var(--accent); color: var(--accent-ink); }
+.tag.ok { border-color: var(--moss); color: var(--moss); }
+
+.cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+.cols > div { min-width: 0; display: grid; gap: 8px; align-content: start; }
+
+.limits { list-style: none; padding: 0; display: grid; gap: 10px; max-width: var(--measure); }
+.limits li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: baseline; }
+
+/* FAQ */
+.faq { display: grid; gap: 8px; max-width: calc(var(--measure) + 40px); }
+.faq details { border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.faq summary { cursor: pointer; padding: 12px 16px; font-weight: 600; list-style: none; display: grid; grid-template-columns: 1.2em minmax(0, 1fr); gap: 8px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::before { content: "+"; font-family: var(--font-mono); color: var(--accent-ink); }
+.faq details[open] summary::before { content: "−"; }
+.faq .answer { padding: 0 16px 14px calc(16px + 1.2em + 8px); display: grid; gap: 8px; }
+
+footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16px; font-size: var(--step--1); color: var(--ink-soft); }
+/* screenshots */
+.shot img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="masthead">
+  <p class="eyebrow">User guide · checked against the app on 9 October 2026</p>
+  <h1>Make your first <em>flyover film</em></h1>
+  <p class="lede">Everything you need to turn the track of an outing into a 3D film: importing, editing on the timeline, choosing the look, exporting a video or a poster, and working offline. No technical knowledge required.</p>
+  <div class="facts">
+    <span><b>GPX · FIT</b> or Strava</span>
+    <span><b>5</b> tabs, <b>1</b> timeline</span>
+    <span>export <b>720p → 4K</b>, 24 / 30 / 60 fps</span>
+    <span><b>0</b> account, <b>0</b> API key</span>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#start">Before you start</a></li>
+    <li><a href="#screen">The screen</a></li>
+    <li><a href="#import">Import a track</a></li>
+    <li><a href="#plan">Plan an outing</a></li>
+    <li><a href="#view">Look around and play</a></li>
+    <li><a href="#look">Choose the look</a></li>
+    <li><a href="#edit">Edit the film</a></li>
+    <li><a href="#format">Output format</a></li>
+    <li><a href="#export">Export</a></li>
+    <li><a href="#offline">Work offline</a></li>
+    <li><a href="#save">Save and reuse</a></li>
+    <li><a href="#desktop">Desktop extras</a></li>
+    <li><a href="#keys">Keyboard shortcuts</a></li>
+    <li><a href="#privacy">Data, privacy and credits</a></li>
+    <li><a href="#faq">Questions and answers</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ================================================================== 1 -->
+<section id="start">
+  <div class="sec-head"><span class="num">01</span><h2>Before you start</h2></div>
+  <p>OpenFlyover lays the track of an outing (hike, trail run, ride, ski tour…) on real 3D terrain covered with aerial photos, flies a camera along it, and saves the result as a video. Everything runs on your computer: there is no account and your track is never uploaded.</p>
+  <div class="cols">
+    <div>
+      <h3>What you need</h3>
+      <ul>
+        <li>A recent <strong>Chrome or Edge</strong>, or the desktop application. Video export has not been tested in Firefox or Safari.</li>
+        <li>A <strong>decent graphics card</strong>: it sets the export speed.</li>
+        <li>An <strong>Internet connection</strong> for the map tiles, unless you <a href="#offline">prepared the track for offline use</a>.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Two ways to run it</h3>
+      <ul>
+        <li>As a <strong>website</strong>, on your own machine or a web host (served over HTTPS).</li>
+        <li>As a <strong>desktop application</strong> for Windows, macOS and Linux. It is the same app, with native file dialogs and <a href="#desktop">batch rendering</a>.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="note">The interface is in French. This guide quotes its labels in French, with a translation in brackets the first time.</p>
+</section>
+
+<!-- ================================================================== 2 -->
+<section id="screen">
+  <div class="sec-head"><span class="num">02</span><h2>The screen</h2></div>
+  <figure class="figure shot">
+    <img src="images/interface.jpg" alt="The interface: top bar, tabs on the left, 3D view of the Tour du Mont-Blanc, timeline at the bottom" loading="lazy" width="1440" height="900">
+    <figcaption>The interface with the sample track: tabs on the left, the 3D view framed to the video format, the timeline below.</figcaption>
+  </figure>
+  <p>The screen reads like video editing software:</p>
+  <ul>
+    <li><strong>Top bar</strong>: project name, undo / redo, "Ouvrir" (open), "Enregistrer" (save), the output format in the middle and <strong>"Exporter"</strong> (export) on the right. The <kbd>?</kbd> button lists every keyboard shortcut.</li>
+    <li><strong>Left rail</strong>: five tabs, "Trace" (track), "Carte" (map), "Survol" (flyover), "Habillage" (overlay) and "Projet" (project). Click the active icon again, or press <kbd>[</kbd>, to fold the panel.</li>
+    <li><strong>Centre</strong>: the 3D view, framed exactly like the video. <strong>Below</strong>: the film timeline.</li>
+    <li><strong>Bottom</strong>: a thin status bar with map loading and the data sources (ⓘ shows the full credits).</li>
+  </ul>
+  <p>Messages (track imported, project saved, video ready…) appear at the bottom of the view; errors stay until you close them. The app remembers the open tab and whether the panel is folded.</p>
+</section>
+
+<!-- ================================================================== 3 -->
+<section id="import">
+  <div class="sec-head"><span class="num">03</span><h2>Import a track</h2></div>
+  <ol class="steps">
+    <li><div><strong>Drop a file.</strong> Drag one or more <code>.gpx</code> or <code>.fit</code> files anywhere into the window. On first launch you can also click "Choisir un fichier" (choose a file), or "Essayer avec l'exemple (Tour du Mont-Blanc)" to load a sample stage.</div></li>
+    <li><div><strong>Let the view frame it.</strong> The camera frames the track. In France or Switzerland the imagery switches to IGN or swisstopo aerial photos, unless you already chose a source.</div></li>
+    <li><div><strong>Add more if needed.</strong> "+ Ajouter" (add) in the track list adds tracks. "Ouvrir" (<kbd>Ctrl+O</kbd>) accepts a track or a saved project.</div></li>
+  </ol>
+  <h3 class="sub">Several tracks</h3>
+  <p>The flyover, weather, landmarks and climbs follow the <strong>first</strong> track; the arrow on another track makes it the flown-over one, and its colour chip changes its colour. With two tracks or more:</p>
+  <ul>
+    <li>"Course fantôme" (ghost race) replays them together with a live leaderboard;</li>
+    <li>"Enchaîner en un seul parcours" (chain into a single route) merges them in order of start time, for a multi-day outing or a recording split in two files. The message offers "Annuler" (undo).</li>
+  </ul>
+  <h3 class="sub">From Strava</h3>
+  <p>"Strava" in the track list (or "Importer depuis Strava" on first launch) imports your activities. OpenFlyover ships no Strava key, so you create your own Strava application once:</p>
+  <ol class="steps">
+    <li><div>On <a href="https://www.strava.com/settings/api">strava.com/settings/api</a>, create an application (free). In "Authorization Callback Domain", enter <code>localhost</code> (local site or desktop app) or your site's address.</div></li>
+    <li><div>Paste its <strong>Client ID</strong> and <strong>Client Secret</strong> into OpenFlyover. They stay in this browser (or the desktop app) and are sent only to Strava.</div></li>
+    <li><div>Click "Se connecter" (connect) and allow reading your activities.</div></li>
+    <li><div>Tick the activities ("Plus" loads older ones), then "Importer".</div></li>
+  </ol>
+  <p class="note">Access is read-only but includes private activities and the full track, privacy zones included: keep it in mind before publishing a film. Strava allows 100 requests per 15 minutes and 1,000 per day per application. "Déconnecter" forgets the connection.</p>
+</section>
+
+<!-- ================================================================== 4 -->
+<section id="plan">
+  <div class="sec-head"><span class="num">04</span><h2>Plan an outing</h2></div>
+  <p>You can fly over a route <strong>before</strong> doing it.</p>
+  <ol class="steps">
+    <li><div>Type a place ("Chamonix") or coordinates ("45.92, 6.87") in <strong>"Préparer une sortie"</strong> (plan an outing), on the home screen or in the "Trace" tab. The terrain appears without a track.</div></li>
+    <li><div>Right-click the terrain › <strong>"Point de passage ici"</strong> (waypoint here) for the start, the intermediate points, then the finish, in order.</div></li>
+    <li><div><strong>"Calculer l'itinéraire"</strong> (compute the route) links the points along OpenStreetMap paths. The route becomes a track you edit like any other; "Modifier" reloads its points.</div></li>
+  </ol>
+  <p>Points must fit within about thirty kilometres and be less than 500 m from a path.</p>
+  <h3 class="sub">Passing times, weather forecast and roadbook</h3>
+  <p>A track without times (a computed route, or one prepared on Komoot, Visorando…) has a <strong>"Prévoir la sortie"</strong> section: pick the date, start time, activity and pace, then "Calculer les horaires". The sun, counters and weather forecast (up to 16 days ahead) then follow the planned outing.</p>
+  <p>The <strong>"Feuille de route"</strong> (roadbook) section lists steep sections, passes, summits, huts and water points with their km, elevation, D+ and passing time. Click a line to move the marker there; "Copier" or "Enregistrer (.txt)" keeps it.</p>
+</section>
+
+<!-- ================================================================== 5 -->
+<section id="view">
+  <div class="sec-head"><span class="num">05</span><h2>Look around and play</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Action</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td>Rotate · pan · zoom</td><td>Left drag · right drag · mouse wheel</td></tr>
+        <tr><td>Back to the overview</td><td>Crosshair button at the top right of the view, or <kbd>F</kbd></td></tr>
+        <tr><td>Play / pause</td><td>▶ in the timeline, or <kbd>Space</kbd>; ■ returns to the start</td></tr>
+        <tr><td>Move in time</td><td>Click or drag the profile; <kbd>←</kbd> <kbd>→</kbd> (1 s, 5 s with <kbd>Shift</kbd>), <kbd>Home</kbd>, <kbd>End</kbd></td></tr>
+        <tr><td>Jump to a place</td><td>Click the track in the 3D view</td></tr>
+        <tr><td>Playback speed</td><td>×0.5 to ×4</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>When paused, you can orbit freely around the marker.</p>
+</section>
+
+<!-- ================================================================== 6 -->
+<section id="look">
+  <div class="sec-head"><span class="num">06</span><h2>Choose the look</h2></div>
+  <p>Each tab groups its settings in foldable sections. Rarely used settings sit under <strong>"Plus de réglages"</strong> (more settings) at the bottom of each section. Each feature is turned on or off with a switch.</p>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>Tab</th><th>What you set there</th></tr></thead>
+      <tbody>
+        <tr><td>"Trace"</td><td>Your tracks, ghost race, "Préparer une sortie", roadbook, climbs and terrain labels ("Montées et étiquettes"), weather of the outing, offline preparation ("Hors ligne")</td></tr>
+        <tr><td>"Carte"</td><td>Base map (aerial photos, topographic maps, historical IGN photos), relief exaggeration, track colouring (speed, slope, elevation, heart rate, cadence, power, temperature), light and sun time, atmosphere, clouds and water, colour grading, OpenStreetMap landmarks</td></tr>
+        <tr><td>"Survol"</td><td>Camera preset ("Poursuite", "Hélicoptère", "Drone haut", "Vue du dessus", "Orbite", "Cinéma"), camera style, film duration (15 s to 10 min), pacing at highlights, track and marker</td></tr>
+        <tr><td>"Habillage"</td><td>Overlay on the film: style ("Éditorial", "Diffusion", "Application"), colours and fonts, titles, counters, profile and mini-map, weather, logo and text, source credits</td></tr>
+        <tr><td>"Projet"</td><td>"Mes projets" (my projects) and settings presets</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="cols">
+    <div>
+      <h3>Light</h3>
+      <p>By default the sun is where it was at the time of the outing. In "Lumière", "Heure fixe" (fixed time) places it anywhere in the day, with one-click "Lever" (sunrise), "Matin", "Midi", "Heure dorée" (golden hour), "Coucher" (sunset) or "Nuit". "Jour" lights the scene on another date: the season changes the sun height.</p>
+    </div>
+    <div>
+      <h3>Weather</h3>
+      <p>The weather of the day (or the forecast for a planned outing) feeds the haze, the sun veil and the volumetric clouds. Clouds can also be set by hand. In the "Trace" tab the weather fits in two lines: the outing, then the moment at the marker.</p>
+    </div>
+    <div>
+      <h3>Track and marker</h3>
+      <p>"Trace et marqueur" ("Survol" tab) chooses a ball, a figurine (hiker, runner, cyclist, skier, paraglider…) or your photo in a circle. "Trace qui se dessine" draws only the part already covered; "Halo lumineux" adds a glow.</p>
+    </div>
+    <div>
+      <h3>Colours</h3>
+      <p>"Couleurs" grades the image in the preview and the export: "Naturel", "Lumineux", "Doux", "Contrasté", "Chaud du soir", "Froid d'altitude", "Noir et blanc"; "Plus de réglages" fine-tunes contrast, saturation, temperature and vignetting.</p>
+    </div>
+  </div>
+  <div class="key">
+    <h3>"modifié" and "Par défaut"</h3>
+    <p>When a section differs from its defaults, a <strong>"modifié"</strong> (modified) chip appears next to its title. <strong>"Par défaut"</strong> resets the whole section; "Annuler" in the message, or <kbd>Ctrl+Z</kbd>, undoes the reset. The imagery source is not tracked: the import picks it by region.</p>
+  </div>
+</section>
+
+<!-- ================================================================== 7 -->
+<section id="edit">
+  <div class="sec-head"><span class="num">07</span><h2>Edit the film</h2></div>
+  <p>On import, the film is assembled for you: an opening on the overview, the flyover with stops at summits, passes and climbs, and a closing. The timeline below the view lets you change all of it.</p>
+  <figure class="figure shot">
+    <img src="images/montage.jpg" alt="A stop selected in the timeline, its settings in the right panel" loading="lazy" width="1440" height="900">
+    <figcaption>Click a block on the timeline: its settings open in the right panel. <kbd>Esc</kbd> closes it.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>To add</th><th>How</th><th>Then</th></tr></thead>
+      <tbody>
+        <tr><td>Stop</td><td>"Arrêt" or <kbd>S</kbd>, at the marker</td><td>"Caméra pendant l'arrêt": same as the film, slow turn, wide view or fixed</td></tr>
+        <tr><td>Text</td><td>"Texte" or <kbd>T</kbd>, at the playhead</td><td>Position, duration, own colour and font ("Couleur et police")</td></tr>
+        <tr><td>Photo or video</td><td>"Média", or drop files on the timeline</td><td>Photos are placed where they were taken; videos (MP4, WebM, MOV, 50 MB and 30 s max) keep their sound</td></tr>
+        <tr><td>Music</td><td>"Options" › "Ajouter une musique…", or drop the file</td><td>Volume, fades, "Caler la durée du film sur la musique", "Caler sur le rythme"</td></tr>
+        <tr><td>Speed section</td><td>"Vitesse", or right-click the track › "Accélérer / ralentir ici"</td><td>×0.25 to ×4; drag the block edges</td></tr>
+        <tr><td>Camera framing</td><td>"Garder ce cadrage ici" ("Survol" tab)</td><td>Distance, tilt and aim; the camera moves smoothly between framings</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <ul>
+    <li>Drag a block to move it, drag its edges to stretch it; edges snap to their neighbours. <kbd>Del</kbd> removes the selected block.</li>
+    <li>The zoom slider and "Ajuster" (fit) set the timeline width; <kbd>Ctrl</kbd> + wheel zooms.</li>
+    <li>Opening and closing: "Depuis la région" starts very high above the region and dives toward the track; "Balayage" (sweep) rotates the overview before descending. "Transition" chooses "Enchaîné" (continuous), "Coupe" (cut), or a fade to black or white.</li>
+    <li>A video filmed during the outing can be <strong>synced to the route</strong>: "Caler sur le parcours" places it where the marker passes at the time it was filmed. "Décalage de l'horloge" fixes a wrong camera clock; "Suivre la vitesse du survol" plays it at the marker's pace (it is then silent).</li>
+    <li>"Baisser la musique sous les vidéos" lowers the music by 10 dB under videos with sound. The speaker button mutes playback only; the export keeps the sound.</li>
+    <li>In the panel of a text or a photo, "Cadrer la caméra pendant cet élément" sets a framing for its duration.</li>
+  </ul>
+</section>
+
+<!-- ================================================================== 8 -->
+<section id="format">
+  <div class="sec-head"><span class="num">08</span><h2>Output format</h2></div>
+  <p>The icons in the middle of the top bar choose the format: <strong>16:9, 9:16, 1:1, 4:5 or 21:9</strong>. The 3D view is framed exactly like the video: what you see is what you export. "Libre" (free) fills the whole screen for viewing and is not saved.</p>
+  <p>The dotted button below the crosshair (or <kbd>G</kbd>) shows the <strong>safe areas</strong>: the "Action 93 %" and "Titres 90 %" margins in landscape and square formats, and the parts hidden by the Reels, TikTok and Shorts interfaces in 9:16 and 4:5. They never appear in the export.</p>
+</section>
+
+<!-- ================================================================== 9 -->
+<section id="export">
+  <div class="sec-head"><span class="num">09</span><h2>Export</h2></div>
+  <figure class="figure shot">
+    <img src="images/habillage.jpg" alt="The film with its overlay and the export drawer open" loading="lazy" width="1440" height="900">
+    <figcaption>The overlay (title, date, credits) and the export drawer: format, resolution, estimated duration and size.</figcaption>
+  </figure>
+  <h3 class="sub">A video</h3>
+  <ol class="steps">
+    <li><div>Click <strong>"Exporter"</strong> (<kbd>Ctrl+E</kbd>): the export drawer opens on the right.</div></li>
+    <li><div>Choose the resolution (720p to 4K). "Plus de réglages" sets frames per second (24, 30, 60) and quality.</div></li>
+    <li><div>Read the summary: duration, frames, codec, estimated size. The video adds 1 s at the start and 2 s at the end.</div></li>
+    <li><div>Click <strong>"Exporter la vidéo"</strong>. In Chrome, Edge and the desktop app you first pick where to save: the file is written as the export progresses. Each frame waits for the visible terrain to load. The top button shows progress ("42 % · Annuler"); click it to stop.</div></li>
+    <li><div>At the end the panel shows "Enregistrée dans…". In other browsers the file downloads at the end.</div></li>
+  </ol>
+  <p class="note">Keep the tab open during the export; tabs and format are locked. Without direct writing to disk, the video is built in memory (about twice its size); above an estimated 1.5 GB the panel warns you.</p>
+  <h3 class="sub">Other outputs</h3>
+  <div class="cols">
+    <div>
+      <h4>Still image</h4>
+      <p>Move the playhead, then "Image fixe" (PNG, or JPEG in "Plus de réglages"). Same size as the video, overlay included.</p>
+    </div>
+    <div>
+      <h4>Overlay only</h4>
+      <p>"Habillage seul (fond transparent)" exports counters, profile, map, titles and credits on a transparent WebM, frame-aligned with the normal video, for your editing software.</p>
+    </div>
+    <div>
+      <h4>Several formats</h4>
+      <p>"Plusieurs formats" exports several format × resolution pairs, plus the still image and poster if wanted, in one go ("Tout exporter"). Chrome, Edge and the desktop app write them into one folder.</p>
+    </div>
+    <div>
+      <h4>Poster</h4>
+      <p>"Affiche": A4 or A3 at 300 dpi, portrait or landscape, or square. Title, date, key figures, profile, weather, credits; several tracks each in its colour; "Carte à plat" for a map seen from above.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== 10 -->
+<section id="offline">
+  <div class="sec-head"><span class="num">10</span><h2>Work offline</h2></div>
+  <p>"Hors ligne" ("Trace" tab) downloads the tiles of the track once; the view and the export then work without a connection.</p>
+  <ol class="steps">
+    <li><div>Choose the corridor width around the track: 2, 5 or 10 km. Outside it, the terrain stays coarser.</div></li>
+    <li><div>Read the estimate (tiles and size: expect several hundred MB for 20 km).</div></li>
+    <li><div>"Préparer hors ligne" starts the download, with "Pause", "Reprendre" (resume) and "Annuler". Running it again completes an unfinished pack.</div></li>
+  </ol>
+  <p>The pack applies to the track, terrain source, imagery and level of detail chosen at that moment. "Supprimer" frees the space. Some sources cap the number of tiles downloaded per day (see <a href="sources.md#attributions-licenses-and-offline-use">data sources</a>).</p>
+</section>
+
+<!-- ================================================================== 11 -->
+<section id="save">
+  <div class="sec-head"><span class="num">11</span><h2>Save and reuse</h2></div>
+  <ul>
+    <li>Name the project in the top bar (otherwise it takes the name of the first track). "Modifié" next to the name flags unsaved changes.</li>
+    <li>"Enregistrer" (<kbd>Ctrl+S</kbd>) saves a <code>&lt;name&gt;.openflyover.json</code> file with the tracks, photos, videos, music and all settings. "Ouvrir" (<kbd>Ctrl+O</kbd>) reloads it; an invalid setting reverts to its default and a message says so.</li>
+    <li>"Garder dans Mes projets" ("Projet" tab) keeps the project inside the app: it saves itself and reopens in one click. Closing with unsaved changes asks first.</li>
+    <li><strong>Presets</strong> ("Projet" tab) save one family of settings under a name: map style, track and labels, overlay, or camera shot ("Prise de vue").</li>
+    <li>Undo and redo cover every setting: <kbd>Ctrl+Z</kbd>, <kbd>Ctrl+Shift+Z</kbd> or <kbd>Ctrl+Y</kbd>. One slider drag is one step.</li>
+  </ul>
+</section>
+
+<!-- ================================================================== 12 -->
+<section id="desktop">
+  <div class="sec-head"><span class="num">12</span><h2>Desktop extras</h2></div>
+  <p>The desktop application opens and saves through the system file dialogs, keeps offline packs and "Mes projets" in its own folder, and can render <strong>one film per track in a folder</strong> without any click:</p>
+  <pre><code>openflyover --rendu ~/Traces/2026 --sortie ~/Films --prereglage "Montagne" --formats 16:9@1080p,9:16@1080p</code></pre>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Option</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>--rendu</code></td><td>Folder of GPX and FIT tracks (only files directly inside it)</td></tr>
+        <tr><td><code>--sortie</code></td><td>Output folder, created if missing; the tracks folder by default</td></tr>
+        <tr><td><code>--prereglage</code></td><td>A preset saved in the app; the app's current settings otherwise</td></tr>
+        <tr><td><code>--formats</code></td><td>format@resolution, comma-separated (<code>16:9</code>, <code>9:16</code>, <code>1:1</code>, <code>4:5</code>, <code>21:9</code>; <code>720p</code>, <code>1080p</code>, <code>1440p</code>, <code>4k</code>)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The window renders each track, writes <code>rendu-en-lot.txt</code> next to the films, then closes. Exit code 0: all done; 1: a film failed; 2: the command could not run.</p>
+  <p class="note">On Linux the desktop app encodes video with the system <code>ffmpeg</code> (<code>sudo apt install ffmpeg</code>); without it, only still images can be exported.</p>
+</section>
+
+<!-- ================================================================== 13 -->
+<section id="keys">
+  <div class="sec-head"><span class="num">13</span><h2>Keyboard shortcuts</h2></div>
+  <p>The same list is available in the app with <kbd>?</kbd>.</p>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>Space</kbd></td><td>Play or pause</td></tr>
+        <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Back or forward one second; with a block selected, nudge it by one second (a tenth with <kbd>Shift</kbd>)</td></tr>
+        <tr><td><kbd>Shift+←</kbd> <kbd>Shift+→</kbd></td><td>Back or forward five seconds</td></tr>
+        <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>Start or end of the film</td></tr>
+        <tr><td><kbd>S</kbd> · <kbd>T</kbd></td><td>Add a stop at the marker · a text at the playhead</td></tr>
+        <tr><td><kbd>Del</kbd></td><td>Remove the selected block</td></tr>
+        <tr><td><kbd>Ctrl+Z</kbd> · <kbd>Ctrl+Shift+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>Undo · redo</td></tr>
+        <tr><td><kbd>Ctrl</kbd> + wheel</td><td>Zoom the timeline</td></tr>
+        <tr><td><kbd>Ctrl+O</kbd> · <kbd>Ctrl+S</kbd> · <kbd>Ctrl+E</kbd></td><td>Open · save · export drawer</td></tr>
+        <tr><td><kbd>F</kbd> · <kbd>G</kbd></td><td>Reframe the view on the track · show the safe areas</td></tr>
+        <tr><td><kbd>[</kbd></td><td>Fold or unfold the panel</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Show the shortcuts</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close the dialog, then the export drawer, then the selection</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================================================================== 14 -->
+<section id="privacy">
+  <div class="sec-head"><span class="num">14</span><h2>Data, privacy and credits</h2></div>
+  <ul>
+    <li><strong>Your track never leaves your computer.</strong> Open services only see an approximate position: the tile area, a few points rounded to 1 km for the weather, the rectangle around the track for landmarks.</li>
+    <li>Weather and landmarks are on by default; turn them off and no more requests are sent.</li>
+    <li>Exported videos, images and posters carry the <strong>source credits</strong> in small print. If you turn them off ("Habillage" › "Crédits des sources"), credit the sources elsewhere, for example in the video description.</li>
+    <li>Some sources forbid commercial use (EOX Sentinel-2, Open-Meteo) or require the same licence for derived works (OpenTopoMap). Check them before publishing a film commercially: see <a href="sources.md#attributions-licenses-and-offline-use">data sources</a>.</li>
+  </ul>
+</section>
+
+<!-- ================================================================== 15 -->
+<section id="faq">
+  <div class="sec-head"><span class="num">15</span><h2>Questions and answers</h2></div>
+  <div class="faq">
+    <details>
+      <summary>The export is slow. Is something wrong?</summary>
+      <div class="answer"><p>No. Each frame waits for the visible terrain to be fully loaded, then is rendered at the video size. A graphics card and a good connection (or an offline pack) make it faster. After a first film, the multi-format summary estimates the render time.</p></div>
+    </details>
+    <details>
+      <summary>Import or export does nothing on my hosted site.</summary>
+      <div class="answer"><p>The site must be served over <strong>HTTPS</strong>: outside <code>localhost</code>, browsers reserve the video encoder and other features for secure pages.</p></div>
+    </details>
+    <details>
+      <summary>Can I use Firefox or Safari?</summary>
+      <div class="answer"><p>The view works, but video export has not been tested there and long videos are built in memory. Use Chrome, Edge or the desktop app for exports.</p></div>
+    </details>
+    <details>
+      <summary>Some terrain looks blurry or flat.</summary>
+      <div class="answer"><p>Detail loads around the camera as tiles arrive. During export each frame waits for them. Outside an offline corridor, terrain stays coarser when you are offline.</p></div>
+    </details>
+    <details>
+      <summary>My video has no sound.</summary>
+      <div class="answer"><p>If the browser cannot encode audio, the video comes out silent and the export panel says so. Videos synced with "Suivre la vitesse du survol" are always silent.</p></div>
+    </details>
+    <details>
+      <summary>Where are my presets and projects kept?</summary>
+      <div class="answer"><p>In the browser's storage (or the desktop app's own folder). To move a project to another machine, use "Enregistrer" and copy the <code>.openflyover.json</code> file.</p></div>
+    </details>
+  </div>
+</section>
+
+</main>
+
+<footer>OpenFlyover user guide. How the app is built: <a href="how-it-works.html">knowledge base</a>. Code, setup and licences: <a href="../README.md">README</a>.</footer>
+</div>
+</body>
+</html>
