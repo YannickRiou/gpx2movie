@@ -1,81 +1,91 @@
 # OpenFlyover
 
-OpenFlyover fait un film de survol 3D à partir d'une trace GPX ou FIT, sur le vrai relief, avec des données ouvertes.
+[![CI](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml/badge.svg)](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml)
+[![Desktop installers](https://github.com/YannickRiou/gpx2movie/actions/workflows/desktop.yml/badge.svg)](https://github.com/YannickRiou/gpx2movie/actions/workflows/desktop.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1C2A33.svg)](LICENSE)
+[![Node 24](https://img.shields.io/badge/node-24-1C2A33?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TypeScript 6](https://img.shields.io/badge/TypeScript-6.0-1C2A33?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React 19](https://img.shields.io/badge/React-19-1C2A33?logo=react&logoColor=white)](https://react.dev/)
+[![three.js r186](https://img.shields.io/badge/three.js-r186-1C2A33?logo=threedotjs&logoColor=white)](https://threejs.org/)
+[![Vite 8](https://img.shields.io/badge/Vite-8-1C2A33?logo=vite&logoColor=white)](https://vite.dev/)
+[![Tauri 2](https://img.shields.io/badge/Tauri-2-1C2A33?logo=tauri&logoColor=white)](https://v2.tauri.app/)
+[![Tested with Vitest](https://img.shields.io/badge/tested_with-Vitest-1C2A33?logo=vitest&logoColor=white)](https://vitest.dev/)
 
-- [Présentation](#présentation)
-- [Captures d'écran](#captures-décran)
-- [Démarrage rapide](#démarrage-rapide)
-- [Utilisation](#utilisation)
-- [Fonctionnement](#fonctionnement)
-- [Déploiement sur un serveur](#déploiement-sur-un-serveur)
-- [Application de bureau](#application-de-bureau)
-- [Tests et qualité](#tests-et-qualité)
-- [Sources de données et attributions](#sources-de-données-et-attributions)
-- [Licences](#licences)
-- [Architecture et contribution](#architecture-et-contribution)
-- [Feuille de route](#feuille-de-route)
+OpenFlyover makes a 3D flyover movie from a GPX or FIT track, over the real terrain, with open data.
 
-## Présentation
+- [Overview](#overview)
+- [Screenshots](#screenshots)
+- [Quick start](#quick-start)
+- [Usage](#usage)
+- [How it works](#how-it-works)
+- [Deploying to a server](#deploying-to-a-server)
+- [Desktop application](#desktop-application)
+- [Tests and quality](#tests-and-quality)
+- [Data sources and attributions](#data-sources-and-attributions)
+- [Licenses](#licenses)
+- [Architecture and contributing](#architecture-and-contributing)
+- [Roadmap](#roadmap)
 
-Vous importez la trace d'une sortie : randonnée, trail, vélo, ski de randonnée… OpenFlyover la pose sur un relief 3D
-couvert d'orthophotos (photos aériennes redressées). Une caméra la survole, et vous exportez le résultat en vidéo.
+## Overview
 
-Tout tourne dans le navigateur. Il n'y a ni compte, ni clé d'API, ni service payant, ni code côté serveur. Vos fichiers
-restent sur votre machine : le navigateur télécharge seulement le relief, l'imagerie, la météo et les repères auprès de
-services ouverts.
+You import the track of an outing: hiking, trail running, cycling, ski touring… OpenFlyover lays it on 3D terrain
+covered with orthophotos (orthorectified aerial photos). A camera flies over it, and you export the result as a video.
 
-Deux façons de l'utiliser :
+Everything runs in the browser. There is no account, no API key, no paid service and no server-side code. Your files
+stay on your machine: the browser only downloads terrain, imagery, weather and landmarks from open services.
 
-- comme **site web statique**, en local ou sur votre propre serveur ;
-- comme **application de bureau** Windows, macOS ou Linux ([voir plus bas](#application-de-bureau)).
+Two ways to use it:
 
-Ce qui existe aujourd'hui :
+- as a **static website**, locally or on your own server;
+- as a Windows, macOS or Linux **desktop application** ([see below](#desktop-application)).
 
-| Domaine | Fonctionnalités |
+What exists today:
+
+| Area | Features |
 |---|---|
-| Import | GPX et FIT, plusieurs traces à la fois ; fréquence cardiaque, cadence, puissance et température si présentes ; distance, D+ / D−, durée, altitudes |
-| Relief et imagerie | relief Mapterhorn ou AWS Terrain Tiles ; orthophotos IGN en France et swisstopo en Suisse, choisies automatiquement ; Esri et Sentinel-2 ailleurs ; cartes topographiques ; photos IGN anciennes (1950–2005) ; exagération du relief ; lacs et rivières d'OpenStreetMap en eau qui reflète le ciel et le soleil, avec vaguelettes |
-| Survol | cinq styles de caméra (poursuite, balancement, orbite, vue du dessus, plan cinématique), six préréglages, durée de 15 s à 10 min, profil altimétrique cliquable |
-| Rythme | ralentis et pauses aux temps forts : sommets des montées, cols, sommets proches |
-| Lumière | ciel et brume physiques, soleil à l'heure réelle de la sortie, ombres du relief, nuit étoilée, exposition automatique |
-| Météo | météo historique du jour de la sortie (Open-Meteo), visible dans un panneau et dans la scène ; nuages en volume tirés de la nébulosité basse, moyenne et haute (ou réglés à la main), poussés par le vent |
-| Repères | sommets, cols, refuges, lacs… tirés d'OpenStreetMap ; montées détectées et classées (cat. 4 à HC) ; étiquettes 3D ; le film ralentit aux cols, sommets et refuges sur la trace et affiche leur nom |
-| Reconnaissance | une sortie pas encore faite, tracée en posant des points sur le relief : l'itinéraire suit les chemins d'OpenStreetMap, avec ses altitudes, et se survole comme une trace |
-| Points d'intérêt | vos propres lieux (« Pique-nique », « Le chalet de Paul »), posés d'un clic droit sur le relief ou au marqueur, affichés comme les repères dans la vue et le film |
-| Trace | colorée selon la vitesse, la pente, l'altitude, le cardio, la cadence, la puissance ou la température ; épaisseur, tirets ou points, halo lumineux, trace qui se dessine au passage du marqueur |
-| Marqueur | boule, figurine (randonneur, coureur, cycliste, VTT, skieur, parapente, voiture) tournée dans le sens de la marche, ou votre photo en rond ; taille réglable |
-| Course fantôme | plusieurs traces rejouées ensemble, avec un classement en direct |
-| Enchaînement | plusieurs traces (une par jour, ou une sortie enregistrée en deux fichiers) réunies en un seul parcours, survolé d'un trait |
-| Habillage | titres, compteurs, profil, mini-carte, météo, logo, texte, classement de la course fantôme, textes, photos et vidéos de la timeline incrustés dans le film, crédits des sources ; trois styles, dont on peut changer les couleurs et les polices, pour tout l'habillage ou élément par élément |
-| Musique | une ou plusieurs musiques sur la timeline (MP3, M4A, OGG, WAV, FLAC), avec volume et fondus ; jouées pendant la lecture et mixées dans la vidéo exportée, avec le son des vidéos ; musique baissée sous les vidéos au choix |
-| Export | vidéo MP4 ou WebM en 16:9, 9:16, 1:1, 4:5 ou 21:9, de 720p à 4K, à 24, 30 ou 60 images/s, avec la musique et le son des vidéos ; image fixe PNG ou JPEG |
-| Affiche | affiche imprimable de la sortie en A4 ou A3 (300 dpi, portrait ou paysage) ou carrée : vue 3D de toute la trace, titre, date, chiffres clés, profil, météo du jour, crédits ; trois styles ; plusieurs traces sur la même affiche, chacune dans sa couleur, avec leur liste ou leur total ; « Carte à plat » pour une carte vue d'en haut |
-| Projet | fichier de projet à enregistrer et rouvrir, annuler / rétablir, préréglages |
+| Import | GPX and FIT, several tracks at once; heart rate, cadence, power and temperature when present; distance, elevation gain / loss (D+ / D−), duration, elevations |
+| Terrain and imagery | Mapterhorn or AWS Terrain Tiles terrain; IGN orthophotos in France and swisstopo in Switzerland, chosen automatically; Esri and Sentinel-2 elsewhere; topographic maps; historical IGN photos (1950–2005); terrain exaggeration; OpenStreetMap lakes and rivers rendered as water that reflects the sky and the sun, with ripples |
+| Flyover | five camera styles (chase, sway, orbit, top-down view, cinematic shot), six presets, duration from 15 s to 10 min, clickable elevation profile |
+| Pacing | slow-motion and pauses at highlights: tops of climbs, passes, nearby summits |
+| Light | physically based sky and haze, sun at the actual time of the outing, terrain shadows, starry night, automatic exposure |
+| Weather | historical weather for the day of the outing (Open-Meteo), shown in a panel and in the scene; volumetric clouds derived from low, mid and high cloud cover (or set by hand), pushed by the wind |
+| Landmarks | summits, passes, huts, lakes… from OpenStreetMap; climbs detected and categorized (cat. 4 to HC); 3D labels; the movie slows down at passes, summits and huts on the track and shows their name |
+| Scouting | an outing not done yet, drawn by placing points on the terrain: the route follows OpenStreetMap paths, with its elevations, and is flown over like a track |
+| Points of interest | your own places ("Picnic", "Paul's chalet"), placed with a right-click on the terrain or at the marker, with an icon (hut, bivouac, summit…), shown like landmarks in the view and in the movie |
+| Track | colored by speed, slope, elevation, heart rate, cadence, power or temperature; width, dashes or dots, glow, track that draws itself as the marker passes |
+| Marker | ball, figurine (hiker, mountaineer, runner, cyclist, bikepacking, mountain bike, skier, paraglider, motorbike, car, light aircraft) facing the direction of travel, or your photo in a circle; adjustable size |
+| Ghost race | several tracks replayed together, with a live leaderboard |
+| Chaining | several tracks (one per day, or one outing recorded in two files) merged into a single route, flown over in one go |
+| Overlay | titles, counters, profile, mini-map, weather, logo, text, ghost race leaderboard, texts, photos and videos from the timeline burned into the movie, source credits; three styles whose colors and fonts can be changed, for the whole overlay or element by element |
+| Music | one or more music tracks on the timeline (MP3, M4A, OGG, WAV, FLAC), with volume and fades; played during playback and mixed into the exported video, with the sound of the videos; music optionally lowered under the videos |
+| Export | MP4 or WebM video in 16:9, 9:16, 1:1, 4:5 or 21:9, from 720p to 4K, at 24, 30 or 60 frames per second, with the music and the sound of the videos; PNG or JPEG still image |
+| Poster | printable poster of the outing in A4 or A3 (300 dpi, portrait or landscape) or square: 3D view of the whole track, title, date, key figures, profile, weather of the day, credits; three styles; several tracks on the same poster, each in its color, with their list or their total; "Carte à plat" (flat map) for a map seen from above |
+| Project | project file to save and reopen, undo / redo, presets |
 
-## Captures d'écran
+## Screenshots
 
-![L'interface : barre du haut, onglets à gauche, vue 3D du Tour du Mont-Blanc, timeline en bas](docs/images/interface.jpg)
+![The interface: top bar, tabs on the left, 3D view of the Tour du Mont-Blanc, timeline at the bottom](docs/images/interface.jpg)
 
-*L'interface avec la trace d'exemple : les onglets à gauche, la vue 3D cadrée au format de la vidéo, la timeline avec ses
-plans, ses arrêts automatiques et ses pistes de textes et de photos.*
+*The interface with the sample track: the tabs on the left, the 3D view framed to the video format, the timeline with its
+shots, its automatic stops and its text and photo lanes.*
 
-![Un arrêt sélectionné dans la timeline, ses réglages dans le panneau de droite](docs/images/montage.jpg)
+![A stop selected in the timeline, its settings in the right panel](docs/images/montage.jpg)
 
-*Le montage : un clic sur un bloc de la timeline ouvre ses réglages à droite.*
+*Editing: clicking a block on the timeline opens its settings on the right.*
 
-![Le film avec son habillage et le tiroir d'export ouvert](docs/images/habillage.jpg)
+![The movie with its overlay and the export drawer open](docs/images/habillage.jpg)
 
-*L'habillage (titre, date, crédits des sources) et le tiroir d'export : format, résolution, durée et taille estimées.*
+*The overlay (title, date, source credits) and the export drawer: format, resolution, estimated duration and size.*
 
-## Démarrage rapide
+## Quick start
 
-Il vous faut :
+You need:
 
-- **Node.js 24** ;
-- **Chrome ou Edge** récent. La vue 3D utilise WebGL 2 et l'export vidéo utilise WebCodecs, l'API d'encodage vidéo du
-  navigateur. L'export n'a pas été testé sous Firefox ni Safari ;
-- une carte graphique correcte : elle fait la vitesse de l'export ;
-- une connexion Internet, pour les tuiles (les petites images carrées de relief et de carte).
+- **Node.js 24**;
+- a recent **Chrome or Edge**. The 3D view uses WebGL 2 and video export uses WebCodecs, the browser's video encoding
+  API. Export has not been tested in Firefox or Safari;
+- a decent graphics card: it sets the export speed;
+- an Internet connection, for the tiles (the small square images of terrain and map).
 
 ```bash
 git clone https://github.com/YannickRiou/gpx2movie.git
@@ -84,260 +94,272 @@ npm ci
 npm run dev
 ```
 
-Ouvrez <http://127.0.0.1:5173> et cliquez sur « Essayer avec l'exemple (Tour du Mont-Blanc) ».
+Open <http://127.0.0.1:5173> and click "Essayer avec l'exemple (Tour du Mont-Blanc)" (try with the sample).
 
-Pour tester la version de production : `npm run build`, puis `npm run preview` (<http://localhost:4173>).
+To test the production build: `npm run build`, then `npm run preview` (<http://localhost:4173>).
 
-### Notes pour la machine de développement
+### Notes for the development machine
 
-- **WSL** : lancez `source ~/.nvm/nvm.sh && nvm use 24` avant `npm`.
-- **Windows** : Node est installé par fnm, hors du PATH. Ajoutez-le avant `npm` :
-  - PowerShell : `$env:Path = "C:\Users\MadCreator\AppData\Roaming\fnm\node-versions\v24.21.0\installation;" + $env:Path`
-  - Git Bash : `export PATH="/c/Users/MadCreator/AppData/Roaming/fnm/node-versions/v24.21.0/installation:$PATH"`
+- **WSL**: run `source ~/.nvm/nvm.sh && nvm use 24` before `npm`.
+- **Windows**: Node is installed by fnm, outside the PATH. Add it before `npm`:
+  - PowerShell: `$env:Path = "C:\Users\MadCreator\AppData\Roaming\fnm\node-versions\v24.21.0\installation;" + $env:Path`
+  - Git Bash: `export PATH="/c/Users/MadCreator/AppData/Roaming/fnm/node-versions/v24.21.0/installation:$PATH"`
 
-## Utilisation
+## Usage
 
-L'écran se lit comme un logiciel de montage :
+The screen reads like video editing software:
 
-- **en haut**, la barre du projet : nom, annuler / rétablir, « Ouvrir », « Enregistrer », le format de sortie au centre et
-  le bouton **« Exporter »** à droite ;
-- **à gauche**, une colonne d'icônes (Trace, Carte, Survol, Habillage, Projet) ; chaque icône ouvre son panneau. Cliquez à
-  nouveau sur l'icône, ou tapez `[`, pour replier le panneau ;
-- **au centre**, la vue 3D, cadrée au format de la vidéo ; **en dessous**, la timeline du film ;
-- **tout en bas**, une fine bande d'état : chargement de la carte et sources des données (le bouton ⓘ affiche le texte
-  complet).
+- **at the top**, the project bar: name, undo / redo, "Ouvrir" (open), "Enregistrer" (save), the output format in the
+  center and the **"Exporter"** (export) button on the right;
+- **on the left**, a column of icons ("Trace" (track), "Carte" (map), "Survol" (flyover), "Habillage" (overlay),
+  "Projet" (project)); each icon opens its panel. Click the icon again, or press `[`, to collapse the panel;
+- **in the center**, the 3D view, framed to the video format; **below it**, the movie timeline;
+- **at the very bottom**, a thin status bar: map loading and data sources (the ⓘ button shows the full text).
 
-L'appli se souvient de l'onglet ouvert et du panneau replié. Les messages (trace importée, projet enregistré, vidéo
-prête, erreur…) s'affichent en bas de la vue ; les erreurs restent jusqu'à ce que vous les fermiez. Le bouton **?** de la
-barre du haut (ou la touche `?`) liste tous les raccourcis clavier.
+The app remembers the open tab and the collapsed panel. Messages (track imported, project saved, video ready, error…)
+appear at the bottom of the view; errors stay until you close them. The **?** button in the top bar (or the `?` key)
+lists all keyboard shortcuts.
 
-### Importer une trace
+### Importing a track
 
-Glissez un ou plusieurs fichiers `.gpx` ou `.fit` n'importe où dans la fenêtre ; un fichier de projet `.json` déposé de
-la même façon s'ouvre. Au premier lancement, la vue affiche aussi **« Choisir un fichier »** et **« Essayer avec l'exemple
-(Tour du Mont-Blanc) »** (une étape synthétique). Ensuite, le petit bouton **« + Ajouter »** de la liste des traces en
-ajoute d'autres. « Ouvrir » (Ctrl+O), dans la barre du haut, accepte aussi bien une trace qu'un projet. Les photos et les
-vidéos se déposent, elles, sur la timeline.
+Drag one or more `.gpx` or `.fit` files anywhere into the window; a `.json` project file dropped the same way opens. On
+first launch, the view also shows **"Choisir un fichier"** (choose a file) and **"Essayer avec l'exemple (Tour du
+Mont-Blanc)"** (a synthetic stage). After that, the small **"+ Ajouter"** (add) button in the track list adds more.
+"Ouvrir" (Ctrl+O), in the top bar, accepts either a track or a project. Photos and videos, on the other hand, are
+dropped on the timeline.
 
-La vue se cadre sur la trace. Si la trace est entièrement en France ou en Suisse, l'imagerie passe à l'IGN ou à swisstopo, sauf si vous avez déjà choisi une source.
+The view frames the track. If the track is entirely in France or Switzerland, the imagery switches to IGN or swisstopo, unless you have already chosen a source.
 
-### Préparer une sortie (reconnaissance)
+### Planning an outing (scouting)
 
-Pour survoler un itinéraire avant d'y aller, tapez un lieu (« Chamonix ») ou des coordonnées (« 45.92, 6.87 ») dans
-**« Préparer une sortie »** de l'accueil ou de l'onglet Trace : le relief s'affiche sans trace. Faites un clic droit sur
-le relief › **« Point de passage ici »** pour le départ, les étapes puis l'arrivée, dans l'ordre. **« Calculer
-l'itinéraire »** relie les points par les chemins d'OpenStreetMap (sentiers et pistes avant les routes) et ajoute une
-trace, sans heures, avec ses altitudes : le film se monte comme pour une sortie faite. « Modifier » reprend ses points
-pour la recalculer. Les points doivent tenir dans une trentaine de kilomètres et être à moins de 500 m d'un chemin.
+To fly over a route before going, type a place ("Chamonix") or coordinates ("45.92, 6.87") in **"Préparer une
+sortie"** (plan an outing) on the home screen or in the "Trace" tab: the terrain appears without a track. Right-click the
+terrain › **"Point de passage ici"** (waypoint here) for the start, the intermediate points, then the finish, in order.
+**"Calculer l'itinéraire"** (compute the route) links the points along OpenStreetMap paths (trails and dirt tracks
+before roads) and adds a track, without times, with its elevations: the movie is edited as for a completed outing.
+"Modifier" (edit) reloads its points to recompute it. The points must fit within about thirty kilometers and be less
+than 500 m from a path.
 
-La liste des traces affiche vos traces ; le bouton × en supprime une. Le survol, la météo, les repères et les montées
-suivent la première trace. Dès deux traces, « Enchaîner en un seul parcours » les réunit en une seule (dans l'ordre des
-heures de départ) ; le message propose « Annuler ».
+The track list shows your tracks; the × button deletes one. The flyover, weather, landmarks and climbs follow the first
+track. With two tracks or more, "Enchaîner en un seul parcours" (chain into a single route) merges them into one (in
+order of start time); the message offers "Annuler" (undo).
 
-### Naviguer et lire
+### Navigating and playback
 
-- Clic gauche glissé : tourner. Clic droit glissé : déplacer. Molette : zoomer.
-- Le bouton en forme de viseur, en haut à droite de la vue (ou la touche F), revient à la vue d'ensemble.
-- Dans la timeline, ▶ (ou Espace) lance le survol et ■ revient au début. Cliquez ou glissez sur le profil pour vous
-  déplacer, ou utilisez les flèches ← → (une seconde, cinq avec Maj), Début et Fin. La vitesse va de ×0,5 à ×4.
-- Cliquez sur la trace, dans la vue 3D, pour y placer la tête de lecture.
-- En pause, vous tournez librement autour du marqueur.
+- Left-click drag: rotate. Right-click drag: pan. Mouse wheel: zoom.
+- The crosshair button, at the top right of the view (or the F key), returns to the overview.
+- In the timeline, ▶ (or Space) starts the flyover and ■ returns to the start. Click or drag on the profile to move, or
+  use the ← → arrows (one second, five with Shift), Home and End. Speed ranges from ×0.5 to ×4.
+- Click the track, in the 3D view, to place the playhead there.
+- When paused, you can orbit freely around the marker.
 
-### Monter le film
+### Editing the movie
 
-- Cliquez sur un bloc de la timeline : ses réglages s'ouvrent dans le panneau de droite. Échap le referme.
-- « Arrêt » (ou la touche S) ajoute un arrêt à la position du marqueur, « Texte » (ou T) un texte à la tête de lecture.
-- « Média » ajoute des photos et des vidéos à la tête de lecture (ou glissez-les sur la timeline). Une vidéo (MP4, WebM
-  ou MOV, 50 Mo au plus) garde sa durée, 30 s au plus ; tirez ses bords pour la raccourcir. Elle garde son son : « Son de
-  la vidéo » le coupe dans son panneau, qui règle aussi son volume. Pendant la lecture, il ne s'entend qu'à ×1. Photos et
-  vidéos sont enregistrées dans le fichier du projet. Dans un projet d'avant, les vidéos restent muettes.
-- Une vidéo filmée pendant la sortie (caméra embarquée, téléphone) peut être calée sur le parcours : « Caler sur le
-  parcours » (dans le message après l'ajout, ou dans le panneau de la vidéo) la place au moment où le marqueur passe là où
-  elle a été filmée. L'heure vient du fichier ; si la caméra n'est pas à l'heure, corrigez-la avec « Décalage de
-  l'horloge » (en secondes, positif : la vidéo passe plus tard). « Suivre la vitesse du survol » fait défiler la vidéo au
-  rythme du marqueur : plus vite quand le survol accélère, figée pendant un arrêt. La trace doit avoir des heures. La vidéo
-  est alors muette : à ce rythme, son son serait déformé.
-- « Options » › « Ajouter une musique… » pose un fichier audio (MP3, M4A, AAC, OGG, Opus, WAV ou FLAC, 30 Mo au plus) sur la
-  piste « Musique », au début du film ou à la suite de la précédente (ou glissez-le sur la timeline). Le bloc montre la forme
-  d'onde. Tirez ses bords pour le couper, réglez le volume et les fondus dans le panneau. « Caler la durée du film sur la
-  musique » change la durée du survol pour que le film finisse avec elle. « Baisser la musique sous les vidéos » la baisse
-  de 10 dB pendant les vidéos qui ont du son. La musique joue pendant la lecture ; le bouton haut-parleur de la barre
-  coupe le son de la lecture, musique et vidéos (la vidéo exportée le garde). Elle est enregistrée dans le projet.
-  « Caler sur le rythme » pose les arrêts, les titres et les débuts des portions de vitesse (ralentis) sur les temps de la musique (de petites marques en haut du bloc).
-- « Vitesse » fait passer 1 km de trace deux fois plus vite, à partir du marqueur (ou clic droit sur la trace, « Accélérer /
-  ralentir ici ») ; tirez les bords du bloc, choisissez de ×0,25 à ×4 dans le panneau.
-- Dans le panneau d'un arrêt, « Caméra pendant l'arrêt » : comme le film, tour lent autour du point, vue large ou fixe.
-- Dans le panneau de l'ouverture, le style « Depuis la région » part de très haut au-dessus de la région, puis plonge vers la trace ; en clôture, la caméra y remonte. Le style « Balayage » fait tourner lentement la vue d'ensemble autour de la trace, puis descend vers le survol (en clôture : l'inverse).
-- Onglet Survol, « Garder ce cadrage ici » pose un cadrage au marqueur (losange de la piste « Plans ») : réglez sa distance,
-  son inclinaison et sa visée dans son panneau. La caméra passe en douceur d'un cadrage à l'autre, le reste du film ne change pas.
-  Dans le panneau d'un texte ou d'une photo, « Cadrer la caméra pendant cet élément » fait de même pour la durée de l'élément.
-- Clic droit sur la trace, dans la vue 3D : « Ajouter un arrêt ici » ou « Ajouter un texte ici ».
-- Le curseur de zoom et « Ajuster » règlent la largeur de la timeline. « Options » règle les arrêts automatiques.
+- Click a block on the timeline: its settings open in the right panel. Escape closes it.
+- "Arrêt" (stop) (or the S key) adds a stop at the marker position, "Texte" (text) (or T) adds a text at the playhead.
+- "Média" (media) adds photos and videos at the playhead (or drag them onto the timeline). A video (MP4, WebM or MOV,
+  50 MB max) keeps its duration, 30 s max; drag its edges to shorten it. It keeps its sound: "Son de la vidéo" (video
+  sound) mutes it in its panel, which also sets its volume. During playback, the sound is heard only at ×1. Photos and
+  videos are saved in the project file. In a project from an earlier version, videos stay silent.
+- A video filmed during the outing (action camera, phone) can be synced to the route: "Caler sur le parcours" (sync to
+  the route) (in the message after adding it, or in the video panel) places it at the moment the marker passes where it
+  was filmed. The time comes from the file; if the camera clock is wrong, correct it with "Décalage de l'horloge" (clock
+  offset) (in seconds; positive: the video plays later). "Suivre la vitesse du survol" (follow the flyover speed) plays
+  the video at the marker's pace: faster when the flyover speeds up, frozen during a stop. The track must have times.
+  The video is then silent: at that pace, its sound would be distorted.
+- "Options" › "Ajouter une musique…" (add music) places an audio file (MP3, M4A, AAC, OGG, Opus, WAV or FLAC, 30 MB max)
+  on the "Musique" (music) lane, at the start of the movie or after the previous one (or drag it onto the timeline). The
+  block shows the waveform. Drag its edges to trim it; set the volume and fades in the panel. "Caler la durée du film
+  sur la musique" (fit the movie duration to the music) changes the flyover duration so that the movie ends with it.
+  "Baisser la musique sous les vidéos" (lower the music under videos) lowers it by 10 dB during videos that have sound.
+  The music plays during playback; the speaker button in the bar mutes playback sound, music and videos (the exported
+  video keeps it). It is saved in the project.
+  "Caler sur le rythme" (sync to the beat) places stops, titles and the starts of speed sections (slow-motion) on the beats of the music (small marks at the top of the block).
+- "Vitesse" (speed) makes 1 km of track play twice as fast, starting at the marker (or right-click the track,
+  "Accélérer / ralentir ici" (speed up / slow down here)); drag the block edges, choose from ×0.25 to ×4 in the panel.
+- In a stop's panel, "Caméra pendant l'arrêt" (camera during the stop): same as the movie, slow turn around the point,
+  wide view or fixed.
+- In the opening panel, the "Depuis la région" (from the region) style starts very high above the region, then dives toward the track; at the closing, the camera climbs back up there. The "Balayage" (sweep) style slowly rotates the overview around the track, then descends into the flyover (at the closing: the reverse).
+- In the "Survol" tab, "Garder ce cadrage ici" (keep this framing here) sets a framing at the marker (diamond on the
+  "Plans" (shots) lane): set its distance, tilt and aim in its panel. The camera moves smoothly from one framing to the
+  next; the rest of the movie does not change.
+  In the panel of a text or a photo, "Cadrer la caméra pendant cet élément" (frame the camera during this element) does
+  the same for the element's duration.
+- Right-click the track, in the 3D view: "Ajouter un arrêt ici" (add a stop here) or "Ajouter un texte ici" (add a text
+  here).
+- The zoom slider and "Ajuster" (fit) set the timeline width. "Options" sets the automatic stops.
 
-### Le format de sortie
+### The output format
 
-Les icônes du centre de la barre choisissent le format de la vidéo : 16:9, 9:16, 1:1, 4:5 ou 21:9. La vue 3D est alors
-cadrée exactement comme la vidéo, avec des bandes sombres autour : ce que vous voyez est ce que vous exportez.
-« Libre » (la première icône) remplit tout l'écran, pour regarder ; ce choix n'est pas enregistré dans le projet.
+The icons in the center of the bar choose the video format: 16:9, 9:16, 1:1, 4:5 or 21:9. The 3D view is then framed
+exactly like the video, with dark bands around it: what you see is what you export.
+"Libre" (free, the first icon) fills the whole screen, for viewing; this choice is not saved in the project.
 
-Le bouton en pointillés, sous le viseur (ou la touche G), affiche les **zones de sécurité** du format : en 16:9, 1:1 et
-21:9 les marges « Action 93 % » et « Titres 90 % » ; en 9:16 et 4:5 les parties cachées par l'interface d'Instagram
-Reels, TikTok et YouTube Shorts (barre du haut, boutons à droite, légende en bas), en hachuré. Elles ne servent qu'à
-l'aperçu : la vidéo exportée ne les contient jamais.
+The dotted button, below the crosshair (or the G key), shows the **safe areas** of the format: in 16:9, 1:1 and 21:9 the
+"Action 93 %" and "Titres 90 %" (titles 90%) margins; in 9:16 and 4:5 the parts hidden by the Instagram Reels, TikTok
+and YouTube Shorts interface (top bar, buttons on the right, caption at the bottom), hatched. They are only for the
+preview: the exported video never contains them.
 
-### Les onglets
+### The tabs
 
-| Onglet | À quoi il sert |
+| Tab | What it is for |
 |---|---|
-| Trace | vos traces ; dès deux traces, la « Course fantôme » ; les montées détectées, la météo de la sortie et « Hors ligne » (sections repliables) |
-| Carte | fond de carte, relief et trace, lumière (heure du soleil), atmosphère et météo, couleurs (étalonnage) ; repères OpenStreetMap |
-| Survol | préréglage, style de caméra, durée du survol, rythme ; trace et marqueur |
-| Habillage | en sections : Habillage (affiché ou non, style, « Couleurs et polices »), Titres, Compteurs, Profil et mini-carte, Météo, logo et texte, Crédits des sources |
-| Projet | Mes projets, préréglages des réglages |
+| "Trace" | your tracks; with two tracks or more, the "Course fantôme" (ghost race); detected climbs, the weather of the outing and "Hors ligne" (offline) (collapsible sections) |
+| "Carte" | base map, terrain and track, light (sun time), atmosphere and weather, colors (color grading); OpenStreetMap landmarks |
+| "Survol" | preset, camera style, flyover duration, pacing; track and marker |
+| "Habillage" | in sections: "Habillage" (shown or not, style, "Couleurs et polices" (colors and fonts)), "Titres" (titles), "Compteurs" (counters), "Profil et mini-carte" (profile and mini-map), "Météo, logo et texte" (weather, logo and text), "Crédits des sources" (source credits) |
+| "Projet" | "Mes projets" (my projects), settings presets |
 
-Les réglages rares sont rangés dans « Plus de réglages », en bas de chaque section. Dans « Lumière », choisissez « Heure
-fixe » pour placer le soleil sur la journée, ou d'un clic : Lever, Matin, Midi, Heure dorée, Coucher, Nuit.
+Rarely used settings are in "Plus de réglages" (more settings), at the bottom of each section. In "Lumière" (light),
+choose "Heure fixe" (fixed time) to place the sun over the day, or with one click: "Lever" (sunrise), "Matin"
+(morning), "Midi" (noon), "Heure dorée" (golden hour), "Coucher" (sunset), "Nuit" (night).
 
-« Couleurs » étalonne l'image, à l'aperçu comme à l'export : Naturel (aucun changement), Lumineux, Doux, Contrasté, Chaud
-du soir, Froid d'altitude, Noir et blanc ; « Plus de réglages » affine le contraste, la saturation, la température et le
-vignettage.
+"Couleurs" (colors) grades the image, in the preview and in the export: "Naturel" (no change), "Lumineux" (bright),
+"Doux" (soft), "Contrasté" (high contrast), "Chaud du soir" (warm evening), "Froid d'altitude" (cold altitude), "Noir et
+blanc" (black and white); "Plus de réglages" fine-tunes contrast, saturation, temperature and vignetting.
 
-Sans trace, les onglets Carte, Survol et Habillage vous invitent d'abord à en ajouter une. Chaque fonction s'allume ou
-s'éteint avec un interrupteur ; les choix multiples (types de repères, compteurs) sont des pastilles à cocher.
+Without a track, the "Carte", "Survol" and "Habillage" tabs first invite you to add one. Each feature is turned on or
+off with a switch; multiple choices (landmark types, counters) are checkable chips.
 
-« Trace et marqueur » (onglet Survol) choisit le marqueur : Boule, Figurine ou Image (une photo ou un avatar, recadré en
-rond). La figurine regarde dans le sens où la trace avance à l'écran. « Trace qui se dessine » ne trace que la partie
-déjà parcourue ; « Halo lumineux » entoure la trace d'un halo de sa couleur. « Plus de réglages » : épaisseur, trait
-(plein, tirets, points), taille du marqueur. Pendant une course fantôme, les autres traces prennent le même marqueur dans
-leur couleur, sauf l'image : elles gardent leur boule.
+"Trace et marqueur" (track and marker) ("Survol" tab) chooses the marker: "Boule" (ball), "Figurine" or "Image" (a
+photo or an avatar, cropped to a circle). The figurine faces the direction in which the track moves on screen. "Trace
+qui se dessine" (self-drawing track) draws only the part already covered; "Halo lumineux" (glow) surrounds the track
+with a halo of its color. "Plus de réglages": width, line (solid, dashes, dots), marker size. During a ghost race, the
+other tracks get the same marker in their color, except the image: they keep their ball.
 
-Dans l'onglet Trace, la météo tient en deux lignes : la sortie, puis l'instant du marqueur. « Détails » donne le reste.
+In the "Trace" tab, the weather fits in two lines: the outing, then the moment at the marker. "Détails" (details) gives
+the rest. A track's color chip opens the color picker; the arrow of a track other than the first makes it the
+flown-over track (it moves to the top). Under the climbs, "Étiquettes dans la vue" (labels in the view) adds kilometer
+markers and sets the size and range of all terrain labels.
 
-La météo et les repères sont actifs par défaut. Éteignez-les : plus aucune requête ne part.
+In "Heure fixe" ("Carte" tab › "Lumière"), "Jour" (day) lights the scene on a day other than the day of the outing:
+sunrise, sunset and sun height follow the season. A text on the timeline can have its own color and font
+(inspector › "Couleur et police" (color and font)).
 
-### « modifié » et « Par défaut »
+Weather and landmarks are on by default. Turn them off and no more requests are sent.
 
-Quand un réglage s'écarte de sa valeur par défaut, la pastille **« modifié »** apparaît à côté du titre de la section. Le
-bouton **« Par défaut »** remet toute la section à zéro. « Annuler » dans le message, ou Ctrl+Z, annule ce retour.
+### "modifié" and "Par défaut"
 
-La source d'imagerie n'est pas suivie, car l'import la choisit selon la région.
+When a setting differs from its default value, the **"modifié"** (modified) chip appears next to the section title. The
+**"Par défaut"** (default) button resets the whole section. "Annuler" in the message, or Ctrl+Z, undoes this reset.
 
-### Exporter une vidéo
+The imagery source is not tracked, because the import chooses it according to the region.
 
-1. Cliquez sur **« Exporter »** (Ctrl+E) : le volet d'export s'ouvre à droite. Sur un petit écran, le panneau de gauche se
-   replie le temps de l'export.
-2. Choisissez le format et la résolution. « Plus de réglages » donne les images par seconde, la qualité et le type d'image
-   fixe.
-3. Lisez le résumé : durée, nombre d'images, codec choisi par le navigateur, taille estimée. La vidéo ajoute 1 s fixe au
-   début et 2 s à la fin.
-4. Cliquez sur **« Exporter la vidéo »**. Dans Chrome, Edge et l'application de bureau, une fenêtre demande d'abord où
-   enregistrer le fichier (« Enregistrement direct sur le disque ») : il s'écrit au fur et à mesure. Le film se calcule sous vos yeux, dans la vue. Chaque image attend que le relief
-   visible soit chargé. Le bouton du haut affiche l'avancement (« 42 % · Annuler ») ; cliquez dessus pour arrêter.
-5. La musique et le son des vidéos sont mixés dans la vidéo (AAC, ou Opus si le navigateur n'encode pas l'AAC). Si le navigateur n'encode aucun
-   son, la vidéo sort muette et le panneau le dit.
-6. À la fin, le panneau indique « Enregistrée dans … ». Dans les autres navigateurs, le fichier se télécharge à la fin et le
-   lien « Télécharger… » reste affiché.
+### Exporting a video
 
-Gardez l'onglet ouvert. Sans écriture directe, la vidéo est construite en mémoire (environ deux fois sa taille) : au-delà
-de 1,5 Go estimés, le panneau prévient. Annuler un export écrit sur le disque supprime le fichier commencé. Pendant
-l'export, les onglets et le format sont bloqués.
+1. Click **"Exporter"** (Ctrl+E): the export pane opens on the right. On a small screen, the left panel collapses
+   during the export.
+2. Choose the format and the resolution. "Plus de réglages" gives frames per second, quality and the still image
+   type.
+3. Read the summary: duration, number of frames, codec chosen by the browser, estimated size. The video adds a fixed
+   1 s at the start and 2 s at the end.
+4. Click **"Exporter la vidéo"** (export the video). In Chrome, Edge and the desktop application, a window first asks
+   where to save the file ("Enregistrement direct sur le disque" (direct save to disk)): it is written as the export progresses. The movie is computed before your eyes, in the view. Each frame waits for the visible
+   terrain to load. The top button shows progress ("42 % · Annuler"); click it to stop.
+5. The music and the sound of the videos are mixed into the video (AAC, or Opus if the browser does not encode AAC). If the browser encodes no
+   audio, the video comes out silent and the panel says so.
+6. At the end, the panel shows "Enregistrée dans …" (saved in …). In other browsers, the file downloads at the end and
+   the "Télécharger…" (download) link stays visible.
 
-Pour une **image fixe**, placez la lecture où vous voulez, puis cliquez sur « Image fixe » (PNG par défaut, JPEG dans « Plus
-de réglages »). Elle a la taille de la vidéo et inclut l'habillage.
+Keep the tab open. Without direct writing, the video is built in memory (about twice its size): above an estimated
+1.5 GB, the panel warns you. Cancelling an export written to disk deletes the partial file. During the export, the tabs
+and the format are locked.
 
-Pour poser l'habillage sur vos propres images dans un logiciel de montage, cochez **« Habillage seul (fond transparent) »**
-avant d'exporter : compteurs, profil, carte, titres et crédits seuls, sans la vue 3D ni le son, dans une vidéo WebM
-transparente qui tombe image pour image sur la vidéo normale.
+For a **still image**, move the playhead where you want, then click "Image fixe" (still image) (PNG by default, JPEG in
+"Plus de réglages"). It has the size of the video and includes the overlay.
 
-Pour publier le même film en **plusieurs formats** (16:9 pour YouTube, 9:16 pour les stories, 1:1…), choisissez « Plusieurs
-formats » en haut du volet d'export. Cochez les résolutions de chaque format, et si vous voulez l'image fixe et l'affiche.
-Le résumé donne le nombre de fichiers, d'images et la taille totale ; après un premier film, il estime aussi la durée du
-rendu. Cliquez sur **« Tout exporter »** : les fichiers sont calculés l'un après l'autre (« 2 / 4 · 16:9 1080p · 42 % »).
-Dans Chrome, Edge et l'application de bureau, un dossier est demandé une fois et chaque fichier y est écrit, nommé
-« <projet> – 16x9-1080p.mp4 » (un fichier du même nom est remplacé). Ailleurs, chaque fichier se télécharge dès qu'il est
-prêt et la liste propose « Enregistrer à nouveau ». « Tout annuler » arrête le fichier en cours et ceux qui restent. Les
-images par seconde et la qualité sont celles du mode « Vidéo ».
+To lay the overlay over your own footage in video editing software, check **"Habillage seul (fond transparent)"**
+(overlay only, transparent background) before exporting: counters, profile, map, titles and credits only, without the
+3D view or sound, in a transparent WebM video that lines up frame for frame with the normal video.
 
-Pour une **affiche**, choisissez « Affiche » en haut du volet d'export. Réglez le format (A4 ou A3 à 300 dpi, portrait ou
-paysage, ou carré pour les réseaux sociaux), le style, le titre (le nom du projet par défaut), le sous-titre et les
-chiffres clés. La vignette montre la mise en page ; la vue 3D n'y apparaît qu'après une première affiche. Cliquez sur
-« Créer l'affiche » : la vue de toute la trace, nord en haut, est rendue en haute résolution puis l'affiche est enregistrée
-en PNG (« <projet> – affiche.png »). Les crédits des sources y figurent toujours, en petit. Les réglages de l'affiche sont
-enregistrés dans le projet ; un préréglage n'en garde que le style.
+To publish the same movie in **several formats** (16:9 for YouTube, 9:16 for stories, 1:1…), choose "Plusieurs
+formats" (several formats) at the top of the export pane. Check the resolutions for each format, and whether you want
+the still image and the poster. The summary gives the number of files, the number of frames and the total size; after a
+first movie, it also estimates the render time. Click **"Tout exporter"** (export all): the files are computed one after
+another ("2 / 4 · 16:9 1080p · 42 %"). In Chrome, Edge and the desktop application, a folder is requested once and each
+file is written to it, named "<project> – 16x9-1080p.mp4" (a file with the same name is replaced). Elsewhere, each file
+downloads as soon as it is ready and the list offers "Enregistrer à nouveau" (save again). "Tout annuler" (cancel all)
+stops the current file and the remaining ones. Frames per second and quality are those of the "Vidéo" (video) mode.
 
-### Préparer hors ligne
+For a **poster**, choose "Affiche" (poster) at the top of the export pane. Set the format (A4 or A3 at 300 dpi, portrait
+or landscape, or square for social networks), the style, the title (the project name by default), the subtitle and the
+key figures. The thumbnail shows the layout; the 3D view appears in it only after a first poster. Click
+"Créer l'affiche" (create the poster): the view of the whole track, north up, is rendered at high resolution, then the
+poster is saved as PNG ("<project> – affiche.png"). The source credits always appear on it, in small print. The poster
+settings are saved in the project; a preset keeps only its style.
 
-La section « Hors ligne » de l'onglet Trace télécharge une fois les tuiles de la trace : la vue et l'export marchent
-ensuite sans connexion.
+### Preparing for offline use
 
-- Choisissez la largeur du couloir autour de la trace : 2, 5 ou 10 km. Au-delà, le relief reste plus grossier.
-- L'estimation donne le nombre de tuiles et la taille avant de lancer : comptez plusieurs centaines de Mo pour 20 km.
-- « Préparer hors ligne » lance le téléchargement : 4 tuiles à la fois, avec Pause, Reprendre et Annuler.
-- Le pack vaut pour la trace, la source de relief, l'imagerie et le niveau de détail choisis à ce moment.
-- Relancer avec la même trace et les mêmes réglages termine un pack incomplet.
-- « Supprimer » libère la place. Sur le site, les tuiles restent dans le navigateur ; sur le bureau, dans le dossier de
-  l'application.
+The "Hors ligne" section of the "Trace" tab downloads the tiles of the track once: the view and the export then work
+without a connection.
 
-Certaines sources interdisent le téléchargement en masse ; elles restent en ligne (voir
-[Sources](#sources-de-données-et-attributions)).
+- Choose the width of the corridor around the track: 2, 5 or 10 km. Outside it, the terrain stays coarser.
+- The estimate gives the number of tiles and the size before starting: expect several hundred MB for 20 km.
+- "Préparer hors ligne" (prepare offline) starts the download: 4 tiles at a time, with "Pause", "Reprendre" (resume)
+  and "Annuler" (cancel).
+- The pack applies to the track, terrain source, imagery and level of detail chosen at that moment.
+- Running it again with the same track and the same settings completes an incomplete pack.
+- "Supprimer" (delete) frees the space. On the website, the tiles stay in the browser; on the desktop, in the
+  application folder.
 
-### Enregistrer un projet
+Some sources forbid bulk downloading; they stay online (see
+[Sources](#data-sources-and-attributions)).
 
-- Donnez un nom au projet directement dans la barre du haut (sinon, il prend le nom de la première trace).
-- « Enregistrer » (Ctrl+S) télécharge un fichier `<nom>.openflyover.json`. Il contient les traces et tous les réglages.
-  À côté du nom, « Modifié » signale des changements depuis le dernier enregistrement.
-- « Ouvrir » (Ctrl+O) le recharge. Un réglage invalide reprend sa valeur par défaut et un message vous le signale.
-- Les flèches d'annulation portent sur les réglages (Ctrl+Z, Ctrl+Maj+Z ou Ctrl+Y).
-- « Garder dans Mes projets » (onglet « Projet ») garde le projet dans l'appli : il s'enregistre tout seul et se rouvre en un clic.
-- Les préréglages (onglet « Projet ») sont gardés dans le navigateur, sous le nom que vous leur donnez.
+### Saving a project
 
-## Fonctionnement
+- Name the project directly in the top bar (otherwise, it takes the name of the first track).
+- "Enregistrer" (Ctrl+S) downloads a `<name>.openflyover.json` file. It contains the tracks and all the settings.
+  Next to the name, "Modifié" (modified) indicates changes since the last save.
+- "Ouvrir" (Ctrl+O) reloads it. An invalid setting reverts to its default value and a message tells you.
+- The undo arrows apply to the settings (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y).
+- "Garder dans Mes projets" (keep in my projects) ("Projet" tab) keeps the project in the app: it saves itself and reopens in one click.
+- Presets ("Projet" tab) are kept in the browser, under the name you give them.
+
+## How it works
 
 ```mermaid
 flowchart LR
-  F["Fichier GPX / FIT"] --> I["Import"]
-  DEM["Tuiles de relief"] --> Q["Terrain"]
-  IMG["Tuiles d'imagerie"] --> Q
-  Q --> S["Scène 3D"]
+  F["GPX / FIT file"] --> I["Import"]
+  DEM["Terrain tiles"] --> Q["Terrain"]
+  IMG["Imagery tiles"] --> Q
+  Q --> S["3D scene"]
   I --> S
-  W["Météo"] --> S
-  O["Repères"] --> S
-  H["Horloge du film"] --> S
-  S --> A["Aperçu"]
-  S --> E["Export image par image"]
-  E --> V["Vidéo MP4 / WebM"]
+  W["Weather"] --> S
+  O["Landmarks"] --> S
+  H["Movie clock"] --> S
+  S --> A["Preview"]
+  S --> E["Frame-by-frame export"]
+  E --> V["MP4 / WebM video"]
 ```
 
-- **Terrain** : les tuiles de relief deviennent des maillages. Un quadtree (découpage en quatre, de plus en plus fin)
-  charge plus de détail près de la caméra. Une tuile reste affichée tant que ses quatre tuiles plus fines ne sont pas
-  prêtes : le relief n'a jamais de trou.
-- **Imagerie** : pour chaque tuile de relief, plusieurs tuiles d'imagerie sont assemblées en une seule texture.
-- **Repère local** : la scène est centrée sur la trace. Les conversions de coordonnées se font en double précision en
-  JavaScript, pour garder une précision au millimètre sur le GPU.
-- **Survol** : la position de la caméra dépend seulement de la position sur la trace, du temps du film et des réglages.
-  L'aperçu et l'export utilisent le même calcul : vous exportez ce que vous voyez.
-- **Atmosphère** : un modèle physique de diffusion de la lumière (bibliothèque Takram) dessine le ciel, la brume et la
-  lumière du soleil.
-- **Export** : chaque image est rendue à la taille de la vidéo, l'habillage est dessiné par-dessus, puis WebCodecs
-  l'encode. La bibliothèque mediabunny range les images dans un fichier MP4 ou WebM.
+- **Terrain**: terrain tiles become meshes. A quadtree (subdivision into four, finer and finer) loads more detail near
+  the camera. A tile stays displayed until its four finer tiles are ready: the terrain never has holes.
+- **Imagery**: for each terrain tile, several imagery tiles are assembled into a single texture.
+- **Local frame**: the scene is centered on the track. Coordinate conversions are done in double precision in
+  JavaScript, to keep millimeter precision on the GPU.
+- **Flyover**: the camera position depends only on the position along the track, the movie time and the settings.
+  Preview and export use the same computation: you export what you see.
+- **Atmosphere**: a physical light scattering model (Takram library) draws the sky, the haze and the sunlight.
+- **Export**: each frame is rendered at the video size, the overlay is drawn on top, then WebCodecs encodes it. The
+  mediabunny library packs the frames into an MP4 or WebM file.
 
-Le détail est dans [`ARCHITECTURE.md`](ARCHITECTURE.md).
+The details are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
-## Déploiement sur un serveur
+## Deploying to a server
 
-OpenFlyover est un site statique : pas de code serveur, pas de base de données. Un petit serveur personnel ou un
-hébergement mutualisé (OVH par exemple) suffit. Votre serveur envoie seulement les fichiers du site. Le navigateur de
-chaque visiteur va chercher lui-même les tuiles, la météo et les repères.
+OpenFlyover is a static site: no server code, no database. A small personal server or shared hosting (OVH for example)
+is enough. Your server only sends the site files. Each visitor's browser fetches the tiles, the weather and the
+landmarks itself.
 
-1. Construisez le site : `npm ci && npm run build`.
-2. Copiez le contenu de `dist/` (environ 17 Mo) à la racine du site.
-3. Servez-le en HTTPS.
+1. Build the site: `npm ci && npm run build`.
+2. Copy the contents of `dist/` (about 17 MB) to the site root.
+3. Serve it over HTTPS.
 
-### HTTPS obligatoire
+### HTTPS required
 
-Hors de `localhost`, le navigateur réserve certaines fonctions aux pages en HTTPS (un « contexte sécurisé ») :
-l'encodeur vidéo de WebCodecs, mais aussi la création des identifiants de trace à l'import. En HTTP simple, ni l'import
-ni l'export ne marchent. Un certificat Let's Encrypt ou celui de votre hébergeur suffit.
+Outside `localhost`, the browser reserves some features for HTTPS pages (a "secure context"): the WebCodecs video
+encoder, but also the creation of track identifiers at import. Over plain HTTP, neither import nor export works. A
+Let's Encrypt certificate or the one from your hosting provider is enough.
 
 ### nginx
 
@@ -364,313 +386,313 @@ server {
 }
 ```
 
-Les fichiers de `/assets/` ont une empreinte dans leur nom : on peut les garder en cache un an. Le dossier `/atmosphere/`
-contient les textures du ciel, en `.exr` et `.bin`, deux types que nginx ne connaît pas.
+Files in `/assets/` have a fingerprint in their name: they can be cached for a year. The `/atmosphere/` folder
+contains the sky textures, as `.exr` and `.bin`, two types that nginx does not know.
 
 ### Apache
 
-Sur un hébergement Apache, ajoutez un fichier `.htaccess` à la racine :
+On Apache hosting, add a `.htaccess` file at the root:
 
 ```apache
 AddType image/x-exr .exr
 AddType font/woff2 .woff2
 ```
 
-### Limites connues
+### Known limitations
 
-- Le site doit être servi **à la racine du domaine**. Quelques chemins sont écrits en dur : `/samples/` dans
-  `src/ui/projectActions.ts`, `/favicon.svg` dans `src/ui/TopBar.tsx` et `index.html` et `/fonts/` dans `src/ui/fonts.css`. Pour un sous-dossier,
-  il faut construire avec `vite build --base=/sous-dossier/` et préfixer ces chemins par `import.meta.env.BASE_URL`.
-- Un site public reste soumis aux conditions des sources ([voir plus bas](#sources-de-données-et-attributions)).
-- Une longue vidéo prend beaucoup de mémoire (environ deux fois sa taille) là où elle ne peut pas être écrite
-  directement sur le disque (Firefox, Safari) ; Chrome, Edge et l'application de bureau l'écrivent au fil de l'export.
+- The site must be served **at the root of the domain**. A few paths are hard-coded: `/samples/` in
+  `src/ui/projectActions.ts`, `/favicon.svg` in `src/ui/TopBar.tsx` and `index.html`, and `/fonts/` in `src/ui/fonts.css`. For a subfolder,
+  you must build with `vite build --base=/subfolder/` and prefix these paths with `import.meta.env.BASE_URL`.
+- A public site remains subject to the terms of the sources ([see below](#data-sources-and-attributions)).
+- A long video takes a lot of memory (about twice its size) where it cannot be written directly to disk (Firefox,
+  Safari); Chrome, Edge and the desktop application write it as the export progresses.
 
-## Application de bureau
+## Desktop application
 
-C'est le même code que le site, dans une fenêtre native [Tauri 2](https://v2.tauri.app/) (dossier `src-tauri/`). Les
-boutons « Ouvrir » et « Enregistrer » et la fin d'un export ouvrent les fenêtres de fichiers du système. L'application
-lit et écrit seulement les fichiers choisis dans ces fenêtres, ses packs hors ligne et « Mes projets » dans son propre
-dossier (`tiles/` et `projects/` du dossier de données de l'application), et les deux dossiers donnés en ligne de
-commande (`--rendu`, `--sortie`). Tuiles, météo et repères viennent des mêmes sources qu'en ligne : il
-faut Internet, sauf pour une trace préparée hors ligne.
+It is the same code as the website, in a native [Tauri 2](https://v2.tauri.app/) window (`src-tauri/` folder). The
+"Ouvrir" and "Enregistrer" buttons and the end of an export open the system file dialogs. The application reads and
+writes only the files chosen in these dialogs, its offline packs and "Mes projets" in its own folder (`tiles/` and
+`projects/` in the application data folder), and the two folders given on the command line (`--rendu`, `--sortie`).
+Tiles, weather and landmarks come from the same sources as online: an Internet connection is required, except for a
+track prepared for offline use.
 
-Elle n'a pas encore été lancée ni empaquetée sur une vraie machine.
+It has not yet been launched or packaged on a real machine.
 
-### Prérequis
+### Prerequisites
 
-- Node.js 24 et les dépendances du site (`npm ci`) ;
-- Rust stable (<https://rustup.rs>), 1.77 ou plus ;
-- les bibliothèques du système, selon la plateforme :
+- Node.js 24 and the website dependencies (`npm ci`);
+- stable Rust (<https://rustup.rs>), 1.77 or later;
+- the system libraries, depending on the platform:
 
-| Système | À installer | Moteur web |
+| System | To install | Web engine |
 |---|---|---|
-| Windows 10 / 11 | « Outils de génération C++ » de Visual Studio (MSVC). WebView2 est fourni avec Windows 11 ; l'installeur l'ajoute sinon | Edge (Chromium) |
-| macOS 11 ou plus | `xcode-select --install` | Safari (WebKit) |
-| Linux (Ubuntu 22.04, Debian 12 ou plus récent) | `sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev` | WebKitGTK |
+| Windows 10 / 11 | Visual Studio "C++ Build Tools" (MSVC). WebView2 ships with Windows 11; otherwise the installer adds it | Edge (Chromium) |
+| macOS 11 or later | `xcode-select --install` | Safari (WebKit) |
+| Linux (Ubuntu 22.04, Debian 12 or newer) | `sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev` | WebKitGTK |
 
-Ubuntu 20.04 ne convient pas : il n'a ni `libwebkit2gtk-4.1` ni une GLib assez récente (2.70) pour Tauri 2.
+Ubuntu 20.04 does not work: it has neither `libwebkit2gtk-4.1` nor a recent enough GLib (2.70) for Tauri 2.
 
-### Lancer et construire
+### Running and building
 
 ```bash
 npm ci
-npm run tauri:dev     # lance le serveur de développement puis la fenêtre ; recharge à chaque modification
-npm run tauri:build   # construit dist/ puis l'application et ses installeurs
+npm run tauri:dev     # starts the development server, then the window; reloads on every change
+npm run tauri:build   # builds dist/, then the application and its installers
 ```
 
-`tauri:build` dépose l'application dans `src-tauri/target/release/` et les installeurs dans
-`src-tauri/target/release/bundle/` : `.msi` et `.exe` (NSIS) sous Windows, `.app` et `.dmg` sous macOS, `.deb`,
-`.rpm` et `.AppImage` sous Linux. Chaque système construit ses propres installeurs. Ils ne sont pas signés : Windows et
-macOS affichent un avertissement au premier lancement.
+`tauri:build` puts the application in `src-tauri/target/release/` and the installers in
+`src-tauri/target/release/bundle/`: `.msi` and `.exe` (NSIS) on Windows, `.app` and `.dmg` on macOS, `.deb`,
+`.rpm` and `.AppImage` on Linux. Each system builds its own installers. They are not signed: Windows and
+macOS show a warning on first launch.
 
-### Rendu en lot en ligne de commande
+### Command-line batch rendering
 
-L'application de bureau peut faire un film par trace d'un dossier, sans clic :
+The desktop application can make one movie per track in a folder, without any clicks:
 
 ```bash
 openflyover --rendu ~/Traces/2026 --sortie ~/Films --prereglage "Montagne" --formats 16:9@1080p,9:16@1080p
 ```
 
-- `--rendu` : dossier des traces GPX et FIT (seuls les fichiers directement dedans sont lus).
-- `--sortie` : dossier des films, créé s'il manque ; par défaut, celui des traces.
-- `--prereglage` : un préréglage enregistré dans l'application ; sans lui, les réglages gardés par l'application.
-- `--formats` : format@résolution, séparés par des virgules (`16:9`, `9:16`, `1:1`, `4:5`, `21:9` ; `720p`, `1080p`, `1440p`, `4k`) ;
-  sans lui, le format de « Vidéo ».
+- `--rendu`: folder of GPX and FIT tracks (only the files directly inside it are read).
+- `--sortie`: folder for the movies, created if missing; by default, the tracks folder.
+- `--prereglage`: a preset saved in the application; without it, the settings kept by the application.
+- `--formats`: format@resolution, comma-separated (`16:9`, `9:16`, `1:1`, `4:5`, `21:9`; `720p`, `1080p`, `1440p`, `4k`);
+  without it, the format of the "Vidéo" mode.
 
-La fenêtre s'ouvre, rend chaque trace, écrit `rendu-en-lot.txt` à côté des films, puis se ferme. Code de sortie : 0
-quand tous les films sont faits, 1 si l'un a échoué, 2 si la commande ne peut pas tourner (option inconnue, préréglage
-ou format inconnu, aucune trace).
+The window opens, renders each track, writes `rendu-en-lot.txt` next to the movies, then closes. Exit code: 0
+when all movies are done, 1 if one failed, 2 if the command cannot run (unknown option, unknown preset
+or format, no track).
 
-GitHub construit aussi les installeurs des trois systèmes (*Actions* › « Installeurs » › *Run workflow*, ou une étiquette
-`v0.x.y` qui prépare une version brouillon), signés dès que les certificats sont ajoutés aux secrets du dépôt : voir
-[`docs/installeurs.md`](docs/installeurs.md).
+GitHub also builds the installers for the three systems (*Actions* › "Desktop installers" › *Run workflow*, or a `v0.x.y`
+tag, which prepares a draft release), signed as soon as the certificates are added to the repository secrets: see
+[`docs/installers.md`](docs/installers.md).
 
-Les icônes de `src-tauri/icons/` viennent de `public/favicon.svg`. Pour les refaire : `npx tauri icon public/favicon.svg`
-(puis garder seulement les fichiers listés dans `src-tauri/tauri.conf.json`).
+The icons in `src-tauri/icons/` come from `public/favicon.svg`. To regenerate them: `npx tauri icon public/favicon.svg`
+(then keep only the files listed in `src-tauri/tauri.conf.json`).
 
-### Limites actuelles
+### Current limitations
 
-- **Export vidéo sous Linux** : WebKitGTK n'a pas WebCodecs ; l'application encode alors le film avec le `ffmpeg` du
-  système, à installer (`sudo apt install ffmpeg`) : MP4 H.264, avec le son en AAC (WebM VP9 et Opus si le nom finit
-  par « .webm »). Sans ffmpeg, le panneau d'export
-  le dit et l'image fixe fonctionne ; l'habillage seul (WebM transparent) n'est pas encore possible
-  ([`ARCHITECTURE.md`](ARCHITECTURE.md), « Export vidéo sans WebCodecs (Linux) » ; pas encore vérifié). Sous Windows (Edge)
-  et sous macOS (WebKit, WebCodecs depuis Safari 16.4), l'export vidéo devrait passer par WebCodecs comme dans le
-  navigateur (pas encore vérifié).
-- Préférences et caches restent dans le stockage de la fenêtre (comme `localStorage` dans un navigateur), propre à
-  l'application.
+- **Video export on Linux**: WebKitGTK does not have WebCodecs; the application then encodes the movie with the system
+  `ffmpeg`, which must be installed (`sudo apt install ffmpeg`): MP4 H.264, with AAC audio (WebM VP9 and Opus if the
+  name ends with ".webm"). Without ffmpeg, the export panel
+  says so and the still image works; overlay only (transparent WebM) is not possible yet
+  ([`ARCHITECTURE.md`](ARCHITECTURE.md), "Video export without WebCodecs (Linux)"; not verified yet). On Windows (Edge)
+  and on macOS (WebKit, WebCodecs since Safari 16.4), video export should go through WebCodecs as in the
+  browser (not verified yet).
+- Preferences and caches stay in the window storage (like `localStorage` in a browser), specific to the
+  application.
 
-## Tests et qualité
+## Tests and quality
 
-| Commande | Rôle |
+| Command | Purpose |
 |---|---|
-| `npm run dev` | serveur de développement sur <http://127.0.0.1:5173> |
-| `npm run build` | vérification des types, puis version de production dans `dist/` |
-| `npm run preview` | sert `dist/` sur <http://localhost:4173> |
-| `npm test` | lance tous les tests (vitest) |
-| `npx vitest run --maxWorkers=1` | les mêmes tests sur un seul cœur, plus stable sur une machine chargée |
-| `npm run typecheck` | vérification des types TypeScript |
-| `npm run lint` | analyse du code (oxlint) |
-| `npm run e2e` | tests de bout en bout dans un vrai navigateur (voir plus bas) |
+| `npm run dev` | development server on <http://127.0.0.1:5173> |
+| `npm run build` | type check, then production build in `dist/` |
+| `npm run preview` | serves `dist/` on <http://localhost:4173> |
+| `npm test` | runs all tests (vitest) |
+| `npx vitest run --maxWorkers=1` | the same tests on a single core, more stable on a busy machine |
+| `npm run typecheck` | TypeScript type check |
+| `npm run lint` | code analysis (oxlint) |
+| `npm run e2e` | end-to-end tests in a real browser (see below) |
 
-La suite compte **environ 1 450 tests** (8 octobre 2026). Chaque fichier de test est rangé à côté de son module
-(`src/**/*.test.ts`). Les appels réseau et l'encodeur vidéo y sont simulés.
+The suite has **about 1,470 tests** (8 October 2026). Each test file sits next to its module
+(`src/**/*.test.ts`). Network calls and the video encoder are mocked.
 
-Les vérifications à faire à la main sur une machine avec une vraie carte graphique sont listées dans
+The manual checks to run on a machine with a real graphics card are listed in
 [`docs/tests-gpu.md`](docs/tests-gpu.md).
 
-### Tests de bout en bout
+### End-to-end tests
 
-`npm run e2e` lance l'application dans un Chromium sans fenêtre et la pilote comme un utilisateur (`e2e/run.mjs`,
-puppeteer-core). Le script démarre son propre serveur Vite sur un port libre. Six scénarios :
+`npm run e2e` runs the application in a headless Chromium and drives it like a user (`e2e/run.mjs`,
+puppeteer-core). The script starts its own Vite server on a free port. Six scenarios:
 
-1. l'accueil vide, puis l'exemple chargé (plans Ouverture, Survol, Clôture) ;
-2. chaque onglet du rail, puis l'aide des raccourcis (bouton et touche « ? », fermée par Échap) ;
-3. la timeline : T ajoute un texte, Ctrl+Z le retire, S ajoute un arrêt ;
-4. le projet enregistré, puis rouvert dans une page neuve (mêmes arrêts et textes) ;
-5. l'export d'une petite vidéo (320 × 180, 2 s, 10 images par seconde) et d'une image fixe ;
-6. la reconnaissance : coordonnées tapées, relief sans trace, deux « Point de passage ici » au clic droit, itinéraire
-   calculé et film monté (la réponse d'Overpass est simulée dans la page : une grille de chemins).
+1. the empty home screen, then the sample loaded (shots "Ouverture" (opening), "Survol", "Clôture" (closing));
+2. each tab of the rail, then the shortcut help ("?" button and key, closed with Escape);
+3. the timeline: T adds a text, Ctrl+Z removes it, S adds a stop;
+4. the project saved, then reopened in a fresh page (same stops and texts);
+5. the export of a small video (320 × 180, 2 s, 10 frames per second) and of a still image;
+6. scouting: typed coordinates, terrain without a track, two "Point de passage ici" with a right-click, route
+   computed and movie edited (the Overpass response is mocked in the page: a grid of paths).
 
-Un scénario échoue sur toute erreur de la console, sauf les erreurs réseau des tuiles, de la météo et d'OpenStreetMap.
-Les tests utilisent les vrais serveurs de tuiles : il faut Internet. Une image dont les tuiles manquent est acceptée.
-Pour l'export, les nuages sont coupés : en rendu logiciel, ils prennent plusieurs minutes par image.
+A scenario fails on any console error, except network errors from tiles, weather and OpenStreetMap.
+The tests use the real tile servers: an Internet connection is required. A frame with missing tiles is accepted.
+For the export, clouds are turned off: in software rendering, they take several minutes per frame.
 
-Réglages par variables d'environnement :
+Settings through environment variables:
 
-| Variable | Rôle |
+| Variable | Purpose |
 |---|---|
-| `OPENFLYOVER_CHROME` | chemin de Chromium ou Chrome (par défaut, le Chromium de Playwright s'il est installé) |
-| `OPENFLYOVER_E2E_SKIP_EXPORT=1` | saute l'export, le scénario le plus long |
-| `OPENFLYOVER_E2E_ONLY=accueil,export` | ne lance que ces scénarios (`accueil`, `onglets`, `timeline`, `projet`, `export`, `reconnaissance`) |
+| `OPENFLYOVER_CHROME` | path to Chromium or Chrome (by default, the Playwright Chromium if it is installed) |
+| `OPENFLYOVER_E2E_SKIP_EXPORT=1` | skips the export, the longest scenario |
+| `OPENFLYOVER_E2E_ONLY=accueil,export` | runs only these scenarios (`accueil`, `onglets`, `timeline`, `projet`, `export`, `reconnaissance`) |
 
-Sans carte graphique, le rendu passe par SwiftShader. Sur la machine de développement (WSL, sans GPU), la suite dure
-environ 7 à 8 minutes, dont 5 à 6 pour l'export ; sans l'export, moins de 1 min 30. Les fichiers téléchargés et les captures des
-échecs sont gardés dans le dossier affiché à la fin.
+Without a graphics card, rendering goes through SwiftShader. On the development machine (WSL, no GPU), the suite takes
+about 7 to 8 minutes, including 5 to 6 for the export; without the export, less than 1 min 30. The downloaded files and
+the screenshots of failures are kept in the folder shown at the end.
 
-Ce qui n'est pas testé automatiquement : la qualité du rendu 3D et de la vidéo. Elle se vérifie à l'œil.
+What is not tested automatically: the quality of the 3D rendering and of the video. It is checked by eye.
 
-## Sources de données et attributions
+## Data sources and attributions
 
-Toutes les sources sont ouvertes et sans clé. Le code les déclare dans `src/terrain/sources.ts` ;
-[`docs/sources.md`](docs/sources.md) détaille leurs vérifications (octobre 2026).
+All sources are open and keyless. The code declares them in `src/terrain/sources.ts`;
+[`docs/sources.md`](docs/sources.md) details how they were checked (October 2026).
 
-| Source | Sert à | Adresse | Attribution affichée |
+| Source | Used for | Address | Displayed attribution |
 |---|---|---|---|
-| Mapterhorn | relief (par défaut) | `tiles.mapterhorn.com` | « © Mapterhorn (données ouvertes, liste des sources : mapterhorn.com/attribution) » |
-| AWS Terrain Tiles | relief | `s3.amazonaws.com/elevation-tiles-prod` | « Terrain Tiles (Mapzen / AWS Open Data) — SRTM, GMTED2010, ETOPO1 courtesy of USGS/NOAA, EU-DEM © Copernicus, ArcticDEM et autres sources ouvertes » |
-| IGN Géoplateforme | orthophotos et Plan IGN en France, photos de 1950 à 2005 | `data.geopf.fr/wmts` | « © IGN — Géoplateforme (BD ORTHO, licence ouverte Etalab 2.0) », et variantes par couche |
-| swisstopo | orthophotos et carte nationale en Suisse | `wmts.geo.admin.ch` | « © swisstopo (SWISSIMAGE, OGD) », « © swisstopo (carte nationale, OGD) » |
-| Esri World Imagery | orthophotos du monde (imagerie par défaut) | `services.arcgisonline.com` | « Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community » |
-| EOX Sentinel-2 cloudless 2025 | images satellite du monde, 10 m | `tiles.maps.eox.at` | « EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0 » |
-| OpenTopoMap | carte topographique du monde | `tile.opentopomap.org` | « Données : © contributeurs OpenStreetMap, SRTM \| Rendu : © OpenTopoMap (CC BY-SA) » |
-| Open-Meteo | météo historique | `archive-api.open-meteo.com` | « Données météo : Open-Meteo.com (CC BY 4.0) » |
-| OpenStreetMap (API Overpass) | repères, plans d'eau (lacs et rivières reflétants), chemins de la reconnaissance | `overpass-api.de`, secours `maps.mail.ru` | « © contributeurs OpenStreetMap (ODbL) » |
-| OpenStreetMap (Nominatim) | lieu tapé dans « Préparer une sortie » (une recherche à la validation, jamais à la frappe) | `nominatim.openstreetmap.org` | « © contributeurs OpenStreetMap (ODbL) » |
+| Mapterhorn | terrain (default) | `tiles.mapterhorn.com` | "© Mapterhorn (données ouvertes, liste des sources : mapterhorn.com/attribution)" |
+| AWS Terrain Tiles | terrain | `s3.amazonaws.com/elevation-tiles-prod` | "Terrain Tiles (Mapzen / AWS Open Data) — SRTM, GMTED2010, ETOPO1 courtesy of USGS/NOAA, EU-DEM © Copernicus, ArcticDEM et autres sources ouvertes" |
+| IGN Géoplateforme | orthophotos and Plan IGN in France, photos from 1950 to 2005 | `data.geopf.fr/wmts` | "© IGN — Géoplateforme (BD ORTHO, licence ouverte Etalab 2.0)", and variants per layer |
+| swisstopo | orthophotos and national map in Switzerland | `wmts.geo.admin.ch` | "© swisstopo (SWISSIMAGE, OGD)", "© swisstopo (carte nationale, OGD)" |
+| Esri World Imagery | world orthophotos (default imagery) | `services.arcgisonline.com` | "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community" |
+| EOX Sentinel-2 cloudless 2025 | world satellite images, 10 m | `tiles.maps.eox.at` | "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0" |
+| OpenTopoMap | world topographic map | `tile.opentopomap.org` | "Données : © contributeurs OpenStreetMap, SRTM \| Rendu : © OpenTopoMap (CC BY-SA)" |
+| Open-Meteo | historical weather | `archive-api.open-meteo.com` | "Données météo : Open-Meteo.com (CC BY 4.0)" |
+| OpenStreetMap (Overpass API) | landmarks, water bodies (reflective lakes and rivers), scouting paths | `overpass-api.de`, fallback `maps.mail.ru` | "© contributeurs OpenStreetMap (ODbL)" |
+| OpenStreetMap (Nominatim) | place typed in "Préparer une sortie" (one search on submit, never while typing) | `nominatim.openstreetmap.org` | "© contributeurs OpenStreetMap (ODbL)" |
 
-La bande d'état, en bas de l'écran, affiche les attributions du relief et de l'imagerie en cours. Celles d'Open-Meteo et d'OpenStreetMap
-s'ajoutent quand la météo ou les repères sont chargés. Les mêmes lignes sont incrustées dans les vidéos et images exportées
-([voir Licences](#licences)).
+The status bar, at the bottom of the screen, shows the attributions of the current terrain and imagery. Those of Open-Meteo and OpenStreetMap
+are added when the weather or the landmarks are loaded. The same lines are burned into exported videos and images
+([see Licenses](#licenses)).
 
-| Source | Licence | À savoir |
+| Source | License | Note |
 |---|---|---|
-| Mapterhorn, AWS Terrain Tiles | données ouvertes (CC BY 4.0, OGL, domaine public…) | citer les sources |
-| IGN | Licence Ouverte Etalab 2.0 | usage commercial permis |
-| swisstopo | données ouvertes (OGD) | citer la source, usage raisonnable |
-| Esri | conditions d'Esri | **à relire** avant tout usage commercial ; hors ligne en usage personnel seulement |
-| EOX Sentinel-2 cloudless | CC BY-NC-SA 4.0 | **pas d'usage commercial** |
-| OpenTopoMap | CC BY-SA | serveur bénévole : usage modéré ; une vidéo faite avec ce fond doit rester sous la même licence |
-| Open-Meteo | CC BY 4.0 | API gratuite **non commerciale**, 10 000 requêtes par jour au plus |
-| OpenStreetMap | ODbL | serveur public Overpass : usage modéré |
+| Mapterhorn, AWS Terrain Tiles | open data (CC BY 4.0, OGL, public domain…) | credit the sources |
+| IGN | Licence Ouverte Etalab 2.0 | commercial use allowed |
+| swisstopo | open data (OGD) | credit the source, reasonable use |
+| Esri | Esri terms | **to be reviewed** before any commercial use; offline for personal use only |
+| EOX Sentinel-2 cloudless | CC BY-NC-SA 4.0 | **no commercial use** |
+| OpenTopoMap | CC BY-SA | volunteer-run server: moderate use; a video made with this base map must stay under the same license |
+| Open-Meteo | CC BY 4.0 | free **non-commercial** API, 10,000 requests per day max |
+| OpenStreetMap | ODbL | public Overpass server: moderate use |
 
-OpenFlyover est un projet personnel, non commercial : toutes les sources peuvent aller dans un pack hors ligne, avec une limite par jour plus basse pour celles qui découragent les téléchargements en masse :
+OpenFlyover is a personal, non-commercial project: all sources can go into an offline pack, with a lower daily limit for those that discourage bulk downloads:
 
-| Source | Hors ligne | Pourquoi |
+| Source | Offline | Why |
 |---|---|---|
-| Mapterhorn | oui, 20 000 tuiles par jour | données ouvertes ; Mapterhorn propose lui-même le téléchargement de zones ([accès aux données](https://mapterhorn.com/data-access)) |
-| AWS Terrain Tiles | oui | archive publique AWS Open Data, faite pour être téléchargée ([registre](https://registry.opendata.aws/terrain-tiles/)) |
-| IGN Géoplateforme | oui, 50 000 tuiles par jour (toutes couches) | Licence Ouverte Etalab 2.0 ; service public à ménager |
-| EOX Sentinel-2 cloudless | oui, 20 000 tuiles par jour | CC BY-NC-SA 4.0 : copie permise hors usage commercial ([conditions](https://cloudless.eox.at/products/viewing)) |
-| swisstopo | oui, usage personnel, 10 000 tuiles / jour | ses conditions demandent d'éviter les téléchargements automatiques en masse ([conditions](https://www.geo.admin.ch/en/general-terms-of-use-fsdi)) : gardez un couloir court |
-| Esri World Imagery | oui, usage personnel, 10 000 tuiles / jour | Esri réserve normalement le hors ligne à ses applications (service « for Export ») : gardez un couloir court |
-| OpenTopoMap | oui, usage personnel, 2 000 tuiles / jour | serveur bénévole qui demande d'éviter les téléchargements en masse ([à propos](https://opentopomap.org/about)) |
+| Mapterhorn | yes, 20,000 tiles per day | open data; Mapterhorn itself offers area downloads ([data access](https://mapterhorn.com/data-access)) |
+| AWS Terrain Tiles | yes | AWS Open Data public archive, made to be downloaded ([registry](https://registry.opendata.aws/terrain-tiles/)) |
+| IGN Géoplateforme | yes, 50,000 tiles per day (all layers) | Licence Ouverte Etalab 2.0; public service to be used sparingly |
+| EOX Sentinel-2 cloudless | yes, 20,000 tiles per day | CC BY-NC-SA 4.0: copying allowed for non-commercial use ([terms](https://cloudless.eox.at/products/viewing)) |
+| swisstopo | yes, personal use, 10,000 tiles / day | its terms ask to avoid automated bulk downloads ([terms](https://www.geo.admin.ch/en/general-terms-of-use-fsdi)): keep the corridor short |
+| Esri World Imagery | yes, personal use, 10,000 tiles / day | Esri normally reserves offline use for its own applications ("for Export" service): keep the corridor short |
+| OpenTopoMap | yes, personal use, 2,000 tiles / day | volunteer-run server that asks to avoid bulk downloads ([about](https://opentopomap.org/about)) |
 
-Une source dont les conditions ne sont pas vérifiées reste en ligne. Les limites par jour
-comptent par appareil.
+A source whose terms have not been checked stays online. The daily limits
+count per device.
 
-Pour ménager ces services, l'application :
+To spare these services, the application:
 
-- garde en mémoire les ~600 dernières tuiles et ne demande que celles de la vue ;
-- envoie **une** requête météo par trace et la garde dans le navigateur ;
-- envoie **une** requête de repères par trace, gardée 30 jours, et réessaie une seule fois si le serveur est saturé ;
-- télécharge un pack hors ligne une seule fois, 4 tuiles à la fois, et ne redemande jamais une tuile déjà gardée ;
-- envoie **une** requête de plans d'eau par trace (lacs et rivières dans un couloir de 8 km), dans la même file et le même
-  cache, seulement si l'eau reflétante est cochée.
+- keeps the last ~600 tiles in memory and requests only those in the view;
+- sends **one** weather request per track and keeps it in the browser;
+- sends **one** landmark request per track, kept for 30 days, and retries only once if the server is overloaded;
+- downloads an offline pack only once, 4 tiles at a time, and never requests a tile that is already stored;
+- sends **one** water body request per track (lakes and rivers in an 8 km corridor), in the same queue and the same
+  cache, only if reflective water is checked.
 
-La trace elle-même ne part jamais. Ces services reçoivent seulement une position approchée : la zone des tuiles, quelques
-points arrondis à 1 km avec leurs dates pour la météo, le rectangle autour de la trace pour les repères.
+The track itself is never sent. These services receive only an approximate position: the tile area, a few
+points rounded to 1 km with their dates for the weather, the rectangle around the track for the landmarks.
 
-## Licences
+## Licenses
 
-Le code d'OpenFlyover est sous **licence MIT** ([`LICENSE`](LICENSE), © 2026 Yannick Riou).
+The OpenFlyover code is under the **MIT license** ([`LICENSE`](LICENSE), © 2026 Yannick Riou).
 
-| Dépendance | Version | Licence |
+| Dependency | Version | License |
 |---|---|---|
 | three | 0.186.1 | MIT |
 | @react-three/fiber, drei, postprocessing | 9.8.1, 10.7.9, 3.1.3 | MIT |
 | postprocessing | 6.39.5 | Zlib |
 | @takram/three-atmosphere, three-clouds, three-geospatial | 0.19.1, 0.7.6, 0.9.1 | MIT |
-| mediabunny | 1.61.3 | MPL-2.0 : utilisable tel quel ; une modification de ses fichiers doit être publiée |
+| mediabunny | 1.61.3 | MPL-2.0: usable as is; a modification of its files must be published |
 | zustand | 5.0.15 | MIT |
 | react, react-dom | 19.3.0 | MIT |
-| @garmin/fitsdk | 21.217.0 | licence FIT de Garmin (ci-dessous) |
+| @garmin/fitsdk | 21.217.0 | Garmin FIT license (below) |
 
-**Garmin FIT SDK.** Ce n'est pas une licence libre. Garmin autorise gratuitement l'usage du format FIT dans vos logiciels,
-mais interdit de redistribuer le SDK « sauf cas prévus ». Or le site publié contient le code du SDK. Ce point n'est pas
-tranché : à vérifier avant une diffusion large. Le SDK n'est pas couvert par la licence MIT du projet.
+**Garmin FIT SDK.** This is not a free license. Garmin allows free use of the FIT format in your software,
+but forbids redistributing the SDK "except as provided". The published site, however, contains the SDK code. This point
+is not settled: it must be checked before a wide release. The SDK is not covered by the MIT license of the project.
 
-Les outils de développement ne sont pas livrés avec le site : Vite, vitest, oxlint et jsdom sont sous MIT, TypeScript
-sous Apache-2.0.
+The development tools are not shipped with the site: Vite, vitest, oxlint and jsdom are under MIT, TypeScript
+under Apache-2.0.
 
-Fichiers embarqués :
+Embedded files:
 
-- **Polices** Fraunces et IBM Plex, sous SIL Open Font License 1.1 ([`public/fonts/README.md`](public/fonts/README.md)).
-- **Icônes** de l'interface : tracés de [Lucide](https://lucide.dev) (licence ISC, mention dans `src/ui/icons.tsx`),
-  intégrés au code.
-- **Textures du ciel** et catalogue d'étoiles, issus du paquet `@takram/three-atmosphere` (MIT), et **textures des
-  nuages** (météo locale, formes, turbulence) du paquet `@takram/three-clouds` (MIT). Le site les sert lui-même. Les étoiles viennent du Yale Bright Star Catalog, dont la licence n'est pas indiquée.
-- **Géoïde EGM96** (grille 1°, `src/geo/egm96Grid.ts`), tiré par `scripts/gen-geoid.mjs` de la grille 15' de la NGA
-  redistribuée par PROJ-data (`us_nga_egm96_15.tif`), domaine public.
-- **Trace d'exemple**, synthétique, générée par `scripts/gen-sample-gpx.mjs`.
+- **Fonts** Fraunces and IBM Plex, under SIL Open Font License 1.1 ([`public/fonts/README.md`](public/fonts/README.md)).
+- Interface **icons**: paths from [Lucide](https://lucide.dev) (ISC license, notice in `src/ui/icons.tsx`),
+  built into the code.
+- **Sky textures** and star catalog, from the `@takram/three-atmosphere` package (MIT), and **cloud
+  textures** (local weather, shapes, turbulence) from the `@takram/three-clouds` package (MIT). The site serves them itself. The stars come from the Yale Bright Star Catalog, whose license is not stated.
+- **EGM96 geoid** (1° grid, `src/geo/egm96Grid.ts`), derived by `scripts/gen-geoid.mjs` from the NGA 15' grid
+  redistributed by PROJ-data (`us_nga_egm96_15.tif`), public domain.
+- **Sample track**, synthetic, generated by `scripts/gen-sample-gpx.mjs`.
 
-**Vidéos exportées.** Elles contiennent des données cartographiques sous leur propre licence
-([voir les sources](#sources-de-données-et-attributions)). Vous devez donc citer ces sources quand vous diffusez une
-vidéo. L'application les incruste en petit dans un coin de chaque vidéo et image fixe exportée, et au bas de chaque affiche (mêmes lignes que la barre
-d'état : relief, imagerie, et Open-Meteo / OpenStreetMap quand la météo ou les repères sont chargés). Ces crédits se
-désactivent dans le panneau Habillage (« Crédits des sources ») : citez alors les sources ailleurs, par exemple dans la
-description de la vidéo.
+**Exported videos.** They contain map data under its own license
+([see the sources](#data-sources-and-attributions)). You must therefore credit these sources when you distribute a
+video. The application burns them in small print into a corner of each exported video and still image, and at the bottom of each poster (same lines as the status
+bar: terrain, imagery, and Open-Meteo / OpenStreetMap when the weather or the landmarks are loaded). These credits can be
+turned off in the "Habillage" panel ("Crédits des sources"): then credit the sources elsewhere, for example in the
+video description.
 
-## Architecture et contribution
+## Architecture and contributing
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) : coordonnées, contrats partagés, modules. À lire avant de coder.
-- [`docs/reprise.md`](docs/reprise.md) : état du projet et prochaines étapes.
-- [`docs/sources.md`](docs/sources.md) : vérification des sources de données.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): coordinates, shared contracts, modules. Read it before coding.
+- [`docs/handover.md`](docs/handover.md): project status and next steps.
+- [`docs/sources.md`](docs/sources.md): checks of the data sources.
 
-Conventions :
+Conventions:
 
-- TypeScript strict, avec `import type` et sans `enum`.
-- Interface en français.
-- Charte graphique dans [`src/ui/theme.css`](src/ui/theme.css).
-- Sources ouvertes uniquement, sans clé ; toute nouvelle source va dans `src/terrain/sources.ts` et `docs/sources.md`.
-- Types, lint et tests au vert avant chaque commit, un commit par fonctionnalité.
+- Strict TypeScript, with `import type` and no `enum`.
+- Interface in French.
+- Visual identity in [`src/ui/theme.css`](src/ui/theme.css).
+- Open, keyless sources only; any new source goes into `src/terrain/sources.ts` and `docs/sources.md`.
+- Types, lint and tests green before each commit, one commit per feature.
 
-## Feuille de route
+## Roadmap
 
-État détaillé, travaux en cours et reprise : [`docs/reprise.md`](docs/reprise.md).
+Detailed status, work in progress and handover: [`docs/handover.md`](docs/handover.md).
 
-| Phase | Contenu |
+| Phase | Content |
 |---|---|
-| 1 — Visionneuse (fait) | import GPX / FIT, relief streamé, imagerie composée, trace plaquée, caméra orbitale |
-| 2 — Survol (fait) | caméra de survol automatique le long de la trace, timeline, lecture / pause, vitesse, marqueur de progression, profil altimétrique |
-| 3 — Atmosphère (fait) | fait : ciel et diffusion atmosphérique (modèle Takram), brume de distance, soleil et heure solaire, ciel de nuit étoilé, exposition automatique et correction, ombres portées du relief, météo réelle dans la scène (soleil voilé, brume, brouillard, ombres adoucies), nuages volumétriques (Takram, pilotés par la météo ou à la main), eau réfléchissante (lacs et rivières d'OpenStreetMap : reflets du ciel et du soleil, vaguelettes, fondu sur la rive), fonds de carte topographiques (Plan IGN, carte nationale suisse, OpenTopoMap), hauteurs calées sur le niveau de la mer (géoïde EGM96 pour l'atmosphère et les nuages) — l'aquarelle (Stadia) exige une clé, exclue |
-| 4 — Personnalisation (en cours) | fait : document de projet (enregistrer / ouvrir un fichier autonome), annuler / rétablir, préréglages, pastille « modifié » et bouton rétablir par panneau, modèle du film et son moteur, timeline de montage sous la vue, ses textes, ses photos et ses vidéos dans le film (incréments 1 à 4 sur 4), vitesse par portion de trace, son des vidéos ; à venir : tout le film est réglable : caméra, rythme, titres, données affichées, style de trace, points d'intérêt, rendu, format (détail ci-dessous) |
-| 5 — Export vidéo (en cours) | fait : rendu hors écran image par image, formats paysage, vertical, carré, portrait, cinéma × résolutions 720p à 4K (24 / 30 / 60 i/s ; trois qualités), attente des seules tuiles visibles et préchargement, habillage incrusté, encodage MP4 H.264 (repli HEVC, WebM VP9 / VP8) via WebCodecs, progression, temps restant, annulation, téléchargement, image fixe PNG / JPEG de la vue courante aux mêmes formats × résolutions, habillage compris, écriture directe sur le disque (Chrome, Edge, application de bureau ; repli en mémoire ailleurs) ; reste : mesure de la vitesse sur une machine avec GPU |
-| 6 — Application de bureau (en cours) | fait : projet Tauri 2 (`src-tauri/`), couche plateforme commune au site et au bureau (`src/platform/`), fenêtres natives pour ouvrir et enregistrer projets, traces et exports, films écrits directement sur le disque, packs de tuiles hors ligne (couloir autour de la trace, site et bureau) ; encodeur vidéo par le ffmpeg du système sous Linux (WebKitGTK n'a pas WebCodecs ; MP4, ou WebM si le nom finit par « .webm »), « Mes projets » gardés par l'application, installeurs construits sur GitHub (`desktop.yml`) ; reste : premier lancement des workflows, signature (certificat) |
-| 7 — Au-delà du survol | fonctionnalités propres à OpenFlyover : lumière et météo réelles de la sortie, trace colorée par les données, course fantôme, vidéo embarquée synchronisée, repères automatiques, rendu en lot, affiche, calage musical, reconnaissance (détail ci-dessous) |
+| 1 — Viewer (done) | GPX / FIT import, streamed terrain, composited imagery, draped track, orbit camera |
+| 2 — Flyover (done) | automatic flyover camera along the track, timeline, play / pause, speed, progress marker, elevation profile |
+| 3 — Atmosphere (done) | done: sky and atmospheric scattering (Takram model), distance haze, sun and solar time, starry night sky, automatic exposure and correction, terrain cast shadows, real weather in the scene (veiled sun, haze, fog, softened shadows), volumetric clouds (Takram, driven by the weather or by hand), reflective water (OpenStreetMap lakes and rivers: sky and sun reflections, ripples, fade at the shore), topographic base maps (Plan IGN, Swiss national map, OpenTopoMap), heights referenced to sea level (EGM96 geoid for the atmosphere and the clouds) — watercolor (Stadia) requires a key, excluded |
+| 4 — Customization (in progress) | done: project document (save / open a standalone file), undo / redo, presets, "modifié" chip and reset button per panel, movie model and its engine, editing timeline below the view, its texts, photos and videos in the movie (increments 1 to 4 of 4), speed per track section, video sound; to come: the whole movie is adjustable: camera, pacing, titles, displayed data, track style, points of interest, rendering, format (details below) |
+| 5 — Video export (in progress) | done: offscreen frame-by-frame rendering, landscape, vertical, square, portrait and cinema formats × resolutions from 720p to 4K (24 / 30 / 60 fps; three quality levels), waiting only for visible tiles and preloading, burned-in overlay, MP4 H.264 encoding (HEVC fallback, WebM VP9 / VP8) via WebCodecs, progress, remaining time, cancellation, download, PNG / JPEG still image of the current view in the same formats × resolutions, overlay included, direct writing to disk (Chrome, Edge, desktop application; in-memory fallback elsewhere); remaining: speed measurement on a machine with a GPU |
+| 6 — Desktop application (in progress) | done: Tauri 2 project (`src-tauri/`), platform layer shared by the website and the desktop app (`src/platform/`), native dialogs to open and save projects, tracks and exports, movies written directly to disk, offline tile packs (corridor around the track, website and desktop); video encoding with the system ffmpeg on Linux (WebKitGTK does not have WebCodecs; MP4, or WebM if the name ends with ".webm"), "Mes projets" kept by the application, installers built on GitHub (`desktop.yml`); remaining: first run of the workflows, signing (certificate) |
+| 7 — Beyond the flyover | features specific to OpenFlyover: real light and weather of the outing, track colored by data, ghost race, synchronized onboard video, automatic landmarks, batch rendering, poster, music sync, scouting (details below) |
 
-### Phase 4 — Personnalisation
+### Phase 4 — Customization
 
-Principe : chaque réglage vit dans un **document de projet unique** (JSON versionné) — enregistrable, rechargeable,
-partageable, avec préréglages et annuler / rétablir. L'aperçu et l'export lisent ce même document : ce qu'on voit est
-ce qui sera rendu.
+Principle: every setting lives in a **single project document** (versioned JSON) — can be saved, reloaded and
+shared, with presets and undo / redo. The preview and the export read this same document: what you see is
+what will be rendered.
 
-| Domaine | Réglages |
+| Area | Settings |
 |---|---|
-| Timeline (montage) | comme un logiciel de montage, la base est le survol continu de la trace, avec des pistes séparées au-dessus : arrêts (orbite ou caméra fixe), titres et textes placés et étirés librement dans le temps, points d'intérêt avec arrêt, médias (images, vidéos) ; film assemblé automatiquement au chargement (ouverture en vue d'ensemble → survol avec arrêts aux sommets, cols et montées → clôture en vue d'ensemble), puis retouché. Quatre incréments : 1 — modèle du film et moteur (horloge du film, plans d'ouverture et de clôture « descente » ou « saut », arrêts, aperçu et export identiques) **fait** ; 2 — timeline sous la vue (pistes plans / arrêts / textes, glisser pour déplacer et étirer avec aimantation, zoom, inspecteur, film assemblé avec un arrêt en orbite à chaque temps fort) **fait** ; 3 — piste des textes dessinée dans l'habillage (aperçu et export, fondus, empilés par position ; cartes d'ouverture et de clôture calées sur le temps du film) **fait** ; 4 — piste des médias : photos plein écran (mouvement lent) ou en carte encadrée, placées là où elles ont été prises (position GPS ou heure de la photo), enregistrées dans le projet **fait** ; vidéos (MP4, WebM, MOV de 50 Mo au plus, découpables, image exacte à l'export) **fait** ; son des vidéos (volume, musique baissée dessous au choix, mixé à l'export) **fait** |
-| Rythme | **fait** : durée totale réglable (15 s–10 min) ; ralentis et pauses aux temps forts (sommets des montées, cols franchis, sommets proches), durée du film conservée ou allongée ; vitesse par portion choisie à la main (piste « Vitesse », ×0,25 à ×4, transitions douces) ; plan de situation (ouverture « Depuis la région » qui plonge vers la trace) ; ouverture et clôture « descente », « saut », « depuis la région » et « balayage » ; à faire : transitions entre sections réglables |
-| Caméra | **fait** : styles poursuite, balancement (hélicoptère), orbite, vue du dessus, plan cinématique ; préréglages nommés ; distance, tangage, cap, lissage ; caméra de chaque arrêt (comme le film, tour lent, vue large, fixe) et cadrages le long de la trace (losanges de la piste « Plans »), y compris un cadrage propre à une photo ou un texte (« Cadrer la caméra pendant cet élément ») |
-| Titres et textes | **fait** : titre d'ouverture (titre, sous-titre, date), textes et sous-titres de la timeline, étiquettes posées sur le relief (sommets, cols, villages), 9 positions, apparition et durée de chaque texte, couleurs et polices de l'habillage ou par élément ; partiel : carte de clôture sans générique déroulant ; à faire : police et couleur par texte, réglage d'apparition des étiquettes 3D |
-| Données à l'écran | **fait** : habillage dessiné sur canvas (même rendu en aperçu et à l'export), trois styles (éditorial, diffusion sombre, application claire), carte d'ouverture, carte de clôture (distance, D+, altitude max, durée, vitesse max, météo), compteurs au choix, profil de dimensions réglables, mini-carte (partie parcourue, flèche du nord), météo au marqueur, logo, texte libre, 9 positions et une taille par widget ; étiquettes 3D effacées derrière les cartes ; couleurs et polices modifiables par-dessus le style, pour tout l'habillage ou par widget. Prévu à l'origine : compteurs (distance, altitude, D+, vitesse, fréquence cardiaque, temps), profil altimétrique (dimensions réglables), mini-carte, logo, texte libre, carte de clôture (altitude max, vitesse max…) ; styles d'habillage prédéfinis (éditorial, diffusion sombre, application claire) ; position, taille et style de chaque widget |
-| Trace | **fait** : épaisseur, style (pleine, tirets, points, halo lumineux), trace qui se dessine au fil du survol, enchaînement de plusieurs traces, marqueur boule, figurine (randonneur, coureur, cycliste, VTT, skieur, parapente, voiture) ou image personnelle ; partiel : couleur attribuée automatiquement (pas de choix), seule la première trace est survolée ; à faire : choix de la couleur et de la trace survolée, marqueurs de départ et d'arrivée réglables, figurines animées et activités manquantes (alpiniste, bikepacking, moto, avion léger) |
-| Points d'intérêt | **fait** : ajout manuel (clic droit ou au marqueur), waypoints GPX affichés ; partiel : photos placées par leur GPS dans le temps du film, mais pas épinglées sur le relief ; à faire : icônes et types d'épingles, bornes kilométriques, réglage commun d'apparition (waypoints, photos, bornes, départ, arrivée) |
-| Rendu | **fait** : sources de relief et d'imagerie, exagération, heure du soleil, exposition, étalonnage (contraste, saturation, température, vignettage) ; partiel : date du soleil (celle de la trace, sinon aujourd'hui), brume pilotée par la météo seulement ; à faire : choix de la date, curseur de brume |
-| Format | **fait** : 16:9, 9:16, 1:1, 4:5 et 21:9, 720p à 4K, 24 / 30 / 60 i/s, zones de sécurité affichées |
-| Thèmes | **fait** : habillage indépendant de l'interface, trois styles fournis, couleurs et polices modifiables ; partiel : un thème personnalisé ne s'enregistre que dans un préréglage complet ; à faire : styles de carte, d'éléments et d'habillage enregistrables séparément |
-| Éditeur | **fait** : une page sans recharger la scène, cinq onglets (Trace, Carte, Survol, Habillage, Projet) ; partiel : pastille « modifié » et « Par défaut » par section (pas par réglage, comparés aux valeurs par défaut) ; à faire : onglets Contenu / Style / Visibilité par élément, prises de vue enregistrées (caméra, cadrage, lumière) |
+| Timeline (editing) | like video editing software, the base is the continuous flyover of the track, with separate lanes above it: stops (orbit or fixed camera), titles and texts placed and stretched freely in time, points of interest with a stop, media (images, videos); movie assembled automatically on load (opening on the overview → flyover with stops at summits, passes and climbs → closing on the overview), then adjusted. Four increments: 1 — movie model and engine (movie clock, "descente" (descent) or "saut" (jump) opening and closing shots, stops, identical preview and export) **done**; 2 — timeline below the view (shots / stops / texts lanes, drag to move and stretch with snapping, zoom, inspector, movie assembled with an orbit stop at each highlight) **done**; 3 — text lane drawn in the overlay (preview and export, fades, stacked by position; opening and closing cards synced to the movie time) **done**; 4 — media lane: full-screen photos (slow movement) or in a framed card, placed where they were taken (GPS position or photo time), saved in the project **done**; videos (MP4, WebM, MOV up to 50 MB, trimmable, exact frame at export) **done**; video sound (volume, music optionally lowered underneath, mixed at export) **done** |
+| Pacing | **done**: adjustable total duration (15 s–10 min); slow-motion and pauses at highlights (tops of climbs, passes crossed, nearby summits), movie duration kept or extended; speed per section chosen by hand ("Vitesse" lane, ×0.25 to ×4, smooth transitions); establishing shot ("Depuis la région" opening that dives toward the track); "descente", "saut", "depuis la région" and "balayage" openings and closings; to do: adjustable transitions between sections |
+| Camera | **done**: chase, sway (helicopter), orbit, top-down view and cinematic shot styles; named presets; distance, pitch, heading, smoothing; camera of each stop (same as the movie, slow turn, wide view, fixed) and framings along the track (diamonds on the "Plans" lane), including a framing specific to a photo or a text ("Cadrer la caméra pendant cet élément") |
+| Titles and texts | **done**: opening title (title, subtitle, date), timeline texts and subtitles, labels placed on the terrain (summits, passes, villages), 9 positions, appearance and duration of each text, overlay colors and fonts, per element or per text, shared size and range of the 3D labels; partial: closing card without rolling credits |
+| On-screen data | **done**: overlay drawn on canvas (same rendering in preview and export), three styles (editorial, dark broadcast, light app), opening card, closing card (distance, D+, max elevation, duration, max speed, weather), counters of your choice, profile with adjustable dimensions, mini-map (covered part, north arrow), weather at the marker, logo, free text, 9 positions and one size per widget; 3D labels hidden behind the cards; colors and fonts editable on top of the style, for the whole overlay or per widget. Originally planned: counters (distance, elevation, D+, speed, heart rate, time), elevation profile (adjustable dimensions), mini-map, logo, free text, closing card (max elevation, max speed…); predefined overlay styles (editorial, dark broadcast, light app); position, size and style of each widget |
+| Track | **done**: width, style (solid, dashes, dots, glow), track drawn progressively during the flyover, chaining of several tracks, marker as a ball, a figurine (hiker, mountaineer, runner, cyclist, bikepacking, mountain bike, skier, paraglider, motorbike, car, light aircraft) or a personal image, color of each track of your choice, flown-over track of your choice (it moves to the top of the list); to do: adjustable start and finish markers, animated figurines |
+| Points of interest | **done**: manual addition (right-click or at the marker) with an icon of your choice (pin, hut, bivouac, summit, viewpoint, photo, flag, water, meal), GPX waypoints displayed, kilometer markers (every 1, 2, 5 or 10 km), shared size and range of the labels; partial: photos placed in the movie time by their GPS position, but not pinned on the terrain; to do: start and finish labels |
+| Rendering | **done**: terrain and imagery sources, exaggeration, sun time, exposure, color grading (contrast, saturation, temperature, vignetting); sun date of your choice in fixed time (by default the date of the track, otherwise today); partial: haze driven by the weather only; to do: haze slider |
+| Format | **done**: 16:9, 9:16, 1:1, 4:5 and 21:9, 720p to 4K, 24 / 30 / 60 fps, safe areas displayed |
+| Themes | **done**: overlay independent of the interface, three styles provided, editable colors and fonts; partial: a custom theme is saved only in a full preset; to do: map, element and overlay styles that can be saved separately |
+| Editor | **done**: one page without reloading the scene, five tabs ("Trace", "Carte", "Survol", "Habillage", "Projet"); partial: "modifié" chip and "Par défaut" per section (not per setting, compared with the default values); to do: Content / Style / Visibility tabs per element, saved shots (camera, framing, light) |
 
-### Phase 7 — Au-delà du survol
+### Phase 7 — Beyond the flyover
 
-Ce qui distingue OpenFlyover : tout reste local, et les données de la sortie (horodatage, capteurs, lieu) pilotent le film.
+What sets OpenFlyover apart: everything stays local, and the data of the outing (timestamps, sensors, location) drive the movie.
 
-| Fonctionnalité | Contenu | État |
+| Feature | Content | Status |
 |---|---|---|
-| Lumière réelle de la sortie | le soleil suit l'horodatage de chaque point : on revit le lever ou le coucher de soleil au bon endroit, ombres portées comprises | fait |
-| Météo historique | température, ressenti, vent et rafales, nuages (3 couches), pluie et neige heure par heure sur la trace, du jour de la sortie (archive Open-Meteo depuis 1940, sans clé, cache local) : bilan de la sortie et conditions au marqueur dans le panneau ; rendu dans la scène (voile, brume, ombres) et widget du film | fait (nuages volumétriques compris) |
-| Trace colorée par une donnée | vitesse, pente, fréquence cardiaque, puissance, en échelle séquentielle perceptuellement uniforme (viridis, magma…) avec légende | fait (vitesse, pente, altitude, FC, cadence, puissance, température) |
-| Course fantôme | plusieurs traces rejouées ensemble sur leur temps réel : comparer des amis, ou ses sorties successives sur un même parcours | marqueurs synchronisés (temps écoulé, heure réelle, même distance), classement en direct et dans l'habillage du film : fait |
-| Vidéo embarquée synchronisée | incrustation d'une vidéo GoPro / Insta360 calée sur l'horodatage ; export de l'habillage seul sur fond transparent pour le montage | vidéo calée sur l'heure de la trace (heure lue dans le fichier, décalage réglable, défilement au rythme du survol) et export de l'habillage seul sur fond transparent : fait |
-| Repères automatiques | sommets, cols, refuges et lacs tirés d'OpenStreetMap avec leur altitude ; montées détectées et catégorisées, qui déclenchent ralentis et titres | montées (cat. 4 à HC), waypoints GPX et repères OpenStreetMap (sommets, cols, refuges, lacs… à 0,1–3 km, une requête Overpass par trace en cache) étiquetés en 3D, ralentis et titres aux cols, sommets et refuges : fait |
-| Rendu en lot | le même film en plusieurs formats d'un coup ; un dossier de GPX et un préréglage → une vidéo par sortie, en ligne de commande, sans interface | plusieurs formats (format × résolution, image fixe, affiche) en une fois, dans un dossier choisi : fait ; une vidéo par trace d'un dossier, depuis l'interface ou en ligne de commande (application de bureau) : fait |
-| Affiche imprimable | la trace sur le relief en très haute résolution, avec titre et chiffres, pour un tirage | A4 / A3 à 300 dpi (portrait, paysage) et carré, vue d'ensemble 3D, titre, date, chiffres clés, profil, météo, crédits, trois styles, plusieurs traces, carte à plat : fait |
-| Calage musical | le rythme du survol (ralentis, transitions) aligné sur les temps forts d'une musique locale | piste « Musique » (volume, fondus, forme d'onde), jouée dans l'aperçu, mixée à l'export, durée du film calée sur la musique, arrêts, titres et portions de vitesse (ralentis) calés sur le rythme : fait |
-| Reconnaissance | tracer un itinéraire futur sur le relief (routage OSM local) pour le survoler avant d'y aller | points posés sur le relief, sans trace ; itinéraire calculé dans le navigateur sur les chemins OSM, altitudes du relief : fait ; profils (vélo, VTT) à faire |
+| Real light of the outing | the sun follows the timestamp of each point: you relive the sunrise or the sunset at the right place, cast shadows included | done |
+| Historical weather | temperature, feels-like temperature, wind and gusts, clouds (3 layers), rain and snow hour by hour along the track, for the day of the outing (Open-Meteo archive since 1940, keyless, local cache): summary of the outing and conditions at the marker in the panel; rendering in the scene (veil, haze, shadows) and movie widget | done (volumetric clouds included) |
+| Track colored by data | speed, slope, heart rate, power, on a perceptually uniform sequential scale (viridis, magma…) with a legend | done (speed, slope, elevation, HR, cadence, power, temperature) |
+| Ghost race | several tracks replayed together on their real time: compare friends, or your successive outings on the same route | synchronized markers (elapsed time, real time, same distance), live leaderboard, also in the movie overlay: done |
+| Synchronized onboard video | a GoPro / Insta360 video inset, synced to the timestamps; export of the overlay alone on a transparent background for editing | video synced to the time of the track (time read from the file, adjustable offset, playback at the flyover pace) and export of the overlay alone on a transparent background: done |
+| Automatic landmarks | summits, passes, huts and lakes from OpenStreetMap with their elevation; climbs detected and categorized, which trigger slow-motion and titles | climbs (cat. 4 to HC), GPX waypoints and OpenStreetMap landmarks (summits, passes, huts, lakes… within 0.1–3 km, one cached Overpass request per track) labeled in 3D, slow-motion and titles at passes, summits and huts: done |
+| Batch rendering | the same movie in several formats at once; a folder of GPX files and a preset → one video per outing, from the command line, without a UI | several formats (format × resolution, still image, poster) in one go, in a chosen folder: done; one video per track in a folder, from the interface or from the command line (desktop application): done |
+| Printable poster | the track on the terrain at very high resolution, with title and figures, for printing | A4 / A3 at 300 dpi (portrait, landscape) and square, 3D overview, title, date, key figures, profile, weather, credits, three styles, several tracks, flat map: done |
+| Music sync | the flyover pacing (slow-motion, transitions) aligned on the beats of a local music file | "Musique" lane (volume, fades, waveform), played in the preview, mixed at export, movie duration fitted to the music, stops, titles and speed sections (slow-motion) synced to the beat: done |
+| Scouting | draw a future route on the terrain (local OSM routing) to fly over it before going | points placed on the terrain, without a track; route computed in the browser on OSM paths, elevations from the terrain: done; profiles (bike, mountain bike) to do |

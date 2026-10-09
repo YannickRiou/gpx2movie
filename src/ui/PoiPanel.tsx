@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { nextFilmId } from '../film/model'
-import type { FilmPoi } from '../film/model'
-import { POI_NAME_MAX, addPoi, poiStopAtM, removePoi, renamePoi } from '../film/pois'
+import { POI_ICONS, POI_ICON_LABELS, nextFilmId } from '../film/model'
+import type { FilmPoi, PoiIcon } from '../film/model'
+import { POI_NAME_MAX, addPoi, poiStopAtM, removePoi, renamePoi, setPoiIcon } from '../film/pois'
 import { addStop } from '../film/timeline'
 import { samplePath, trackPathOf } from '../flyover/path'
 import { editFilm } from '../scene/usePacing'
@@ -58,6 +58,21 @@ export function PoiPanel() {
                   editFilm((film) => ({ film: renamePoi(film, poi.id, name) }), { step: false })
                 }}
               />
+              <select
+                className="select poi__icon"
+                aria-label={`Pictogramme de ${poi.name || "ce point d'intérêt"}`}
+                value={poi.icon ?? 'epingle'}
+                onChange={(e) => {
+                  const icon = e.currentTarget.value as PoiIcon
+                  editFilm((film) => ({ film: setPoiIcon(film, poi.id, icon) }))
+                }}
+              >
+                {POI_ICONS.map((icon) => (
+                  <option key={icon} value={icon}>
+                    {POI_ICON_LABELS[icon]}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 className="btn btn--secondary btn--small"

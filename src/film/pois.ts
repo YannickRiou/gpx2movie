@@ -6,7 +6,7 @@ import type { LonLat } from '../core/types'
 import { nearestOnPath } from '../flyover/path'
 import type { TrackPath } from '../flyover/path'
 import { nextFilmId } from './model'
-import type { Film } from './model'
+import type { Film, PoiIcon } from './model'
 
 /** Longest name kept (the 3D label shows at most its first 40 characters). */
 export const POI_NAME_MAX = 60
@@ -33,6 +33,18 @@ export function addPoi(film: Film, at: LonLat, name = ''): Film {
 /** The film with point `id` renamed (kept as typed, so a field can be cleared and retyped; a blank name shows no label). */
 export function renamePoi(film: Film, id: string, name: string): Film {
   return { ...film, pois: film.pois.map((poi) => (poi.id === id ? { ...poi, name: name.slice(0, POI_NAME_MAX) } : poi)) }
+}
+
+/** The film with the pictogram of point `id` changed ('epingle', the default, is not stored). */
+export function setPoiIcon(film: Film, id: string, icon: PoiIcon): Film {
+  return {
+    ...film,
+    pois: film.pois.map((poi) => {
+      if (poi.id !== id) return poi
+      const { icon: _previous, ...rest } = poi
+      return icon === 'epingle' ? rest : { ...rest, icon }
+    }),
+  }
 }
 
 export function removePoi(film: Film, id: string): Film {

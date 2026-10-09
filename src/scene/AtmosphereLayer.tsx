@@ -31,7 +31,7 @@ import type { AerialPerspectiveEffect, SkyLightProbe, SunDirectionalLight } from
 import { AerialPerspective, Atmosphere, Sky, SkyLight, Stars, SunLight, type AtmosphereApi } from '@takram/three-atmosphere/r3f'
 import { buildTrackPath, samplePath } from '../flyover/path'
 import { mslLocalToEcef } from '../geo/geoid'
-import { sunDateAt } from '../flyover/sun'
+import { sunDateAt, sunDayMs } from '../flyover/sun'
 import { useAppStore } from '../state/store'
 import { CLEAR_SCENE_WEATHER, hazeExtinction, sceneWeatherAt } from '../weather/sceneWeather'
 import type { SceneWeather } from '../weather/sceneWeather'
@@ -117,7 +117,7 @@ export function AtmosphereLayer() {
       sunFromTrack: settings.sunFromTrack,
       solarHour: settings.sunHour,
       lon: frame.origin.lon,
-      dayMs: track?.stats.startTime ?? today,
+      dayMs: sunDayMs(settings.sunDate, track?.stats.startTime, today),
     })
     atmosphere.updateByDate(date)
     dateRef.current = date

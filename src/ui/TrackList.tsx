@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import type { Track } from '../core/types'
+import { isExportBusy, useExportStore } from '../export/store'
 import { RACE_SYNC_LABELS, RACE_SYNC_MODES, raceAt, rankRacers, syncNeedsTime } from '../flyover/race'
 import type { Race, RaceSync, Racer } from '../flyover/race'
 import { useRace } from '../scene/useRace'
@@ -153,6 +154,9 @@ function ChainTracks({ tracks }: { tracks: readonly Track[] }) {
 export function TrackList() {
   const tracks = useAppStore((s) => s.tracks)
   const removeTrack = useAppStore((s) => s.removeTrack)
+  const setTrackColor = useAppStore((s) => s.setTrackColor)
+  const flyTrack = useAppStore((s) => s.flyTrack)
+  const busy = useExportStore((s) => isExportBusy(s.phase))
 
   return (
     <section aria-labelledby="tracks-title">
@@ -166,12 +170,33 @@ export function TrackList() {
         <p className="tracks__empty">Aucune trace. Glissez un fichier GPX ou FIT dans la fenêtre, ou cliquez sur « Ajouter ».</p>
       ) : (
         <ul className="tracks">
-          {tracks.map((track) => (
+          {tracks.map((track, index) => (
             <li key={track.id} className="track">
-              <span className="track__swatch" style={{ background: track.color }} aria-hidden="true" />
+              <label className="track__swatch" style={{ background: track.color }} data-tip="Couleur de la trace">
+                <input
+                  type="color"
+                  className="track__color"
+                  value={track.color}
+                  aria-label={`Couleur de la trace ${track.name}`}
+                  onChange={(e) => setTrackColor(track.id, e.currentTarget.value)}
+                />
+              </label>
               <span className="track__name" title={track.name}>
                 {track.name}
               </span>
+              {index > 0 && (
+                <button
+                  type="button"
+                  className="track__fly"
+                  aria-label={`Survoler la trace ${track.name}`}
+                  data-tip="Survoler celle-ci (elle passe en tête)"
+                  data-tip-side="left"
+                  disabled={busy}
+                  onClick={() => flyTrack(track.id)}
+                >
+                  <Icon name="navigation" size={16} />
+                </button>
+              )}
               <button
                 type="button"
                 className="track__delete"

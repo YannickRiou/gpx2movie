@@ -21,7 +21,7 @@ import { recordedAtProgress } from './data'
 import type { LeaderboardRow, OverlayFrame, OverlayTrack } from './data'
 import type { CounterId, CreditsPosition, OverlayAnchor, OverlaySettings, StyledWidget } from './settings'
 import { COUNTER_IDS, widgetOverrides } from './settings'
-import { resolveOverlayTheme } from './themes'
+import { OVERLAY_FONT_FAMILIES, resolveOverlayTheme, softTextOf } from './themes'
 import type { OverlayTheme } from './themes'
 
 /** On screen (preview) or offscreen (video export). */
@@ -1074,12 +1074,14 @@ function filmTextWidget(p: Painter, item: FilmText, opacity: number, maxWidth: n
   if (!content && !subtitleText) return null
   const { theme, u } = p
   const s = item.size
-  const main: TextStyle = { family: theme.bodyFamily, weight: 500, sizePx: 2.4 * u * s, color: theme.text }
+  // its own colour and font, else the overlay's
+  const family = item.font ? OVERLAY_FONT_FAMILIES[item.font] : theme.bodyFamily
+  const main: TextStyle = { family, weight: 500, sizePx: 2.4 * u * s, color: item.color ?? theme.text }
   const subtitle: TextStyle = {
-    family: theme.bodyFamily,
+    family,
     weight: theme.labelWeight,
     sizePx: 1.6 * u * s,
-    color: theme.textSoft,
+    color: item.color ? softTextOf(item.color) : theme.textSoft,
     uppercase: theme.labelUppercase,
     tracking: theme.labelUppercase ? 0.12 : 0,
   }
