@@ -353,6 +353,16 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    the current lots): thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
    Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop.
 
+**Later, once the desktop and web versions are finished and working**
+- **Web app highly usable on mobile** (large lot, user's request). Today the interface is built for a desktop screen,
+  mouse and keyboard. To cover: a layout for phone and tablet widths (panels as bottom sheets, one panel at a time,
+  the 3D view kept visible); touch gestures for the 3D view and the timeline (pinch, two-finger orbit, drag of clips,
+  long press instead of right-click), touch-sized controls; a performance budget for mobile GPUs (pixel ratio cap,
+  lighter clouds and tiles, memory limits on iOS); import from the phone (file picker, share target of an installed
+  web app for GPX / FIT sent by Strava, Garmin or Komoot apps); export on mobile browsers (WebCodecs support and
+  memory to check per browser, shorter or lower-resolution fallback); offline use as an installed web app. Check
+  each browser's support (Safari iOS, Chrome Android) before choosing, and add a mobile scenario to `npm run e2e`.
+
 **In the user's hands**
 10. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
    steady camera, free camera, start / finish pins, export.
