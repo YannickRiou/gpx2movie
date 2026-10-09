@@ -175,8 +175,10 @@ list of activities, GPS / time / altitude / sensor streams), `src/strava/track.t
 application" (Client ID / Secret pasted once, kept in the platform storage of this browser or this computer, sent
 only to strava.com), because the token exchange requires the secret and the project has no server; no Strava key is
 in the code. Documented in the user guide (`docs/user-guide.html`, "Import a track"), `ARCHITECTURE.md` ("Strava import") and
-`docs/tests-gpu.md` (section 6 bis). Left: review the whole, real test (CORS of `www.strava.com/oauth/token` from the
-browser to be confirmed).
+`docs/tests-gpu.md` (section 6 bis). **Checked by the user on 9 October 2026 with the Windows desktop application**:
+connection and import of real activities through the API work. The website path (browser `fetch` of
+`www.strava.com/oauth/token`) has not been tried yet; the desktop webview applies the same cross-origin rules, so it
+is expected to work.
 
 ## Visual checks still to do (never seen on screen)
 
@@ -295,9 +297,8 @@ The roadmap is built except one feature. What remains:
 1. **Region highlight** (the only unfinished work item, "Interrupted 1" above): `src/scene/RegionHighlight.tsx`,
    wiring `syncRegion` / `useRegionStore` to the film, "Hauteur de départ" ("Région" / "Pays") and "Mettre en avant
    la région" in the opening inspector (`START_HEIGHT_LABELS` exists but is not shown), OpenStreetMap credit, docs.
-2. In the user's hands: tests on the machine with a GPU (`docs/tests-gpu.md`), first launch of the desktop
-   application, command-line rendering once on a real machine, a real Strava import (CORS of the token exchange from
-   the browser to confirm), signing certificates if wanted, then a first `v0.1.0` tag (release published by
+2. In the user's hands: tests on the machine with a GPU (`docs/tests-gpu.md`), command-line rendering once on a real
+   machine, Strava import on the website (done on the Windows desktop application), signing certificates if wanted, then a first `v0.1.0` tag (release published by
    `desktop.yml`).
 3. Before a public release: decide on the Garmin FIT SDK license (see "Limits and open points").
 4. Extensions proposed and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only
