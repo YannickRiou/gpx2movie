@@ -8,6 +8,8 @@ import {
   counterText,
   drawOverlay,
   endCardOpacity,
+  creditLines,
+  creditsRollProgress,
   formatDateFr,
   filmTextMaxWidths,
   filmTextOpacity,
@@ -107,6 +109,36 @@ function draw(progress: number, settings: OverlaySettings) {
   drawOverlay(ctx, overlayFrameAt(track, progress), settings, SIZE)
   return { texts, calls, joined: texts.map((t) => t.text).join(' | ') }
 }
+
+describe('rolling credits', () => {
+  it('keeps the non-blank lines, trimmed', () => {
+    expect(creditLines(' Paul \n\n  Musique : Lou ')).toEqual(['Paul', 'Musique : Lou'])
+    expect(creditLines(undefined)).toEqual([])
+  })
+
+  it('holds while the card fades in, then rolls to the end of the film', () => {
+    // card from 0.9 of the flight, faded in at 0.925
+    expect(creditsRollProgress(progressTime(0.9), 0.9)).toBe(0)
+    expect(creditsRollProgress(progressTime(0.925), 0.9)).toBeCloseTo(0, 9)
+    expect(creditsRollProgress(progressTime(0.9625), 0.9)).toBeCloseTo(0.5, 6)
+    expect(creditsRollProgress(progressTime(1), 0.9)).toBe(1)
+  })
+
+  it('draws the card and every line, moving up with the time, and is part of the timed state', () => {
+    const settings = enabled({ end: { ...DEFAULT_OVERLAY.end, credits: 'Paul\nLou' } })
+    const at = (progress: number) => {
+      const { ctx, texts } = fakeContext()
+      drawOverlay(ctx, overlayFrameAt(track, progress), settings, SIZE)
+      return texts
+    }
+    const early = at(0.94)
+    const late = at(0.97)
+    const y = (texts: TextCall[], text: string) => texts.find((t) => t.text === text)?.y ?? NaN
+    expect(y(early, 'Paul')).toBeLessThan(y(early, 'Lou'))
+    expect(y(late, 'Lou')).toBeLessThan(y(early, 'Lou'))
+    expect(overlayTimedState(settings, [], progressTime(0.94))).not.toEqual(overlayTimedState(settings, [], progressTime(0.97)))
+  })
+})
 
 describe('card timing', () => {
   it('fades the opening card in, holds it, then fades it out before its end', () => {
