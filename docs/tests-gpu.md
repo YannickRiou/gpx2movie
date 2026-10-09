@@ -149,6 +149,11 @@ reproduce it next to the box.
       the October 2026 screenshot); billows with shaded crevices, warm at golden hour, a broken top; the moving
       preview may keep a fine grain; an exported video has no grain on the clouds (« Qualité des nuages à
       l’export » « Moyenne » and « Fine »), and its export time per frame (×6 for the clouds) stays acceptable.
+- [ ] « Rendu de la mer de nuages » › « Nappe » (surface) next to « Volumétrique », same views at noon and at golden
+      hour: rolling cumulus tops without grain or shimmer (also far away and while the camera moves), creases darker
+      than the tops, warm tops and long shadows at a low sun, a bright rim looking toward the sun, summits emerging
+      without a hard line, the sea fading into the haze at the horizon; under the sea, a grey ceiling; frames per
+      second against the volumetric sea; drifting with the wind, identical in the export.
 - [ ] "Générique" (credits) of the closing card: the card holds, then card and lines roll up and leave the frame on the
       last frame, in 16:9 and 9:16, in the 3 overlay styles; readable on snow.
 - [ ] "Transitions" (Survol tab) at 0.5 s then 4 s: easing into a stop, a pause and a "Vitesse" section shorter / longer,

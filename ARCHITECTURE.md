@@ -75,6 +75,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | weather in the scene | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction`; `WeatherEffect` |
 | `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | reflective water | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater`; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH`; `WaterLayer`, `WATER_LIFT_M`; `useWaterStore` (`osm/store.ts`) |
 | `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | volumetric clouds | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `withCloudDefaults`, `seaTopFor`, `cloudCoversAt`, `sceneCloudsFrom`, `seaOfClouds`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor`; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
+| `src/scene/cloudSea.ts` + `src/scene/CloudSeaSurface.tsx` | surface sea of clouds | `seaRelief`, `billow`, `gradientNoise`, `octaveWeight`, `seaNoisePoint`, `seaBaseAltitude`, `curvatureDropM`, `edgeFade`, `rimFade`, `buildRadialGrid`, `terrainBoxOf`, `terrainGridCentres`, `seaReliefGlsl`, `glslFloat`; `CloudSeaSurface` |
 | `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | color grading | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms`; `GradingEffect`; `useGradingEffect`, `GradingComposer` |
 | `src/project/*` | project document, history, presets | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`, `isProjectThumbnail`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import") |
@@ -1542,9 +1543,10 @@ it, know at what time you will pass each point, where the sun will be and what t
 - `@takram/three-clouds` 0.7.6 (MIT, same family and same versions as `three-atmosphere` / `three-geospatial`).
   `CloudsLayer` (in the `AtmosphereLayer` `EffectComposer`, before `AerialPerspective`, which composites them) is mounted only
   with the atmosphere, in `manuel` or `mer` mode, or in `meteo` mode once the weather of the first track is loaded.
-- Setting `settings.clouds { mode: 'meteo' | 'manuel' | 'mer' | 'aucun', coverage, altitudeM, seaTopM, quality }` (default
-  `meteo`, 0.4, 1,200 m, 2,000 m, `medium`; `SETTING_CHECKS`: `isValidClouds`; `SETTING_UPGRADES`: `withCloudDefaults`
-  for projects saved before `seaTopM`), "Nuages" (clouds) block of the "Atmosphère et météo" section.
+- Setting `settings.clouds { mode: 'meteo' | 'manuel' | 'mer' | 'aucun', coverage, altitudeM, seaTopM, seaRender, quality }`
+  (default `meteo`, 0.4, 1,200 m, 2,000 m, `volume`, `medium`; `SETTING_CHECKS`: `isValidClouds`; `SETTING_UPGRADES`:
+  `withCloudDefaults` for projects saved before `seaTopM` and `seaRender`), "Nuages" (clouds) block of the "Atmosphère
+  et météo" section.
 - Pure (`sceneClouds.ts`, tested): `cloudCoversAt` gives the cover of the three layers (Open-Meteo low / mid / high at
   the sun date under the marker, via `sceneConditionsAt`; missing layer = total; manual: low = `coverage`,
   mid 60%, high 40%). `sceneCloudsFrom`: the library has only one `coverage`; the layer that asks for the most
@@ -1572,6 +1574,26 @@ it, know at what time you will pass each point, where the sun will be and what t
   billows) and a density of 0.15: the light enters the billows, which shade each other at a low sun, instead of
   a flat white surface. `SceneClouds` carries the optional shape (`CloudShape`) and period; the other modes keep the
   library defaults. The visible tops sit a little below `seaTopM` (the density fades towards the top of the layer).
+- Surface sea of clouds (`seaRender: 'surface'`, « Rendu de la mer de nuages » › « Nappe », shown under the top of the
+  sea): `CloudSeaSurface`, a mesh of the scene in `AtmosphereLayer` instead of `CloudsLayer` (not mounted then), to
+  compare with the volumetric sea on a real GPU. One draw call: a radial grid centred under the camera
+  (`buildRadialGrid`: 8 m to 300 km, 256 sectors, rings growing by 1 + 2π/256 so the cells stay square, ~112k
+  vertices), lifted in the vertex shader to `seaTopM` × exaggeration minus the relief, along the curvature of the Earth
+  (−r²/2R), and displaced into cumulus billows (`seaRelief`, pure and tested, written to GLSL by `seaReliefGlsl` from
+  the same constants): rounded domes on a jittered grid (smooth maximum between neighbours) in five octaves from
+  2.2 km down to 110 m (75 to 8 m high, unexaggerated) over a 9 km swell, in a domain warped by 380 m; an octave
+  covering fewer than 6 cells (vertex) or pixels (fragment) fades to its mean: noise-free by construction, flat at the
+  horizon. Drift: `cloudDrift` of the same wind × film time, as in the volumetric mode.
+  Shading (fragment, per pixel): normal by finite differences of the relief, steepened ×2 for the shading only
+  (cumulus domes are rounder than a sea can be displaced); sun direction, colour × intensity of the Takram `SunLight`
+  and irradiance of the `SkyLight` probe (plus the night fill) set every frame, so golden hour turns it warm; wrap
+  lighting (0.25), creases darker than the tops (occlusion from the relief), self-shadowing from the coarse relief
+  probed toward the sun at 60, 180 and 450 m, forward scattering (Henyey-Greenstein, g 0.6) through the rims and thin
+  tops; seen from below, a grey overcast ceiling. The aerial perspective hazes it like the terrain.
+  Soft edges: a 256² grid of terrain altitudes over the terrain area (tracks + `AREA_MARGIN_M`, lon/lat of the
+  samples computed once per area), a half-float texture sampled again (debounced, flushed by the export) when tiles
+  arrive; the cloud fades over its last 120 m (× exaggeration) above the terrain (`edgeFade`) and is discarded where
+  invisible (no depth written). A pure function of the settings, film time and camera: the export draws the same sea.
 - Wind: the archive's wind at the start of the outing (constant for the film, 4 m/s westerly breeze by default) × 2 at altitude
   × `CLOUD_TIMELAPSE` (20). Drift = wind × film time (`playback.timeS`, otherwise `clock.timeAtProgress`): offsets of
   the weather texture (Jacobian of the shader's cube-sphere UV, `weatherOffsetFor`) and of the shape textures (ECEF
