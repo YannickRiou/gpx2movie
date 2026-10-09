@@ -313,13 +313,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    high-performance GPU.
 
 **Proposed, waiting for the user's go**
-4. **Camera smoothing in time** (idea from MapDirector's « Smoothing » panel: aim smoothing 2 s, camera smoothing
-   7.5 s, ending 3 s, turn smoothing 1,000 m). Today the flyover camera is smoothed in space only: heading over a chord
-   window (« Lissage des virages », a ×0.25–×4 multiplier), aim height averaged along the track, track points
-   (« Lissage de la trace », metres). Missing: the aim point and the camera position low-passed over a window of film
-   time (seconds), so speed changes, pauses and stops do not jerk the view; an ending ease; the turn smoothing shown in
-   metres instead of a multiplier. Must stay a pure function of film time (a weighted average of the placements at
-   t ± window, a fixed number of samples) so the export matches the preview.
+4. **Camera smoothing in time**: done on the work branch (« Lissage de la visée », « Lissage de la caméra » 3 s by
+   default, « Fin en douceur », « Lissage des virages » in metres; see ARCHITECTURE.md, "Flyover"). To check on a GPU.
 5. **Motion blur** (« Flou de bougé », speed effect; idea from MapDirector's « Lens » panel: field of view 60°, lens
    flare, vignette, bloom, bloom radius, depth of field, motion blur 0.6). Export: render several sub-frames across the
    shutter interval of each video frame and average them (exact, deterministic, also helps the clouds converge; cost:

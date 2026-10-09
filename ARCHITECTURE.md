@@ -51,8 +51,9 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/marker*.ts` + `trackLineStyle.ts` | track and marker (see "Track and marker") | pure: `TrackStyle`, `DEFAULT_TRACK_STYLE`, `MarkerSettings`, `DEFAULT_MARKER`, `isValidTrackStyle`, `isValidMarker`, `withTrackStyleDefaults`, `withMarkerDefaults` (`markerSettings.ts`); `MARKER_FIGURE_PATHS`, `circlePath` (`markerFigures.ts`); `drawBadge`, `readableInk`, `squareCrop`, `fileToAvatarDataUrl`, `loadMarkerImage` (`markerBadge.ts`, 2D canvas); `markerBadge`, `badgeTexture`, `headsLeft`, `placeMarker`, `useMarkerImage`, `MARKER_SCREEN_FACTOR` (`markerSprite.ts`); `createGlowMaterial`, `applyDash`, `quantizedPixelSize`, `cumulativeDistances`, `cutAt`, `cutLine` (`trackLineStyle.ts`); `TrackMarkerSection` (`src/ui`) |
 | `src/flyover/path.ts` | flyover path | `buildTrackPath(track): TrackPath` (concatenated segments, cumulative distances, `time` in ms or NaN), `trackPathOf(track)` (same path, cached per track), `samplePath(path, distanceM): PathSample` (`ele` and `time` interpolated only if both neighbors have them), `recordedTimeAt(path, distanceM)` (fills points without a time), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)`, `pickProjectedPath(screen, distM, px, py, maxPx)` (point of the projected track closest to the pointer) |
 | `src/flyover/smooth.ts` | track smoothing (see "Track and marker") | `smoothPoints(points, windowM)`, `smoothTrack(track, windowM)`, `smoothedTrackPath(track, windowM)` (smoothed positions, recorded distances and times) |
-| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad? })` → `{ target, position, marker }`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
-| `src/flyover/cameraSettings.ts` | camera styles and presets | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
+| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad?, aimProgress?, cameraProgress? })` → `{ target, position, marker }`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
+| `src/flyover/cameraSettings.ts` | camera styles and presets | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `withCameraDefaults`, `turnSmoothingM(camera, lengthM)`, `advanceProgress(progress, dt, speed, durationS)` |
+| `src/flyover/timeSmoothing.ts` | camera smoothing in film time | `timeSmoothing(clock, timeS, motionS, camera)` → `{ aimProgress, cameraProgress, timeS }`, `windowAverage`, `easedEndTimeS`, `smoothsInTime`, `TIME_SMOOTHING_SAMPLES` |
 | `src/flyover/climbs.ts` | detected climbs | `detectClimbs`, `climbsOf(track)` (cached per track), exported thresholds, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | 3D labels | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`…; `setLabelSource(id, labels)` (prefixed, unique ids), `useLabelSources` |
 | `src/flyover/pacing.ts` | flyover pacing | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance`; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses given by the film); `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
@@ -366,7 +367,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   terrain sampler), with no state from one frame to the next, so the video export can render any frame in isolation.
   Orbit and cinematic (`movesWithTime`) follow the film time (`timeS`, or progress × duration when missing) and therefore keep
   turning during pacing pauses; the other styles depend only on progress. Heading = chord
-  [d − w, d + w] (w = 2% of the track, 150 m–1.5 km, × smoothing), automatic distance 4% of the track (600 m–4 km, × distance).
+  [d − w, d + w] (2w = « Lissage des virages » `turnSmoothingM` in metres; 0 = « Auto »: w = 2% of the track,
+  150 m–1.5 km, × the `smoothing` multiplier of the presets and older projects), automatic distance 4% of the track (600 m–4 km, × distance).
   Styles (`settings.camera.style`): `chase` (behind the marker), `sway` (swing toward the outside of bends:
   50° · tanh(0.8 · T / 50°), T = sum of turn angles weighted by a tent over ±2w, continuous and calm), `orbit` (6°/s
   around the marker from the start heading), `top` (≥ 70°, distance × 2.5, north or heading up), `cinematic` (distance × 1.6,
@@ -384,10 +386,32 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   then the camera is kept `MIN_TERRAIN_CLEARANCE_M` (40 m) above the actual terrain below it (a bump narrower than a
   cell). About 65 terrain samples per frame. On ±15 m bumps 30 m wide, the frame-to-frame height change drops from
   3–35 m to 0.16 m on flat ground, the change of vertical speed from 1–70 m to under 2.5 m on hills.
-- **Camera settings**: `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp }` and named
+  **Smoothing in film time** (`src/flyover/timeSmoothing.ts`, applied by `computeFilmView`; still no frame-to-frame
+  state): the aim point follows the marker's progress averaged over « Lissage de la visée » `aimSmoothingS` (0 by
+  default: on the marker), the camera follows it averaged over « Lissage de la caméra » `cameraSmoothingS` (3 s by
+  default), each a raised-cosine window of 21 fixed samples of `clock.progressAtTime` centred on the film time; the
+  camera then stands around its own point of the track (`cameraProgress`, heading and sway measured there) at the
+  aim's height, looking at the aim (`aimProgress`), the marker staying on its progress. The progress is averaged, not
+  the placements: at constant speed it is unchanged (the look of a film stays the same away from speed changes), the
+  averaged point stays on the track (no corner cut, no angle to average), and a sample costs a clock look-up, not a
+  placement. Speed changes, pacing pauses and stops are anticipated and eased: a stop entered over 1.5 s jerks about
+  half as much at 3 s, a quarter at 7.5 s; the start of the flight (the flight view was still during the opening, then
+  at full speed) no longer jumps. Edges: the clock holds the progress outside the flight (0 during the opening, 1
+  during the closing) and clamps the film time, so the windows reach across the shots without a jump; the shot curves,
+  the stop cameras (orbit angle, « Vue large », « Fixe » held motion time) and the camera keys keep the marker's time
+  and progress, so a framing pinned for an item is the one seen during it. « Fin en douceur » `endingS` (0 by
+  default): over its last seconds the camera time slows down at a constant rate to a stop (`easedEndTimeS`: speed 1 →
+  0, held from the end of the flight at half the ease short of it), the time-based motions (orbit, cinema) too; the
+  aim keeps following the marker to the finish, so the camera stops and turns to watch it. `filmViewMovesWithTime` is
+  true during every stop when one of the three is on (the export then renders those frames instead of repeating one).
+- **Camera settings**: `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp, turnSmoothingM,
+  aimSmoothingS, cameraSmoothingS, endingS }` (a camera saved before the last four gets them from `DEFAULT_CAMERA`,
+  `withCameraDefaults` in `SETTING_UPGRADES`: « Auto » keeps its multiplier, so the turns look the same) and named
   presets (`CAMERA_PRESETS`: Poursuite (chase), Hélicoptère (helicopter), Drone haut (high drone), Vue du dessus (top view), Orbite (orbit), Cinéma (cinema)) in
   `src/flyover/cameraSettings.ts`; `settings.flyoverDurationS` (15–600 s, 60 by default) = duration at ×1, the timeline
-  speed applies on top. "Survol" tab (`src/ui/CameraPanel.tsx`, "Caméra" and "Durée et rythme" sections). While paused, a camera setting change repositions the camera.
+  speed applies on top. "Survol" tab (`src/ui/CameraPanel.tsx`, "Caméra" and "Durée et rythme" sections; the
+  smoothing sliders under the camera's « Plus de réglages », « Lissage des virages » showing the « Auto » length for
+  the first track). While paused, a camera setting change repositions the camera.
   "Cadrer la caméra pendant cet élément" (frame the camera during this item; inspector of a text or a media item): `addItemCamera` places a framing where
   the marker is at the start of the item (selected, to be adjusted) and, if the marker moves during the item, a second one at
   its end that keeps the framing that was there: neighboring framings keep their values (between the end of the item and the
