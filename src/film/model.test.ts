@@ -16,6 +16,7 @@ import {
   nextFilmId,
   shotCuts,
   shotDurationS,
+  situationTiming,
   transitionDipAt,
 } from './model'
 import type { Film, FilmAudio, FilmCameraKey, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
@@ -104,6 +105,15 @@ describe('film model', () => {
     for (const regionId of ['node/1', 'relation/', 'relation/1a', 3 as never]) {
       expect(isValidFilm(film({ opening: { style: 'situation', durationS: 9, regionId } }))).toBe(false)
     }
+  })
+
+  it('region shot: hold optional (none by default), within its range; hold + move = the shot duration', () => {
+    expect(isValidFilm(film({ opening: { style: 'situation', durationS: 9, holdS: 3 } }))).toBe(true)
+    for (const holdS of [-1, 10.5, '2' as never]) {
+      expect(isValidFilm(film({ opening: { style: 'situation', durationS: 9, holdS } }))).toBe(false)
+    }
+    expect(situationTiming({ durationS: 9 })).toEqual({ holdS: 0, moveS: 9 })
+    expect(situationTiming({ durationS: 4, holdS: 6 })).toEqual({ holdS: 4, moveS: 0 })
   })
 
   it('dip curve: 0 outside its window, symmetric, 1 at the cut', () => {

@@ -13,6 +13,7 @@ import {
   SHOT_STYLES,
   SHOT_TRANSITIONS,
   SHOT_TRANSITION_LABELS,
+  SITUATION_HOLD_RANGE,
   START_HEIGHTS,
   START_HEIGHT_LABELS,
   STOP_CAMERAS,
@@ -20,6 +21,7 @@ import {
   STOP_DURATION_RANGE,
   SYNC_OFFSET_RANGE,
   shotDipColor,
+  situationTiming,
 } from '../film/model'
 import type { Film, MediaLayout, MediaSync, ShotStyle, ShotTransition, StartHeight, StopCamera } from '../film/model'
 import {
@@ -105,6 +107,62 @@ function InspectorGroup({ title, children }: { title: string; children: ReactNod
       </h3>
       {children}
     </section>
+  )
+}
+
+/**
+ * « Durées » of a 'situation' shot: « Maintien » on the region view, then the move (« Plongée » at the opening,
+ * « Remontée » at the closing, held after it); the shot lasts their sum (`durationS`, read by the clock and the
+ * timeline), at most SHOT_DURATION_RANGE.max: a longer move shortens the hold, never the other way.
+ */
+function SituationTimings({
+  phase,
+  durationS,
+  holdS,
+  onChange,
+}: {
+  phase: 'opening' | 'closing'
+  durationS: number
+  holdS: number | undefined
+  onChange(patch: { durationS: number; holdS: number | undefined }): void
+}) {
+  const timing = situationTiming({ durationS, holdS })
+  const max = SHOT_DURATION_RANGE.max
+  const set = (hold: number, move: number) => {
+    const moveS = Math.min(Math.max(move, SHOT_DURATION_RANGE.min), max)
+    const kept = Math.min(hold, max - moveS)
+    onChange({ durationS: kept + moveS, holdS: kept > 0 ? kept : undefined })
+  }
+  return (
+    <InspectorGroup title="Durées">
+      <RangeField
+        label="Maintien"
+        {...SITUATION_HOLD_RANGE}
+        value={timing.holdS}
+        format={seconds}
+        onChange={(hold) => set(hold, timing.moveS)}
+        wide={false}
+        tip={
+          phase === 'opening'
+            ? 'Temps passé immobile sur la vue de la région, région en pleine lumière, avant la plongée.'
+            : 'Temps passé immobile sur la vue de la région à la fin du film.'
+        }
+      />
+      <RangeField
+        label={phase === 'opening' ? 'Plongée' : 'Remontée'}
+        {...SHOT_DURATION_RANGE}
+        value={timing.moveS}
+        format={seconds}
+        onChange={(move) => set(timing.holdS, move)}
+        wide={false}
+        tip={
+          phase === 'opening'
+            ? 'Durée du mouvement de la vue de la région jusqu’au survol ; la mise en avant s’efface pendant ce temps.'
+            : 'Durée du mouvement du survol jusqu’à la vue de la région ; la mise en avant apparaît pendant ce temps.'
+        }
+      />
+      <p className="field__hint">Durée du plan : {seconds(durationS)}</p>
+    </InspectorGroup>
   )
 }
 
@@ -386,17 +444,24 @@ export function FilmInspector() {
                 <PlaceSelect value={shot.regionId ?? null} onChange={(regionId) => change((f) => setFilmPlace(f, regionId), false)} />
               )}
             </InspectorGroup>
+            <SituationTimings
+              phase={item}
+              durationS={shot.durationS}
+              holdS={shot.holdS}
+              onChange={(patch) => change((f) => updateShot(f, item, patch), false)}
+            />
           </>
         )}
-        {range(
-          'duration',
-          'Durée',
-          shot.durationS,
-          SHOT_DURATION_RANGE,
-          seconds,
-          (durationS) => change((f) => updateShot(f, item, { durationS }), false),
-          shot.style === 'aucune',
-        )}
+        {shot.style !== 'situation' &&
+          range(
+            'duration',
+            'Durée',
+            shot.durationS,
+            SHOT_DURATION_RANGE,
+            seconds,
+            (durationS) => change((f) => updateShot(f, item, { durationS }), false),
+            shot.style === 'aucune',
+          )}
         <div className="field">
           <label className="field__label" htmlFor={`${id}-transition`}>
             Transition

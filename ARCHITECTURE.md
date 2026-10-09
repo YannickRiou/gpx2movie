@@ -562,7 +562,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   default duration gets `SITUATION_DURATION_S`, 9 s, for its long dive (`updateShot`; saved films keep theirs); `transition` `'enchaine'` by default, `'coupe'`,
   `'fondu-noir'`, `'fondu-blanc'`, `dipS` 0.3–2 s, 1 s by default: optional, an old film stays continuous;
   `startHeight` `'region'` (default) or `'pays'`, `highlight` (default off) and `regionId` (« Lieu », OSM area
-  `relation/<id>` or `way/<id>`, absent = automatic) for a `situation` shot, see below);
+  `relation/<id>` or `way/<id>`, absent = automatic) and `holdS` (« Maintien », 0–10 s, `SITUATION_HOLD_RANGE`,
+  absent = 0) for a `situation` shot, see below);
   `autoStops` (generated stops) and `autoMode`: `'temps-forts'` (default for new projects) or `'rythme'` (earlier
   projects);
   `stops[]` `{ id, atM, durationS (0.5–60 s), camera: 'film' | 'orbite' | 'large' | 'fixe', label?, source?: { kind, ref? } }`
@@ -652,7 +653,12 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   of the frame (`groundReach`, flat ground, 50° vertical field of view) stays within 400 km of the track's box
   (`REGION_REACH_M`; the terrain area of a film with a region view reaches 500 km, `REGION_AREA_MARGIN_M`), never
   closer than the overview. A single move (geometric distance, smootherstep), which passes the overview distance on the way
-  without stopping there: no jerk, never backing up. The camera far plane (5,000 km) limits nothing; seen from above,
+  without stopping there: no jerk, never backing up. **Hold and push-in** (« Durées » in the inspector: « Maintien »,
+  then « Plongée » at the opening, « Remontée » then « Maintien » at the closing): `holdS` of the shot's `durationS`
+  is spent still on the region view (`situationTiming`: hold + move = duration, so the clock and the timeline keep
+  reading `durationS`; a move made longer than 30 s in all shortens the hold), the smootherstep move takes the rest
+  (`shotBlend(…, holdS)`). Without a hold (every film saved before), the move takes the whole shot: exactly the
+  curve of before. The camera far plane (5,000 km) limits nothing; seen from above,
   the engine picks coarse tiles (loading in time: `docs/tests-gpu.md`). **Region highlight** ("Mettre en avant la
   région" (highlight the region) in the shot inspector, under "Hauteur de départ" (start height), "Hauteur de fin" for
   the closing; `highlight`, off by default: no Overpass request and an unchanged framing for every film saved before,
@@ -681,8 +687,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   cannot be occluded correctly anyway), drawn after the terrain and the track line, under the ghost line, the marker
   and the labels. Unlit colours divided by the exposure. Opacity `regionHighlightOpacity(clock, timeS)`, pure: from the
   share of the region view in the shot (1 − `shotWeight` at the opening, `shotWeight` at the closing), smootherstep
-  between 0.55 and 0.85 (`REGION_HIGHLIGHT_FADE`): whole at the top, gone a little before the middle of the dive, back
-  as the closing climbs; held whole until the cut with "Coupe" or a fade. Shots always move with time
+  between 0.55 and 0.85 (`REGION_HIGHLIGHT_FADE`): whole at the top and during the hold, gone a little before the
+  middle of the dive, back as the closing climbs; held whole until the cut with "Coupe" or a fade. Shots always move with time
   (`filmViewMovesWithTime`), so the export draws every frame of it; hidden on the poster's overview still. OpenStreetMap
   is credited while a region is loaded (status bar, burned-in credits). Stop camera: `film`, the
   flight camera continues (the marker holds, so does the camera, except the orbit and cinematic styles, which keep their motion);

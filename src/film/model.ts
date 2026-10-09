@@ -69,6 +69,11 @@ export interface FilmShot {
    * "way/45"); absent = the automatic administrative region. One place per film: `setFilmPlace` writes both shots.
    */
   regionId?: string
+  /**
+   * 'situation': seconds the region view is held (« Maintien »: at the start of the opening, at the end of the
+   * closing) within `durationS`; the rest is the move (« Plongée »). Default 0: one move over the whole shot.
+   */
+  holdS?: number
 }
 
 export const START_HEIGHTS = ['region', 'pays'] as const
@@ -89,6 +94,14 @@ export function filmRegionId(film: Pick<Film, 'opening' | 'closing'>): string | 
 export const isRegionId = (v: unknown): v is string => typeof v === 'string' && /^(relation|way)\/\d+$/.test(v)
 /** Duration given to a shot switched to 'situation' while it had its default duration (seconds): the dive is long. */
 export const SITUATION_DURATION_S = 9
+/** Hold on the region view of a 'situation' shot (seconds; also its validity range in a loaded project). */
+export const SITUATION_HOLD_RANGE = { min: 0, max: 10, step: 0.5 } as const
+
+/** Hold of a 'situation' shot and its move (seconds), within its duration: hold + move = `durationS`. */
+export function situationTiming(shot: Pick<FilmShot, 'durationS' | 'holdS'>): { holdS: number; moveS: number } {
+  const holdS = Math.min(Math.max(0, shot.holdS ?? 0), shot.durationS)
+  return { holdS, moveS: shot.durationS - holdS }
+}
 
 /** Length of a dip to black or white (also its validity range in a loaded project), seconds. */
 export const DIP_DURATION_RANGE = { min: 0.3, max: 2, step: 0.1 } as const
@@ -451,7 +464,8 @@ export function isValidShot(shot: unknown): shot is FilmShot {
     (shot.dipS === undefined || within(shot.dipS, DIP_DURATION_RANGE.min, DIP_DURATION_RANGE.max)) &&
     (shot.startHeight === undefined || oneOf(START_HEIGHTS, shot.startHeight)) &&
     (shot.highlight === undefined || typeof shot.highlight === 'boolean') &&
-    (shot.regionId === undefined || isRegionId(shot.regionId))
+    (shot.regionId === undefined || isRegionId(shot.regionId)) &&
+    (shot.holdS === undefined || within(shot.holdS, SITUATION_HOLD_RANGE.min, SITUATION_HOLD_RANGE.max))
   )
 }
 

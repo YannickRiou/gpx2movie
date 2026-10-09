@@ -3,6 +3,7 @@ import { PerspectiveCamera, Vector3 } from 'three'
 import { buildFilmClock } from '../film/clock'
 import type { FilmClockInput } from '../film/clock'
 import type { FilmCameraKey, FilmShot, FilmStop } from '../film/model'
+import { situationTiming } from '../film/model'
 import { createLocalFrame } from '../geo/ellipsoid'
 import { buildTrack } from '../import/stats'
 import { computeCameraView, MIN_GROUND_CLEARANCE_M } from './camera'
@@ -252,6 +253,47 @@ describe('region highlight opacity', () => {
     const clock = clockOf({ ...highlighted, transition: 'coupe' }, { style: 'aucune', durationS: 5 })
     expect(regionHighlightOpacity(clock, 8 - 1e-6)).toBe(1)
     expect(regionHighlightOpacity(clock, 8)).toBe(0)
+  })
+
+  it('whole during the hold, fading during the push-in (and the other way at the closing)', () => {
+    // 3 s held + 5 s of push-in: the push-in plays the curve of a 5 s shot without hold
+    const held = { ...highlighted, holdS: 3 }
+    const clock = clockOf(held, { ...held, durationS: 6 })
+    const plain = clockOf({ ...highlighted, durationS: 5 }, { ...highlighted, durationS: 3 })
+    for (let t = 0; t <= 3; t += 0.25) expect(regionHighlightOpacity(clock, t)).toBe(1)
+    for (let t = 3; t <= 8; t += 0.25) expect(regionHighlightOpacity(clock, t)).toBeCloseTo(regionHighlightOpacity(plain, t - 3), 9)
+    const closingS = clock.openingS + clock.flightS
+    const plainClosingS = plain.openingS + plain.flightS
+    for (let s = 0; s <= 3; s += 0.25) {
+      expect(regionHighlightOpacity(clock, closingS + s)).toBeCloseTo(regionHighlightOpacity(plain, plainClosingS + s), 9)
+    }
+    for (let s = 3; s <= 6; s += 0.25) expect(regionHighlightOpacity(clock, closingS + s)).toBe(1)
+  })
+})
+
+describe('situation timing', () => {
+  it('no hold: today’s single move over the whole shot', () => {
+    for (let s = 0; s <= 9; s += 0.5) {
+      expect(shotBlend('situation', 'opening', s, 9, 0)).toBe(smootherstep(s / 9))
+      expect(shotBlend('situation', 'opening', s, 9)).toBe(shotBlend('descente', 'opening', s, 9))
+      expect(shotBlend('situation', 'closing', s, 9)).toBe(smootherstep(s / 9))
+    }
+  })
+
+  it('opening: held, then the move over the rest; closing: the move, then held', () => {
+    expect(shotBlend('situation', 'opening', 0, 9, 3)).toBe(0)
+    expect(shotBlend('situation', 'opening', 3, 9, 3)).toBe(0)
+    expect(shotBlend('situation', 'opening', 6, 9, 3)).toBeCloseTo(0.5, 12)
+    expect(shotBlend('situation', 'opening', 9, 9, 3)).toBe(1)
+    expect(shotBlend('situation', 'closing', 3, 9, 3)).toBeCloseTo(0.5, 12)
+    expect(shotBlend('situation', 'closing', 6, 9, 3)).toBe(1)
+    expect(shotBlend('situation', 'closing', 8, 9, 3)).toBe(1)
+    // only the 'situation' style holds; a hold longer than the shot leaves a cut at its end
+    expect(shotBlend('descente', 'opening', 3, 9, 3)).toBe(smootherstep(3 / 9))
+    expect(shotBlend('situation', 'opening', 4, 5, 9)).toBe(0)
+    expect(shotBlend('situation', 'opening', 5, 5, 9)).toBe(1)
+    expect(situationTiming({ durationS: 9, holdS: 3 })).toEqual({ holdS: 3, moveS: 6 })
+    expect(situationTiming({ durationS: 9 })).toEqual({ holdS: 0, moveS: 9 })
   })
 })
 

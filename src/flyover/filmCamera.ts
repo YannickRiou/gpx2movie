@@ -22,7 +22,7 @@ import { Vector3 } from 'three'
 import { clamp, smootherstep } from '../core/math'
 import type { LocalFrame, LonLat } from '../core/types'
 import type { ClockStop, FilmClock, FilmState } from '../film/clock'
-import { shotCuts } from '../film/model'
+import { shotCuts, situationTiming } from '../film/model'
 import type { FilmShot, ShotStyle, StartHeight } from '../film/model'
 import type { HeightSampler } from '../scene/TrackLines'
 import { MIN_GROUND_CLEARANCE_M, computeCameraView, movesWithTime, type CameraView, type CameraViewOptions } from './camera'
@@ -72,9 +72,17 @@ export const STOP_WIDE_PITCH_DEG = 20
 const DEG = Math.PI / 180
 const UP = new Vector3(0, 1, 0)
 
-/** Fraction (0 = first view, 1 = second) of a shot `localS` seconds into it: opening overview → flight, closing flight → overview. */
-export function shotBlend(style: ShotStyle, phase: 'opening' | 'closing', localS: number, lengthS: number): number {
+/**
+ * Fraction (0 = first view, 1 = second) of a shot `localS` seconds into it: opening overview → flight, closing
+ * flight → overview. A 'situation' shot holds its region view `holdS` seconds (opening: first; closing: last) and
+ * moves by smootherstep over the rest; with no hold, over the whole shot, like 'descente'.
+ */
+export function shotBlend(style: ShotStyle, phase: 'opening' | 'closing', localS: number, lengthS: number, holdS = 0): number {
   if (!(lengthS > 0)) return 1
+  if (style === 'situation' && holdS > 0) {
+    const { holdS: hold, moveS } = situationTiming({ durationS: lengthS, holdS })
+    return ramp(phase === 'opening' ? localS - hold : localS, moveS)
+  }
   if (style === 'balayage') {
     const u = localS / lengthS
     return smootherstep(phase === 'opening' ? (u - SWEEP_SHARE) / (1 - SWEEP_SHARE) : u / (1 - SWEEP_SHARE))
@@ -105,7 +113,7 @@ export function turnedView(view: CameraView, angleRad: number): CameraView {
  */
 export function shotWeight(shot: FilmShot, phase: 'opening' | 'closing', localS: number, lengthS: number): number {
   if (shotCuts(shot)) return phase === 'opening' ? 0 : 1
-  return shotBlend(shot.style, phase, localS, lengthS)
+  return shotBlend(shot.style, phase, localS, lengthS, shot.holdS)
 }
 
 /** Share of the region view in a highlighting 'situation' shot below which its highlight is gone, above which it is whole. */
