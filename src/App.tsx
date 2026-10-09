@@ -10,7 +10,6 @@ import { useAppStore } from './state/store'
 import { CameraPanel } from './ui/CameraPanel'
 import { ClimbList } from './ui/ClimbList'
 import { EmptyState } from './ui/EmptyState'
-import { FilmInspector } from './ui/FilmInspector'
 import { HelpDialog } from './ui/HelpDialog'
 import { Icon } from './ui/icons'
 import type { IconName } from './ui/icons'
@@ -41,6 +40,8 @@ import './ui/shell.css'
 // packs are not needed to show the first screen. They stay mounted once loaded (side effects, see the side panel).
 const ExportPanel = lazy(() => import('./ui/ExportPanel').then((m) => ({ default: m.ExportPanel })))
 const OfflinePanel = lazy(() => import('./ui/OfflinePanel').then((m) => ({ default: m.OfflinePanel })))
+// the film inspector only opens on a selected timeline block
+const FilmInspector = lazy(() => import('./ui/FilmInspector').then((m) => ({ default: m.FilmInspector })))
 
 const TAB_LABELS: Record<ShellTab, { label: string; icon: IconName }> = {
   trace: { label: 'Trace', icon: 'route' },
@@ -420,7 +421,11 @@ export default function App() {
         </aside>
         {/* the export drawer goes first */}
         <aside className="dock" aria-label="Inspecteur" hidden={shell.dockOpen || !shell.inspecting} inert={exporting}>
-          {shell.inspecting && !shell.dockOpen && <FilmInspector />}
+          {shell.inspecting && !shell.dockOpen && (
+            <Suspense>
+              <FilmInspector />
+            </Suspense>
+          )}
         </aside>
       </div>
 

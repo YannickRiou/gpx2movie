@@ -2,7 +2,6 @@ import { Suspense, lazy, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { VIDEO_ASPECTS } from '../export/schedule'
 import { isExportBusy, useExportStore } from '../export/store'
-import { OverlayCanvas } from '../overlay/OverlayCanvas'
 import { useAppStore } from '../state/store'
 import { Icon } from './icons'
 import { SafeZones, useSafeZonesStore } from './SafeZones'
@@ -12,6 +11,7 @@ import { TrackLegend } from './TrackLegend'
 
 // the 3D scene (three.js, atmosphere, clouds, terrain) is its own chunk: the shell and the welcome card paint first
 const FlyoverCanvas = lazy(() => import('../scene/FlyoverCanvas').then((m) => ({ default: m.FlyoverCanvas })))
+const OverlayCanvas = lazy(() => import('../overlay/OverlayCanvas').then((m) => ({ default: m.OverlayCanvas })))
 
 /**
  * Centre of the shell: the 3D view and its overlay framed to the output format (letterbox in ink, the export
@@ -52,7 +52,9 @@ export function Stage({ children }: { children?: ReactNode }) {
         <Suspense>
           <FlyoverCanvas />
         </Suspense>
-        <OverlayCanvas />
+        <Suspense>
+          <OverlayCanvas />
+        </Suspense>
         {trackColored && <TrackLegend />}
         {rect && safeZones && <SafeZones aspect={aspectId} />}
       </div>
