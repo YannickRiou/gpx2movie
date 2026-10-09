@@ -324,21 +324,33 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    default). Same « Lens » panel, already there: vignette (« Couleurs » › « Plus de réglages »); fixed field of view
    (`CAMERA_FOV_DEG` = 50°). Not there: adjustable field of view, bloom, lens flare, depth of field — to weigh one by
    one with the user.
-6. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
-7. Extensions not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
+6. **Situation shot, more control** (ideas from MapDirector's « Situate » panel, seen on a Corsica flyover: « Parc
+   naturel régional de Corse » outlined in glowing white, name in large type, green dot at the outing). Already here:
+   automatic administrative region (levels 4–6), « Région » / « Pays » height, highlight, styles « Depuis la région »
+   (dive) and « Balayage » (≈ their Sweep / Hop), « Enchaîné » transition (≈ « Blend intro »). Missing:
+   - **choice of the place** among the areas that contain the track, not only administrative ones: natural and
+     national parks, protected areas, islands, massifs (OpenStreetMap `boundary=protected_area` / `national_park`,
+     `place=island`, `natural=mountain_range`), in a list (« Lieu »);
+   - **separate timings**: hold on the situation view (« Maintien »), then push-in duration (« Plongée »), instead of
+     one shot duration;
+   - **framing of the situation view**: tilt, distance (km), heading free or north up (« Boussole »), bearing,
+     headroom, and « Capturer la vue actuelle » to set it from the 3D view;
+   - **sun moving during the shot** (« Faire bouger le soleil »: time of day animated over the opening).
+7. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
+8. Extensions not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
    Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop.
-8. Commit `32a3818` message mentions the `CLAUDE.md` file name; `CLAUDE.md` and `.claude/` are in the repository
+9. Commit `32a3818` message mentions the `CLAUDE.md` file name; `CLAUDE.md` and `.claude/` are in the repository
    (configuration files). Rewriting history or removing them only on the user's request.
 
 **In the user's hands**
-9. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
+10. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
    steady camera, free camera, start / finish pins, export.
-10. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
+11. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
    remove them; delete the old branches (`lot-suites`, `landmarks-hide`, `track-style`, `ui-polish`,
    `timeline-polish`, `export-stream`, `timeline-videos`, `water`): the session cannot delete remote branches.
-11. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
+12. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
    application); signing certificates if wanted; then a first `v0.1.0` tag (release published by `desktop.yml`).
-12. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+13. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.
