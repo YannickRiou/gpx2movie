@@ -7,6 +7,7 @@
  */
 import { fillSky } from '../export/capture'
 import type { MiniMapOutline } from '../overlay/data'
+import { FRAUNCES, GLACIER, INK, INK_SOFT, PAPER, PLEX, PLEX_CONDENSED, TRAIL_RED, TRAIL_RED_LIGHT } from '../overlay/themes'
 import { formatDistance, formatNumber } from '../ui/format'
 import type { PosterContent, PosterProfile } from './content'
 import { CREDIT_LINES, FIGURE_VALUE_SHARE, fitLines, fitText, fitTrackList, truncate } from './layout'
@@ -15,17 +16,7 @@ import type { PosterStyleId } from './settings'
 
 export type PosterContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
-const FRAUNCES = '"Fraunces", Georgia, serif'
-const PLEX = '"IBM Plex Sans", system-ui, sans-serif'
-const PLEX_CONDENSED = '"IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif'
-
-const PAPER = '#F5F2EA'
 const LINE = '#D6CDBB'
-const INK = '#1C2A33'
-const INK_SOFT = '#55626B'
-const TRAIL_RED = '#C23B22'
-const TRAIL_RED_LIGHT = '#FF8A5C'
-const GLACIER = '#A9CCD9'
 
 interface Font {
   family: string
