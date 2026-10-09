@@ -68,6 +68,8 @@ export function RangeField({
   onChange,
   disabled = false,
   wide = true,
+  tip,
+  spoken = format,
 }: {
   label: string
   min: number
@@ -78,13 +80,27 @@ export function RangeField({
   onChange(value: number): void
   disabled?: boolean
   wide?: boolean
+  /** explanation in an ⓘ next to the label */
+  tip?: string
+  /** value read by screen readers, when it differs from the displayed one */
+  spoken?(value: number): string
 }) {
   const id = useId()
+  const labelEl = (
+    <label className="field__label" htmlFor={id}>
+      {label}
+    </label>
+  )
   return (
     <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
+      {tip ? (
+        <div className="field__label-row">
+          {labelEl}
+          <InfoTip text={tip} />
+        </div>
+      ) : (
+        labelEl
+      )}
       <div className="range-row">
         <input
           id={id}
@@ -96,7 +112,7 @@ export function RangeField({
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(Number(e.currentTarget.value))}
-          aria-valuetext={format(value)}
+          aria-valuetext={spoken(value)}
         />
         <output className={wide ? 'range-row__value range-row__value--wide' : 'range-row__value'} htmlFor={id}>
           {format(value)}
