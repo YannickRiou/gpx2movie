@@ -1,8 +1,8 @@
 import type { CSSProperties } from 'react'
 import { create } from 'zustand'
 import type { VideoAspect } from '../export/schedule'
-import { safeZones } from './safeZones'
-import type { FrameBox } from './safeZones'
+import { safeZones } from './safeZoneLayout'
+import type { FrameBox } from './safeZoneLayout'
 
 /** Shown or not (preview only: neither saved nor undoable, off at start-up); « G » or the button of the view. */
 export const useSafeZonesStore = create<{ visible: boolean; toggle(): void }>()((set) => ({
