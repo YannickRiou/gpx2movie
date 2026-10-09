@@ -22,6 +22,8 @@ export interface LandmarkSettings {
   kinds: Record<OsmKind, boolean>
   /** largest distance between a landmark and the track (metres) */
   maxDistanceM: number
+  /** OSM ids ("node/123") of the landmarks hidden one by one by the user (kept in the project) */
+  hiddenIds: string[]
 }
 
 export const DEFAULT_LANDMARK_SETTINGS: LandmarkSettings = {
@@ -38,14 +40,15 @@ export const DEFAULT_LANDMARK_SETTINGS: LandmarkSettings = {
     waterPoint: false,
   },
   maxDistanceM: 1500,
+  hiddenIds: [],
 }
 
-/** The settings of an older project with the kinds added since set to their default (« Points d'eau »). */
+/** The settings of an older project with the kinds added since set to their default (« Points d'eau ») and no hidden landmark. */
 export function withLandmarkDefaults(raw: unknown): unknown {
   if (raw === null || typeof raw !== 'object') return raw
   const settings = raw as { kinds?: unknown }
   if (settings.kinds === null || typeof settings.kinds !== 'object') return raw
-  return { ...settings, kinds: { ...DEFAULT_LANDMARK_SETTINGS.kinds, ...settings.kinds } }
+  return { hiddenIds: [], ...settings, kinds: { ...DEFAULT_LANDMARK_SETTINGS.kinds, ...settings.kinds } }
 }
 
 /** Allowed `maxDistanceM` (metres); the upper bound is what one query covers. */
@@ -260,6 +263,18 @@ export function buildLandmarks(
     if (kept.length >= maxCount) break
   }
   return kept.sort((a, b) => a.alongM - b.alongM || b.priority - a.priority)
+}
+
+/** The landmarks the user left visible and those hidden by id, both in the incoming order. */
+export function splitHidden(
+  landmarks: readonly Landmark[],
+  hiddenIds: readonly string[],
+): { shown: Landmark[]; hidden: Landmark[] } {
+  const ids = new Set(hiddenIds)
+  const shown: Landmark[] = []
+  const hidden: Landmark[] = []
+  for (const l of landmarks) (ids.has(l.id) ? hidden : shown).push(l)
+  return { shown, hidden }
 }
 
 // ---------------------------------------------------------------------------

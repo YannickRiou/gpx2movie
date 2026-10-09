@@ -22,6 +22,7 @@ import {
 import type { Film, MediaLayout, MediaSync, ShotStyle, ShotTransition, StopCamera } from '../film/model'
 import {
   addItemCamera,
+  attachToStop,
   clipSyncOffsetS,
   formatFilmTime,
   formatSpeedFactor,
@@ -191,6 +192,35 @@ export function FilmInspector() {
     <div className="film-inspector__row">
       {number('start', 'Début (s)', startS, 0, clock.totalTime(), (v) => set({ startS: v }))}
       {number('length', 'Durée (s)', durationS, ITEM_DURATION_RANGE.min, ITEM_DURATION_RANGE.max, (v) => set({ durationS: v }))}
+    </div>
+  )
+
+  /** « Attaché à » a stop of the film (generated stops are written out first), or to none */
+  const attachSelect = (stopId: string | undefined) => (
+    <div className="field">
+      <label className="field__label" htmlFor={`${id}-stop`}>
+        Attaché à
+      </label>
+      <select
+        id={`${id}-stop`}
+        className="select"
+        value={stopId ?? ''}
+        aria-describedby={`${id}-stop-hint`}
+        onChange={(e) => {
+          const stop = clock.stops.find((s) => s.id === e.currentTarget.value) ?? null
+          editFilm((f) => ({ film: attachToStop(f, item, stop) }), { stops: stop !== null })
+        }}
+      >
+        <option value="">Aucun arrêt</option>
+        {clock.stops.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label || 'Arrêt'} · {formatDistance(s.atM)}
+          </option>
+        ))}
+      </select>
+      <p id={`${id}-stop-hint`} className="field__hint">
+        {stopId ? 'Suit l’arrêt quand il se déplace ; redevient libre si l’arrêt est supprimé.' : 'Attaché, il suit l’arrêt quand on le déplace.'}
+      </p>
     </div>
   )
 
@@ -395,6 +425,7 @@ export function FilmInspector() {
           {range('size', 'Taille', filmText.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
           <FilmTextStyleFields color={filmText.color} font={filmText.font} onChange={({ color, font }) => set({ color, font })} />
           {timing(filmText.startS, filmText.durationS, set)}
+          {attachSelect(filmText.stopId)}
           {itemCamera(filmText.startS, filmText.durationS)}
           <p className="field__hint">Le texte s'affichera dans l'habillage du film.</p>
         </>
@@ -502,6 +533,7 @@ export function FilmInspector() {
           {anchorSelect(card ? 'Position' : 'Position de la légende', media.anchor, (anchor) => set({ anchor }))}
           {range('size', 'Taille', media.size, SIZE_RANGE, (v) => `×${formatNumber(v, 1)}`, (size) => set({ size }))}
           {timing(media.startS, media.durationS, set)}
+          {attachSelect(media.stopId)}
           {itemCamera(media.startS, media.durationS)}
           {video && number('in', 'Début dans la vidéo (s)', media.inS ?? 0, 0, fileS, (inS) => set({ inS: Math.min(inS, fileS) }))}
           {video && clipSound()}

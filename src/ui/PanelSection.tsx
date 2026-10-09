@@ -1,19 +1,53 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import type { ReactNode } from 'react'
+import { getPlatform } from '../platform'
 import { modifiedPaths } from '../project/apply'
 import type { SettingPath } from '../project/apply'
 import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { Icon } from './icons'
 import { ModifiedMarker } from './ModifiedMarker'
+import { FOLDS_KEY, parseFoldPrefs } from './shell'
+
+/** The fold states remembered by the browser (none when its storage cannot be read). */
+function loadFolds(): Record<string, boolean> {
+  try {
+    return parseFoldPrefs(getPlatform().storage.get(FOLDS_KEY))
+  } catch {
+    return {}
+  }
+}
+
+/** Remember that section `title` is open or folded (the choice lasts for the session without storage). */
+function saveFold(title: string, open: boolean) {
+  try {
+    const folds = loadFolds()
+    if (folds[title] !== open) getPlatform().storage.set(FOLDS_KEY, JSON.stringify({ ...folds, [title]: open }))
+  } catch {
+    // storage unavailable: the section is just not remembered
+  }
+}
 
 /**
  * Foldable section of a tab, flat with a sticky header (title, « modifié / Par défaut » of `keys` if given, chevron).
- * Open at first; the content stays mounted when folded.
+ * Open at first, then as last left (remembered by title in the browser, `FOLDS_KEY`); the content stays mounted when
+ * folded.
  */
-export function PanelSection({ title, keys, children }: { title: string; keys?: (keyof Settings)[]; children: ReactNode }) {
+export function PanelSection({
+  title,
+  keys,
+  hidden = false,
+  children,
+}: {
+  title: string
+  keys?: (keyof Settings)[]
+  hidden?: boolean
+  children: ReactNode
+}) {
+  // read once: the element then keeps its own state
+  const [open] = useState(() => loadFolds()[title] ?? true)
   return (
-    <details className="fold panel-section" open>
+    <details className="fold panel-section" open={open} hidden={hidden} onToggle={(e) => saveFold(title, e.currentTarget.open)}>
       <summary className="fold__summary">
         <h2 className="section-title fold__title">{title}</h2>
         {/* the marker's button must not fold the section */}
@@ -68,6 +102,8 @@ export function RangeField({
   onChange,
   disabled = false,
   wide = true,
+  tip,
+  spoken = format,
 }: {
   label: string
   min: number
@@ -78,13 +114,27 @@ export function RangeField({
   onChange(value: number): void
   disabled?: boolean
   wide?: boolean
+  /** explanation in an ⓘ next to the label */
+  tip?: string
+  /** value read by screen readers, when it differs from the displayed one */
+  spoken?(value: number): string
 }) {
   const id = useId()
+  const labelEl = (
+    <label className="field__label" htmlFor={id}>
+      {label}
+    </label>
+  )
   return (
     <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
+      {tip ? (
+        <div className="field__label-row">
+          {labelEl}
+          <InfoTip text={tip} />
+        </div>
+      ) : (
+        labelEl
+      )}
       <div className="range-row">
         <input
           id={id}
@@ -96,7 +146,7 @@ export function RangeField({
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(Number(e.currentTarget.value))}
-          aria-valuetext={format(value)}
+          aria-valuetext={spoken(value)}
         />
         <output className={wide ? 'range-row__value range-row__value--wide' : 'range-row__value'} htmlFor={id}>
           {format(value)}

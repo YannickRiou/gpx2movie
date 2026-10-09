@@ -112,7 +112,27 @@ describe('syncLandmarks', () => {
     expect(Object.keys(useLandmarkStore.getState().features)).toEqual(['a'])
 
     syncLandmarks([a], { ...DEFAULT_LANDMARK_SETTINGS, enabled: false }, { deps })
-    expect(useLandmarkStore.getState()).toMatchObject({ status: 'idle', features: {}, landmarks: {} })
+    expect(useLandmarkStore.getState()).toMatchObject({ status: 'idle', features: {}, landmarks: {}, hidden: {} })
     expect(osmLabels()).toEqual([])
+  })
+
+  it('keeps the landmarks hidden by the user aside, out of the labels, without refetching', async () => {
+    const { calls, deps } = deferredFetcher()
+    const track = makeTrack('a')
+    const hiding: LandmarkSettings = { ...DEFAULT_LANDMARK_SETTINGS, hiddenIds: ['node/1', 'node/999'] }
+    syncLandmarks([track], hiding, { deps })
+    calls[0].resolve(FEATURES)
+    await flush()
+    let state = useLandmarkStore.getState()
+    expect(state.landmarks.a.map((l) => l.id)).toEqual(['node/2'])
+    expect(state.hidden.a.map((l) => l.id)).toEqual(['node/1'])
+    expect(osmLabels().map((l) => l.id)).toEqual(['osm:node/2'])
+
+    syncLandmarks([track], DEFAULT_LANDMARK_SETTINGS, { deps })
+    expect(deps.fetchFeatures).toHaveBeenCalledTimes(1)
+    state = useLandmarkStore.getState()
+    expect(state.landmarks.a.map((l) => l.id)).toEqual(['node/1', 'node/2'])
+    expect(state.hidden.a).toEqual([])
+    expect(osmLabels().map((l) => l.id).sort()).toEqual(['osm:node/1', 'osm:node/2'])
   })
 })

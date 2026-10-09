@@ -190,3 +190,18 @@ export function parseShellPrefs(raw: string | null): Pick<ShellState, 'tab' | 'c
     return fallback
   }
 }
+
+/** Open / folded state of the sections of the panels (`PanelSection`), remembered by the browser by section title. */
+export const FOLDS_KEY = 'openflyover.folds.v1'
+
+/** What is remembered: open (true) or folded (false) by section title; nothing for anything unreadable. */
+export function parseFoldPrefs(raw: string | null): Record<string, boolean> {
+  if (!raw) return {}
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return {}
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean'))
+  } catch {
+    return {}
+  }
+}

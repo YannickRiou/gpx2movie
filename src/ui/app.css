@@ -1203,6 +1203,29 @@
   color: var(--color-ink-soft);
 }
 
+/* One landmark: the seek button plus the eye button that hides / shows it */
+.landmark-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.landmark-row .landmark {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.landmark-row--hidden .landmark {
+  border-style: dashed;
+  border-color: var(--color-ink-soft);
+  background: transparent;
+  opacity: 0.6;
+}
+
+.landmark-row--hidden .landmark__name {
+  text-decoration: line-through;
+}
+
 /* « Feuille de route » (RoadbookPanel): one row per key point, columns km · lieu · alt. · heure */
 .roadbook {
   display: flex;

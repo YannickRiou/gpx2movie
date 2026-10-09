@@ -1,4 +1,67 @@
-# Tile sources — empirical verification
+# Data sources: attributions, licenses and verification
+
+The first section lists what the app displays and allows for each source; the rest of the document records how the
+sources were checked.
+
+## Attributions, licenses and offline use
+
+| Source | Used for | Address | Displayed attribution |
+|---|---|---|---|
+| Mapterhorn | terrain (default) | `tiles.mapterhorn.com` | "© Mapterhorn (données ouvertes, liste des sources : mapterhorn.com/attribution)" |
+| AWS Terrain Tiles | terrain | `s3.amazonaws.com/elevation-tiles-prod` | "Terrain Tiles (Mapzen / AWS Open Data) — SRTM, GMTED2010, ETOPO1 courtesy of USGS/NOAA, EU-DEM © Copernicus, ArcticDEM et autres sources ouvertes" |
+| IGN Géoplateforme | orthophotos and Plan IGN in France, photos from 1950 to 2005 | `data.geopf.fr/wmts` | "© IGN — Géoplateforme (BD ORTHO, licence ouverte Etalab 2.0)", and variants per layer |
+| swisstopo | orthophotos and national map in Switzerland | `wmts.geo.admin.ch` | "© swisstopo (SWISSIMAGE, OGD)", "© swisstopo (carte nationale, OGD)" |
+| Esri World Imagery | world orthophotos (default imagery) | `services.arcgisonline.com` | "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community" |
+| EOX Sentinel-2 cloudless 2025 | world satellite images, 10 m | `tiles.maps.eox.at` | "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0" |
+| OpenTopoMap | world topographic map | `tile.opentopomap.org` | "Données : © contributeurs OpenStreetMap, SRTM \| Rendu : © OpenTopoMap (CC BY-SA)" |
+| Open-Meteo | historical weather, forecast for an upcoming outing | `archive-api.open-meteo.com`, `api.open-meteo.com` | "Données météo : Open-Meteo.com (CC BY 4.0)" |
+| OpenStreetMap (Overpass API) | landmarks, water bodies (reflective lakes and rivers), scouting paths | `overpass-api.de`, fallback `maps.mail.ru` | "© contributeurs OpenStreetMap (ODbL)" |
+| OpenStreetMap (Nominatim) | place typed in "Préparer une sortie" (one search on submit, never while typing) | `nominatim.openstreetmap.org` | "© contributeurs OpenStreetMap (ODbL)" |
+
+The status bar, at the bottom of the screen, shows the attributions of the current terrain and imagery. Those of Open-Meteo and OpenStreetMap
+are added when the weather or the landmarks are loaded. The same lines are burned into exported videos and images
+([README, "Licenses"](../README.md#licenses)).
+
+The optional Strava import is not one of these sources: it reads your own activities through your own Strava
+application ([user guide](user-guide.html#import)). No Strava key or account is in the code.
+
+| Source | License | Note |
+|---|---|---|
+| Mapterhorn, AWS Terrain Tiles | open data (CC BY 4.0, OGL, public domain…) | credit the sources |
+| IGN | Licence Ouverte Etalab 2.0 | commercial use allowed |
+| swisstopo | open data (OGD) | credit the source, reasonable use |
+| Esri | Esri terms | **to be reviewed** before any commercial use; offline for personal use only |
+| EOX Sentinel-2 cloudless | CC BY-NC-SA 4.0 | **no commercial use** |
+| OpenTopoMap | CC BY-SA | volunteer-run server: moderate use; a video made with this base map must stay under the same license |
+| Open-Meteo | CC BY 4.0 | free **non-commercial** API, 10,000 requests per day max |
+| OpenStreetMap | ODbL | public Overpass server: moderate use |
+
+OpenFlyover is a personal, non-commercial project: all sources can go into an offline pack, with a lower daily limit for those that discourage bulk downloads:
+
+| Source | Offline | Why |
+|---|---|---|
+| Mapterhorn | yes, 20,000 tiles per day | open data; Mapterhorn itself offers area downloads ([data access](https://mapterhorn.com/data-access)) |
+| AWS Terrain Tiles | yes | AWS Open Data public archive, made to be downloaded ([registry](https://registry.opendata.aws/terrain-tiles/)) |
+| IGN Géoplateforme | yes, 50,000 tiles per day (all layers) | Licence Ouverte Etalab 2.0; public service to be used sparingly |
+| EOX Sentinel-2 cloudless | yes, 20,000 tiles per day | CC BY-NC-SA 4.0: copying allowed for non-commercial use ([terms](https://cloudless.eox.at/products/viewing)) |
+| swisstopo | yes, personal use, 10,000 tiles / day | its terms ask to avoid automated bulk downloads ([terms](https://www.geo.admin.ch/en/general-terms-of-use-fsdi)): keep the corridor short |
+| Esri World Imagery | yes, personal use, 10,000 tiles / day | Esri normally reserves offline use for its own applications ("for Export" service): keep the corridor short |
+| OpenTopoMap | yes, personal use, 2,000 tiles / day | volunteer-run server that asks to avoid bulk downloads ([about](https://opentopomap.org/about)) |
+
+A source whose terms have not been checked stays online. The daily limits
+count per device.
+
+To spare these services, the application:
+
+- keeps the last ~600 tiles in memory and requests only those in the view;
+- sends **one** weather request per track and keeps it in the browser;
+- sends **one** landmark request per track, kept for 30 days, and retries only once if the server is overloaded;
+- downloads an offline pack only once, 4 tiles at a time, and never requests a tile that is already stored;
+- sends **one** water body request per track (lakes and rivers in an 8 km corridor), in the same queue and the same
+  cache, only if reflective water is checked.
+
+The track itself is never sent. These services receive only an approximate position: the tile area, a few
+points rounded to 1 km with their dates for the weather, the rectangle around the track for the landmarks.
 
 Verification date: **2026-10-05** (independent review the same day: extra probes at the borders, § "Border probes");
 dated topographic maps and orthophotos added on **2026-10-07** (§ "Old maps and photos"). Tools: `curl.exe` with the header `Origin: http://127.0.0.1:5173`

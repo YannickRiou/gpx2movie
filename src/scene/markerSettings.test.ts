@@ -15,7 +15,7 @@ import { MARKER_FIGURE_PATHS } from './markerFigures'
 
 describe('track style and marker settings', () => {
   it('defaults keep the former look: 4 px solid line, white ball', () => {
-    expect(DEFAULT_TRACK_STYLE).toEqual({ width: 4, dash: 'plein', glow: false, drawOn: false })
+    expect(DEFAULT_TRACK_STYLE).toEqual({ width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 })
     expect(DEFAULT_MARKER.kind).toBe('boule')
     expect(isValidTrackStyle(DEFAULT_TRACK_STYLE)).toBe(true)
     expect(isValidMarker(DEFAULT_MARKER)).toBe(true)
@@ -24,6 +24,9 @@ describe('track style and marker settings', () => {
   it('rejects unknown choices, out-of-range sizes and anything but a bounded image data URL', () => {
     expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, dash: 'zigzag' as never })).toBe(false)
     expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, width: 40 })).toBe(false)
+    expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, smoothingM: -10 })).toBe(false)
+    expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, smoothingM: 500 })).toBe(false)
+    expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, smoothingM: 100 })).toBe(true)
     expect(isValidMarker({ ...DEFAULT_MARKER, figure: 'cheval' as never })).toBe(false)
     expect(isValidMarker({ ...DEFAULT_MARKER, size: 0 })).toBe(false)
     expect(isValidMarker({ ...DEFAULT_MARKER, image: 'https://example.org/me.png' })).toBe(false)
@@ -37,6 +40,10 @@ describe('track style and marker settings', () => {
     const { settings, invalid } = sanitizeSettings({ marker: { kind: 'figurine', figure: 'skieur' }, trackStyle: { width: 'x' } })
     expect(settings.marker).toEqual({ ...DEFAULT_MARKER, kind: 'figurine', figure: 'skieur' })
     expect(invalid).toEqual(['trackStyle'])
+    // a track style saved before the smoothing existed: off
+    const older = sanitizeSettings({ trackStyle: { width: 6, dash: 'tirets', glow: true, drawOn: true } })
+    expect(older.invalid).toEqual([])
+    expect(older.settings.trackStyle).toEqual({ width: 6, dash: 'tirets', glow: true, drawOn: true, smoothingM: 0 })
   })
 
   it('has a pictogram for every figure', () => {

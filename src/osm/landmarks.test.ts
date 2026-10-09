@@ -9,6 +9,7 @@ import {
   landmarkText,
   parseEle,
   projectOnPath,
+  splitHidden,
   withLandmarkDefaults,
 } from './landmarks'
 import type { OsmFeature } from './overpass'
@@ -159,7 +160,24 @@ describe('withLandmarkDefaults', () => {
   it('gives an older project the kinds added since, off', () => {
     const { waterPoint: _added, ...olderKinds } = DEFAULT_LANDMARK_SETTINGS.kinds
     const older = { enabled: true, kinds: { ...olderKinds, place: true }, maxDistanceM: 800 }
-    expect(withLandmarkDefaults(older)).toEqual({ ...older, kinds: { ...older.kinds, waterPoint: false } })
+    expect(withLandmarkDefaults(older)).toEqual({ ...older, kinds: { ...older.kinds, waterPoint: false }, hiddenIds: [] })
+    expect(withLandmarkDefaults({ ...older, hiddenIds: ['node/1'] })).toMatchObject({ hiddenIds: ['node/1'] })
     expect(withLandmarkDefaults('x')).toBe('x')
+  })
+})
+
+describe('splitHidden', () => {
+  const base = { kind: 'peak' as const, name: 'x', lon: 6.78, lat: 45.9, distanceM: 10, priority: 28, text: 'x' }
+  const list = [
+    { ...base, id: 'node/1', alongM: 100 },
+    { ...base, id: 'node/2', alongM: 200 },
+    { ...base, id: 'way/3', alongM: 300 },
+  ]
+
+  it('splits the landmarks by hidden id, keeping the order', () => {
+    expect(splitHidden(list, [])).toEqual({ shown: list, hidden: [] })
+    const { shown, hidden } = splitHidden(list, ['way/3', 'node/1', 'node/99'])
+    expect(shown.map((l) => l.id)).toEqual(['node/2'])
+    expect(hidden.map((l) => l.id)).toEqual(['node/1', 'way/3'])
   })
 })

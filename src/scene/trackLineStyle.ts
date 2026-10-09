@@ -14,8 +14,6 @@ import { CustomBlending, MaxEquation } from 'three'
 import type { Camera, Color, InterleavedBufferAttribute, Vector3 } from 'three'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 import type { LineGeometry } from 'three/addons/lines/LineGeometry.js'
-import type { TrackPoint } from '../core/types'
-import { haversineM } from '../geo/ellipsoid'
 import type { TrackDash, TrackStyle } from './markerSettings'
 
 /** Dash and gap of the patterns, in line widths. */
@@ -101,20 +99,6 @@ export function applyDash(material: LineMaterial, style: TrackStyle, renderScale
 // ---------------------------------------------------------------------------
 // Draw-on
 // ---------------------------------------------------------------------------
-
-/**
- * Distance of every point from the start of its track (metres): `startM` plus the length along `points`, the
- * jump between two segments adding nothing (as `buildTrackPath`, which places the marker).
- */
-export function cumulativeDistances(points: readonly TrackPoint[], startM: number): Float64Array {
-  const out = new Float64Array(points.length)
-  let total = startM
-  for (let i = 0; i < points.length; i++) {
-    if (i > 0) total += haversineM(points[i - 1], points[i])
-    out[i] = total
-  }
-  return out
-}
 
 /**
  * Pieces of a polyline (`dist` per point) drawn up to `distanceM`: `count` pieces, the last one drawn over the

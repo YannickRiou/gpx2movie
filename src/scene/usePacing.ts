@@ -4,6 +4,7 @@ import type { PassingTimes } from '../film/assemble'
 import { filmClockFor } from '../film/clock'
 import type { FilmClock, FilmClockFor } from '../film/clock'
 import type { Film } from '../film/model'
+import { followStops } from '../film/timeline'
 import { useLandmarkStore } from '../osm/store'
 import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
@@ -28,14 +29,16 @@ export function getFilmSource(): FilmClockFor {
 
 /**
  * Edit the film of the stores: `stops` writes the generated stops out first (`materializeStops`, editing a stop);
- * retouching a landmark title fixes them (`freezeLandmarkTitles`); one undo step, or merged with the quick changes
- * before it when `step` is false (typing in the inspector). The edit's `id` is selected on the timeline (null:
- * nothing selected, absent: unchanged).
+ * the texts and media attached to a stop follow it (`followStops`); retouching a landmark title fixes them
+ * (`freezeLandmarkTitles`); one undo step, or merged with the quick changes before it when `step` is false (typing in
+ * the inspector). The edit's `id` is selected on the timeline (null: nothing selected, absent: unchanged).
  */
 export function editFilm(edit: (film: Film) => { film: Film; id?: string | null }, { stops = false, step = true } = {}): void {
-  const { track, film, pacing, landmarks } = getFilmSource()
-  const result = edit(stops && track ? materializeStops(film, { track, landmarks, pacing }) : film)
-  const next = freezeLandmarkTitles(film, result.film)
+  const source = getFilmSource()
+  const { track, film, pacing, landmarks } = source
+  const base = stops && track ? materializeStops(film, { track, landmarks, pacing }) : film
+  const result = edit(base)
+  const next = freezeLandmarkTitles(film, followStops(base, result.film, (f) => filmClockFor({ ...source, film: f })))
   const set = () => useAppStore.getState().setSetting('film', next)
   if (next !== film) {
     if (step) getSettingsHistory().transaction(set)

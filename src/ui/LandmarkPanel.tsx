@@ -4,12 +4,14 @@ import { OSM_ATTRIBUTION, OSM_KINDS } from '../osm/overpass'
 import { syncLandmarks, useLandmarkStore } from '../osm/store'
 import { setLandmarkTitles } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
+import { Icon } from './icons'
 import { PanelSection } from './PanelSection'
 import { formatDistance, formatNumber } from './format'
 
 /**
  * « Repères (OpenStreetMap) » (foldable section of the Carte tab): kinds and corridor width, « Ralentir et titrer aux
- * repères », status, the landmarks of the first track ordered along it (click = seek the flyover there) and the ODbL
+ * repères », status, the landmarks of the first track ordered along it (click = seek the flyover there; the eye button
+ * hides one, kept in the project as `settings.landmarks.hiddenIds`, hidden ones stay listed greyed out) and the ODbL
  * attribution. Also drives the landmark store, and makes the landmark titles of the film again whenever the landmarks
  * of the first track are published (loaded, kinds or distance changed) while that option is on.
  */
@@ -23,6 +25,7 @@ export function LandmarkPanel() {
   const message = useLandmarkStore((s) => s.message)
   const first = tracks[0]
   const landmarks = useLandmarkStore((s) => (first ? s.landmarks[first.id] : undefined))
+  const hidden = useLandmarkStore((s) => (first ? s.hidden[first.id] : undefined))
   const titles = useAppStore((s) => s.settings.film.landmarkTitles)
 
   useEffect(() => {
@@ -37,6 +40,15 @@ export function LandmarkPanel() {
   if (!first) return null
   const lengthM = first.stats.distanceM
   const list = landmarks ?? []
+  const hiddenList = hidden ?? []
+  const rows = [
+    ...list.map((landmark) => ({ landmark, hidden: false })),
+    ...hiddenList.map((landmark) => ({ landmark, hidden: true })),
+  ].sort((a, b) => a.landmark.alongM - b.landmark.alongM || b.landmark.priority - a.landmark.priority)
+  const setHidden = (landmarkId: string, hide: boolean) => {
+    const rest = settings.hiddenIds.filter((hiddenId) => hiddenId !== landmarkId)
+    setSetting('landmarks', { ...settings, hiddenIds: hide ? [...rest, landmarkId] : rest })
+  }
 
   return (
     <PanelSection title="Repères (OpenStreetMap)" keys={['landmarks']}>
@@ -111,9 +123,13 @@ export function LandmarkPanel() {
         {settings.enabled && status === 'error' && message}
         {settings.enabled &&
           status === 'ready' &&
-          (list.length === 0
+          (rows.length === 0
             ? 'Aucun repère de ces types près de la trace.'
-            : `${list.length} ${list.length > 1 ? 'repères' : 'repère'} le long de la trace. Cliquez pour y aller.`)}
+            : list.length === 0
+              ? `Tous les repères sont masqués (${hiddenList.length}).`
+              : `${list.length} ${list.length > 1 ? 'repères' : 'repère'} le long de la trace` +
+                (hiddenList.length > 0 ? ` · ${hiddenList.length} ${hiddenList.length > 1 ? 'masqués' : 'masqué'}` : '') +
+                '. Cliquez pour y aller.')}
       </p>
 
       {settings.enabled && status === 'error' && (
@@ -122,14 +138,14 @@ export function LandmarkPanel() {
         </button>
       )}
 
-      {settings.enabled && list.length > 0 && (
+      {settings.enabled && rows.length > 0 && (
         <ul className="landmarks">
-          {list.map((landmark) => (
-            <li key={landmark.id}>
+          {rows.map(({ landmark, hidden: isHidden }) => (
+            <li key={landmark.id} className={isHidden ? 'landmark-row landmark-row--hidden' : 'landmark-row'}>
               <button
                 type="button"
                 className="landmark"
-                title="Aller à ce repère"
+                title={isHidden ? 'Repère masqué · aller à ce repère' : 'Aller à ce repère'}
                 onClick={() => setProgress(lengthM > 0 ? landmark.alongM / lengthM : 0)}
               >
                 <span className={landmark.kind === 'pass' ? 'landmark__kind landmark__kind--pass' : 'landmark__kind'}>
@@ -140,9 +156,29 @@ export function LandmarkPanel() {
                   au km {formatNumber(landmark.alongM / 1000, 1)} · à {formatDistance(landmark.distanceM)} de la trace
                 </span>
               </button>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={isHidden ? `Afficher le repère ${landmark.text}` : `Masquer le repère ${landmark.text}`}
+                data-tip={isHidden ? 'Afficher ce repère' : 'Masquer ce repère'}
+                data-tip-side="left"
+                onClick={() => setHidden(landmark.id, !isHidden)}
+              >
+                <Icon name={isHidden ? 'eye-off' : 'eye'} size={16} />
+              </button>
             </li>
           ))}
         </ul>
+      )}
+
+      {settings.enabled && settings.hiddenIds.length > 0 && (
+        <button
+          type="button"
+          className="btn btn--secondary btn--block"
+          onClick={() => setSetting('landmarks', { ...settings, hiddenIds: [] })}
+        >
+          Réafficher tous les repères masqués
+        </button>
       )}
 
       {settings.enabled && status !== 'idle' && (

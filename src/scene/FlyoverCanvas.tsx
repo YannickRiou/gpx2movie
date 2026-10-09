@@ -24,6 +24,7 @@ import { Suspense, lazy, useEffect, useMemo, type CSSProperties } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { useAppStore } from '../state/store'
 import { ExportController } from '../export/ExportController'
+import { CAMERA_FOV_DEG } from '../flyover/filmCamera'
 import { createOverlayDrawer } from '../overlay/exportOverlay'
 import { CameraRig } from './CameraRig'
 import { FlyoverRig } from './FlyoverRig'
@@ -52,7 +53,7 @@ export const SUN_POSITION: readonly [number, number, number] = [0.6e5, 1e5, 0.5e
 export const SUN_INTENSITY = 2.0
 
 /** Camera spot before the first fit (the rig snaps to the tracks as soon as they exist). */
-const CAMERA ={ fov: 50, near: 1, far: 5e6, position: [0, 2000, 3000] as [number, number, number] }
+const CAMERA = { fov: CAMERA_FOV_DEG, near: 1, far: 5e6, position: [0, 2000, 3000] as [number, number, number] }
 const GL = { antialias: true, logarithmicDepthBuffer: true, alpha: true }
 
 const wrapperStyle: CSSProperties = {

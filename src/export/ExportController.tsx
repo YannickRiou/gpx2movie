@@ -26,7 +26,8 @@ import type { FilmClock } from '../film/clock'
 import { useMediaStore } from '../film/media'
 import { transitionDipAt } from '../film/model'
 import { computeFilmView, filmViewMovesWithTime, overviewView, type FilmView } from '../flyover/filmCamera'
-import { buildTrackPath, type TrackPath } from '../flyover/path'
+import type { TrackPath } from '../flyover/path'
+import { smoothedTrackPath } from '../flyover/smooth'
 import { loadOverlayFonts } from '../overlay/assets'
 import { overlayTime, overlayTimedState } from '../overlay/draw'
 import { loadFrameMedia, releaseFrameMedia } from '../overlay/exportOverlay'
@@ -229,7 +230,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
   }
   const isCanceled = () => deps.signal.aborted || exportStore().cancelRequested
   const track = useAppStore.getState().tracks[0]
-  const path = track ? buildTrackPath(track) : null
+  // the path FlyoverRig places the camera on
+  const path = track ? smoothedTrackPath(track, useAppStore.getState().settings.trackStyle.smoothingM) : null
   const timings: ExportTimings = { ...EMPTY_TIMINGS }
   const startedAt = performance.now()
 

@@ -16,10 +16,13 @@ import {
   addSpeed,
   addStop,
   addText,
+  attachToStop,
   clipRateAt,
   clipSyncOffsetS,
   dragFilm,
+  edgeScrollSpeed,
   fitPxPerS,
+  followStops,
   formatFilmTime,
   formatSpeedFactor,
   hasFilmItem,
@@ -83,6 +86,19 @@ describe('timeline scale', () => {
     expect((scrollLeft + 200) / (10 * zoom)).toBeCloseTo(before, 12)
     expect(zoomAt(1, 0.5, 200, 0)).toEqual({ zoom: 1, scrollLeft: 0 })
     expect(zoomAt(40, 10, 0, 0).zoom).toBe(50)
+  })
+
+  it('scrolls by itself near an edge, faster closer to it', () => {
+    // timeline from x = 100 to 1100, 48 px edges
+    expect(edgeScrollSpeed(600, 100, 1100)).toBe(0)
+    expect(edgeScrollSpeed(148, 100, 1100)).toBe(0)
+    expect(edgeScrollSpeed(124, 100, 1100)).toBe(-450)
+    expect(edgeScrollSpeed(100, 100, 1100)).toBe(-900)
+    expect(edgeScrollSpeed(40, 100, 1100)).toBe(-900)
+    expect(edgeScrollSpeed(1076, 100, 1100)).toBe(450)
+    expect(edgeScrollSpeed(1300, 100, 1100)).toBe(900)
+    expect(edgeScrollSpeed(1064, 100, 1100, 48, 300)).toBe(75)
+    expect(edgeScrollSpeed(600, 600, 600)).toBe(0)
   })
 
   it('ruler: the first step wide enough for a label', () => {
@@ -583,5 +599,96 @@ describe('camera keys', () => {
     expect(dragFilm(keyed, id, 'move', -1000, ctx).cameraKeys[0].atM).toBe(0)
     expect(hasFilmItem(keyed, [], id)).toBe(true)
     expect(removeFilmItem(keyed, id).cameraKeys).toEqual([])
+  })
+})
+
+describe('texts and media attached to a stop', () => {
+  /** clock of a film of the test track (its own stops, speed portions and shots) */
+  const clockOfFilm = (f: Film) =>
+    buildFilmClock({
+      opening: f.opening,
+      closing: f.closing,
+      stops: f.stops,
+      speeds: f.speeds,
+      lengthM: L,
+      highlightsM: [],
+      durationS: D,
+      pacing: { ...DEFAULT_PACING, keepDuration: false },
+    })
+  const holdOf = (f: Film, id: string) => clockOfFilm(f).stops.find((s) => s.id === id)!
+  const round = (s: number) => Math.round(s * 100) / 100
+  /** text-1 attached to stop-1 one second after its hold starts, media-1 fitted to its hold */
+  const attached = (() => {
+    const stop1 = holdOf(film, 'stop-1')
+    const f = attachToStop(attachToStop(film, 'text-1', stop1), 'media-1', stop1)
+    return updateText(f, 'text-1', { startS: f.texts[0].startS + 1 })
+  })()
+
+  it('attaching: a text moves to the start of the hold, a photo is fitted to the hold; detaching keeps the time', () => {
+    const stop1 = holdOf(film, 'stop-1')
+    const f = attachToStop(attachToStop(film, 'text-1', stop1), 'media-1', stop1)
+    expect(f.texts[0]).toMatchObject({ stopId: 'stop-1', startS: round(stop1.holdStartS), durationS: 4 })
+    expect(f.media[0]).toMatchObject({ stopId: 'stop-1', startS: round(stop1.holdStartS), durationS: round(stop1.holdEndS - stop1.holdStartS) })
+    expect(f.texts[1]).toBe(film.texts[1])
+    expect(isValidFilm(f)).toBe(true)
+    const free = attachToStop(f, 'text-1', null)
+    expect('stopId' in free.texts[0]).toBe(false)
+    expect(free.texts[0].startS).toBe(f.texts[0].startS)
+    // a video keeps its length
+    const clip: Film = { ...film, media: [{ ...photo('media-1', 40, 12), kind: 'video' }] }
+    expect(attachToStop(clip, 'media-1', stop1).media[0]).toMatchObject({ stopId: 'stop-1', startS: round(stop1.holdStartS), durationS: 12 })
+  })
+
+  it('follow their stop when it moves along the track, keeping their offset', () => {
+    const before = holdOf(attached, 'stop-1')
+    const dragged = dragFilm(attached, 'stop-1', 'move', 5, contextOf(attached))
+    const next = followStops(attached, dragged, clockOfFilm)
+    const after = holdOf(next, 'stop-1')
+    const delta = after.holdStartS - before.holdStartS
+    expect(delta).toBeGreaterThan(4)
+    expect(next.texts[0].startS).toBeCloseTo(attached.texts[0].startS + delta, 1)
+    expect(next.texts[0].startS - after.holdStartS).toBeCloseTo(1, 1)
+    expect(next.media[0].startS).toBe(round(after.holdStartS))
+    // a free text stays where it is
+    expect(next.texts[1]).toBe(attached.texts[1])
+  })
+
+  it('an item fitted to the hold stays fitted when the stop is stretched; shots and speed portions move them too', () => {
+    const stretched = followStops(attached, dragFilm(attached, 'stop-1', 'end', 2, contextOf(attached)), clockOfFilm)
+    const hold = holdOf(stretched, 'stop-1')
+    expect(stretched.media[0]).toMatchObject({ startS: round(hold.holdStartS), durationS: round(hold.holdEndS - hold.holdStartS) })
+    expect(stretched.media[0].durationS).toBeCloseTo(attached.media[0].durationS + 2, 1)
+    expect(stretched.texts[0].startS).toBe(attached.texts[0].startS)
+    // a longer opening delays the stop and what is attached to it, not the free items
+    const later = followStops(attached, updateShot(attached, 'opening', { durationS: attached.opening.durationS + 2 }), clockOfFilm)
+    expect(later.texts[0].startS).toBeCloseTo(attached.texts[0].startS + 2, 2)
+    expect(later.media[0].startS).toBeCloseTo(attached.media[0].startS + 2, 2)
+    expect(later.texts[1]).toBe(attached.texts[1])
+    // a slower portion before the stop delays it as well
+    const slowed = followStops(attached, { ...attached, speeds: [{ id: 'speed-1', fromM: 500, toM: 1500, factor: 0.5 }] }, clockOfFilm)
+    const delay = holdOf(slowed, 'stop-1').holdStartS - holdOf(attached, 'stop-1').holdStartS
+    expect(delay).toBeGreaterThan(1)
+    expect(slowed.texts[0].startS).toBeCloseTo(attached.texts[0].startS + delay, 1)
+  })
+
+  it('an attached item moved by the edit itself keeps its new place (new offset)', () => {
+    const moved = dragFilm(attached, 'text-1', 'move', 3, contextOf(attached))
+    expect(followStops(attached, moved, clockOfFilm)).toBe(moved)
+  })
+
+  it('become free where they are once their stop is gone', () => {
+    const removed = followStops(attached, removeFilmItem(attached, 'stop-1'), clockOfFilm)
+    expect(removed.texts[0].stopId).toBeUndefined()
+    expect(removed.media[0].stopId).toBeUndefined()
+    expect(removed.texts[0].startS).toBe(attached.texts[0].startS)
+    const auto = followStops(attached, { ...attached, autoStops: true, stops: [] }, clockOfFilm)
+    expect(auto.texts.every((t) => t.stopId === undefined) && auto.media.every((m) => m.stopId === undefined)).toBe(true)
+  })
+
+  it('leave the film as is when nothing is attached or nothing moves', () => {
+    const edited = dragFilm(film, 'stop-1', 'move', 5, contextOf(film))
+    expect(followStops(film, edited, clockOfFilm)).toBe(edited)
+    const renamed = updateText(attached, 'text-2', { text: 'Titre' })
+    expect(followStops(attached, renamed, clockOfFilm)).toBe(renamed)
   })
 })

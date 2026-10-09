@@ -267,54 +267,27 @@ function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
       </fieldset>
 
       {clouds.mode === 'manuel' && (
-        <div className="field">
-          <label className="field__label" htmlFor={`${id}-clouds-coverage`}>
-            Couverture nuageuse
-          </label>
-          <div className="range-row">
-            <input
-              id={`${id}-clouds-coverage`}
-              className="range"
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={clouds.coverage}
-              onChange={(e) => set({ coverage: Number(e.currentTarget.value) })}
-              aria-valuetext={formatPercent(clouds.coverage)}
-            />
-            <output className="range-row__value range-row__value--wide" htmlFor={`${id}-clouds-coverage`}>
-              {formatPercent(clouds.coverage)}
-            </output>
-          </div>
-        </div>
+        <RangeField
+          label="Couverture nuageuse"
+          min={0}
+          max={1}
+          step={0.05}
+          value={clouds.coverage}
+          format={formatPercent}
+          onChange={(coverage) => set({ coverage })}
+        />
       )}
 
       {clouds.mode !== 'aucun' && (
         <MoreSettings paths={['clouds.altitudeM', 'clouds.quality']} label="Réglages des nuages">
-          <div className="field">
-            <div className="field__label-row">
-              <label className="field__label" htmlFor={`${id}-clouds-altitude`}>
-                Base des nuages bas
-              </label>
-              <InfoTip text="Hauteur au-dessus du point le plus bas de la trace. Les nuages moyens sont 2 km plus haut." />
-            </div>
-            <div className="range-row">
-              <input
-                id={`${id}-clouds-altitude`}
-                className="range"
-                type="range"
-                min={CLOUD_ALTITUDE_RANGE.min}
-                max={CLOUD_ALTITUDE_RANGE.max}
-                step={CLOUD_ALTITUDE_RANGE.step}
-                value={clouds.altitudeM}
-                onChange={(e) => set({ altitudeM: Number(e.currentTarget.value) })}
-              />
-              <output className="range-row__value range-row__value--wide" htmlFor={`${id}-clouds-altitude`}>
-                {formatNumber(clouds.altitudeM)} m
-              </output>
-            </div>
-          </div>
+          <RangeField
+            label="Base des nuages bas"
+            tip="Hauteur au-dessus du point le plus bas de la trace. Les nuages moyens sont 2 km plus haut."
+            {...CLOUD_ALTITUDE_RANGE}
+            value={clouds.altitudeM}
+            format={(v) => `${formatNumber(v)} m`}
+            onChange={(altitudeM) => set({ altitudeM })}
+          />
           <div className="field">
             <div className="field__label-row">
               <label className="field__label" htmlFor={`${id}-clouds-quality`}>
@@ -361,27 +334,15 @@ function WaterControl() {
         <InfoTip text="Plans d’eau d’OpenStreetMap autour de la trace : reflets du ciel et du soleil, vaguelettes." />
       </div>
       {water.enabled && (
-        <div className="field">
-          <label className="field__label" htmlFor={`${id}-water-strength`}>
-            Intensité de l’eau
-          </label>
-          <div className="range-row">
-            <input
-              id={`${id}-water-strength`}
-              className="range"
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={water.strength}
-              onChange={(e) => setSetting('water', { ...water, strength: Number(e.currentTarget.value) })}
-              aria-valuetext={formatPercent(water.strength)}
-            />
-            <output className="range-row__value range-row__value--wide" htmlFor={`${id}-water-strength`}>
-              {formatPercent(water.strength)}
-            </output>
-          </div>
-        </div>
+        <RangeField
+          label="Intensité de l’eau"
+          min={0}
+          max={1}
+          step={0.05}
+          value={water.strength}
+          format={formatPercent}
+          onChange={(strength) => setSetting('water', { ...water, strength })}
+        />
       )}
     </>
   )
@@ -397,13 +358,10 @@ export function SettingsPanel() {
   const id = useId()
   const terrainId = `${id}-terrain`
   const imageryId = `${id}-imagery`
-  const exaggerationId = `${id}-exaggeration`
   const wireframeId = `${id}-wireframe`
   const atmosphereId = `${id}-atmosphere`
   const shadowsId = `${id}-shadows`
-  const exposureId = `${id}-exposure`
   const weatherSceneId = `${id}-weather-scene`
-  const weatherStrengthId = `${id}-weather-strength`
   const firstTrackId = useAppStore((s) => s.tracks[0]?.id)
   const weatherReady = useWeatherStore((s) => s.status === 'ready' && s.trackId !== null && s.trackId === firstTrackId)
   const trackColorId = `${id}-track-color`
@@ -482,29 +440,17 @@ export function SettingsPanel() {
       </PanelSection>
 
       <PanelSection title="Relief et trace" keys={['exaggeration', 'trackColorBy', 'wireframe']}>
-        <div className="field">
-          <div className="field__label-row">
-            <label className="field__label" htmlFor={exaggerationId}>
-              Exagération du relief
-            </label>
-            <InfoTip text="Multiplie les hauteurs pour accentuer les montagnes (×1 = relief réel)." />
-          </div>
-          <div className="range-row">
-            <input
-              id={exaggerationId}
-              className="range"
-              type="range"
-              min={EXAGGERATION_MIN}
-              max={EXAGGERATION_MAX}
-              step={EXAGGERATION_STEP}
-              value={settings.exaggeration}
-              onChange={(e) => setSetting('exaggeration', Number(e.currentTarget.value))}
-            />
-            <output className="range-row__value" htmlFor={exaggerationId}>
-              ×{formatNumber(settings.exaggeration, 1)}
-            </output>
-          </div>
-        </div>
+        <RangeField
+          label="Exagération du relief"
+          tip="Multiplie les hauteurs pour accentuer les montagnes (×1 = relief réel)."
+          min={EXAGGERATION_MIN}
+          max={EXAGGERATION_MAX}
+          step={EXAGGERATION_STEP}
+          value={settings.exaggeration}
+          format={(v) => `×${formatNumber(v, 1)}`}
+          onChange={(exaggeration) => setSetting('exaggeration', exaggeration)}
+          wide={false}
+        />
 
         <div className="field">
           <label className="field__label" htmlFor={trackColorId}>
@@ -597,55 +543,27 @@ export function SettingsPanel() {
 
         {settings.atmosphere && (
           <MoreSettings paths={['exposureEv', 'weatherScene.strength']} label="Exposition et intensité">
-            <div className="field">
-              <div className="field__label-row">
-                <label className="field__label" htmlFor={exposureId}>
-                  Exposition
-                </label>
-                <InfoTip text="Éclaircit ou assombrit l’image, en plus du réglage automatique selon le soleil." />
-              </div>
-              <div className="range-row">
-                <input
-                  id={exposureId}
-                  className="range"
-                  type="range"
-                  min={EXPOSURE_EV_MIN}
-                  max={EXPOSURE_EV_MAX}
-                  step={EXPOSURE_EV_STEP}
-                  value={settings.exposureEv}
-                  onChange={(e) => setSetting('exposureEv', Number(e.currentTarget.value))}
-                  aria-valuetext={formatEv(settings.exposureEv)}
-                />
-                <output className="range-row__value range-row__value--wide" htmlFor={exposureId}>
-                  {formatEv(settings.exposureEv)}
-                </output>
-              </div>
-            </div>
+            <RangeField
+              label="Exposition"
+              tip="Éclaircit ou assombrit l’image, en plus du réglage automatique selon le soleil."
+              min={EXPOSURE_EV_MIN}
+              max={EXPOSURE_EV_MAX}
+              step={EXPOSURE_EV_STEP}
+              value={settings.exposureEv}
+              format={formatEv}
+              onChange={(exposureEv) => setSetting('exposureEv', exposureEv)}
+            />
 
             {weatherReady && settings.weatherScene.enabled && (
-              <div className="field">
-                <label className="field__label" htmlFor={weatherStrengthId}>
-                  Intensité de la météo
-                </label>
-                <div className="range-row">
-                  <input
-                    id={weatherStrengthId}
-                    className="range"
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={WEATHER_STRENGTH_STEP}
-                    value={settings.weatherScene.strength}
-                    onChange={(e) =>
-                      setSetting('weatherScene', { ...settings.weatherScene, strength: Number(e.currentTarget.value) })
-                    }
-                    aria-valuetext={formatPercent(settings.weatherScene.strength)}
-                  />
-                  <output className="range-row__value range-row__value--wide" htmlFor={weatherStrengthId}>
-                    {formatPercent(settings.weatherScene.strength)}
-                  </output>
-                </div>
-              </div>
+              <RangeField
+                label="Intensité de la météo"
+                min={0}
+                max={1}
+                step={WEATHER_STRENGTH_STEP}
+                value={settings.weatherScene.strength}
+                format={formatPercent}
+                onChange={(strength) => setSetting('weatherScene', { ...settings.weatherScene, strength })}
+              />
             )}
           </MoreSettings>
         )}

@@ -19,7 +19,9 @@
  * `settings.trackStyle` (see `trackLineStyle.ts`): width, dashes, a glow (a third, wider Line2 on the same
  * geometry) and « trace qui se dessine », which draws each track only up to its marker. The cut follows the
  * playback progress through a store subscription, so it is applied in the very frame FlyoverRig moves the marker
- * (this component's frame callback runs before the rig's).
+ * (this component's frame callback runs before the rig's). `smoothingM` smooths the recorded points before
+ * densification (`flyover/smooth.ts`, the marker follows the same positions) and rebuilds the lines; the point
+ * distances stay the recorded ones, so the cut stays under the marker.
  */
 import { useCallback, useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -46,18 +48,19 @@ import {
   trackMetricValues,
   type TrackColorBy,
 } from '../flyover/trackColor'
+import { smoothPoints } from '../flyover/smooth'
 import { raceAt } from '../flyover/race'
 import type { Race } from '../flyover/race'
 import { densify } from '../import/stats'
 import { useAppStore } from '../state/store'
 import { DEFAULT_TRACK_STYLE } from './markerSettings'
 import type { TrackStyle } from './markerSettings'
+import { cumulativeDistances } from '../geo/lonLat'
 import { useTerrainContext } from './TerrainLayer'
 import { wakeScene } from './renderOnDemand'
 import {
   applyDash,
   createGlowMaterial,
-  cumulativeDistances,
   cutLine,
   lineWidthPx,
   quantizedPixelSize,
@@ -232,7 +235,9 @@ export function writeLineColors(geometry: LineGeometry, colors: Float32Array): v
 export interface SegmentLines extends CuttableLine {
   /** index in track.segments */
   index: number
-  /** densified points (the recorded ones are kept as the same objects) */
+  /** points densified from (the recorded ones, or their smoothed copies), kept in `points` as the same objects */
+  source: TrackPoint[]
+  /** densified points */
   points: TrackPoint[]
   buffer: DrapeBuffer
   /** scratch xyz per point, reused on every drape */
@@ -247,6 +252,8 @@ export interface SegmentLines extends CuttableLine {
 export interface TrackLineSet {
   track: Track
   frame: LocalFrame
+  /** `trackStyle.smoothingM` the lines were built with */
+  smoothingM: number
   object: Group
   segments: SegmentLines[]
   solidMaterial: LineMaterial
@@ -312,6 +319,7 @@ export function buildTrackLineSet(
   shared: SharedResources,
   width: number,
   height: number,
+  smoothingM = 0,
 ): TrackLineSet {
   const object = new Group()
   object.name = `track:${track.id}`
@@ -321,9 +329,11 @@ export function buildTrackLineSet(
   /** distance at the start of the segment, as the marker counts it */
   let startM = 0
   for (const [index, segment] of track.segments.entries()) {
-    const points = densify(segment.points, DENSIFY_STEP_M)
+    const source = smoothPoints(segment.points, smoothingM)
+    const points = densify(source, DENSIFY_STEP_M)
     if (points.length < 2) continue
-    const dist = cumulativeDistances(points, startM)
+    // recorded distances carried over to the densified points: the scale of the marker (`smoothedTrackPath`)
+    const dist = resampleValues(source, cumulativeDistances(segment.points, startM), points)
     startM = dist[dist.length - 1]
     const buffer = buildDrapeBuffer(points, frame)
     const positions = new Float32Array(buffer.count * 3)
@@ -337,7 +347,7 @@ export function buildTrackLineSet(
     glow.name = 'track-line-glow'
     glow.visible = false
     object.add(solid, ghost, glow)
-    segments.push({ index, points, buffer, positions, dist, shortened: -1, geometry, solid, ghost, glow })
+    segments.push({ index, source, points, buffer, positions, dist, shortened: -1, geometry, solid, ghost, glow })
   }
 
   let startMarker: Mesh | null = null
@@ -353,6 +363,7 @@ export function buildTrackLineSet(
   return {
     track,
     frame,
+    smoothingM,
     object,
     segments,
     solidMaterial: materials.solid,
@@ -440,8 +451,7 @@ export function applyTrackColors(sets: Iterable<TrackLineSet>, colorBy: TrackCol
   const linear = new Color()
   list.forEach((set, k) => {
     for (const segment of set.segments) {
-      const source = set.track.segments[segment.index].points
-      const perPoint = resampleValues(source, values[k][segment.index], segment.points)
+      const perPoint = resampleValues(segment.source, values[k][segment.index], segment.points)
       const colors = colorizeValues(perPoint, range, colormap)
       for (let o = 0; o < colors.length; o += 3) {
         linear.setRGB(colors[o], colors[o + 1], colors[o + 2], SRGBColorSpace)
@@ -498,8 +508,8 @@ export function drawOnDistances(tracks: readonly Track[], progress: number, race
 }
 
 /**
- * Reconcile the Three objects with the store: keep sets whose track and frame are unchanged, rebuild the
- * others, drop the ones whose track disappeared.
+ * Reconcile the Three objects with the store: keep sets whose track, frame and smoothing are unchanged, rebuild
+ * the others, drop the ones whose track disappeared.
  */
 export function syncTrackLineSets(
   group: Group,
@@ -509,18 +519,19 @@ export function syncTrackLineSets(
   shared: SharedResources,
   width: number,
   height: number,
+  smoothingM = 0,
 ): void {
   const alive = new Set<string>()
   for (const track of tracks) {
     alive.add(track.id)
     const existing = sets.get(track.id)
-    if (existing && existing.track === track && existing.frame === frame) continue
+    if (existing && existing.track === track && existing.frame === frame && existing.smoothingM === smoothingM) continue
     if (existing) {
       disposeTrackLineSet(existing)
       sets.delete(track.id)
     }
     if (!frame) continue
-    const set = buildTrackLineSet(track, frame, shared, width, height)
+    const set = buildTrackLineSet(track, frame, shared, width, height, smoothingM)
     group.add(set.object)
     sets.set(track.id, set)
   }
@@ -551,6 +562,7 @@ export function TrackLines() {
   const tracks = useAppStore((s) => s.tracks)
   const exaggeration = useAppStore((s) => s.settings.exaggeration)
   const colorBy = useAppStore((s) => s.settings.trackColorBy)
+  const smoothingM = useAppStore((s) => s.settings.trackStyle.smoothingM)
   const race = useRace()
   const { engine, frame } = useTerrainContext()
   const size = useThree((s) => s.size)
@@ -603,17 +615,17 @@ export function TrackLines() {
     if (!group) return
     sharedRef.current ??= createSharedResources()
     const { width, height } = sizeRef.current
-    syncTrackLineSets(group, setsRef.current, tracks, frame, sharedRef.current, width, height)
+    syncTrackLineSets(group, setsRef.current, tracks, frame, sharedRef.current, width, height, smoothingM)
     exposureRef.current = Number.NaN
     styleRef.current = null
     drapeAll(engine, exaggeration)
-  }, [tracks, frame, engine, exaggeration, drapeAll])
+  }, [tracks, frame, engine, exaggeration, drapeAll, smoothingM])
 
   // Colours: after the build above (same commit), only when the mode or the set of lines changes.
   useEffect(() => {
     applyTrackColors(setsRef.current.values(), colorBy)
     exposureRef.current = Number.NaN
-  }, [tracks, frame, colorBy])
+  }, [tracks, frame, colorBy, smoothingM])
 
   useFrame(({ gl, camera, size: canvas }) => {
     const { renderScale } = useExportStore.getState()

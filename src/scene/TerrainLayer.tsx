@@ -16,7 +16,7 @@ import type { LocalFrame, LonLatBounds, TerrainEngine, TerrainEngineOptions, Ter
 import { createLocalFrame, expandBounds } from '../geo/ellipsoid'
 import type { Film } from '../film/model'
 import { REGION_AREA_MARGIN_M } from '../flyover/filmCamera'
-import { createTerrainEngine } from '../terrain/engine'
+import { AREA_MARGIN_M, AREA_MIN_SIZE_M, createTerrainEngine } from '../terrain/engine'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
 import { useAppStore, type Settings } from '../state/store'
 
@@ -24,10 +24,6 @@ import { useAppStore, type Settings } from '../state/store'
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Margin added around the union of the track bounds to define the terrain area of interest. */
-export const AREA_MARGIN_M = 25_000
-/** Minimum size of the terrain area across, so short tracks still get a landscape around them. */
-export const AREA_MIN_SIZE_M = 40_000
 /** Screen-space error threshold handed to the engine (pixels). */
 export const ERROR_TARGET_PX = 3
 /** How often terrain stats are pushed to the store (seconds): 4 Hz. */

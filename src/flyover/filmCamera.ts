@@ -56,8 +56,8 @@ export const REGION_FIT_MARGIN = 1.15
  */
 export const REGION_REACH_M = 400_000
 export const REGION_AREA_MARGIN_M = 500_000
-/** Vertical field of view (scene/FlyoverCanvas.tsx). */
-const CAMERA_FOV_DEG = 50
+/** Vertical field of view of the scene camera (scene/FlyoverCanvas.tsx, offline/plan.ts). */
+export const CAMERA_FOV_DEG = 50
 /** 'balayage' shot: turn of the overview around its target (degrees), share of the shot it takes. */
 export const SWEEP_DEG = 75
 export const SWEEP_SHARE = 0.6

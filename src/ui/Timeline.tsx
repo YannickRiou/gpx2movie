@@ -9,7 +9,8 @@
  * « Vitesse » (portions of the track flown faster or slower, added at the marker), « Arrêts », « Textes », « Médias » (photos and video clips, also dropped onto the timeline; photos taken along the
  * track can then be placed where they were taken, clips filmed during the outing synced with it), « Musique » (sound files with their waveform, added from the
  * « Options » menu or dropped; played along by the preview, muted by the bar's button, mixed into the export): drag a block to move it, an edge to stretch it, snapping to the other edges, the
- * highlights and the playhead (Alt: no snapping); Ctrl+wheel zooms. Keyboard on a block: arrows nudge (Shift:
+ * highlights and the playhead (Alt: no snapping); Ctrl+wheel zooms; zoomed, a drag near an edge scrolls the lanes;
+ * texts and media attached to a stop follow it. Keyboard on a block: arrows nudge (Shift:
  * finer), Delete removes (Escape deselects: `App`); Space plays / pauses anywhere outside a control. The selection
  * lives in the store (`filmSelection`): the inspector of the selected block is in the right dock (`FilmInspector`).
  *
@@ -23,6 +24,7 @@ import { freezeLandmarkTitles, materializeStops, stopCandidates } from '../film/
 import { AUDIO_FILE_EXTENSIONS, fitFilmToMusic, isAudioFile, musicLengthS, readAudio, startMusicPreview, useMusicPreview, waveformPath } from '../film/audio'
 import { beatTicksPath } from '../film/beats'
 import { buildFilmClock, filmClockFor, filmClockInputFor } from '../film/clock'
+import type { FilmClockInput } from '../film/clock'
 import { photoTimeMs } from '../film/exif'
 import { useMediaStore } from '../film/media'
 import { isMediaFile, readMedia } from '../film/video'
@@ -37,7 +39,9 @@ import {
   addText,
   clipSyncOffsetS,
   dragFilm,
+  edgeScrollSpeed,
   fitPxPerS,
+  followStops,
   formatFilmTime,
   formatSpeedFactor,
   hasFilmItem,
@@ -90,7 +94,30 @@ const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : 
 
 type Gesture =
   | { kind: 'scrub' }
-  | { kind: 'edit'; item: TimelineItem; grip: Grip; x0: number; start: Film; ctx: DragContext; result: Film | null }
+  | { kind: 'edit'; item: TimelineItem; grip: Grip; x0: number; scroll0: number; start: Film; ctx: DragContext; result: Film | null }
+
+/** Edge auto-scroll of a gesture: last pointer position, the handler that replays it, animation frame. */
+interface EdgeScroll {
+  clientX: number
+  altKey: boolean
+  apply(clientX: number, altKey: boolean): void
+  frame: number
+  /** time of the last frame (0 before the first) */
+  timeMs: number
+  /** fraction of a pixel not scrolled yet (the browser rounds `scrollLeft`) */
+  carry: number
+}
+
+/** Clock of `film`, a retouch of the film whose clock input is `input` (same track, pacing and landmarks). */
+const clockOfFilm = (input: FilmClockInput, film: Film) =>
+  buildFilmClock({
+    ...input,
+    opening: film.opening,
+    closing: film.closing,
+    stops: film.autoStops ? input.stops : film.stops,
+    speeds: film.speeds,
+    cameraKeys: film.cameraKeys,
+  })
 
 /** Recorded instant -> "14 h 32", in the browser time zone. */
 function formatClock(ms: number): string {
@@ -275,26 +302,14 @@ export function Timeline() {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const gestureRef = useRef<Gesture | null>(null)
+  const edgeRef = useRef<EdgeScroll | null>(null)
   /** zoom for the wheel listener */
   const zoomRef = useRef(zoom)
   /** scroll to apply once the zoomed content is laid out */
   const pendingScrollRef = useRef<number | null>(null)
 
   const shownFilm = draft ?? film
-  const shownClock = useMemo(
-    () =>
-      draft
-        ? buildFilmClock({
-            ...input,
-            opening: draft.opening,
-            closing: draft.closing,
-            stops: draft.autoStops ? input.stops : draft.stops,
-            speeds: draft.speeds,
-            cameraKeys: draft.cameraKeys,
-          })
-        : clock,
-    [draft, input, clock],
-  )
+  const shownClock = useMemo(() => (draft ? clockOfFilm(input, draft) : clock), [draft, input, clock])
   const flightXs = useMemo(() => {
     const n = profile?.ele.length ?? 0
     return Array.from({ length: n }, (_, i) => shownClock.timeAtProgress(i / Math.max(1, n - 1)) - shownClock.openingS)
@@ -337,6 +352,9 @@ export function Timeline() {
   // the music plays along the preview
   useEffect(() => startMusicPreview(), [])
 
+  // no edge auto-scroll left running once the timeline is gone
+  useEffect(() => () => cancelAnimationFrame(edgeRef.current?.frame ?? 0), [])
+
   useEffect(() => {
     // Space plays / pauses, except in a control that uses it
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
@@ -371,14 +389,16 @@ export function Timeline() {
   // --- edits -------------------------------------------------------------------------------------------------
   const isStop = (item: TimelineItem) => clock.stops.some((s) => s.id === item)
   const withOwnStops = (f: Film) => materializeStops(f, { track, landmarks, pacing })
-  /** one undo step (retouching a landmark title fixes them, as in `editFilm`) */
+  const clockOf = (f: Film) => clockOfFilm(input, f)
+  /** one undo step; the texts and media attached to a stop follow it, retouching a landmark title fixes them (as in `editFilm`) */
   const commit = (edited: Film) => {
-    const next = freezeLandmarkTitles(film, edited)
+    const next = freezeLandmarkTitles(film, followStops(film, edited, clockOf))
     if (next !== film) getSettingsHistory().transaction(() => setSetting('film', next))
   }
   /** nudges with the arrows (quick changes of the film are merged into one undo step) */
   const change = (fn: (f: Film) => Film, stops: boolean) => {
-    const next = freezeLandmarkTitles(film, fn(stops ? withOwnStops(film) : film))
+    const base = stops ? withOwnStops(film) : film
+    const next = freezeLandmarkTitles(film, followStops(base, fn(base), clockOf))
     if (next !== film) setSetting('film', next)
   }
   const dragContext = (item: TimelineItem): DragContext => ({
@@ -532,20 +552,67 @@ export function Timeline() {
     setSelected(item)
     contentRef.current?.setPointerCapture(e.pointerId)
     const start = isStop(item) ? withOwnStops(film) : film
-    gestureRef.current = { kind: 'edit', item, grip, x0: e.clientX, start, ctx: dragContext(item), result: null }
+    const scroll0 = scrollerRef.current?.scrollLeft ?? 0
+    gestureRef.current = { kind: 'edit', item, grip, x0: e.clientX, scroll0, start, ctx: dragContext(item), result: null }
+  }
+  /** the gesture at pointer `clientX` (the content may have scrolled under the pointer since the press) */
+  const applyPointer = (clientX: number, altKey: boolean) => {
+    const g = gestureRef.current
+    if (!g) return
+    if (g.kind === 'scrub') return seek(timeAt(clientX))
+    const dx = clientX - g.x0 + (scrollerRef.current?.scrollLeft ?? 0) - g.scroll0
+    if (!g.result && Math.abs(dx) < DRAG_THRESHOLD_PX) return
+    const dragged = dragFilm(g.start, g.item, g.grip, dx / pxPerS, altKey ? { ...g.ctx, snapS: 0 } : g.ctx)
+    g.result = followStops(g.start, dragged, clockOf)
+    setDraft(g.result)
+  }
+  /**
+   * Keeps the pointer of the gesture for the edge auto-scroll: near an edge of the zoomed timeline it scrolls (faster
+   * closer to the edge, `edgeScrollSpeed`) and replays the gesture at the same pointer, until the release.
+   */
+  const followEdge = (clientX: number, altKey: boolean) => {
+    const edge = edgeRef.current
+    if (edge) {
+      Object.assign(edge, { clientX, altKey, apply: applyPointer })
+      return
+    }
+    const tick = (now: number) => {
+      const current = edgeRef.current
+      const el = scrollerRef.current
+      if (!current || !el || !gestureRef.current) {
+        edgeRef.current = null
+        return
+      }
+      // first frame: no time elapsed yet
+      const dt = current.timeMs > 0 ? Math.min(0.05, Math.max(0, now - current.timeMs) / 1000) : 0
+      current.timeMs = now
+      const rect = el.getBoundingClientRect()
+      const speed = edgeScrollSpeed(current.clientX, rect.left, rect.right)
+      if (speed !== 0 && el.scrollWidth > el.clientWidth) {
+        const before = el.scrollLeft
+        const target = before + speed * dt + current.carry
+        el.scrollLeft = target
+        current.carry = Math.max(-1, Math.min(1, target - el.scrollLeft))
+        if (el.scrollLeft !== before) current.apply(current.clientX, current.altKey)
+      } else {
+        current.carry = 0
+      }
+      current.frame = requestAnimationFrame(tick)
+    }
+    edgeRef.current = { clientX, altKey, apply: applyPointer, timeMs: 0, carry: 0, frame: requestAnimationFrame(tick) }
   }
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const g = gestureRef.current
     if (!g) return
-    if (g.kind === 'scrub') return seek(timeAt(e.clientX))
-    const dx = e.clientX - g.x0
-    if (!g.result && Math.abs(dx) < DRAG_THRESHOLD_PX) return
-    g.result = dragFilm(g.start, g.item, g.grip, dx / pxPerS, e.altKey ? { ...g.ctx, snapS: 0 } : g.ctx)
-    setDraft(g.result)
+    applyPointer(e.clientX, e.altKey)
+    // a press that only selects a block (not dragged yet) does not scroll
+    if (g.kind === 'scrub' || g.result) followEdge(e.clientX, e.altKey)
   }
   const endGesture = (e: PointerEvent<HTMLDivElement>) => {
     const g = gestureRef.current
     gestureRef.current = null
+    cancelAnimationFrame(edgeRef.current?.frame ?? 0)
+    edgeRef.current = null
     if (g?.kind === 'edit' && g.result && e.type === 'pointerup') commit(g.result)
     setDraft(null)
   }

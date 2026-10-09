@@ -196,7 +196,7 @@ describe('settings and misc', () => {
       exposureEv: 0,
       grading: { preset: 'naturel', contrast: 0, saturation: 0, warmth: 0, vignette: 0 },
       trackColorBy: 'none',
-      trackStyle: { width: 4, dash: 'plein', glow: false, drawOn: false },
+      trackStyle: { width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 },
       marker: { kind: 'boule', figure: 'randonneur', image: '', size: 1, animated: false },
       camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
       flyoverDurationS: 60,
@@ -237,6 +237,7 @@ describe('settings and misc', () => {
         enabled: true,
         kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false, waterPoint: false },
         maxDistanceM: 1500,
+        hiddenIds: [],
       },
       race: { enabled: false, sync: 'elapsed' },
     })
