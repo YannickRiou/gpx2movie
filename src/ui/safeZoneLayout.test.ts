@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { VIDEO_ASPECTS } from '../export/schedule'
-import { phoneInterfaceOver, safeZones } from './safeZones'
-import type { FrameBox } from './safeZones'
+import { phoneInterfaceOver, safeZones } from './safeZoneLayout'
+import type { FrameBox } from './safeZoneLayout'
 
 const insideFrame = (b: FrameBox) =>
   b.left >= 0 && b.top >= 0 && b.width > 0 && b.height > 0 && b.left + b.width <= 1 + 1e-12 && b.top + b.height <= 1 + 1e-12

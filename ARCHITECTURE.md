@@ -255,7 +255,7 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   closing the drawer are disabled (resizing the scene would resize the canvas).
 - **View**: floating "Recadrer la vue" (reframe the view) button (F); click on the track and right-click menu (`TrackPicker`, see "Film and
   timeline").
-- **Safe zones** (`src/ui/SafeZones.tsx`, pure and tested geometry in `src/ui/safeZones.ts`): floating button below
+- **Safe zones** (`src/ui/SafeZones.tsx`, pure and tested geometry in `src/ui/safeZoneLayout.ts`): floating button below
   "Recadrer" (outside "Libre") or G; preview state (small `useSafeZonesStore` store, neither saved nor undoable, off at
   startup). DOM layer in the framed `.view__stage`, above the overlay, `pointer-events: none`: the export (canvas)
   never sees it. 16:9, 1:1, 21:9: action safe 93% and title safe 90% (EBU R 95), dotted. 9:16 and 4:5:
