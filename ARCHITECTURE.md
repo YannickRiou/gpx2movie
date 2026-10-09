@@ -329,7 +329,10 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   "Détails" (details); ghost race synchronization and ranking only once it is enabled. Habillage (`OverlayPanel`)
   in `PanelSection`: "Habillage" (switch, style, "Couleurs et polices" (colors and fonts) collapsed; the only "modifié / Par défaut",
   for all of `overlay`), "Titres" (titles), "Compteurs" (counters; and "Classement (course fantôme)" (ghost race ranking) from two tracks), "Profil et mini-carte" (profile and mini-map), "Météo, logo et texte" (weather, logo and text; absent when the overlay is off), "Crédits des
-  sources" (source credits; always). `PanelSection` accepts sections without `keys` (no marker). Projet: without presets, one
+  sources" (source credits; always). Each element (`WidgetGroup`) has its switch, then up to three tabs, only those it
+  has: "Contenu" (content: `children`), "Style" (`style`: position, size, then its own colors and fonts) and
+  "Visibilité" (visibility: `visibility`, e.g. the display time of the opening card). `PanelSection` accepts sections
+  without `keys` (no marker). Projet: without presets, one
   line instead of an empty list. Lumière: sunrise / sunset on one line (local time if the track gives its offset,
   otherwise solar time), the matching solar time in the ⓘ of "Heure solaire". ⓘ also on the fine camera
   settings and the flyover duration. Setting keys and behavior unchanged.
@@ -480,7 +483,10 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
 ## Track and marker
 
 - **Settings** `settings.trackStyle { width, dash: 'plein' | 'tirets' | 'points', glow, drawOn }` and `settings.marker { kind:
-  'boule' | 'figurine' | 'image', figure, image, size }` (`src/scene/markerSettings.ts`, pure). Defaults = the previous look
+  'boule' | 'figurine' | 'image', figure, image, size, animated }` (`src/scene/markerSettings.ts`, pure). `animated`: the
+  figurine bounces and sways with `figureMotion(timeS)` (two steps per second of film, lift up to 8% of the badge through
+  `sprite.center`, ±5° through `material.rotation`), a function of the film time only: a paused film keeps its pose,
+  the export matches the preview; the ghost-race markers stay still. Defaults = the previous look
   (4 px, solid, white ball). Checked by `SETTING_CHECKS`, completed by `SETTING_UPGRADES` (keys added later).
   `image`: 128 px square PNG as a data URL (`fileToAvatarDataUrl`, platform picker), 300,000 characters at most.
   "Trace et marqueur" (track and marker) section of the Survol tab (`src/ui/TrackMarkerSection.tsx`).
@@ -582,7 +588,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   exit (≤ 1.5 s), each with its own duration; `keepDuration` keeps F = `flyoverDurationS` (stops ≤ 50%, shortened
   proportionally; a sped-up section slows the rest down by as much). **Speed sections** (`flightPacing(…, speeds)`): the
   local speed (slow-downs included) is multiplied by m(x) = factor^w(x) over [fromM, toM], w rising from 0 to 1 as a raised
-  cosine over `SPEED_EASE_S` (1.5 s) at base speed, inside the section (at most half of it), and
+  cosine over `pacing.transitionS` ("Transitions", 0.5–4 s, default `SPEED_EASE_S` = 1.5 s; the same length bounds the
+  ease into and out of pauses and stops) at base speed, inside the section (at most half of it), and
   falling back the same way at its end: never a speed jump; 32 grid steps per transition, inverse always exact.
   Applied whether pacing is active or not, combined with stops (a stop inside a section remains a stop). The clock
   places them in film time (`clock.speeds`: `startS` / `endS` = marker passing the edges). A stop's window
@@ -876,7 +883,10 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   a file has no entry. Renaming changes the entry (and the name of the open project; its document follows at the next
   save); deleting asks for an inline confirmation, and the open project stays open without an entry.
 - **Presets** in `getPlatform().storage` (`openflyover.presets.v1`, in-memory fallback); a key missing from a preset keeps its
-  current value. `save` returns false when the storage refuses (full or blocked): the preset remains usable for the
+  current value. A preset keeps every setting or one family (`Preset.scope`, `PRESET_SCOPES`: "Style de carte",
+  "Trace, marqueur et étiquettes", "Habillage", "Prise de vue (caméra, cadrage, lumière)"): `save(name, settings, scope)`
+  stores only the keys of `PRESET_SCOPE_KEYS[scope]`, so applying it changes nothing else; a stored preset with an
+  unknown family is dropped on reading. `save` returns false when the storage refuses (full or blocked): the preset remains usable for the
   session and the panel shows "Préréglage non enregistré : stockage du navigateur plein"; the weather cache, on the other hand, stays
   silent (it only loses its persistence).
 
@@ -925,7 +935,10 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   `labels.size` (×0.6 to ×1.6); on overlap, the highest priority wins. Opacity is a function of the view alone (no
   temporal smoothing): each export frame is rendered in isolation. With the overlay active: opacity multiplied by
   1 − `cardOpacityAt(progress, settings.overlay)` (`labelOpacity`); labels fade out behind the opening
-  and closing cards. Setting `settings.labels { climbs, waypoints, kmStep, size, rangeKm }` (old projects completed by
+  and closing cards. Start and finish (`endpointLabels`, `labels.endpoints`, priority 150; one "Départ et arrivée" label when
+  both ends are less than 100 m apart) and the photos of the film whose file gave a GPS position (`photoLabels`,
+  `labels.photos`, priority 190, `MediaAsset.lon` / `lat` read from EXIF when the photo is added) use the pictogram
+  panel of the points of interest. Setting `settings.labels { climbs, waypoints, kmStep, endpoints, photos, size, rangeKm }` (old projects completed by
   `withLabelDefaults`, values checked by `isValidLabelSettings`), section
   "Montées" (climbs; `ClimbList`, a click places the flyover at the foot of the climb).
 
@@ -1019,7 +1032,10 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   progress: the tests and the old behavior). The cards are timed on the film time: the opening card
   appears on the first frame (opening shot included) and fades out at `opening + title.end × flight`; the closing card
   appears at `opening + end.start × flight` and stays until the last frame (closing shot included); fades of 1% and
-  2.5% of the flight. The 3D labels (`Labels`) read the same opacity (`cardOpacityAt(time, …)`).
+  2.5% of the flight. The 3D labels (`Labels`) read the same opacity (`cardOpacityAt(time, …)`). Rolling credits
+  (`end.credits`, optional, one line per name, `creditLines`): the card leaves the layout and heads a centered roll
+  (`drawCreditsRoll`), still while it fades in, then rolling up so the last line leaves the top on the last frame
+  (`creditsRollProgress`, also in `overlayTimedState` so the export redraws each frame of the roll).
 - **Timeline texts** (`extras.texts` = `settings.film.texts`): visible within `[startS, startS + durationS)` of film
   time, 0.4 s fades (at most a quarter of the duration, `filmTextOpacity`), same style as the "Texte libre" (free text; body, style
   panel, size × `size`, safety margins), text on two lines at most (the second cut with "…"), subtitle
@@ -1269,7 +1285,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
 - Application (`AtmosphereLayer`): intensities of the `SunLight` and the `SkyLight`, `shadow.intensity`, compensation added to
   the exposure; under the veil, the SH coefficients of the sky light tend toward their luminance.
 - `WeatherEffect` (`src/scene/weatherEffect.ts`, after the aerial perspective, same `EffectPass`): the Takram effect has no
-  density setting, hence an exponential height fog (β0 = 3.912·(hazeScale − 1)/60 km at ground level under the marker,
+  density setting, hence an exponential height fog (β0 = 3.912·(hazeScale − 1)/60 km at ground level under the marker;
+  `hazeScale` = the weather's plus 19 × `settings.haze`, the "Brume" slider, `withManualHaze`, at most 30,
   analytic integral along the ray), veiled sky, distance pulled toward gray under the veil, desaturation; logarithmic
   depth read as in the Takram effect; uniforms prefixed `weather*`.
 - Limits: weather from a single point applied to the whole scene.
