@@ -80,7 +80,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/lens.ts` + `useLensEffects.ts` + `flareEffect.ts` + `shutterEffect.ts` | « Objectif » lens effects (see "Lens") | pure, tested: `LensSettings`, `DEFAULT_LENS`, `LENS_RANGES`, `isValidLens`, `withLensDefaults`, `lensActive`, `bloomParams`, `depthOfFieldParams`, `SHUTTER_SUBFRAMES`, `shutterSamples`, `previewShutterWeight`, `radialBlurLength`, `setShutterSubFrame`, `shutterSubFrame`, `subFrameSlices`; `useLensEffects`, `FlareEffect`, `ShutterEffect`; `filmViewAt` (`filmView.ts`: the camera placement of `FlyoverRig` at a progress and film time, shared with the export); `LensPanel` (`src/ui`) |
 | `src/project/*` | project document, history, presets | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`, `isProjectThumbnail`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import") |
-| `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefix` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
+| `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefixes` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | zustand state | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` (shell); `shell.ts` (pure, tested: `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`); `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`); `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `runImport`, `loadSample`, `chainLoadedTracks`); `importFlow.ts` (import orchestration without React, tested) |
 
@@ -91,9 +91,8 @@ full customization through a single project document, WebCodecs video export, Ta
 - Picking a file, saving a file, reading a drop, keeping a preference: go through `getPlatform()`
   (`src/platform`), never through an `<input type="file">`, a fresh download link or `localStorage`, nor through Tauri
   directly.
-- Node is not in the global PATH. Prefix each command:
-  - PowerShell: `$env:Path = "C:\Users\MadCreator\AppData\Roaming\fnm\node-versions\v24.21.0\installation;" + $env:Path; npm test`
-  - Bash: `export PATH="/c/Users/MadCreator/AppData/Roaming/fnm/node-versions/v24.21.0/installation:$PATH"; npm test`
+- Node 24 is installed with fnm and may not be in the global PATH. Run `fnm use 24` (or prepend the fnm installation
+  folder of Node 24 to PATH) before `npm`.
 - Scripts: `npm run dev` (port 5173), `npm run build`, `npm test` (vitest run), `npm run coverage` (same with coverage), `npm run typecheck` (tsc --noEmit).
 
 ## Loading (bundle splitting)
@@ -323,8 +322,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   state remembered by title in the platform storage (`FOLDS_KEY` `openflyover.folds.v1`, `parseFoldPrefs` in `shell.ts`,
   read once on mount, written on `toggle`; without storage or with an unreadable value every section opens). Carte: "Fond de carte" (base map)
   (imagery), "Relief et trace" (terrain and track; exaggeration, track color), "Lumière" (light), "Atmosphère et météo" (atmosphere and weather; atmosphere,
-  shadows, weather in the scene), "Couleurs" (colors; color grading), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset, style as icon tiles, north up),
-  "Durée et rythme" (duration and pacing; duration, film duration, slow-downs on / off). Rare settings are in `MoreSettings` ("Plus de
+  shadows, weather in the scene), "Couleurs" (colors; color grading), "Objectif" (lens effects; `LensPanel`), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset, style as icon tiles, north up),
+  "Durée et rythme" (duration and pacing; duration, film duration, slow-downs on / off, « Plan de situation » switches for the opening and the closing), "Trace et marqueur" (track and marker; `TrackMarkerSection`). Rare settings are in `MoreSettings` ("Plus de
   réglages", closed `<details>`): imagery detail, terrain source, wireframe, exposure, weather intensity, distance /
   tilt / aim / smoothing, highlights and pacing parameters. Its summary shows "modifié" when a hidden setting
   departs from the default (`modifiedPaths(settings, paths)` from `project/apply.ts`, paths `'key'` or `'key.field'`). Setting
@@ -412,7 +411,7 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
 - **Camera settings**: `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp, turnSmoothingM,
   aimSmoothingS, cameraSmoothingS, endingS }` (a camera saved before the last four gets them from `DEFAULT_CAMERA`,
   `withCameraDefaults` in `SETTING_UPGRADES`: « Auto » keeps its multiplier, so the turns look the same) and named
-  presets (`CAMERA_PRESETS`: Poursuite (chase), Hélicoptère (helicopter), Drone haut (high drone), Vue du dessus (top view), Orbite (orbit), Cinéma (cinema)) in
+  presets (`CAMERA_PRESETS`, 12: Poursuite (chase), Drone rapide, Oiseau, Hélicoptère, Orbite, Cinéma, Drone haut, Planeur, Montgolfière, Avion, Vue du dessus, Satellite; `findCameraPreset`; « Préréglage » is a grid of tiles with distance and tilt, plus a « Personnalisé » tile when the settings match no preset) in
   `src/flyover/cameraSettings.ts`; `settings.flyoverDurationS` (15–600 s, 60 by default) = duration at ×1, the timeline
   speed applies on top. "Survol" tab (`src/ui/CameraPanel.tsx`, "Caméra" and "Durée et rythme" sections; the
   smoothing sliders under the camera's « Plus de réglages », « Lissage des virages » showing the « Auto » length for
@@ -649,7 +648,7 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   the view (lanes, drag to move / stretch, inspector; done); 3 text lane drawn in the overlay (done);
   4 media lane (photos and videos done, with their sound: see "Video sound").
 - **Model** (`src/film/model.ts`, `settings.film`: saved in the project document, undoable, validated by
-  `isValidFilm` in `SETTING_CHECKS`, no migration: an old project receives `DEFAULT_FILM`):
+  `isValidFilm` in `SETTING_CHECKS`; an old project receives `DEFAULT_FILM`, and the v1 → v2 migration in `src/project/document.ts` gives a v1 project without a film `{ autoMode: 'rythme' }`):
   `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut' | 'situation' | 'balayage', durationS, transition?, dipS?,
   startHeight?, highlight? }` (1–30 s; default descente 6 s / 5 s; a shot switched to `situation` while it still has its
   default duration gets `SITUATION_DURATION_S`, 9 s, for its long dive (`updateShot`; saved films keep theirs); `transition` `'enchaine'` by default, `'coupe'`,
@@ -1597,7 +1596,11 @@ it, know at what time you will pass each point, where the sun will be and what t
   interpolated cloud covers, hourly totals and WMO 45/48 fog re-centered on the middle of their hour then interpolated) gives
   `sunScale`, `skyScale`, `hazeScale`, `hazeHeightM`, `shadowStrength`, `exposureCompensationEv`, `desaturation`, `skyVeil`
   (formulas at the top of `sceneWeatherFrom`, bounded, identity for a clear sky, without data or with the setting off; `strength` blends
-  toward identity). A pure function of progress: the export stays deterministic.
+  toward identity). With o the cloud opacity (min of the total cover and low + 0.6·mid + 0.25·high), w the rain or snow
+  wetness (1 − e^(−mm/h ÷ 2) or 1 − e^(−cm/h), the larger) and f the fog: `sunScale` = (1 − 0.8·o^1.5)·(1 − 0.5·max(w, f)),
+  down to 0.1 under a rainy overcast; `skyScale` = (1 − 0.35·o^1.5)·(1 − 0.25·w), about 0.5 at worst;
+  `hazeScale` = 1 + 2·low² + 8·rain + 12·snow + 16·f, at most 30 (visibility 60 km ÷ `hazeScale`);
+  `shadowStrength` = (1 − 0.9·o^1.5)·(1 − 0.7·max(w, f)). A pure function of progress: the export stays deterministic.
 - Application (`AtmosphereLayer`): intensities of the `SunLight` and the `SkyLight`, `shadow.intensity`, compensation added to
   the exposure; under the veil, the SH coefficients of the sky light tend toward their luminance.
 - `WeatherEffect` (`src/scene/weatherEffect.ts`, after the aerial perspective, same `EffectPass`): the Takram effect has no
@@ -1621,8 +1624,8 @@ it, know at what time you will pass each point, where the sun will be and what t
   the sun date under the marker, via `sceneConditionsAt`; missing layer = total; manual: low = `coverage`,
   mid 60%, high 40%). `sceneCloudsFrom`: the library has only one `coverage`; the layer that asks for the most
   sets it (table measured on the quantiles of the r / g / b channels of `local_weather.png`: cloud fraction → coverage), the
-  others are thinned by their exponent `w^e` (e = ln t / ln tᵢ, t = 1 − 2.5·coverage), and beyond 0.4 (nearly overcast
-  sky) by their density. Bases: low at `altitudeM` above the lowest point of the track, mid 2 km higher,
+  others are thinned by their exponent `w^e` (e = ln t / ln tᵢ, t = 1 − 2.5·coverage, 1 ≤ e ≤ 8), and beyond 0.4 (nearly overcast
+  sky) by their density instead (scaled by Cᵢ / C). Bases: low at `altitudeM` above the lowest point of the track, mid 2 km higher,
   cirrus at max(7 km, ground + 5.5 km), × exaggeration (thicknesses unchanged). Layer "a" (fog) and cloud haze
   turned off: the haze remains that of `WeatherEffect`. Under visible clouds, the `WeatherEffect` sky veil is
   reduced to 30%.
@@ -1652,7 +1655,7 @@ it, know at what time you will pass each point, where the sun will be and what t
   (−r²/2R), and displaced into cumulus billows (`seaRelief`, pure and tested, written to GLSL by `seaReliefGlsl` from
   the same constants): rounded domes on a jittered grid (smooth maximum between neighbours) in five octaves from
   2.2 km down to 110 m (75 to 8 m high, unexaggerated) over a 9 km swell, in a domain warped by 380 m; an octave
-  covering fewer than 6 cells (vertex) or pixels (fragment) fades to its mean: noise-free by construction, flat at the
+  covering fewer than `LOD_SAMPLES` = 6 cells (vertex) or pixels (fragment) fades to its mean: noise-free by construction, flat at the
   horizon. Drift: `cloudDrift` of the same wind × film time, as in the volumetric mode.
   Shading (fragment, per pixel): normal by finite differences of the relief, steepened ×2 for the shading only
   (cumulus domes are rounder than a sea can be displaced); sun direction, colour × intensity of the Takram `SunLight`
@@ -1700,7 +1703,8 @@ it, know at what time you will pass each point, where the sun will be and what t
   noise (STBN) of the Takram examples is not in the package (downloaded from GitHub, NVIDIA license): it is
   replaced by an interleaved gradient noise generated at startup (`cloudNoise.ts`, 128 × 128 × 64; slice z shifted by
   z × the golden ratio, modulo 1, so that consecutive slices stratify the march start of a pixel), also passed to
-  `AerialPerspective` (otherwise it downloads it as soon as the clouds provide their shadow map).
+  `AerialPerspective` (otherwise it downloads it as soon as the clouds provide their shadow map). Nothing is downloaded
+  from GitHub.
 - Limits: the terrain is lit by sources (`SunLight`), so cloud shadows do not reach it (the
   sun stays dimmed by the weather); layers at a fixed altitude for the whole film; in the preview, temporal upsampling
   trails when the camera moves fast, and the moving or playing preview keeps the grain of the upsampling (only a still
@@ -1765,7 +1769,9 @@ it, know at what time you will pass each point, where the sun will be and what t
   stopped at the finish), `distance` (same fraction of each track). The first two require timestamps on all the
   tracks, otherwise fall back to `distance`.
 - Time ↔ distance tables per track (points without a time filled, clock made monotonic), lookups by bisection. Ranking
-  gaps compared at equal fraction (exact on the same route); displayed as "+1 min 20", "−350 m".
+  gaps compared at equal fraction (exact on the same route); displayed as "+1 min 20", "−350 m". In time modes the gap
+  is the difference between the race times at which the racer and the lead reached the furthest point both reached
+  (positive = behind); without timestamps, the difference of the distances covered, in metres (negative = behind).
 - `RaceMarkers` (after `FlyoverRig` in `TerrainLayer`): same kind of marker as the head (`settings.marker`, see "Track
   and marker") in the track color with an ink edge, same screen size as the main marker. Limit: the stops of the lead track are crossed instantly (playback advances by distance).
 
@@ -1793,7 +1799,7 @@ it, know at what time you will pass each point, where the sun will be and what t
 - Camera (`src/flyover/follow.ts`, `filmFollowOf` → `FilmViewOptions.follow`): the flight camera flies the stage under
   the marker on its own smoothed path at its own progress (`stageAt`), so it never glides across the jump between two
   stages: a cut at the film time the marker reaches it. The shots still frame the whole sequence. A pure function of
-  the progress, passed by FlyoverRig and by the export's prefetch (`viewAt`): preview and export agree.
+  the progress, passed by FlyoverRig and by the export's prefetch (`filmViewAt`): preview and export agree.
 - Overlay: `prepareOverlayFilm` / `overlayFilmFrameAt`: the live widgets show the stage under the marker (its distance,
   D+, time, profile, mini-map), the opening and closing cards the name and totals of the sequence. A stage card
   (`stageCardAt`, `StageCard`: name, « Étape 2 sur 3 · date », distance, D+; centred, `STAGE_CARD_S` = 5 s from the

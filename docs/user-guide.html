@@ -403,8 +403,8 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
       <thead><tr><th>Tab</th><th>What you set there</th></tr></thead>
       <tbody>
         <tr><td>"Trace"</td><td>Your tracks, "Plusieurs traces" (one after the other or side by side), roadbook, climbs and terrain labels ("Montées et étiquettes"), weather of the outing, offline preparation ("Hors ligne")</td></tr>
-        <tr><td>"Carte"</td><td>Base map (aerial photos, topographic maps, historical IGN photos), relief exaggeration, track colouring (speed, slope, elevation, heart rate, cadence, power, temperature), light and sun time, atmosphere, clouds and water, colour grading, OpenStreetMap landmarks</td></tr>
-        <tr><td>"Survol"</td><td>Camera preset ("Poursuite", "Hélicoptère", "Drone haut", "Vue du dessus", "Orbite", "Cinéma"), camera style, film duration (15 s to 10 min), pacing at highlights, track and marker. Camera smoothing sits in "Caméra" › "Plus de réglages": "Lissage des virages" (metres of track, "Auto" by default), "Lissage de la visée" and "Lissage de la caméra" (seconds: the view eases into stops and speed changes instead of jerking), "Fin en douceur" (the camera slows to a stop over the last seconds and watches the marker finish)</td></tr>
+        <tr><td>"Carte"</td><td>Base map (aerial photos, topographic maps, historical IGN photos), relief exaggeration, track colouring (speed, slope, elevation, heart rate, cadence, power, temperature), light and sun time, atmosphere, clouds and water, colour grading, lens effects ("Objectif"), OpenStreetMap landmarks, points of interest</td></tr>
+        <tr><td>"Survol"</td><td>Camera preset in "Caméra" › "Préréglage", a grid of tiles (icon, name, distance multiplier and tilt): "Poursuite", "Drone rapide", "Oiseau", "Hélicoptère", "Orbite", "Cinéma", "Drone haut", "Planeur", "Montgolfière", "Avion", "Vue du dessus", "Satellite", plus a "Personnalisé" tile, selected when your settings match no preset. Camera style, film duration (15 s to 10 min), pacing at highlights, track and marker. Camera smoothing sits in "Caméra" › "Plus de réglages": "Lissage des virages" (metres of track, "Auto" by default), "Lissage de la visée" and "Lissage de la caméra" (seconds: the view eases into stops and speed changes instead of jerking), "Fin en douceur" (the camera slows to a stop over the last seconds and watches the marker finish)</td></tr>
         <tr><td>"Habillage"</td><td>Overlay on the film: style ("Éditorial", "Diffusion", "Application"), colours and fonts, titles, counters, profile and mini-map, weather, logo and text, source credits</td></tr>
         <tr><td>"Projet"</td><td>"Mes projets" (my projects) and settings presets</td></tr>
       </tbody>
@@ -433,7 +433,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
     </div>
     <div>
       <h3>Lens</h3>
-      <p>"Objectif" adds camera lens effects, all off ("Non") until you move their slider, the same in the preview and the export: "Flou de bougé (obturateur)" (speed effect: the edges of the picture streak towards the direction of travel while the centre stays sharp, stronger as the camera goes faster, none during stops; the export also renders 8 images per frame while the shutter is open, so it takes longer, and the preview adds a trail while the film plays), "Halo lumineux" (bloom on the sun, snow and water; its radius under "Plus de réglages"), "Reflet d'objectif" (lens flare when the sun is in the picture, with the atmosphere only) and "Profondeur de champ" (sharp on the marker, blurred in front and behind).</p>
+      <p>"Objectif" ("Carte" tab) adds camera lens effects, all off ("Non") until you move their slider, the same in the preview and the export: "Flou de bougé (obturateur)" (speed effect: the edges of the picture streak towards the direction of travel while the centre stays sharp, stronger as the camera goes faster, none during stops; the export also renders 8 images per frame while the shutter is open, so it takes longer, and the preview adds a trail while the film plays), "Halo lumineux" (bloom on the sun, snow and water; its radius under "Plus de réglages"), "Reflet d'objectif" (lens flare when the sun is in the picture, with the atmosphere only) and "Profondeur de champ" (sharp on the marker, blurred in front and behind).</p>
     </div>
   </div>
   <div class="key">
@@ -456,8 +456,8 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
       <tbody>
         <tr><td>Stop</td><td>"Arrêt" or <kbd>S</kbd>, at the marker</td><td>"Caméra pendant l'arrêt": same as the film, slow turn, wide view or fixed</td></tr>
         <tr><td>Text</td><td>"Texte" or <kbd>T</kbd>, at the playhead</td><td>Position, duration, own colour and font ("Couleur et police")</td></tr>
-        <tr><td>Photo or video</td><td>"Média", or drop files on the timeline</td><td>Photos are placed where they were taken; videos (MP4, WebM, MOV, 50 MB and 30 s max) keep their sound</td></tr>
-        <tr><td>Music</td><td>"Options" › "Ajouter une musique…", or drop the file</td><td>Volume, fades, "Caler la durée du film sur la musique", "Caler sur le rythme"</td></tr>
+        <tr><td>Photo or video</td><td>"Média", or drop files on the timeline</td><td>Photos are placed where they were taken; videos (MP4, WebM, MOV, 50 MB max, added at 30 s at most and trimmable) keep their sound</td></tr>
+        <tr><td>Music</td><td>"Options" › "Ajouter une musique…", or drop the file (MP3, M4A, OGG, WAV, FLAC; 30 MB max)</td><td>Volume, fades, "Caler la durée du film sur la musique", "Caler sur le rythme"</td></tr>
         <tr><td>Speed section</td><td>"Vitesse", or right-click the track › "Accélérer / ralentir ici"</td><td>×0.25 to ×4; drag the block edges</td></tr>
         <tr><td>Camera framing</td><td>"Garder ce cadrage ici" ("Survol" tab)</td><td>Distance, tilt and aim; the camera moves smoothly between framings</td></tr>
       </tbody>
@@ -513,7 +513,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
     </div>
     <div>
       <h4>Several formats</h4>
-      <p>"Plusieurs formats" exports several format × resolution pairs, plus the still image and poster if wanted, in one go ("Tout exporter"). Chrome, Edge and the desktop app write them into one folder.</p>
+      <p>"Plusieurs formats" exports several format × resolution pairs, plus the still image and poster if wanted, in one go ("Tout exporter"). Chrome, Edge and the desktop app write them into one folder. There, "Un film par trace" with "Choisir le dossier des traces…" makes the films for every GPX or FIT file of a folder.</p>
     </div>
     <div>
       <h4>Poster</h4>

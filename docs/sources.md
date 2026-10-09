@@ -22,7 +22,11 @@ are added when the weather or the landmarks are loaded. The same lines are burne
 ([README, "Licenses"](../README.md#licenses)).
 
 The optional Strava import is not one of these sources: it reads your own activities through your own Strava
-application ([user guide](user-guide.html#import)). No Strava key or account is in the code.
+application ([user guide](user-guide.html#import)). No Strava key or account is in the code. It goes through
+`www.strava.com` only (authorization, token, API v3) and falls under the [Strava API Agreement](https://www.strava.com/legal/api):
+the activities stay on the user's device, but the agreement restricts showing a user's Strava data to other people
+and asks for Strava branding ("Powered by Strava") in applications distributed publicly. **To be reviewed** before
+sharing a film made from a Strava activity or distributing the application widely.
 
 | Source | License | Note |
 |---|---|---|
