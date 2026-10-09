@@ -760,12 +760,18 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   kept). `followStops(before, after, clockOf, clockBefore?)` runs on every edit of the film (`editFilm`, the timeline's
   `commit` and `change`, the draft of a gesture), on "Ralentir et titrer aux repères" (`setLandmarkTitles`) and on
   the flyover duration and pacing (`setFlightTiming`: the setting and the film in one change, `clockBefore` = the clock
-  before it): an item the edit did not move itself keeps its offset to the start of the hold (an
+  before it; their "Par défaut": `followFlightTiming` inside the `resetSettings` step) and when the first track's
+  landmarks are published again (`followLandmarks` from the `LandmarkPanel` effect, `clockBefore` = the clock with the
+  landmarks published before, since the pacing slows down at landmarks; not an undo step, landmarks are not an edit):
+  an item the edit did not move itself keeps its offset to the start of the hold (an
   item fitted to the hold stays fitted, stretched with the stop) when the stop moves in film time (drag, position,
   duration, other stop, speed portions, shots); an item whose stop is no longer one of the film's own stops (deleted,
   "Arrêts automatiques" checked again) becomes free where it is; moving the attached item changes its offset.
   Inspector: "Attaché à : Aucun arrêt / <arrêt>" (attached to: no stop / a stop) for a text, a photo or a video
-  (attaching to a generated stop writes the stops out first; one undo step).
+  (attaching to a generated stop writes the stops out first; one undo step). Landmarks and stops: the generated stops
+  follow the landmarks but carry nothing; written out, a stop keeps its meters and only its film time moves with the
+  slow-downs. Landmarks are not saved but fetched again: the first ones published for a track (project opened, track
+  imported) move nothing, the film was saved with the times they gave.
 - **Selection**: `filmSelection` in the store (added at the end of the state, neither saved nor undoable), set by a press or
   focus on a block and by additions (`editFilm` selects the new block), cleared by Esc, closing
   the inspector, a deletion, or when the block no longer exists (undo, other track, generated stops moved:
@@ -927,10 +933,9 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   portrait photo loses its top and bottom).
   Other limits: the 3D preview only
   follows a gesture on release; in `'temps-forts'` mode, the pacing's
-  "pause" slider does not set the duration of the generated stops (4 s, to adjust per stop); attached items only
-  follow a stop on edits of the film: changing the flyover duration, the pacing, the loaded landmarks or the landmark
-  titles moves the stops in time without them; only the film's own stops (not the generated ones while "Arrêts
-  automatiques" is checked) can carry items.
+  "pause" slider does not set the duration of the generated stops (4 s, to adjust per stop); only the film's own stops
+  (not the generated ones while "Arrêts automatiques" is checked) can carry items; landmarks loaded for the first time
+  after an edit made without them (landmarks off since the import) do not move attached items.
 
 ## Project (phase 4)
 

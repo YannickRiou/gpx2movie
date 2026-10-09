@@ -5,9 +5,11 @@ import { filmClockFor } from '../film/clock'
 import type { FilmClock, FilmClockFor } from '../film/clock'
 import type { Film } from '../film/model'
 import { followStops } from '../film/timeline'
+import type { Landmark } from '../osm/landmarks'
 import { useLandmarkStore } from '../osm/store'
 import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
+import type { Settings } from '../state/store'
 
 /** What the film clock is computed from: first track, film, flyover duration, pacing, landmarks (from the stores). */
 export function useFilmSource(): FilmClockFor {
@@ -80,6 +82,53 @@ export function setFlightTiming(patch: Partial<Pick<FilmClockFor, 'durationS' | 
   const { settings } = useAppStore.getState()
   const { durationS = settings.flyoverDurationS, pacing = settings.pacing } = patch
   useAppStore.setState({ settings: { ...settings, flyoverDurationS: durationS, pacing, film } })
+}
+
+/**
+ * After the flyover duration or the pacing of the stores changed from `before` (« Par défaut » of « Durée et rythme »,
+ * `resetSettings`), the texts and media attached to a stop follow it (`followStops`), in the same undo step.
+ */
+export function followFlightTiming(before: Pick<Settings, 'flyoverDurationS' | 'pacing'>): void {
+  const source = getFilmSource()
+  if (source.durationS === before.flyoverDurationS && source.pacing === before.pacing) return
+  const film = followStops(
+    source.film,
+    source.film,
+    (f) => filmClockFor({ ...source, film: f }),
+    (f) => filmClockFor({ ...source, durationS: before.flyoverDurationS, pacing: before.pacing, film: f }),
+  )
+  if (film !== source.film) useAppStore.getState().setSetting('film', film)
+}
+
+/** Landmarks of the first track the film was last in line with (null: none published for that track yet). */
+let followedLandmarks: { trackId: string | undefined; landmarks: readonly Landmark[] | null } = { trackId: undefined, landmarks: null }
+
+/**
+ * The landmarks of the first track published again (`LandmarkPanel`): the slow-downs of the pacing at landmarks move
+ * the stops in film time, and the texts and media attached to a stop follow them (`followStops`) from the landmarks
+ * published before. Not an undo step: loading landmarks is not an edit. Not on the first landmarks of a track (project
+ * opened, track imported): landmarks are not saved but fetched again, and a film was saved with the times of its own.
+ */
+export function followLandmarks(): void {
+  const source = getFilmSource()
+  const trackId = source.track?.id
+  const previous = followedLandmarks.trackId === trackId ? followedLandmarks.landmarks : null
+  // once a track had landmarks, none (turned off) is a change too
+  followedLandmarks = { trackId, landmarks: source.landmarks ?? (previous && []) }
+  if (!previous || previous === source.landmarks) return
+  const film = followStops(
+    source.film,
+    source.film,
+    (f) => filmClockFor({ ...source, film: f }),
+    (f) => filmClockFor({ ...source, landmarks: previous, film: f }),
+  )
+  if (film === source.film) return
+  const resume = getSettingsHistory().suspend()
+  try {
+    useAppStore.getState().setSetting('film', film)
+  } finally {
+    resume()
+  }
 }
 
 /** Film time at which the marker passes a distance along the first track of `source`, in a given film (flight only). */

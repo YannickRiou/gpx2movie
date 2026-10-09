@@ -2,7 +2,7 @@ import { useEffect, useId } from 'react'
 import { KIND_BADGES, KIND_LABELS, LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { OSM_ATTRIBUTION, OSM_KINDS } from '../osm/overpass'
 import { syncLandmarks, useLandmarkStore } from '../osm/store'
-import { setLandmarkTitles } from '../scene/usePacing'
+import { followLandmarks, setLandmarkTitles } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { Icon } from './icons'
 import { PanelSection } from './PanelSection'
@@ -34,6 +34,7 @@ export function LandmarkPanel() {
 
   // not on a change of the film: an undone title stays undone until the landmarks change
   useEffect(() => {
+    followLandmarks()
     if (landmarks && useAppStore.getState().settings.film.landmarkTitles) setLandmarkTitles(true)
   }, [landmarks])
 
