@@ -31,7 +31,7 @@ import { panelColorOf, resolveOverlayTheme, toHex } from '../overlay/themes'
 import { getPlatform } from '../platform'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
-import { formatNumber } from './format'
+import { formatNumber, formatPercent } from './format'
 import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
 
 const COUNTER_LABELS: Record<CounterId, string> = {
@@ -45,7 +45,7 @@ const COUNTER_LABELS: Record<CounterId, string> = {
 
 type WidgetKey = Exclude<keyof OverlaySettings, 'enabled' | 'style' | 'overrides'>
 
-const percent = (v: number) => `${formatNumber(v * 100)} %`
+const percent = formatPercent
 
 function TextField({ label, value, placeholder, onChange }: { label: string; value: string; placeholder?: string; onChange(v: string): void }) {
   const id = useId()

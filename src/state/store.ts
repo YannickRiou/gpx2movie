@@ -21,6 +21,7 @@ import type { MarkerSettings, TrackStyle } from '../scene/markerSettings'
 import type { TrackColorBy } from '../flyover/trackColor'
 import { centroid } from '../geo/lonLat'
 import { DEFAULT_LANDMARK_SETTINGS } from '../osm/landmarks'
+import { DEFAULT_LABELS } from '../scene/labelModel'
 import { DEFAULT_WATER } from '../osm/water'
 import type { WaterSettings } from '../osm/water'
 import type { LandmarkSettings } from '../osm/landmarks'
@@ -189,7 +190,7 @@ export const DEFAULT_SETTINGS: Settings = {
   flyoverDurationS: DEFAULT_FLYOVER_DURATION_S,
   pacing: DEFAULT_PACING,
   film: DEFAULT_FILM,
-  labels: { climbs: true, waypoints: true, kmStep: 0, endpoints: false, photos: false, size: 1, rangeKm: 70 },
+  labels: DEFAULT_LABELS,
   weather: { enabled: true },
   weatherScene: DEFAULT_WEATHER_SCENE,
   haze: 0,

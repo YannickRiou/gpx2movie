@@ -11,7 +11,7 @@ import { HAZE_RANGE } from '../weather/sceneWeather'
 import { useWeatherStore } from '../weather/store'
 import { GradingPanel } from './GradingPanel'
 import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
-import { formatNumber } from './format'
+import { formatNumber, formatPercent } from './format'
 
 const ZOOM_OFFSETS: { value: Settings['imageryZoomOffset']; label: string }[] = [
   { value: 0, label: 'Normal' },
@@ -30,7 +30,6 @@ const EXPOSURE_EV_STEP = 0.5
 const WEATHER_STRENGTH_STEP = 0.05
 
 /** 0.75 -> "75 %" */
-const formatPercent = (v: number) => `${formatNumber(v * 100)} %`
 
 /** 0.5 -> "+0,5 IL" */
 function formatEv(ev: number): string {
@@ -591,7 +590,7 @@ export function SettingsPanel() {
             label="Brume"
             {...HAZE_RANGE}
             value={settings.haze}
-            format={(v) => (v === 0 ? 'Aucune' : `${formatNumber(v * 100)} %`)}
+            format={(v) => (v === 0 ? 'Aucune' : formatPercent(v))}
             onChange={(haze) => setSetting('haze', haze)}
           />
         )}

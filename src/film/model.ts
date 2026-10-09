@@ -23,6 +23,7 @@
  * the export. Ids are stable (`stop-3`, `text-1`, `auto-4520` for a generated stop) so the timeline can select
  * an item across edits. Pure module (no DOM, no React, no Three, no store).
  */
+import { isRecord, oneOf } from '../core/guards'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { OVERLAY_ANCHORS, OVERLAY_FONT_IDS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN, isHexColor } from '../overlay/settings'
 import type { OverlayAnchor, OverlayFontId } from '../overlay/settings'
@@ -335,8 +336,6 @@ export function nextFilmId(film: Film, kind: FilmItemKind): string {
 // ---------------------------------------------------------------------------
 
 const within = (v: unknown, min: number, max: number) => typeof v === 'number' && v >= min && v <= max
-const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
-const oneOf = (list: readonly string[], v: unknown) => typeof v === 'string' && list.includes(v)
 const optionalString = (v: unknown) => v === undefined || typeof v === 'string'
 const isId = (v: unknown) => typeof v === 'string' && v !== ''
 

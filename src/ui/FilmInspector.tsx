@@ -38,7 +38,7 @@ import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MI
 import type { OverlayAnchor } from '../overlay/settings'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
-import { formatDegrees, formatDistance, formatNumber } from './format'
+import { formatDegrees, formatDistance, formatNumber, formatPercent } from './format'
 import { Icon } from './icons'
 import { FilmTextStyleFields } from './OverlayPanel'
 import { RangeField } from './PanelSection'
@@ -74,7 +74,7 @@ const km = (m: number) => Math.round(m / 10) / 100
 
 const seconds = (s: number) => `${formatNumber(s, Number.isInteger(s) ? 0 : 1)} s`
 const VOLUME_RANGE = { min: 0, max: 1, step: 0.01 }
-const percent = (v: number) => `${Math.round(v * 100)} %`
+const percent = formatPercent
 const FADE_SLIDER = { min: FADE_RANGE.min, max: 10, step: FADE_RANGE.step }
 
 

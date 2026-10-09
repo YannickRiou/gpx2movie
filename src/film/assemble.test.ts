@@ -5,7 +5,6 @@ import type { PacingSettings } from '../flyover/pacing'
 import { buildTrack } from '../import/stats'
 import type { Landmark } from '../osm/landmarks'
 import {
-  assembleFilm,
   autoStopId,
   autoStops,
   filmStops,
@@ -101,9 +100,9 @@ describe('autoStops (temps-forts: new films)', () => {
   })
 })
 
-describe('assembleFilm', () => {
+describe('materializeStops on the default film', () => {
   it('default shots, generated stops written out, valid', () => {
-    const film = assembleFilm({ track, landmarks, pacing: ON })
+    const film = materializeStops(DEFAULT_FILM, { track, landmarks, pacing: ON })
     expect(film.opening).toEqual(DEFAULT_FILM.opening)
     expect(film.closing).toEqual(DEFAULT_FILM.closing)
     expect(film.autoStops).toBe(false)

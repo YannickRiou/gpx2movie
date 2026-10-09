@@ -3,6 +3,7 @@
  * (the look before these settings existed), ranges, French labels, and the checks and upgrades used by the
  * project document. Pure: no Three.js, no DOM, so the store and the interface can import it cheaply.
  */
+import { inRange, oneOf, withDefaults } from '../core/guards'
 
 // ---------------------------------------------------------------------------
 // Track style
@@ -90,21 +91,14 @@ export const MARKER_FIGURE_LABELS: Record<MarkerFigure, string> = {
 // Project document: value checks (the JSON shape is checked against the defaults) and upgrades
 // ---------------------------------------------------------------------------
 
-const within = (v: number, range: { min: number; max: number }) => v >= range.min && v <= range.max
-const oneOf = (list: readonly string[], v: string) => list.includes(v)
 
 export function isValidTrackStyle(style: TrackStyle): boolean {
-  return within(style.width, TRACK_WIDTH_RANGE) && oneOf(TRACK_DASHES, style.dash)
+  return inRange(style.width, TRACK_WIDTH_RANGE) && oneOf(TRACK_DASHES, style.dash)
 }
 
 export function isValidMarker(marker: MarkerSettings): boolean {
   const image = marker.image === '' || (marker.image.startsWith('data:image/') && marker.image.length <= MARKER_IMAGE_MAX_CHARS)
-  return oneOf(MARKER_KINDS, marker.kind) && oneOf(MARKER_FIGURES, marker.figure) && image && within(marker.size, MARKER_SIZE_RANGE)
-}
-
-/** Keys of `defaults` missing from `raw` taken from `defaults` (a setting saved before a field was added). */
-function withDefaults<T extends object>(defaults: T): (raw: unknown) => unknown {
-  return (raw) => (raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? { ...defaults, ...raw } : raw)
+  return oneOf(MARKER_KINDS, marker.kind) && oneOf(MARKER_FIGURES, marker.figure) && image && inRange(marker.size, MARKER_SIZE_RANGE)
 }
 
 export const withTrackStyleDefaults = withDefaults(DEFAULT_TRACK_STYLE)

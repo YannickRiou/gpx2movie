@@ -12,9 +12,9 @@ import { addCameraKey } from '../film/timeline'
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { PACING_RANGES } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
-import { editFilm, usePacing } from '../scene/usePacing'
+import { editFilm, useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
-import { formatDegrees, formatDistance, formatNumber } from './format'
+import { formatDegrees, formatDistance, formatNumber, formatPercent, formatSecondsShort } from './format'
 import { Icon } from './icons'
 import type { IconName } from './icons'
 import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
@@ -58,7 +58,7 @@ interface PacingSlider {
 }
 
 const PACING_SLIDERS: PacingSlider[] = [
-  { key: 'slowFactor', label: 'Vitesse aux temps forts', format: (v) => `${formatNumber(v * 100)} %` },
+  { key: 'slowFactor', label: 'Vitesse aux temps forts', format: formatPercent },
   {
     key: 'windowM',
     label: 'Longueur du ralenti',
@@ -94,7 +94,7 @@ export function CameraPanel() {
   const camera = useAppStore((s) => s.settings.camera)
   const durationS = useAppStore((s) => s.settings.flyoverDurationS)
   const pacing = useAppStore((s) => s.settings.pacing)
-  const film = usePacing()
+  const film = useFilmClock()
   const stopCount = film.stops.length
   const setSetting = useAppStore((s) => s.setSetting)
   const id = useId()
@@ -312,7 +312,7 @@ export function CameraPanel() {
           label="Transitions"
           {...PACING_RANGES.transitionS}
           value={pacing.transitionS}
-          format={(v) => `${formatNumber(v, 2)} s`}
+          format={formatSecondsShort}
           onChange={(transitionS) => updatePacing({ transitionS })}
         />
         <p className="field__hint">Durée des changements de vitesse : entrée et sortie des arrêts, des pauses et des portions de vitesse.</p>

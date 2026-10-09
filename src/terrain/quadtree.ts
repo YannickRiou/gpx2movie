@@ -82,10 +82,6 @@ export class TileNode {
     this.resetBounds()
   }
 
-  get depth(): number {
-    return this.key.z
-  }
-
   /** Create the four children on first use. */
   ensureChildren(): readonly [TileNode, TileNode, TileNode, TileNode] {
     if (!this.children) {

@@ -201,7 +201,7 @@ function PresetSection() {
       </h2>
 
       <p className="field__hint">
-        Tous les réglages, ou une seule famille (style de carte, trace, habillage, prise de vue) à appliquer sans toucher au reste ; jamais les traces, arrêts, textes ni photos. Gardés {getPlatform().capabilities.isDesktop ? 'sur cet ordinateur' : 'dans ce navigateur'}.
+        Tous les réglages ou une seule famille (carte, trace, habillage, prise de vue), sans traces, arrêts, textes ni photos. Gardés {getPlatform().capabilities.isDesktop ? 'sur cet ordinateur' : 'dans ce navigateur'}.
       </p>
 
       {presets.length === 0 ? (

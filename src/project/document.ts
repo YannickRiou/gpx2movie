@@ -8,6 +8,7 @@
  * validated (against the type of its default) and restored without touching this file. Add an entry
  * to `SETTING_CHECKS` only when a value of the right type can still be invalid (enum, catalogue id, range).
  */
+import { isRecord } from '../core/guards'
 import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'
 import { sanitizeMediaTable, usedMedia } from '../film/media'
 import type { MediaTable } from '../film/media'
@@ -144,9 +145,6 @@ export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unkno
   pacing: withPacingDefaults,
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
 
 /** True when `value` has the JSON shape of `reference` (finite numbers, same keys for objects). */
 function sameShape(value: unknown, reference: unknown): boolean {

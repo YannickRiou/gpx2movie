@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatPercent,
+  formatSecondsShort,
   formatAscent,
   formatDistance,
   formatDistanceGap,
@@ -85,5 +87,14 @@ describe('formatDistanceGap', () => {
     expect(formatDistanceGap(1234)).toBe('+1,2 km')
     expect(formatDistanceGap(0.3)).toBe('0 m')
     expect(formatDistanceGap(Number.POSITIVE_INFINITY)).toBe('–')
+  })
+})
+
+describe('formatPercent / formatSecondsShort', () => {
+  it('formats a share and seconds with only the decimals they need', () => {
+    expect(formatPercent(0.35)).toBe('35 %')
+    expect(formatSecondsShort(1.5)).toBe('1,5 s')
+    expect(formatSecondsShort(1.25)).toBe('1,25 s')
+    expect(formatSecondsShort(2)).toBe('2 s')
   })
 })
