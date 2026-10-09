@@ -197,6 +197,22 @@ export interface RegionState {
 export const useRegionStore = create<RegionState>()(() => ({ key: null, status: 'idle', region: null, frame: null }))
 
 let controller: AbortController | null = null
+/** `holdRegion`: an answer arriving meanwhile waits in `heldAnswer` */
+let holding = false
+let heldAnswer: Partial<RegionState> | null = null
+
+/**
+ * While the video export renders (`holdRegion(true)` at its start, false at its end), a region answer arriving is
+ * kept aside and applied afterwards: the export camera and the highlight keep the region they started with (none if
+ * it was still loading), the framing never changes in the middle of a film.
+ */
+export function holdRegion(hold: boolean): void {
+  holding = hold
+  if (hold || !heldAnswer) return
+  const answer = heldAnswer
+  heldAnswer = null
+  useRegionStore.setState(answer)
+}
 
 /**
  * Bring the region in line with the track box shown and whether a shot highlights it: fetched once per box (cached),
@@ -207,19 +223,20 @@ export function syncRegion(track: LonLatBounds | null, wanted: boolean, fetch = 
   if (useRegionStore.getState().key === key) return
   controller?.abort()
   controller = null
+  heldAnswer = null
   if (!track || key === null) {
     useRegionStore.setState({ key: null, status: 'idle', region: null, frame: null })
     return
   }
   const ctrl = (controller = new AbortController())
   useRegionStore.setState({ key, status: 'loading', region: null, frame: null })
+  const answer = (state: Partial<RegionState>) => {
+    if (controller !== ctrl) return
+    if (holding) heldAnswer = state
+    else useRegionStore.setState(state)
+  }
   fetch(track, ctrl.signal).then(
-    (region) => {
-      if (controller !== ctrl) return
-      useRegionStore.setState({ status: region ? 'ready' : 'none', region, frame: region ? regionFrame(region) : null })
-    },
-    () => {
-      if (controller === ctrl) useRegionStore.setState({ status: 'error' })
-    },
+    (region) => answer({ status: region ? 'ready' : 'none', region, frame: region ? regionFrame(region) : null }),
+    () => answer({ status: 'error' }),
   )
 }
