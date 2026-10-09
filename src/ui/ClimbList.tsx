@@ -77,6 +77,10 @@ export function ClimbList() {
           />
           Départ et arrivée
         </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={labels.photos} onChange={(e) => setSetting('labels', { ...labels, photos: e.currentTarget.checked })} />
+          Photos, là où elles ont été prises
+        </label>
         <label className="field">
           <span className="field__label">Bornes kilométriques</span>
           <select

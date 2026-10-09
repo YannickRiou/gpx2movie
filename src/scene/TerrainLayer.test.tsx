@@ -76,7 +76,7 @@ describe('engine options from settings', () => {
     flyoverDurationS: 60,
     pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true, transitionS: 1.5 },
     film: DEFAULT_FILM,
-    labels: { climbs: true, waypoints: true, kmStep: 0, endpoints: false, size: 1, rangeKm: 70 },
+    labels: { climbs: true, waypoints: true, kmStep: 0, endpoints: false, photos: false, size: 1, rangeKm: 70 },
     weather: { enabled: true },
     weatherScene: { enabled: true, strength: 1 },
     haze: 0,

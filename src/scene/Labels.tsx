@@ -19,6 +19,7 @@ import { useFrame } from '@react-three/fiber'
 import { CanvasTexture, Group, type Camera, LinearFilter, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three'
 import type { LocalFrame, TerrainEngine } from '../core/types'
 import { registerDrapeFlush, useExportStore } from '../export/store'
+import { useMediaStore } from '../film/media'
 import type { PoiIcon } from '../film/model'
 import { climbsOf } from '../flyover/climbs'
 import { cardOpacityAt, overlayTime } from '../overlay/draw'
@@ -30,6 +31,7 @@ import {
   climbLabels,
   kmLabels,
   endpointLabels,
+  photoLabels,
   distanceFade,
   labelOpacity,
   lineOfSightClearance,
@@ -274,6 +276,8 @@ export function Labels() {
   const show = useAppStore((s) => s.settings.labels)
   const exaggeration = useAppStore((s) => s.settings.exaggeration)
   const pois = useAppStore((s) => s.settings.film.pois)
+  const media = useAppStore((s) => s.settings.film.media)
+  const table = useMediaStore((s) => s.table)
   const sources = useLabelSources((s) => s.sources)
   const { engine, frame } = useTerrainContext()
 
@@ -290,10 +294,11 @@ export function Labels() {
     if (show.waypoints) out.push(...waypointLabels(tracks))
     if (first) out.push(...kmLabels(first, show.kmStep))
     if (show.endpoints && first) out.push(...endpointLabels(first))
+    if (show.photos) out.push(...photoLabels(media, table))
     out.push(...poiLabels(pois))
     out.push(...externalLabels(sources))
     return out
-  }, [tracks, show, pois, sources])
+  }, [tracks, show, pois, media, table, sources])
 
   // Redraw the textures once the web font is available (the first ones may use the fallback font).
   useEffect(() => {
