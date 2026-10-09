@@ -3,10 +3,12 @@
  * film time, the camera settings and the terrain sampler. No smoothing state from frame to frame, so a given
  * progress and film time always give the same image: the video export can render any frame on its own.
  *
- * Every style places the camera on a sphere around the marker (horizontal direction, pitch, distance), then
- * raises it to keep MIN_GROUND_CLEARANCE_M above the ground and the sight line to the marker above the relief.
- * Each term is continuous in the progress and the film time, so the camera never jumps. The time-based motions
- * (orbit, cinematic swing) follow the film time, so they keep moving while the pacing holds the progress.
+ * Every style places the camera on a sphere around the aim point (above the marker, at the smoothed ground
+ * height), then raises it to keep MIN_GROUND_CLEARANCE_M above the smoothed ground and the sight line to the aim
+ * above the relief. The heights are read from terrain samples that stay put while the marker moves (fixed track
+ * distances, a fixed grid), so the camera follows the relief without riding each bump. Each term is continuous in
+ * the progress and the film time, so the camera never jumps. The time-based motions (orbit, cinematic swing)
+ * follow the film time, so they keep moving while the pacing holds the progress.
  */
 import { Vector3 } from 'three'
 import { clamp, lastIndexAtOrBelow } from '../core/math'
@@ -30,11 +32,27 @@ export const CHASE_DISTANCE_MAX_M = 4_000
 /** Pitch limits whatever the settings: under 2° the sight line grazes the relief, at 90° lookAt is undefined. */
 export const PITCH_MIN_DEG = 2
 export const PITCH_MAX_DEG = 88
-/** The camera never goes closer than this to the (exaggerated) ground below it (metres). */
+/** The camera never goes closer than this to the smoothed (exaggerated) ground below it (metres). */
 export const MIN_GROUND_CLEARANCE_M = 80
+/** Whatever the smoothing, the camera never goes closer than this to the actual (exaggerated) terrain below it. */
+export const MIN_TERRAIN_CLEARANCE_M = 40
+/** The clearance floor takes over from the free height over this band (smooth maximum, at most a quarter above). */
+export const CLEARANCE_EASE_M = 80
 /**
- * Terrain samples along the sight line camera → marker (fractions 0 .. LINE_OF_SIGHT_MAX_FRACTION); the
- * clearance tapers from MIN_GROUND_CLEARANCE_M under the camera to 0 at the marker.
+ * Ground smoothing radius = this fraction of the heading window (× `smoothing` too), at most GROUND_WINDOW_MAX_M:
+ * the aim height is the tent-weighted mean of the terrain along the track over ± this radius, and the clearance
+ * rules read the terrain on a grid of this cell size. Scaled like the heading window, so with the track length and
+ * the marker's step per frame: a frame slides the weights by the same small share (37.5 m for a track under
+ * 7.5 km at smoothing 1). Capped so a valley or a ridge narrower than a cell does not shift the ground much; the
+ * tracks that reach the cap (over 30 km) are seen from 1.2 km or more, where a few metres of bobbing no longer show.
+ */
+export const GROUND_WINDOW_FRACTION = 0.25
+export const GROUND_WINDOW_MAX_M = 150
+/** Aim height: terrain samples on each side of the marker, at multiples of radius / this along the track. */
+export const GROUND_SAMPLES_PER_SIDE = 4
+/**
+ * Terrain samples along the sight line camera → aim (fractions 0 .. LINE_OF_SIGHT_MAX_FRACTION); the
+ * clearance tapers from MIN_GROUND_CLEARANCE_M under the camera to 0 at the aim.
  */
 export const LINE_OF_SIGHT_SAMPLES = 12
 export const LINE_OF_SIGHT_MAX_FRACTION = 0.9
@@ -60,6 +78,7 @@ const NORTH = new Vector3(0, 0, -1)
 const _behind = new Vector3()
 const _ahead = new Vector3()
 const _sight = new Vector3()
+const _corner = new Vector3()
 
 // ---------------------------------------------------------------------------
 // Path measures
@@ -131,9 +150,14 @@ export function smoothedTurn(path: TrackPath, d: number, window: number): number
 // ---------------------------------------------------------------------------
 
 export interface CameraView {
-  /** marker position on the draped track, local frame */
+  /** look-at point, local frame (flight: above the marker, at the smoothed ground height) */
   target: Vector3
   position: Vector3
+}
+
+export interface FlightView extends CameraView {
+  /** marker position on the draped track, local frame */
+  marker: Vector3
 }
 
 export interface CameraViewOptions {
@@ -209,11 +233,13 @@ function placement(
 }
 
 /**
- * Camera view at `progress` along `path` and film time `options.timeS`. The camera looks along the reference
- * direction rotated by the view angle, from `distance` away at `pitch` above the horizon; it is then raised
- * (pitch steepens) to stay MIN_GROUND_CLEARANCE_M above the terrain and until the sight line to the marker clears
- * the terrain between.
- * Heights: terrain sample, else recorded elevation, else 0; times `exaggeration`.
+ * Camera view at `progress` along `path` and film time `options.timeS`. The camera looks at the aim point along
+ * the reference direction rotated by the view angle, from `distance` away at `pitch` above the horizon; it is then
+ * raised (pitch steepens) to stay MIN_GROUND_CLEARANCE_M above the smoothed terrain (MIN_TERRAIN_CLEARANCE_M above
+ * the actual terrain) and until the sight line to the aim clears the terrain between.
+ * Aim = marker x / z at the smoothed ground height (`trackGround`, at least the grid ground the clearance reads,
+ * so the sight line ends above it) + `liftM`. Heights: terrain sample, else recorded elevation, else 0; times
+ * `exaggeration`.
  */
 export function computeCameraView(
   path: TrackPath,
@@ -221,7 +247,7 @@ export function computeCameraView(
   frame: LocalFrame,
   sample: HeightSampler | null,
   options: CameraViewOptions,
-): CameraView {
+): FlightView {
   const { exaggeration, liftM, camera = DEFAULT_CAMERA, durationS = DEFAULT_FLYOVER_DURATION_S } = options
   const p = clamp(progress, 0, 1)
   const timeS = options.timeS ?? p * durationS
@@ -229,13 +255,69 @@ export function computeCameraView(
 
   const at = samplePath(path, d)
   const ground = (sample?.(at.lon, at.lat) ?? at.ele ?? 0) * exaggeration
-  const target = frame.toLocal(at.lon, at.lat, ground + liftM)
+  const marker = frame.toLocal(at.lon, at.lat, ground + liftM)
+  const cellM = Math.min(headingWindowM(path) * camera.smoothing * GROUND_WINDOW_FRACTION, GROUND_WINDOW_MAX_M)
+  const gridAtMarker = sample ? gridGround(marker.x, marker.z, cellM, frame, sample) : undefined
+  const aimGround = Math.max(trackGround(path, d, cellM, sample), gridAtMarker ?? -Infinity) * exaggeration
+  const target = frame.toLocal(at.lon, at.lat, aimGround + liftM)
 
   const place = placement(path, d, timeS, frame, camera)
   place.viewAngle += options.orbitRad ?? 0
   const position = positionAround(target, place)
-  if (sample) position.y = lowestClearY(position, target, frame, sample, exaggeration)
-  return { target, position }
+  if (sample) position.y = lowestClearY(position, target, frame, sample, exaggeration, cellM)
+  return { target, position, marker }
+}
+
+/**
+ * Ground height (metres, not exaggerated) under the track around `d`: the tent-weighted mean over
+ * ]d - radiusM, d + radiusM[ of the terrain at fixed track distances (multiples of radiusM / GROUND_SAMPLES_PER_SIDE).
+ * The samples stay put while the marker moves, only their weights slide: the mean follows the relief, not the
+ * bumps under the marker, and a finer tile arriving shifts it by a fraction. Terrain, else recorded elevation, else 0.
+ */
+function trackGround(path: TrackPath, d: number, radiusM: number, sample: HeightSampler | null): number {
+  const step = radiusM / GROUND_SAMPLES_PER_SIDE
+  let sum = 0
+  let weight = 0
+  for (let k = Math.floor((d - radiusM) / step) + 1; k * step < d + radiusM; k++) {
+    const w = 1 - Math.abs(k * step - d) / radiusM
+    const at = samplePath(path, k * step)
+    sum += w * (sample?.(at.lon, at.lat) ?? at.ele ?? 0)
+    weight += w
+  }
+  return sum / weight
+}
+
+/**
+ * Ground height (metres, not exaggerated) at local (x, z), bilinear between the terrain at the corners of its cell
+ * in a fixed `cellM` grid of the local frame: the corners stay put while the camera moves, so the height follows
+ * the relief with a bounded slope, never each bump. Exact on a plane; a bump narrower than the cell can rise above
+ * it (hence MIN_TERRAIN_CLEARANCE_M), a cliff is softened over a cell. Undefined without terrain there.
+ */
+function gridGround(x: number, z: number, cellM: number, frame: LocalFrame, sample: HeightSampler): number | undefined {
+  const i = Math.floor(x / cellM)
+  const j = Math.floor(z / cellM)
+  const tx = x / cellM - i
+  const tz = z / cellM - j
+  let sum = 0
+  let weight = 0
+  for (let ci = 0; ci <= 1; ci++) {
+    for (let cj = 0; cj <= 1; cj++) {
+      const w = (ci ? tx : 1 - tx) * (cj ? tz : 1 - tz)
+      if (w <= 0) continue
+      const at = frame.toLonLat(_corner.set((i + ci) * cellM, 0, (j + cj) * cellM))
+      const h = sample(at.lon, at.lat)
+      if (h === undefined) continue
+      sum += w * h
+      weight += w
+    }
+  }
+  return weight > 0 ? sum / weight : undefined
+}
+
+/** max(a, b) eased over a band of `k`: never below the larger, at most k / 4 above it, with no kink. */
+function smoothMax(a: number, b: number, k: number): number {
+  const h = Math.max(0, k - Math.abs(a - b)) / k
+  return Math.max(a, b) + (h * h * k) / 4
 }
 
 /** Camera on the sphere around `target` given by the placement (pitch clamped to PITCH_MIN_DEG..PITCH_MAX_DEG). */
@@ -253,20 +335,35 @@ function positionAround(target: Vector3, { reference, viewAngle, pitchDeg, dista
 
 /**
  * Lowest camera height (local y, at least `position.y`) that keeps the sight line to `target` above the
- * (exaggerated) terrain: the line at fraction f (0 = camera) has height y + (target.y - y) · f and must clear the
- * ground there by MIN_GROUND_CLEARANCE_M · (1 - f).
+ * (exaggerated) grid ground (`gridGround`): the line at fraction f (0 = camera) has height y + (target.y - y) · f
+ * and must clear the ground there by MIN_GROUND_CLEARANCE_M · (1 - f). The floor is eased in (`smoothMax`), then
+ * the camera is kept MIN_TERRAIN_CLEARANCE_M above the actual terrain below it.
  */
-function lowestClearY(position: Vector3, target: Vector3, frame: LocalFrame, sample: HeightSampler, exaggeration: number): number {
-  let minY = position.y
+function lowestClearY(
+  position: Vector3,
+  target: Vector3,
+  frame: LocalFrame,
+  sample: HeightSampler,
+  exaggeration: number,
+  cellM: number,
+): number {
+  let floor = -Infinity
   for (let i = 0; i <= LINE_OF_SIGHT_SAMPLES; i++) {
     const f = (i / LINE_OF_SIGHT_SAMPLES) * LINE_OF_SIGHT_MAX_FRACTION
     _sight.lerpVectors(position, target, f).setY(target.y)
-    const at = frame.toLonLat(_sight)
-    const ground = sample(at.lon, at.lat)
+    const ground = gridGround(_sight.x, _sight.z, cellM, frame, sample)
     if (ground === undefined) continue
+    const at = frame.toLonLat(_sight)
     const clearance = MIN_GROUND_CLEARANCE_M * (1 - f)
     const floorY = frame.toLocal(at.lon, at.lat, ground * exaggeration + clearance, _sight).y
-    minY = Math.max(minY, (floorY - target.y * f) / (1 - f))
+    floor = Math.max(floor, (floorY - target.y * f) / (1 - f))
   }
-  return minY
+  let y = smoothMax(position.y, floor, CLEARANCE_EASE_M)
+  // a bump narrower than the grid cell
+  const below = frame.toLonLat(_sight.set(position.x, y, position.z))
+  const ground = sample(below.lon, below.lat)
+  if (ground !== undefined) {
+    y = Math.max(y, frame.toLocal(below.lon, below.lat, ground * exaggeration + MIN_TERRAIN_CLEARANCE_M, _sight).y)
+  }
+  return y
 }

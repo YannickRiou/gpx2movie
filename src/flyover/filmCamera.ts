@@ -405,7 +405,7 @@ export function computeFilmView(
   const orbitRad = stop?.camera === 'orbite' ? stopOrbitRad(stop.addedS, state.localS, state.lengthS) : 0
   const motionS = stop?.camera === 'fixe' ? heldMotionTimeS(stop, state.timeS) - clock.openingS : state.flightTimeS
   const flight = computeCameraView(path, progress, frame, sample, { ...flightOptions, camera, timeS: motionS, orbitRad })
-  if (state.phase !== 'opening' && state.phase !== 'closing') return { ...flight, marker: flight.target }
+  if (state.phase !== 'opening' && state.phase !== 'closing') return flight
 
   const shot = state.phase === 'opening' ? clock.opening : clock.closing
   const overview =
@@ -424,5 +424,5 @@ export function computeFilmView(
     state.phase === 'opening'
       ? blendViews(wide, flight, k, frame, sample, options.exaggeration)
       : blendViews(flight, wide, k, frame, sample, options.exaggeration)
-  return { ...view, marker: flight.target }
+  return { ...view, marker: flight.marker }
 }

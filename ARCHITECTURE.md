@@ -51,7 +51,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/marker*.ts` + `trackLineStyle.ts` | track and marker (see "Track and marker") | pure: `TrackStyle`, `DEFAULT_TRACK_STYLE`, `MarkerSettings`, `DEFAULT_MARKER`, `isValidTrackStyle`, `isValidMarker`, `withTrackStyleDefaults`, `withMarkerDefaults` (`markerSettings.ts`); `MARKER_FIGURE_PATHS`, `circlePath` (`markerFigures.ts`); `drawBadge`, `readableInk`, `squareCrop`, `fileToAvatarDataUrl`, `loadMarkerImage` (`markerBadge.ts`, 2D canvas); `markerBadge`, `badgeTexture`, `headsLeft`, `placeMarker`, `useMarkerImage`, `MARKER_SCREEN_FACTOR` (`markerSprite.ts`); `createGlowMaterial`, `applyDash`, `quantizedPixelSize`, `cumulativeDistances`, `cutAt`, `cutLine` (`trackLineStyle.ts`); `TrackMarkerSection` (`src/ui`) |
 | `src/flyover/path.ts` | flyover path | `buildTrackPath(track): TrackPath` (concatenated segments, cumulative distances, `time` in ms or NaN), `trackPathOf(track)` (same path, cached per track), `samplePath(path, distanceM): PathSample` (`ele` and `time` interpolated only if both neighbors have them), `recordedTimeAt(path, distanceM)` (fills points without a time), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)`, `pickProjectedPath(screen, distM, px, py, maxPx)` (point of the projected track closest to the pointer) |
 | `src/flyover/smooth.ts` | track smoothing (see "Track and marker") | `smoothPoints(points, windowM)`, `smoothTrack(track, windowM)`, `smoothedTrackPath(track, windowM)` (smoothed positions, recorded distances and times) |
-| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad? })`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
+| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad? })` → `{ target, position, marker }`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
 | `src/flyover/cameraSettings.ts` | camera styles and presets | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
 | `src/flyover/climbs.ts` | detected climbs | `detectClimbs`, `climbsOf(track)` (cached per track), exported thresholds, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | 3D labels | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`…; `setLabelSource(id, labels)` (prefixed, unique ids), `useLabelSources` |
@@ -371,6 +371,18 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   around the marker from the start heading), `top` (≥ 70°, distance × 2.5, north or heading up), `cinematic` (distance × 1.6,
   pitch / 2, lateral sweep ±35° with a 40 s period). All keep 80 m above the ground and a clear line of sight
   (13 samples); the tests check continuity in progress.
+  **Steady heights** (no frame-to-frame state, so preview and export stay identical): the heights are read from
+  terrain samples that stay put while the marker moves, so the camera follows the relief without riding each bump
+  or a sight-line sample (whose height counts up to 10× near the marker). Ground radius / cell r = w / 4, at most
+  150 m (37.5 m below a 7.5 km track at smoothing 1: scaled with the track, so with the marker's step per frame).
+  The camera looks at the aim point, not the marker (`marker`, on the draped track): marker x / z at
+  max(`trackGround`, grid ground) + lift; `trackGround` = tent-weighted mean of the terrain at fixed track
+  distances (multiples of r / 4, ≤ 8 samples) over ±r. Clearance rules (80 m under the camera, the sight line to the
+  aim) read the grid ground: bilinear between the terrain at the corners of a fixed r grid of the local frame (exact
+  on a plane, cliffs softened over a cell); the floor is eased in (smooth maximum over 80 m, at most 20 m above),
+  then the camera is kept `MIN_TERRAIN_CLEARANCE_M` (40 m) above the actual terrain below it (a bump narrower than a
+  cell). About 65 terrain samples per frame. On ±15 m bumps 30 m wide, the frame-to-frame height change drops from
+  3–35 m to 0.16 m on flat ground, the change of vertical speed from 1–70 m to under 2.5 m on hills.
 - **Camera settings**: `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp }` and named
   presets (`CAMERA_PRESETS`: Poursuite (chase), Hélicoptère (helicopter), Drone haut (high drone), Vue du dessus (top view), Orbite (orbit), Cinéma (cinema)) in
   `src/flyover/cameraSettings.ts`; `settings.flyoverDurationS` (15–600 s, 60 by default) = duration at ×1, the timeline
@@ -675,7 +687,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   speed, `CAMERA_KEY_EASE_S`), after the last, back the same way; elsewhere the film settings. Linear in distance and
   in pitch, aim along the shortest path. Style and smoothing remain those of the film. A function of progress
   alone: still during a stop, `filmViewMovesWithTime` unchanged.
-  The marker stays on the track (`view.marker`); the target does only during the flight.
+  The marker stays on the track (`view.marker`); the target is the flight's aim point (smoothed ground height
+  above the marker) during the flight.
 - **Shot transitions** (`transition` of the opening, at its end, and of the closing, at its start; "Transition" in the
   shot inspector): "Enchaîné" (continuous) = the continuous move above. "Coupe" (cut), "Fondu au noir" (fade to
   black), "Fondu au blanc" (fade to white): the shot holds its wide view (overview, or region view) and the camera cuts
