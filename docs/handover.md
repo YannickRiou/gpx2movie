@@ -149,22 +149,14 @@ Done (tests green, never seen on screen):
   deleted (`lib.rs`, `cancel_all` in `video.rs`).
 - Shared helpers: `core/errors.ts` (`errorMessage`), `clamp` from `core/math.ts` everywhere.
 
-**Interrupted 1 — locator map from very high up, region highlighted** (user's request: like the "Valais/Wallis" view
-of MapDirector: an almost top-down view of the whole administrative region of the outing, outside darkened, glowing
-white border, name of the region in the centre, orange dot at the outing, then the dive):
-
-- done: `src/osm/region.ts` (Overpass `is_in` then `out geom`, admin levels 4 to 6, the smallest region that contains
-  the track and is at least 5 times larger, rings stitched with `stitchRings`, simplified to 2,000 points, cache);
-  `regionDistanceM` / `regionView` rewritten in `src/flyover/filmCamera.ts` (start height "Région" / "Pays"
-  (region / country), `StartHeight`, 55–165 km for "Région", × 2.5 for "Pays", framing on the region's box); terrain
-  engine: wider area and zoom cap outside the corridor (`src/terrain/quadtree.ts`, `engine.ts`,
-  `src/scene/TerrainLayer.tsx`, `REGION_AREA_MARGIN_M`).
-- left: the `src/scene/RegionHighlight.tsx` rendering (named in `region.ts`, **not written yet**: darken outside the
-  region, glowing line, name, dot, fade during the dive, same in preview and export); calling `syncRegion` /
-  `useRegionStore` from the film (nothing does yet); the setting in the opening inspector ("Hauteur de départ" (start
-  height), "Mettre en avant la région" (highlight the region)); the OpenStreetMap credit when the region is shown;
-  the atmosphere seen from very high up (clouds cut above a certain height?); the user documentation (README,
-  `docs/tests-gpu.md`). `ARCHITECTURE.md` describes the camera part and what is missing.
+- **Region highlight** (was "Interrupted 1", finished on 9 October 2026; the user's reference: MapDirector's
+  "Valais/Wallis" view): shot inspector "Hauteur de départ" / "Hauteur de fin" and "Mettre en avant la région"
+  (`FilmShot.highlight`, off by default), `syncRegion` called by `src/scene/RegionHighlight.tsx` only while a shot
+  highlights the region, darkened outside, glowing border, name, orange dot, fading out during the dive
+  (`regionHighlightOpacity`), OpenStreetMap credit; details in `ARCHITECTURE.md` (Camera). 98 test files, 1,568 tests.
+  Seen only in headless Chromium without tiles (mocked Overpass): look, contrast on real imagery and loading of the
+  coarse tiles from very high up still to check on a GPU; the atmosphere seen from very high up (clouds?) was not
+  looked at.
 
 **Interrupted 2 — Strava import** (almost finished): `src/strava/api.ts` (authorization, token exchange and refresh,
 list of activities, GPS / time / altitude / sensor streams), `src/strava/track.ts` (streams → `Track`),
@@ -193,6 +185,9 @@ remain the source for each work item.
   atmosphere chain: SMAA, merged into the same pass as tone mapping, reads the pass input (image before
   aerial perspective and tone mapping) on detected edges; if light fringes appear on ridges,
   move it into its own pass.
+- Region highlight ("Depuis la région" › "Mettre en avant la région", sample in the Alps): the region's border on the
+  relief, readable name and dot, outside darkened but still legible, fade during the dive, same frames in a 1080p
+  export, "Pays" start height, 9:16.
 - Safe zones: button under "Recadrer" ("Reframe") (absent in "Libre" ("Free")), G, labels readable on a narrow preview, button
   strip in 9:16 and 4:5, 93% / 90% margins in 16:9, nothing in the export.
 
@@ -292,21 +287,17 @@ remain the source for each work item.
 
 ## Proposed next steps
 
-The roadmap is built except one feature. What remains:
+The roadmap is built. What remains:
 
-1. **Region highlight** (the only unfinished work item, "Interrupted 1" above): `src/scene/RegionHighlight.tsx`,
-   wiring `syncRegion` / `useRegionStore` to the film, "Hauteur de départ" ("Région" / "Pays") and "Mettre en avant
-   la région" in the opening inspector (`START_HEIGHT_LABELS` exists but is not shown), OpenStreetMap credit, docs.
-2. In the user's hands: tests on the machine with a GPU (`docs/tests-gpu.md`), command-line rendering once on a real
-   machine, Strava import on the website (done on the Windows desktop application), signing certificates if wanted, then a first `v0.1.0` tag (release published by
-   `desktop.yml`).
-3. Before a public release: decide on the Garmin FIT SDK license (see "Limits and open points").
-4. Extensions proposed and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only
-   export on the Linux desktop, a built-in openh264 encoder; the ported features' known limits (roadbook lists hidden
-   landmarks, smoothing not applied to ghost racers / labels / mini-map / poster).
-5. Polish from real use (`docs/roadmap.md`, last section): keep the free camera above the terrain; rethink the
-   start marker sphere.
-6. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+1. In the user's hands: tests on the machine with a GPU (`docs/tests-gpu.md`, region highlight included),
+   command-line rendering once on a real machine, Strava import on the website (done on the Windows desktop
+   application), signing certificates if wanted, then a first `v0.1.0` tag (release published by `desktop.yml`).
+2. Polish from real use still in progress (`docs/roadmap.md`, last section): sea of clouds in place of the manual
+   haze slider, steadier flyover camera (target height and ground clearance smoothed along the track).
+3. Extensions proposed and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only
+   export on the Linux desktop, a built-in openh264 encoder; heart rate from separate FIT `hr` messages (chest strap
+   in swim files), not read by the in-house FIT decoder.
+4. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.
