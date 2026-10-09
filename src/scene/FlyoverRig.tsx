@@ -21,6 +21,7 @@ import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
 import { frameDelta } from './renderOnDemand'
 import { headsLeft, LEAD_MARKER_COLORS, placeMarker, useMarkerImage } from './markerSprite'
+import { figureMotion } from './markerSettings'
 import { useFilmClock } from './usePacing'
 import { LINE_LIFT_M, type HeightSampler } from './TrackLines'
 
@@ -113,7 +114,8 @@ export function FlyoverRig() {
     // after the camera move: the figure faces the way the track runs in this very frame
     const look = { marker: settings.marker, image: markerImage, allowImage: true }
     const mirrored = settings.marker.kind === 'figurine' && headsLeft(path, progress * path.lengthM, view.marker, frame, camera)
-    placeMarker(marker, view.marker, camera, look, LEAD_MARKER_COLORS, mirrored, 1 / gl.toneMappingExposure)
+    const motion = settings.marker.kind === 'figurine' && settings.marker.animated ? figureMotion(timeS) : undefined
+    placeMarker(marker, view.marker, camera, look, LEAD_MARKER_COLORS, mirrored, 1 / gl.toneMappingExposure, motion)
   })
 
   // unlit and drawn over the terrain: readable on the track colour and on dark forest alike

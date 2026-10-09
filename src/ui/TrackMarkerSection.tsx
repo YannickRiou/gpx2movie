@@ -147,6 +147,12 @@ export function TrackMarkerSection() {
           onChange={(figure) => updateMarker({ figure })}
         />
       )}
+      {marker.kind === 'figurine' && (
+        <label className="checkbox">
+          <input type="checkbox" checked={marker.animated} onChange={(e) => updateMarker({ animated: e.currentTarget.checked })} />
+          Animer la figurine (pas et balancement)
+        </label>
+      )}
       {marker.kind === 'image' && <MarkerImageField marker={marker} update={updateMarker} />}
 
       <div className="field__label-row">
