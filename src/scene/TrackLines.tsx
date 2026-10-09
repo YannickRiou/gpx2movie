@@ -48,6 +48,8 @@ import {
 import { smoothPoints } from '../flyover/smooth'
 import { raceAt } from '../flyover/race'
 import type { Race } from '../flyover/race'
+import { filmSequenceOf } from '../flyover/sequence'
+import type { Sequence } from '../flyover/sequence'
 import { densify } from '../import/stats'
 import { useAppStore } from '../state/store'
 import { DEFAULT_TRACK_STYLE } from './markerSettings'
@@ -442,9 +444,11 @@ export function cutTrackLineSet(set: TrackLineSet, distanceM: number): void {
 
 /**
  * Distance each track is drawn up to with « trace qui se dessine »: the first track to its marker, the others to
- * their ghost racer when the race is on (`race` not null), else whole.
+ * their ghost racer when the race is on (`race` not null), else whole; « À la suite » (`sequence` not null), the
+ * stages flown whole, the current one to the marker, the next ones not yet.
  */
-export function drawOnDistances(tracks: readonly Track[], progress: number, race: Race | null): number[] {
+export function drawOnDistances(tracks: readonly Track[], progress: number, race: Race | null, sequence: Sequence | null = null): number[] {
+  if (sequence) return sequence.stages.map((s) => Math.max(0, progress * sequence.stages[sequence.stages.length - 1].endM - s.startM))
   const out = tracks.map(() => Infinity)
   if (tracks.length > 0) out[0] = progress * tracks[0].stats.distanceM
   if (race) for (const racer of raceAt(race, progress)) if (racer.index > 0) out[racer.index] = racer.distanceM
@@ -528,7 +532,7 @@ export function TrackLines() {
   const refreshDrawOn = useCallback(() => {
     const { tracks: current, playback, settings } = useAppStore.getState()
     const distances = settings.trackStyle.drawOn
-      ? drawOnDistances(current, playback.progress, settings.race.enabled ? raceRef.current : null)
+      ? drawOnDistances(current, playback.progress, settings.race.enabled ? raceRef.current : null, filmSequenceOf(current, settings.race))
       : null
     current.forEach((track, i) => {
       const set = setsRef.current.get(track.id)

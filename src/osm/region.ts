@@ -1,13 +1,16 @@
 /**
- * Administrative region of an outing from OpenStreetMap (Overpass, same client, queue and cache as the landmarks),
- * highlighted by a 'situation' shot (scene/RegionHighlight.tsx) and framed by its region view (flyover/filmCamera.ts).
+ * Region of an outing from OpenStreetMap (Overpass, same client, queue and cache as the landmarks), highlighted by a
+ * 'situation' shot (scene/RegionHighlight.tsx) and framed by its region view (flyover/filmCamera.ts).
  *
- * Two small queries, both cached: the administrative boundaries of levels 4 to 6 (région and département in France,
- * canton and district in Switzerland, Land and Kreis in Germany…) whose area contains the centre of the track, with
- * their tags and bounding box only (`is_in`, `out tags bb`); then the full geometry (`out geom`) of the one chosen
- * (`chooseRegion`: the smallest that contains the whole track box and is REGION_MIN_RATIO times larger). Its outer
- * and inner rings are stitched from the member ways and simplified to at most REGION_MAX_POINTS points; only that
- * compact result is cached. No boundary found, offline or a failed query: the shot simply has no highlight.
+ * Two small queries, both cached: the areas that contain the centre of the track, with their tags and bounding box
+ * only (`is_in`, `out tags bb`): administrative boundaries of levels 4 to 6 (région and département in France, canton
+ * and district in Switzerland, Land and Kreis in Germany…), national parks, protected areas and nature reserves
+ * (« Parc naturel régional »), islands, mountain ranges mapped as areas; then the full geometry (`out geom`) of the
+ * one chosen: the place picked in the shot (« Lieu », `regionId`) while it still contains the track, else the
+ * automatic choice (`chooseRegion`: among the administrative ones, the smallest that contains the whole track box and
+ * is REGION_MIN_RATIO times larger). Its outer and inner rings are stitched from the member ways (a closed way is a
+ * ring of its own) and simplified to at most REGION_MAX_POINTS points; only that compact result is cached. No area
+ * found, offline or a failed query: the shot simply has no highlight.
  */
 import { create } from 'zustand'
 import type { LonLat, LonLatBounds } from '../core/types'
@@ -19,13 +22,31 @@ export const REGION_MIN_RATIO = 5
 /** Points kept over all the rings of the region (the boundary of a canton has tens of thousands). */
 export const REGION_MAX_POINTS = 2000
 
-/** A boundary containing the centre of the track: OSM relation id, admin_level, name and box. */
+/**
+ * What an area is: an administrative boundary (levels 4 to 6), a national park, a protected area or a nature reserve
+ * (« Parc naturel régional » in France), an island, a mountain range.
+ */
+export type RegionKind = 'admin' | 'parc' | 'protege' | 'ile' | 'massif'
+export const REGION_KIND_LABELS: Record<RegionKind, string> = {
+  admin: 'limite administrative',
+  parc: 'parc national',
+  protege: 'espace protégé',
+  ile: 'île',
+  massif: 'massif',
+}
+
+/** An area containing the centre of the track: OSM element, kind, admin_level (NaN when not administrative), name and box. */
 export interface AdminCandidate {
+  type: 'relation' | 'way'
   id: number
+  kind: RegionKind
   level: number
   name: string
   bounds: LonLatBounds
 }
+
+/** Id of an area as a shot stores it (`regionId`) and as `AdminRegion.id` reads: "relation/123", "way/45". */
+export const candidateId = (c: Pick<AdminCandidate, 'type' | 'id'>): string => `${c.type}/${c.id}`
 
 /** The highlighted region: rings open (last point ≠ first), [lon, lat], outer and inner alike (even-odd fill). */
 export interface AdminRegion {
@@ -68,45 +89,75 @@ const contains = (outer: LonLatBounds, inner: LonLatBounds) =>
 // Candidates
 // ---------------------------------------------------------------------------
 
-/** Overpass QL query of the administrative boundaries (levels 4 to 6) around `point`: tags and box only. */
+/** Overpass QL query of the areas around `point` that may situate it (`regionKind`): tags and box only. */
 export function regionCandidatesQuery(point: LonLat): string {
   return (
     `[out:json][timeout:${QUERY_TIMEOUT_S}];\n` +
     `is_in(${point.lat.toFixed(5)},${point.lon.toFixed(5)})->.a;\n` +
-    `rel(pivot.a)["boundary"="administrative"]["admin_level"~"^[456]$"];\n` +
+    `(\n` +
+    `  rel(pivot.a)["boundary"="administrative"]["admin_level"~"^[456]$"];\n` +
+    `  wr(pivot.a)["boundary"~"^(national_park|protected_area)$"];\n` +
+    `  wr(pivot.a)["leisure"="nature_reserve"];\n` +
+    `  wr(pivot.a)["place"="island"];\n` +
+    `  wr(pivot.a)["natural"="mountain_range"];\n` +
+    `);\n` +
     `out tags bb qt;\n`
   )
 }
+
+/** Kind of an area from its tags, null when it is none of those asked for. */
+export function regionKind(tags: Record<string, string>): RegionKind | null {
+  if (tags.boundary === 'administrative') return /^[456]$/.test(tags.admin_level ?? '') ? 'admin' : null
+  if (tags.boundary === 'national_park') return 'parc'
+  if (tags.boundary === 'protected_area' || tags.leisure === 'nature_reserve') return 'protege'
+  if (tags.place === 'island') return 'ile'
+  if (tags.natural === 'mountain_range') return 'massif'
+  return null
+}
+
+type Geometry = ({ lat: number; lon: number } | null)[]
 
 interface RegionElement {
   type: string
   id: number
   tags?: Record<string, string>
   bounds?: { minlat: number; minlon: number; maxlat: number; maxlon: number }
-  members?: { type: string; role?: string; geometry?: ({ lat: number; lon: number } | null)[] }[]
+  geometry?: Geometry
+  members?: { type: string; role?: string; geometry?: Geometry }[]
 }
 
-/** Named boundaries of a candidates response; throws on a server-side error. */
+/** Named areas of a candidates response (relations; closed ways too, except boundaries); throws on a server-side error. */
 export function parseRegionCandidates(json: unknown): AdminCandidate[] {
   const out: AdminCandidate[] = []
   for (const e of overpassElements(json) as RegionElement[]) {
-    const level = Number(e.tags?.admin_level)
+    const kind = e.tags ? regionKind(e.tags) : null
     const name = e.tags ? regionName(e.tags) : ''
-    if (e.type !== 'relation' || !e.bounds || !name || !Number.isFinite(level)) continue
+    const type = e.type === 'relation' ? 'relation' : e.type === 'way' && kind !== 'admin' ? 'way' : null
+    if (!type || !kind || !e.bounds || !name) continue
     const { minlat, minlon, maxlat, maxlon } = e.bounds
-    out.push({ id: e.id, level, name, bounds: { west: minlon, south: minlat, east: maxlon, north: maxlat } })
+    const level = kind === 'admin' ? Number(e.tags?.admin_level) : NaN
+    out.push({ type, id: e.id, kind, level, name, bounds: { west: minlon, south: minlat, east: maxlon, north: maxlat } })
   }
   return out
 }
 
+/** The areas that contain the whole track box `track`, smallest first (box diagonals; ties by id: deterministic). */
+export function containingRegions(candidates: readonly AdminCandidate[], track: LonLatBounds): AdminCandidate[] {
+  return candidates
+    .filter((c) => contains(c.bounds, track))
+    .sort((a, b) => boxDiagonalM(a.bounds) - boxDiagonalM(b.bounds) || candidateId(a).localeCompare(candidateId(b)))
+}
+
 /**
- * Region to highlight for a track of box `track`: among the boundaries containing the whole box, the smallest that is
- * REGION_MIN_RATIO × larger (diagonals), else the largest; null when none contains it (a track across a border).
+ * Region highlighted automatically for a track of box `track`: among the administrative boundaries containing the
+ * whole box, the smallest that is REGION_MIN_RATIO × larger (diagonals), else the largest; null when none contains it
+ * (a track across a border). Parks, islands and ranges are only offered in the « Lieu » list.
  */
 export function chooseRegion(candidates: readonly AdminCandidate[], track: LonLatBounds): AdminCandidate | null {
-  const containing = candidates
-    .filter((c) => contains(c.bounds, track))
-    .sort((a, b) => boxDiagonalM(a.bounds) - boxDiagonalM(b.bounds))
+  const containing = containingRegions(
+    candidates.filter((c) => c.kind === 'admin'),
+    track,
+  )
   const wanted = REGION_MIN_RATIO * boxDiagonalM(track)
   return containing.find((c) => boxDiagonalM(c.bounds) >= wanted) ?? containing.at(-1) ?? null
 }
@@ -115,9 +166,9 @@ export function chooseRegion(candidates: readonly AdminCandidate[], track: LonLa
 // Geometry
 // ---------------------------------------------------------------------------
 
-/** Overpass QL query of the full geometry of the boundary relation `id`. */
-export function regionGeometryQuery(id: number): string {
-  return `[out:json][timeout:${QUERY_TIMEOUT_S}];\nrel(${id});\nout geom qt;\n`
+/** Overpass QL query of the full geometry of the area `id`: a relation, or a closed way. */
+export function regionGeometryQuery(id: number, type: AdminCandidate['type'] = 'relation'): string {
+  return `[out:json][timeout:${QUERY_TIMEOUT_S}];\n${type === 'way' ? 'way' : 'rel'}(${id});\nout geom qt;\n`
 }
 
 const round5 = (v: number) => Math.round(v * 1e5) / 1e5
@@ -140,31 +191,55 @@ export function simplifyRings(rings: readonly LonLat[][], maxPoints = REGION_MAX
   }
 }
 
-const toRing = (geometry: ({ lat: number; lon: number } | null)[] | undefined): LonLat[] =>
+const toRing = (geometry: Geometry | undefined): LonLat[] =>
   (geometry ?? []).filter((p) => p !== null).map((p) => ({ lon: p.lon, lat: p.lat }))
 
 /** The region of a geometry response (a list of at most one, for the cache); throws on a server-side error. */
 export function parseRegionGeometry(json: unknown): AdminRegion[] {
-  const relation = (overpassElements(json) as RegionElement[]).find((e) => e.type === 'relation')
-  if (!relation) return []
-  const ways = (relation.members ?? []).filter((m) => m.type === 'way' && m.role !== 'subarea')
-  const rings = simplifyRings([
-    ...stitchRings(ways.filter((m) => m.role !== 'inner').map((m) => toRing(m.geometry))),
-    ...stitchRings(ways.filter((m) => m.role === 'inner').map((m) => toRing(m.geometry))),
-  ])
+  const element = (overpassElements(json) as RegionElement[]).find((e) => e.type === 'relation' || e.type === 'way')
+  if (!element) return []
+  const ways = (element.members ?? []).filter((m) => m.type === 'way' && m.role !== 'subarea')
+  const rings = simplifyRings(
+    element.type === 'way'
+      ? stitchRings([toRing(element.geometry)])
+      : [
+          ...stitchRings(ways.filter((m) => m.role !== 'inner').map((m) => toRing(m.geometry))),
+          ...stitchRings(ways.filter((m) => m.role === 'inner').map((m) => toRing(m.geometry))),
+        ],
+  )
   if (rings.length === 0) return []
   const bounds = boxOf(rings.flat().map(([lon, lat]) => ({ lon, lat })))
-  return [{ id: `relation/${relation.id}`, name: regionName(relation.tags ?? {}), bounds, rings }]
+  return [{ id: `${element.type}/${element.id}`, name: regionName(element.tags ?? {}), bounds, rings }]
 }
 
-/** Region to highlight for a track of box `track`, from the caches or two queued Overpass queries; null when none. */
-export async function fetchRegion(track: LonLatBounds, signal?: AbortSignal, deps?: OverpassDeps): Promise<AdminRegion | null> {
+/** The areas around a track and the region chosen among them (`fetchRegion`). */
+export interface RegionAnswer {
+  /** areas containing the whole track box, smallest first (`containingRegions`) */
+  candidates: AdminCandidate[]
+  /** id of the automatic choice (`chooseRegion`), null when there is none */
+  autoId: string | null
+  region: AdminRegion | null
+}
+
+/**
+ * Region to highlight for a track of box `track`: the area `regionId` while it contains the track, else the automatic
+ * choice, from the caches or two queued Overpass queries (the geometry of the chosen area only).
+ */
+export async function fetchRegion(
+  track: LonLatBounds,
+  regionId: string | null = null,
+  signal?: AbortSignal,
+  deps?: OverpassDeps,
+): Promise<RegionAnswer> {
   const centre = { lon: (track.west + track.east) / 2, lat: (track.south + track.north) / 2 }
-  const candidates = await cachedOverpassQuery(regionCandidatesQuery(centre), parseRegionCandidates, signal, deps)
-  const chosen = chooseRegion(candidates, track)
-  if (!chosen) return null
-  const [region] = await cachedOverpassQuery(regionGeometryQuery(chosen.id), parseRegionGeometry, signal, deps)
-  return region ?? null
+  const all = await cachedOverpassQuery(regionCandidatesQuery(centre), parseRegionCandidates, signal, deps)
+  const candidates = containingRegions(all, track)
+  const auto = chooseRegion(all, track)
+  const chosen = candidates.find((c) => candidateId(c) === regionId) ?? auto
+  const listed = { candidates, autoId: auto ? candidateId(auto) : null }
+  if (!chosen) return { ...listed, region: null }
+  const [region] = await cachedOverpassQuery(regionGeometryQuery(chosen.id, chosen.type), parseRegionGeometry, signal, deps)
+  return { ...listed, region: region ?? null }
 }
 
 /** Centre and size (metres) of the region's box: what the region view frames (flyover/filmCamera.ts `RegionFrame`). */
@@ -186,15 +261,46 @@ export function regionFrame(region: AdminRegion): { centre: LonLat; widthM: numb
 export type RegionStatus = 'idle' | 'loading' | 'ready' | 'none' | 'error'
 
 export interface RegionState {
-  /** box of the track the region was asked for ("west,south,east,north"), null when not wanted */
+  /** box of the track the region was asked for ("west,south,east,north") and the place chosen ("|relation/12", "|" for automatic), null when not wanted */
   key: string | null
   status: RegionStatus
   region: AdminRegion | null
   /** `regionFrame(region)`, computed once */
   frame: ReturnType<typeof regionFrame> | null
+  /** the areas offered in « Lieu » (smallest first) and the automatic one; kept while another place of the same track loads */
+  candidates: AdminCandidate[]
+  autoId: string | null
 }
 
-export const useRegionStore = create<RegionState>()(() => ({ key: null, status: 'idle', region: null, frame: null }))
+const NO_REGION: Omit<RegionState, 'key'> = { status: 'idle', region: null, frame: null, candidates: [], autoId: null }
+
+export const useRegionStore = create<RegionState>()(() => ({ key: null, ...NO_REGION }))
+
+/** Tilt from the vertical, distance and bearing of the region view seen from the 3D camera (flyover/filmCamera.ts `situationFramingOf`). */
+export interface CapturedFraming {
+  tiltDeg: number
+  distanceKm: number
+  bearingDeg: number
+}
+type FramingCapture = (highlighted: boolean) => CapturedFraming | null
+let framingCapture: FramingCapture | null = null
+
+/**
+ * « Capturer la vue actuelle »: the scene (scene/FlyoverRig.tsx) registers how to read the framing of its camera
+ * around the target of the region view (the highlighted region's centre when `highlighted` and loaded, else the
+ * track's); returns the unregistration.
+ */
+export function registerFramingCapture(capture: FramingCapture): () => void {
+  framingCapture = capture
+  return () => {
+    if (framingCapture === capture) framingCapture = null
+  }
+}
+
+/** Framing of the 3D view as it is now, null while the scene is not there. */
+export function captureFraming(highlighted: boolean): CapturedFraming | null {
+  return framingCapture?.(highlighted) ?? null
+}
 
 let controller: AbortController | null = null
 /** `holdRegion`: an answer arriving meanwhile waits in `heldAnswer` */
@@ -215,28 +321,39 @@ export function holdRegion(hold: boolean): void {
 }
 
 /**
- * Bring the region in line with the track box shown and whether a shot highlights it: fetched once per box (cached),
- * forgotten when no longer wanted. Idempotent: React effects may call it on every change.
+ * Bring the region in line with the track box shown, whether a shot highlights it and the place chosen (`regionId`,
+ * null: automatic): fetched once per box and place (cached), forgotten when no longer wanted. Idempotent: React
+ * effects may call it on every change.
  */
-export function syncRegion(track: LonLatBounds | null, wanted: boolean, fetch = fetchRegion): void {
-  const key = wanted && track ? [track.west, track.south, track.east, track.north].join(',') : null
-  if (useRegionStore.getState().key === key) return
+export function syncRegion(
+  track: LonLatBounds | null,
+  wanted: boolean,
+  regionId: string | null = null,
+  fetch: (track: LonLatBounds, regionId: string | null, signal: AbortSignal) => Promise<RegionAnswer> = fetchRegion,
+): void {
+  const box = track ? [track.west, track.south, track.east, track.north].join(',') : ''
+  const key = wanted && track ? `${box}|${regionId ?? ''}` : null
+  const before = useRegionStore.getState()
+  if (before.key === key) return
   controller?.abort()
   controller = null
   heldAnswer = null
   if (!track || key === null) {
-    useRegionStore.setState({ key: null, status: 'idle', region: null, frame: null })
+    useRegionStore.setState({ key: null, ...NO_REGION })
     return
   }
   const ctrl = (controller = new AbortController())
-  useRegionStore.setState({ key, status: 'loading', region: null, frame: null })
+  // another place for the same track: the list stays while it loads
+  const listed = before.key?.split('|')[0] === box ? {} : { candidates: [], autoId: null }
+  useRegionStore.setState({ key, status: 'loading', region: null, frame: null, ...listed })
   const answer = (state: Partial<RegionState>) => {
     if (controller !== ctrl) return
     if (holding) heldAnswer = state
     else useRegionStore.setState(state)
   }
-  fetch(track, ctrl.signal).then(
-    (region) => answer({ status: region ? 'ready' : 'none', region, frame: region ? regionFrame(region) : null }),
+  fetch(track, regionId, ctrl.signal).then(
+    ({ region, candidates, autoId }) =>
+      answer({ status: region ? 'ready' : 'none', region, frame: region ? regionFrame(region) : null, candidates, autoId }),
     () => answer({ status: 'error' }),
   )
 }

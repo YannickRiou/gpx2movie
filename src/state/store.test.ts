@@ -148,33 +148,17 @@ describe('removeTrack / clearTracks', () => {
     useAppStore.getState().flyTrack('nope')
     expect(useAppStore.getState()).toBe(before)
   })
-})
 
-describe('setPlanArea', () => {
-  it('shows an area without any track, kept when the tracks come and go', () => {
-    const area = FR.bounds
-    useAppStore.getState().setPlanArea(area)
-    let st = useAppStore.getState()
-    expect(st.bounds).toEqual(area)
-    expect(st.frameOrigin).toEqual({ lon: 6.88, lat: 45.94 })
-    expect(st.fitRequest).toBe(1)
-    expect(st.settings.imagerySourceId).toBe(pickRegionalImagery(area))
-
-    // a track far from the area gets its own origin, one inside it keeps the area's
-    st.addTracks([CH])
-    expect(useAppStore.getState().bounds).toEqual(CH.bounds)
-    expect(useAppStore.getState().frameOrigin).toEqual({ lon: 10.25, lat: 46.03 })
-    useAppStore.getState().removeTrack('ch')
-    expect(useAppStore.getState().frameOrigin).toEqual({ lon: 6.88, lat: 45.94 })
-    useAppStore.getState().addTracks([FR])
-    expect(useAppStore.getState().frameOrigin).toEqual({ lon: 6.88, lat: 45.94 })
-    useAppStore.getState().removeTrack('fr')
-    st = useAppStore.getState()
-    expect(st.bounds).toEqual(area)
-    expect(st.frameOrigin).toEqual({ lon: 6.88, lat: 45.94 })
-
-    useAppStore.getState().clearTracks()
-    expect(useAppStore.getState()).toMatchObject({ planArea: null, bounds: null, frameOrigin: null })
+  it('moveTrack moves a track to a place of the list (clamped); no-op in place or for an unknown one', () => {
+    useAppStore.getState().addTracks([FR, CH, CA])
+    useAppStore.getState().moveTrack('ca', 1)
+    expect(useAppStore.getState().tracks.map((t) => t.id)).toEqual(['fr', 'ca', 'ch'])
+    useAppStore.getState().moveTrack('fr', 9)
+    expect(useAppStore.getState().tracks.map((t) => t.id)).toEqual(['ca', 'ch', 'fr'])
+    const before = useAppStore.getState()
+    useAppStore.getState().moveTrack('ca', 0)
+    useAppStore.getState().moveTrack('nope', 0)
+    expect(useAppStore.getState()).toBe(before)
   })
 })
 
@@ -198,7 +182,7 @@ describe('settings and misc', () => {
       trackColorBy: 'none',
       trackStyle: { width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 },
       marker: { kind: 'boule', figure: 'randonneur', image: '', size: 1, animated: false },
-      camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
+      camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false, turnSmoothingM: 0, aimSmoothingS: 0, cameraSmoothingS: 3, endingS: 0 },
       flyoverDurationS: 60,
       pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true, transitionS: 1.5 },
       film: {
@@ -219,7 +203,7 @@ describe('settings and misc', () => {
       labels: { climbs: true, waypoints: true, kmStep: 0, endpoints: false, photos: false, size: 1, rangeKm: 70 },
       weather: { enabled: true },
       weatherScene: { enabled: true, strength: 1 },
-      clouds: { mode: 'meteo', coverage: 0.4, altitudeM: 1200, seaTopM: 2000, quality: 'medium' },
+      clouds: { mode: 'meteo', coverage: 0.4, altitudeM: 1200, seaTopM: 2000, seaRender: 'volume', quality: 'medium' },
       water: { enabled: true, strength: 1 },
       overlay: DEFAULT_OVERLAY,
       video: { aspect: '16:9', resolution: '1080p', fps: 30, quality: 'high' },

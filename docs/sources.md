@@ -15,8 +15,7 @@ sources were checked.
 | EOX Sentinel-2 cloudless 2025 | world satellite images, 10 m | `tiles.maps.eox.at` | "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0" |
 | OpenTopoMap | world topographic map | `tile.opentopomap.org` | "Données : © contributeurs OpenStreetMap, SRTM \| Rendu : © OpenTopoMap (CC BY-SA)" |
 | Open-Meteo | historical weather, forecast for an upcoming outing | `archive-api.open-meteo.com`, `api.open-meteo.com` | "Données météo : Open-Meteo.com (CC BY 4.0)" |
-| OpenStreetMap (Overpass API) | landmarks, water bodies (reflective lakes and rivers), scouting paths | `overpass-api.de`, fallback `maps.mail.ru` | "© contributeurs OpenStreetMap (ODbL)" |
-| OpenStreetMap (Nominatim) | place typed in "Préparer une sortie" (one search on submit, never while typing) | `nominatim.openstreetmap.org` | "© contributeurs OpenStreetMap (ODbL)" |
+| OpenStreetMap (Overpass API) | landmarks, water bodies (reflective lakes and rivers) | `overpass-api.de`, fallback `maps.mail.ru` | "© contributeurs OpenStreetMap (ODbL)" |
 
 The status bar, at the bottom of the screen, shows the attributions of the current terrain and imagery. Those of Open-Meteo and OpenStreetMap
 are added when the weather or the landmarks are loaded. The same lines are burned into exported videos and images
@@ -376,22 +375,6 @@ non-commercial). Same parameters as the archive (`start_date` / `end_date`, seve
 `timeformat=unixtime`), same 13 hourly variables and same response shape (24 hours per day from 0:00 UTC). Range: from
 92 days back to today + 15 days (on 8 October: `2026-10-23` → 200, `2026-10-24` → 400 "out of allowed range from
 2026-07-07 to 2026-10-23"). Kept 3 h at most, in memory only (the forecast changes several times a day).
-
-## Typed place — Nominatim (2026-10-08)
-
-"Préparer une sortie" (plan an outing) searches for a typed place on the public instance `https://nominatim.openstreetmap.org/search`
-(`format=jsonv2`, `limit=1`, `accept-language=fr`), without a key. Usage rules noted (the official page
-operations.osmfoundation.org/policies/nominatim could not be reached from the development machine; taken from the help forum
-and the OSM mailing lists, not checked against the current text): at most **1 request per second** for the whole application,
-identification by a Referer or a dedicated User-Agent (the browser sends the Referer), **no search-as-you-type**
-(autocomplete forbidden). The code (`src/osm/geocode.ts`) only searches on submit, spaces requests by one
-second and keeps the responses in memory for the session; typed coordinates ("45.92, 6.87") make no
-request. ODbL data, same attribution as Overpass. To check: identification from the desktop application
-(WebView), whose Referer is not that of a website.
-
-The paths for the scouting go through Overpass (next section): one request per box snapped to a
-0.02° grid around the placed points (2 km margin, 0.3° at most), `way["highway"]` without motorways, roads under construction or
-private roads, `out geom qt`, response reduced to the type and to points rounded to 1e-5°, kept 30 days like the others.
 
 ## OpenStreetMap landmarks — Overpass API (2026-10-07)
 

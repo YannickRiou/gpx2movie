@@ -29,6 +29,7 @@
  *
  * Pure functions (no DOM, no React, no Three, no store).
  */
+import { oneOf } from '../core/guards'
 import { firstIndexAtOrAbove, lastIndexAtOrBelow } from '../core/math'
 import type { Track } from '../core/types'
 import { samplePath, type TrackPath } from './path'
@@ -37,14 +38,50 @@ import { smoothedTrackPath } from './smooth'
 export const RACE_SYNC_MODES = ['elapsed', 'clock', 'distance'] as const
 export type RaceSync = (typeof RACE_SYNC_MODES)[number]
 
+/**
+ * What the flight camera follows during a ghost race (`flyover/follow.ts`): the lead track (the first one, as before),
+ * the racer ahead, or all the racers framed together.
+ */
+export const RACE_CAMERAS = ['premiere', 'tete', 'ensemble'] as const
+export type RaceCamera = (typeof RACE_CAMERAS)[number]
+
+/** Transition between two stages « À la suite »: a plain cut, or the cut at the darkest (lightest) point of a dip. */
+export const STAGE_TRANSITIONS = ['coupe', 'fondu-noir', 'fondu-blanc'] as const
+export type StageTransition = (typeof STAGE_TRANSITIONS)[number]
+
+/**
+ * « Plusieurs traces »: by default the first track is flown and the others are only drawn; « En parallèle » replays
+ * them all together (`enabled`, the ghost race); « À la suite » flies them one after the other (`sequence`,
+ * flyover/sequence.ts). The optional fields are absent from projects saved before them: their film is unchanged.
+ */
 export interface RaceSettings {
-  /** show a moving marker on every other track during the flyover */
+  /** « En parallèle »: show a moving marker on every other track during the flyover */
   enabled: boolean
   /** how the other tracks are synchronised with the lead */
   sync: RaceSync
+  /** ghost race: what the camera follows (absent = 'premiere') */
+  camera?: RaceCamera
+  /** « À la suite »: the tracks flown one after the other in list order (ignored while `enabled`) */
+  sequence?: boolean
+  /** « À la suite »: a card with the name and figures of each stage as it starts (absent = true) */
+  stageCards?: boolean
+  /** « À la suite »: how one stage cuts to the next (absent = 'fondu-noir') */
+  stageTransition?: StageTransition
 }
 
 export const DEFAULT_RACE: RaceSettings = { enabled: false, sync: 'elapsed' }
+
+export const RACE_CAMERA_LABELS: Record<RaceCamera, string> = {
+  premiere: 'Première trace',
+  tete: 'Celle en tête',
+  ensemble: 'Toutes les traces',
+}
+
+export const STAGE_TRANSITION_LABELS: Record<StageTransition, string> = {
+  coupe: 'Coupe',
+  'fondu-noir': 'Fondu au noir',
+  'fondu-blanc': 'Fondu au blanc',
+}
 
 export const RACE_SYNC_LABELS: Record<RaceSync, string> = {
   elapsed: 'Temps écoulé',
@@ -58,7 +95,13 @@ export function syncNeedsTime(sync: RaceSync): boolean {
 }
 
 export function isValidRace(race: RaceSettings): boolean {
-  return (RACE_SYNC_MODES as readonly string[]).includes(race.sync)
+  return (
+    (RACE_SYNC_MODES as readonly string[]).includes(race.sync) &&
+    (race.camera === undefined || oneOf(RACE_CAMERAS, race.camera)) &&
+    (race.sequence === undefined || typeof race.sequence === 'boolean') &&
+    (race.stageCards === undefined || typeof race.stageCards === 'boolean') &&
+    (race.stageTransition === undefined || oneOf(STAGE_TRANSITIONS, race.stageTransition))
+  )
 }
 
 /** Fractions closer than this are the same point (racers side by side). */

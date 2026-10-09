@@ -2,8 +2,19 @@ import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Track } from '../core/types'
 import { isExportBusy, useExportStore } from '../export/store'
-import { RACE_SYNC_LABELS, RACE_SYNC_MODES, raceAt, rankRacers, syncNeedsTime } from '../flyover/race'
-import type { Race, RaceSync, Racer } from '../flyover/race'
+import {
+  RACE_CAMERA_LABELS,
+  RACE_CAMERAS,
+  RACE_SYNC_LABELS,
+  RACE_SYNC_MODES,
+  STAGE_TRANSITION_LABELS,
+  STAGE_TRANSITIONS,
+  raceAt,
+  rankRacers,
+  syncNeedsTime,
+} from '../flyover/race'
+import type { Race, RaceCamera, RaceSettings, RaceSync, Racer, StageTransition } from '../flyover/race'
+import { playsInSequence } from '../flyover/sequence'
 import {
   PACE_RANGE,
   PLAN_ACTIVITIES,
@@ -66,30 +77,112 @@ function RaceBoard({ race, tracks }: { race: Race; tracks: readonly Track[] }) {
   )
 }
 
-/** « Course fantôme »: replay every track together with the first one (2+ tracks). */
+/** « Plusieurs traces »: how the film plays two tracks or more. */
+const MULTI_MODES = ['une', 'suite', 'parallele'] as const
+type MultiMode = (typeof MULTI_MODES)[number]
+const MULTI_MODE_LABELS: Record<MultiMode, string> = { une: 'La première', suite: 'À la suite', parallele: 'En parallèle' }
+const MULTI_MODE_HINTS: Record<MultiMode, string> = {
+  une: 'Le film survole la première trace, les autres sont seulement dessinées.',
+  suite: 'Le film survole les traces l’une après l’autre, dans l’ordre de la liste : chacune garde sa couleur, son nom et ses chiffres.',
+  parallele: 'Course fantôme : toutes les traces rejouées ensemble.',
+}
+
+function multiModeOf(race: RaceSettings, count: number): MultiMode {
+  if (race.enabled) return 'parallele'
+  return playsInSequence(race, count) ? 'suite' : 'une'
+}
+
+/** The race settings for a mode: the ghost race and the sequence never both on. */
+function withMultiMode(race: RaceSettings, mode: MultiMode): RaceSettings {
+  const { sequence: _sequence, ...rest } = race
+  if (mode === 'parallele') return { ...rest, enabled: true }
+  if (mode === 'suite') return { ...rest, enabled: false, sequence: true }
+  return { ...rest, enabled: false }
+}
+
+/**
+ * « Plusieurs traces » (2+ tracks): the first one alone, « À la suite » (stages, their transition and cards) or
+ * « En parallèle » (the ghost race: sync, what the camera follows, leaderboard).
+ */
 function RacePanel({ tracks }: { tracks: readonly Track[] }) {
   const id = useId()
   const settings = useAppStore((s) => s.settings.race)
+  const leaderboard = useAppStore((s) => s.settings.overlay.leaderboard)
+  const overlayOn = useAppStore((s) => s.settings.overlay.enabled)
   const setSetting = useAppStore((s) => s.setSetting)
+  const flyTrack = useAppStore((s) => s.flyTrack)
+  const busy = useExportStore((s) => isExportBusy(s.phase))
   const race = useRace()
   if (!race) return null
+  const mode = multiModeOf(settings, tracks.length)
+  const set = (patch: Partial<RaceSettings>) => setSetting('race', { ...settings, ...patch })
+  /** a track of the list is followed by making it the first one; the other entries are camera modes */
+  const followCamera = (value: string) => {
+    if ((RACE_CAMERAS as readonly string[]).includes(value)) set({ camera: value as RaceCamera })
+    else {
+      set({ camera: 'premiere' })
+      flyTrack(value)
+    }
+  }
+  const camera = settings.camera ?? 'premiere'
 
   return (
     <div className="settings race" role="group" aria-labelledby={`${id}-title`}>
       <h3 id={`${id}-title`} className="field__label">
-        Course fantôme
+        Plusieurs traces
       </h3>
-      <label className="checkbox checkbox--switch" htmlFor={`${id}-enabled`}>
-        <input
-          id={`${id}-enabled`}
-          type="checkbox"
-          checked={settings.enabled}
-          onChange={(e) => setSetting('race', { ...settings, enabled: e.currentTarget.checked })}
-        />
-        Rejouer toutes les traces avec la première
-      </label>
+      <div className="segmented" role="radiogroup" aria-labelledby={`${id}-title`} aria-describedby={`${id}-mode-hint`}>
+        {MULTI_MODES.map((m) => (
+          <label key={m} className="segmented__option">
+            <input
+              type="radio"
+              name={`${id}-mode`}
+              value={m}
+              checked={mode === m}
+              disabled={busy}
+              onChange={() => setSetting('race', withMultiMode(settings, m))}
+            />
+            {MULTI_MODE_LABELS[m]}
+          </label>
+        ))}
+      </div>
+      <p id={`${id}-mode-hint`} className="field__hint">
+        {MULTI_MODE_HINTS[mode]}
+      </p>
 
-      <div className="field" hidden={!settings.enabled}>
+      {mode === 'suite' && (
+        <>
+          <div className="field">
+            <label className="field__label" htmlFor={`${id}-transition`}>
+              Entre deux étapes
+            </label>
+            <select
+              id={`${id}-transition`}
+              className="select"
+              value={settings.stageTransition ?? 'fondu-noir'}
+              onChange={(e) => set({ stageTransition: e.currentTarget.value as StageTransition })}
+            >
+              {STAGE_TRANSITIONS.map((t) => (
+                <option key={t} value={t}>
+                  {STAGE_TRANSITION_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <label className="checkbox checkbox--switch" htmlFor={`${id}-cards`}>
+            <input
+              id={`${id}-cards`}
+              type="checkbox"
+              checked={settings.stageCards !== false}
+              onChange={(e) => set({ stageCards: e.currentTarget.checked })}
+            />
+            Carton au début de chaque étape
+          </label>
+          <p className="field__hint">Nom, date, distance et dénivelé de l’étape. L’ordre est celui de la liste (flèche pour monter une trace).</p>
+        </>
+      )}
+
+      <div className="field" hidden={mode !== 'parallele'}>
         <label className="field__label" htmlFor={`${id}-sync`}>
           Synchronisation
         </label>
@@ -115,6 +208,37 @@ function RacePanel({ tracks }: { tracks: readonly Track[] }) {
 
       {settings.enabled && (
         <>
+          <div className="field">
+            <label className="field__label" htmlFor={`${id}-camera`}>
+              Caméra sur
+            </label>
+            <select id={`${id}-camera`} className="select" value={camera} disabled={busy} onChange={(e) => followCamera(e.currentTarget.value)}>
+              <option value="premiere">{tracks[0].name}</option>
+              {tracks.slice(1).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+              {RACE_CAMERAS.filter((c) => c !== 'premiere').map((c) => (
+                <option key={c} value={c}>
+                  {RACE_CAMERA_LABELS[c]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <label className="checkbox checkbox--switch" htmlFor={`${id}-board`}>
+            <input
+              id={`${id}-board`}
+              type="checkbox"
+              checked={leaderboard.enabled}
+              onChange={(e) => {
+                const { overlay } = useAppStore.getState().settings
+                setSetting('overlay', { ...overlay, leaderboard: { ...overlay.leaderboard, enabled: e.currentTarget.checked } })
+              }}
+            />
+            Classement à l’image
+          </label>
+          {leaderboard.enabled && !overlayOn && <p className="field__hint">Visible une fois l’habillage activé.</p>}
           <RaceBoard race={race} tracks={tracks} />
           <p className="field__hint">Écart avec la première trace, au même pourcentage du parcours.</p>
         </>
@@ -290,12 +414,14 @@ function OutingPlanForm({ track }: { track: Track }) {
   )
 }
 
-/** One card per imported track, with a delete button; chaining and the ghost race block from two tracks. */
+/** One card per imported track, with a delete button; chaining and « Plusieurs traces » from two tracks. */
 export function TrackList() {
   const tracks = useAppStore((s) => s.tracks)
   const removeTrack = useAppStore((s) => s.removeTrack)
   const setTrackColor = useAppStore((s) => s.setTrackColor)
   const flyTrack = useAppStore((s) => s.flyTrack)
+  const moveTrack = useAppStore((s) => s.moveTrack)
+  const inSequence = useAppStore((s) => playsInSequence(s.settings.race, s.tracks.length))
   const busy = useExportStore((s) => isExportBusy(s.phase))
 
   return (
@@ -327,7 +453,20 @@ export function TrackList() {
               <span className="track__name" title={track.name}>
                 {track.name}
               </span>
-              {index > 0 && (
+              {index > 0 && inSequence && (
+                <button
+                  type="button"
+                  className="track__fly"
+                  aria-label={`Monter la trace ${track.name} d’une étape`}
+                  data-tip="Monter d’une étape"
+                  data-tip-side="left"
+                  disabled={busy}
+                  onClick={() => moveTrack(track.id, index - 1)}
+                >
+                  <Icon name="chevron-up" size={16} />
+                </button>
+              )}
+              {index > 0 && !inSequence && (
                 <button
                   type="button"
                   className="track__fly"

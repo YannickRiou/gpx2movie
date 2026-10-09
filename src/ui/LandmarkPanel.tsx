@@ -2,7 +2,8 @@ import { useEffect, useId } from 'react'
 import { KIND_BADGES, KIND_LABELS, LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { OSM_ATTRIBUTION, OSM_KINDS } from '../osm/overpass'
 import { syncLandmarks, useLandmarkStore } from '../osm/store'
-import { followLandmarks, setLandmarkTitles } from '../scene/usePacing'
+import { sequenceLandmarks } from '../flyover/sequence'
+import { followLandmarks, setLandmarkTitles, useFilmSequence, useFilmSource } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { Icon } from './icons'
 import { PanelSection } from './PanelSection'
@@ -23,9 +24,11 @@ export function LandmarkPanel() {
   const setProgress = useAppStore((s) => s.setProgress)
   const status = useLandmarkStore((s) => s.status)
   const message = useLandmarkStore((s) => s.message)
-  const first = tracks[0]
-  const landmarks = useLandmarkStore((s) => (first ? s.landmarks[first.id] : undefined))
-  const hidden = useLandmarkStore((s) => (first ? s.hidden[first.id] : undefined))
+  // the landmarks along the film: the first track's, or « À la suite » those of every stage
+  const { track: first, landmarks } = useFilmSource()
+  const sequence = useFilmSequence()
+  const hiddenByTrack = useLandmarkStore((s) => s.hidden)
+  const hidden = sequence ? sequenceLandmarks(sequence, hiddenByTrack) : first ? hiddenByTrack[first.id] : undefined
   const titles = useAppStore((s) => s.settings.film.landmarkTitles)
 
   useEffect(() => {

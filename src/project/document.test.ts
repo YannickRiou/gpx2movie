@@ -172,6 +172,16 @@ describe('serializeProject / parseProject', () => {
     expect(invalid).toEqual(['race'])
   })
 
+  it('loads « Plusieurs traces » (à la suite, camera of the race) and rejects unknown values', () => {
+    const d = doc()
+    const settings = d.settings as Record<string, unknown>
+    const race = { enabled: false, sync: 'elapsed', sequence: true, stageCards: false, stageTransition: 'fondu-blanc', camera: 'ensemble' }
+    settings.race = race
+    expect(parseProject(JSON.stringify(d)).settings.race).toEqual(race)
+    expect(sanitizeSettings({ race: { ...race, stageTransition: 'enchaine' } }).invalid).toEqual(['race'])
+    expect(sanitizeSettings({ race: { ...race, camera: 'drone' } }).invalid).toEqual(['race'])
+  })
+
   it('loads the fixed video formats of older projects as aspect × resolution', () => {
     const { settings, invalid } = sanitizeSettings({ video: { format: '1080x1920', fps: 60, quality: 'max' } })
     expect(invalid).toEqual([])
@@ -204,6 +214,15 @@ describe('serializeProject / parseProject', () => {
     expect(settings.clouds).toEqual({ ...DEFAULT_SETTINGS.clouds, mode: 'manuel' })
     expect(sanitizeSettings({ clouds: { ...DEFAULT_SETTINGS.clouds, mode: 'mer', seaTopM: 2400 } }).settings.clouds.seaTopM).toBe(2400)
     expect(sanitizeSettings({ clouds: { ...DEFAULT_SETTINGS.clouds, mode: 'mer', seaTopM: 9000 } }).invalid).toEqual(['clouds'])
+  })
+
+  it('loads the sea of clouds of older projects as volumetric and validates its rendering', () => {
+    const { seaRender: _ignored, ...older } = DEFAULT_SETTINGS.clouds
+    const { settings, invalid } = sanitizeSettings({ clouds: { ...older, mode: 'mer', seaTopM: 2400 } })
+    expect(invalid).toEqual([])
+    expect(settings.clouds).toEqual({ ...DEFAULT_SETTINGS.clouds, mode: 'mer', seaTopM: 2400, seaRender: 'volume' })
+    expect(sanitizeSettings({ clouds: { ...DEFAULT_SETTINGS.clouds, seaRender: 'surface' } }).settings.clouds.seaRender).toBe('surface')
+    expect(sanitizeSettings({ clouds: { ...DEFAULT_SETTINGS.clouds, seaRender: 'plat' } }).invalid).toEqual(['clouds'])
   })
 
   it('rejects an unknown track colour mode and an out-of-range exposure', () => {

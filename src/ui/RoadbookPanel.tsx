@@ -4,6 +4,7 @@ import { videoFileName } from '../export/store'
 import { buildRoadbook, longestSteepText, passageText, roadbookLandmarks, roadbookSummary, roadbookText } from '../plan/roadbook'
 import { useLandmarkStore } from '../osm/store'
 import { getPlatform } from '../platform'
+import { useFilmTrack } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatAscent, formatDuration, formatNumber } from './format'
 import { Icon } from './icons'
@@ -16,6 +17,7 @@ import { showToast } from './toast'
  */
 export function RoadbookPanel() {
   const track = useAppStore((s) => s.tracks[0])
+  const filmLengthM = useFilmTrack()?.stats.distanceM
   const pois = useAppStore((s) => s.settings.film.pois)
   const landmarksOn = useAppStore((s) => s.settings.landmarks.enabled)
   const hiddenIds = useAppStore((s) => s.settings.landmarks.hiddenIds)
@@ -28,7 +30,8 @@ export function RoadbookPanel() {
   )
 
   if (!track || !roadbook) return null
-  const lengthM = track.stats.distanceM
+  // « À la suite », the first track is the first stage: the same metres along the film
+  const lengthM = filmLengthM ?? track.stats.distanceM
   const hasTimes = roadbook.rows.some((row) => row.timeMs !== undefined)
   const steep = longestSteepText(roadbook)
   const text = () => roadbookText(roadbook, track.name)

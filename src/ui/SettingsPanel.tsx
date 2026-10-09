@@ -6,7 +6,7 @@ import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
-import { CLOUD_ALTITUDE_RANGE, SEA_TOP_RANGE, seaTopFor, type CloudMode, type CloudQuality } from '../weather/sceneClouds'
+import { CLOUD_ALTITUDE_RANGE, SEA_TOP_RANGE, seaTopFor, type CloudMode, type CloudQuality, type SeaRender } from '../weather/sceneClouds'
 import { useWeatherStore } from '../weather/store'
 import { GradingPanel } from './GradingPanel'
 import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
@@ -226,6 +226,10 @@ const CLOUD_MODE_OPTIONS: { value: CloudMode; label: string }[] = [
   { value: 'mer', label: 'Mer de nuages' },
   { value: 'aucun', label: 'Aucun' },
 ]
+const SEA_RENDER_OPTIONS: { value: SeaRender; label: string }[] = [
+  { value: 'volume', label: 'Volumétrique' },
+  { value: 'surface', label: 'Nappe' },
+]
 const CLOUD_QUALITY_OPTIONS: { value: CloudQuality; label: string }[] = [
   { value: 'low', label: 'Rapide' },
   { value: 'medium', label: 'Moyenne' },
@@ -299,6 +303,30 @@ function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
           format={(v) => `${formatNumber(v)} m`}
           onChange={(seaTopM) => set({ seaTopM })}
         />
+      )}
+
+      {clouds.mode === 'mer' && (
+        <fieldset className="field fieldset">
+          <legend className="field__label">Rendu de la mer de nuages</legend>
+          <div className="segmented">
+            {SEA_RENDER_OPTIONS.map((option) => (
+              <label key={option.value} className="segmented__option">
+                <input
+                  type="radio"
+                  name={`${id}-sea-render`}
+                  checked={clouds.seaRender === option.value}
+                  onChange={() => set({ seaRender: option.value })}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+          <p className="field__hint">
+            {clouds.seaRender === 'surface'
+              ? 'Une nappe de nuages éclairée, sans grain, plus légère à calculer.'
+              : 'Des nuages en volume, plus coûteux.'}
+          </p>
+        </fieldset>
       )}
 
       {clouds.mode !== 'aucun' && (

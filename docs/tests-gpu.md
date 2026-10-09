@@ -63,6 +63,12 @@ reproduce it next to the box.
       intro and outro (descent from the overview).
 - [ ] Intro and outro "Depuis la région" (from the region) (16:9 and 9:16, short and long track): terrain loaded in time for the
       very high view (no terrain edge, no blurry tiles), dive toward the track and climb back without stutter.
+- [ ] "Depuis la région" with "Lieu" set to a park, an island or a range (e.g. « Parc naturel régional de Corse »):
+      border and name of that place, framed whole; "Maintien" 2 s then "Plongée" 5 s: still, region whole, then the
+      dive with the highlight fading; "Cadrage": "Inclinaison" 10°, "Distance" 35 km, "Boussole" 0° (north up), "Marge"
+      20 % (place at the bottom of the frame), "Capturer la vue actuelle" after orbiting the 3D view (the shot starts
+      from that view); no terrain edge at 60° of tilt; "Faire bouger le soleil" (low sun, morning outing): shadows
+      sweeping the relief, no jump of light where the shot meets the flight; same in the exported video.
 - [ ] Shot transitions (Opening / Closing inspector): clean "Coupe" (cut) at the start and at the end of the flight; "Fondu au
       noir" and "Fondu au blanc" (fade to black / to white, 0.3 s and 2 s): the picture goes through the color, the camera jump
       hidden at the darkest point, only the credits visible on top, tiles loaded when the picture comes back; same rendering
@@ -77,14 +83,10 @@ reproduce it next to the box.
       identical to before.
 - [ ] On-demand rendering: still view → the GPU drops to almost nothing (task manager, GPU tab); nothing
       frozen after a change: drag a slider, rotate the camera (damping to the end), tiles that
-      arrive, clouds that settle (~0.5 s), label font, marker image, water, reframing (full
+      arrive, clouds that settle (~0.5–1 s), label font, marker image, water, reframing (full
       animation); playback resumes without a jump after a long pause; export unchanged.
 - [ ] Preview clouds (fewer computation steps than the "bas" (low) preset): no visible bands or holes compared
       with before; the export keeps its quality.
-- [ ] Scouting: "Préparer une sortie" (plan an outing) ("Chamonix", then "45.92, 6.87"), terrain without a track, pins
-      "Départ" / "Étape" / "Arrivée" (start / waypoint / finish) on right-click, "Calculer l'itinéraire" (compute the route) on real paths (trails
-      preferred over roads, point more than 500 m away rejected), film assembled, "Modifier" (edit) then recompute (same color), project
-      saved then reopened ("Modifier" still offered); Windows desktop (Nominatim under the CSP).
 - [ ] Safe zones: button under "Recadrer" (reframe) or G key, social network bands in 9:16 and 4:5, margins in 16:9,
       absent from the export.
 
@@ -95,6 +97,11 @@ reproduce it next to the box.
 - [ ] Speed per section: ×2 block then ×0.5, acceleration without stutter at the edges, "garder la durée" (keep the duration).
 - [ ] Camera at stops: "Tour lent" (slow turn) at the summit (the turn comes back without stutter), "Vue large" (wide view) (smooth pull-back and
       rise), "Fixe" (fixed) with the "Orbite" (orbit) style (the camera slows down, stops, starts again), "Comme le film" (same as the film).
+- [ ] Camera smoothing ("Caméra" › "Plus de réglages"): "Lissage de la caméra" 0 then 7.5 s on a film with stops and a
+      "Ralentir aux temps forts" slow-down: the camera anticipates and eases into each stop, no jerk at the start of the
+      flight; "Lissage de la visée" 2 s: the marker drifts a little off-centre at stops, then comes back; "Fin en douceur"
+      3 s: the camera comes to rest at the end and turns to watch the marker finish; "Lissage des virages" "Auto" vs
+      1,5 km on a twisty track; an export with these on identical to the preview (stops included).
 - [ ] Framings ("Garder ce cadrage ici" (keep this framing here), diamonds on the "Plans" (shots) track): high, wide view over a long section,
       smooth transition from one framing to another and back to the film setting, without stutter at the edges; dragged diamond; export
       identical to the preview.
@@ -138,6 +145,15 @@ reproduce it next to the box.
       prises" (photos where they were taken): a phone photo with GPS pinned at the right place, caption as its text.
 - [ ] "Mer de nuages" (sea of clouds): a flat, dense layer filling the valleys, summits above « Sommet de la mer de
       nuages » emerging, warm at sunset (clouds not black at a low sun, unlike SwiftShader); identical in the export.
+- [ ] "Mer de nuages", grain and shape: a still view settles within ~1 s into smooth clouds (no speckle, compare with
+      the October 2026 screenshot); billows with shaded crevices, warm at golden hour, a broken top; the moving
+      preview may keep a fine grain; an exported video has no grain on the clouds (« Qualité des nuages à
+      l’export » « Moyenne » and « Fine »), and its export time per frame (×6 for the clouds) stays acceptable.
+- [ ] « Rendu de la mer de nuages » › « Nappe » (surface) next to « Volumétrique », same views at noon and at golden
+      hour: rolling cumulus tops without grain or shimmer (also far away and while the camera moves), creases darker
+      than the tops, warm tops and long shadows at a low sun, a bright rim looking toward the sun, summits emerging
+      without a hard line, the sea fading into the haze at the horizon; under the sea, a grey ceiling; frames per
+      second against the volumetric sea; drifting with the wind, identical in the export.
 - [ ] "Générique" (credits) of the closing card: the card holds, then card and lines roll up and leave the frame on the
       last frame, in 16:9 and 9:16, in the 3 overlay styles; readable on snow.
 - [ ] "Transitions" (Survol tab) at 0.5 s then 4 s: easing into a stop, a pause and a "Vitesse" section shorter / longer,
@@ -150,6 +166,13 @@ reproduce it next to the box.
       the preview and to the export, "Revenir au style" (back to the style); a single Ctrl+Z after a drag in the color picker.
 - [ ] Ghost race ranking in the 3 styles: color dots and gaps aligned, no width jump,
       "Tête" (lead), then "Arrivée" (finish).
+- [ ] "Plusieurs traces" › "À la suite" with two days of a hike: the film flies day 1 then day 2, a clean cut at the
+      darkest point of the dip (no camera glide between the two days), the stage card (name, « Étape 2 sur 2 », date,
+      distance, D+) centred for 5 s, the counters, profile and mini-map those of the stage; one segment per stage on the
+      timeline; "Coupe" and "Fondu au blanc"; the up arrow swaps the stages; same frames in the export (16:9, 9:16).
+- [ ] "Plusieurs traces" › "En parallèle", "Caméra sur" « Celle en tête » (a cut when the lead changes or finishes)
+      and « Toutes les traces » (all racers in the frame, the camera pulls back as they spread, no jump); a track
+      chosen in the list becomes the first one; "Classement à l'image" with the overlay on; same in the export.
 
 - [ ] Close the tab (Chrome, Firefox): nothing asked without changes, nor with a "Mes projets" project changed more than
       3 s ago; "Quitter le site ?" (leave site?, the browser's own wording) with "Modifié" outside "Mes projets", during an
@@ -222,3 +245,8 @@ On Linux (Ubuntu 22.04 or later, WebKitGTK without WebCodecs: export through the
 - [ ] Simulated failure (`pkill ffmpeg` during the export): the export stops with a message about ffmpeg, no partial
       file.
 - [ ] From the AppImage and from the deb package: ffmpeg found and launched (AppImage environment variables).
+- [ ] GPU encoder (NVIDIA with its driver, or Intel / AMD with `/dev/dri/renderD128`): start from a terminal, the
+      first MP4 export prints `Encodeur H.264 de ffmpeg : h264_nvenc` (or `h264_vaapi`); export time of a 1080p film
+      clearly shorter than the same export with an earlier build (libx264; note both); file played by VLC and the
+      system player, colors identical; standard / maximum quality give different sizes. Without a usable GPU (or an
+      ffmpeg built without them): `libx264` printed, export as before, its start delayed once by 10 s at most.

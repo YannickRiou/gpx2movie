@@ -52,8 +52,8 @@ then run `git status` and `npm run typecheck`.
 - Checks: `npm run typecheck`, `npm run lint` (0 errors; about forty pre-existing React warnings, mostly in `src/scene`),
   `npx vitest run --maxWorkers=1` (current figures: "Work in progress"), `npm run build`.
 - End-to-end tests: `npm run e2e` (`e2e/run.mjs`, puppeteer-core, Playwright's Chromium or `OPENFLYOVER_CHROME`,
-  SwiftShader, Vite server started by the script without file watching). 6 scenarios: home screen and sample, tabs
-  and help, T / Ctrl+Z / S, project saved then reopened, 320 × 180 export + still image, reconnaissance (mocked Overpass). 7 to 8 min here (export
+  SwiftShader, Vite server started by the script without file watching). 5 scenarios: home screen and sample, tabs
+  and help, T / Ctrl+Z / S, project saved then reopened, 320 × 180 export + still image. 7 to 8 min here (export
   5 to 6 min, clouds off); `OPENFLYOVER_E2E_SKIP_EXPORT=1`: under 1 min 30. Fails on any console error except network
   noise. Only one browser at a time on this machine.
 - Checking the desktop app's Rust (Linux impossible here, Ubuntu 20.04 without webkit2gtk-4.1):
@@ -92,9 +92,9 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (98 files, 1,589 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (100 files, 1,643 tests, `lot-suites` and the ported
 features included), `npm run build`,
-`cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
+`cargo test` (12). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
 - **Review fixes**: held export frames re-rendered when the scene moves with time (animated figurine, clouds, water);
   settings panel and inspector `inert` during an export, batch cancel from the top bar; overlay element tabs as
@@ -125,6 +125,10 @@ features included), `npm run build`,
   are published again (`followLandmarks`, no undo step; the first landmarks of a track move nothing, since landmarks
   are not saved and the film was saved with the times they gave); the free camera is lifted above the terrain when
   tiles or the exaggeration change under it while it sits still. Not seen on screen.
+- **Thumbnails in "Mes projets"**: each write keeps a ~10 KB JPEG of the 3D view in the entry (`scene/thumbnail.ts`),
+  older entries show an empty frame. Seen in headless Chromium (software GPU), not on a GPU nor in the desktop app.
+- **Linux desktop export on the GPU**: MP4 encoded with `h264_nvenc`, else `h264_vaapi`, else `libx264`, chosen by a
+  real ffmpeg probe once per run (`video.rs`); not tried on a GPU.
 - **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
   constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
   "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK); a text added with T attached to
@@ -144,8 +148,7 @@ Done (tests green, never seen on screen):
   Naismith-like rule adapted to cycling, pace factor), "Prévoir la sortie" (plan the outing) in the card of a track
   without times (`TrackList.tsx`, `Track.timesEstimated`, "horaires estimés" (estimated times) chip, "Effacer les
   horaires" (clear the times)), weather from the Open-Meteo **forecast** (`api.open-meteo.com/v1/forecast`, 16 days,
-  3 h memory cache; desktop CSP widened). Works on a route computed by the scouting ("Préparer une sortie") as on an
-  imported one.
+  3 h memory cache; desktop CSP widened).
 - **Roadbook**: `src/plan/roadbook.ts`, `src/ui/RoadbookPanel.tsx` ("Trace" tab, under "Montées et étiquettes" (climbs and labels)): steep
   sections ≥ 15 % / ≥ 25 %, key points (climbs, passes, summits, huts, water points, points of interest), km /
   elevation / D+ / time, click = playhead, "Copier" (copy), "Enregistrer (.txt)" (save as text). New landmark type
@@ -297,16 +300,66 @@ remain the source for each work item.
 
 ## Proposed next steps
 
-The roadmap is built. What remains:
+Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by owner:
 
-1. In the user's hands: tests on the machine with a GPU (`docs/tests-gpu.md`, region highlight included),
-   command-line rendering once on a real machine, Strava import on the website (done on the Windows desktop
-   application), signing certificates if wanted, then a first `v0.1.0` tag (release published by `desktop.yml`).
-2. Polish from real use still in progress (`docs/roadmap.md`, last section): sea of clouds in place of the manual
-   haze slider, steadier flyover camera (target height and ground clearance smoothed along the track).
-3. Extensions proposed and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only
-   export on the Linux desktop, a built-in openh264 encoder.
-4. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+**In progress (code)**
+1. Volumetric clouds: done on the work branch (still views and exported frames averaged over 32 / 16–32 renders,
+   sea of clouds with a dense base and wispy tops, lit at a low sun; ARCHITECTURE.md, clouds). The edge against the
+   relief can only be softened through density (three-clouds has no option). To judge on a GPU (`docs/tests-gpu.md`).
+2. « Mer de nuages » as a surface (« Nappe »): done on the work branch (« Rendu de la mer de nuages » › « Nappe »,
+   `CloudSeaSurface`, noise-free billows, soft edges against the summits). Compare it with the volumetric sea on a
+   real GPU (look, fps) and keep the better one as the default.
+3. On the work branch, not yet merged: « Lissage de la trace » out of « Plus de réglages », « Plan de situation à
+   l'ouverture / à la clôture » switches in the « Survol » tab (nothing on by default), WebGL context asking for the
+   high-performance GPU.
+
+**Proposed, waiting for the user's go**
+4. **Camera smoothing in time**: done on the work branch (« Lissage de la visée », « Lissage de la caméra » 3 s by
+   default, « Fin en douceur », « Lissage des virages » in metres; see ARCHITECTURE.md, "Flyover"). To check on a GPU.
+5. **Motion blur** (« Flou de bougé », speed effect; idea from MapDirector's « Lens » panel: field of view 60°, lens
+   flare, vignette, bloom, bloom radius, depth of field, motion blur 0.6). Export: render several sub-frames across the
+   shutter interval of each video frame and average them (exact, deterministic, also helps the clouds converge; cost:
+   × the sub-frame count). Preview: a cheaper velocity-based blur, or none. Setting: shutter amount 0–1 (0 = off by
+   default). Same « Lens » panel, already there: vignette (« Couleurs » › « Plus de réglages »); fixed field of view
+   (`CAMERA_FOV_DEG` = 50°). Requested by the user, with the motion blur: **bloom** (glow of the bright areas: sun,
+   snow, water; amount and radius), **lens flare** (« Reflet d'objectif » when the sun is in or near the frame),
+   **depth of field** (sharp on the marker, distance blur; amount). All three off by default, in a « Objectif »
+   section, same in preview and export (postprocessing effects in the existing composer: `BloomEffect`,
+   `DepthOfFieldEffect`; lens flare from the sun position, e.g. a custom effect or a maintained library).
+   Adjustable field of view: still to weigh.
+6. **Situation shot, more control**: done on the work branch (« Lieu » among the areas containing the track,
+   « Maintien » / « Plongée », « Cadrage » with « Capturer la vue actuelle », « Faire bouger le soleil »; see
+   ARCHITECTURE.md, "Film and timeline", Camera). To check on a GPU (`docs/tests-gpu.md`); the place list was only
+   tested against a mocked Overpass.
+7. **Several tracks: « À la suite » or « En parallèle »**: done on the work branch (ARCHITECTURE.md, "Several
+   tracks"). « Plusieurs traces » in the track list: « La première » (default, unchanged), « À la suite » (stages
+   with their own colour, name and figures, one timeline segment each, stage card, cut or dip between stages, order
+   of the list) and « En parallèle » (the ghost race, camera on the first track, the one ahead or all of them,
+   leaderboard toggle). Left: the sun, the clouds and the weather of a later stage still follow the first track (a
+   one-line change in `AtmosphereLayer` / `CloudsLayer` / the weather store, owned by the clouds work); no hold or
+   camera move between stages (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
+8. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
+   the current lots): overlay-only export on the
+   Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop. Dropped by the user: GoPro GPS time (GPMF).
+
+**Later, once the desktop and web versions are finished and working**
+- **Web app highly usable on mobile** (large lot, user's request). Today the interface is built for a desktop screen,
+  mouse and keyboard. To cover: a layout for phone and tablet widths (panels as bottom sheets, one panel at a time,
+  the 3D view kept visible); touch gestures for the 3D view and the timeline (pinch, two-finger orbit, drag of clips,
+  long press instead of right-click), touch-sized controls; a performance budget for mobile GPUs (pixel ratio cap,
+  lighter clouds and tiles, memory limits on iOS); import from the phone (file picker, share target of an installed
+  web app for GPX / FIT sent by Strava, Garmin or Komoot apps); export on mobile browsers (WebCodecs support and
+  memory to check per browser, shorter or lower-resolution fallback); offline use as an installed web app. Check
+  each browser's support (Safari iOS, Chrome Android) before choosing, and add a mobile scenario to `npm run e2e`.
+
+**In the user's hands**
+9. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
+   steady camera, free camera, start / finish pins, export.
+10. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
+   remove them; delete the old branches (`lot-suites`, `landmarks-hide`, `track-style`, `ui-polish`,
+   `timeline-polish`, `export-stream`, `timeline-videos`, `water`): the session cannot delete remote branches.
+11. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
+   application); signing certificates if wanted; then a first `v0.1.0` tag (release published by `desktop.yml`).
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.

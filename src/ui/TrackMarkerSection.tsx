@@ -118,8 +118,8 @@ function MarkerImageField({ marker, update }: { marker: MarkerSettings; update(p
 }
 
 /**
- * « Trace et marqueur » section of the Survol tab: the marker (ball, figurine, picture), the draw-on and the glow
- * first; line width, dashes, smoothing and marker size under « Plus de réglages ».
+ * « Trace et marqueur » section of the Survol tab: the marker (ball, figurine, picture), the draw-on, the glow and the
+ * smoothing first; line width, dashes and marker size under « Plus de réglages ».
  */
 export function TrackMarkerSection() {
   const style = useAppStore((s) => s.settings.trackStyle)
@@ -169,8 +169,16 @@ export function TrackMarkerSection() {
         <input type="checkbox" checked={style.glow} onChange={(e) => updateStyle({ glow: e.currentTarget.checked })} />
         Halo lumineux
       </label>
+      <RangeField
+        label="Lissage de la trace"
+        tip="Trace en zigzag ou caméra qui tremble ? Le lissage moyenne les positions GPS sur cette distance : la trace et la caméra suivent une ligne calme."
+        {...TRACK_SMOOTHING_RANGE}
+        value={style.smoothingM}
+        format={(v) => (v === 0 ? 'Aucun' : formatDistance(v))}
+        onChange={(smoothingM) => updateStyle({ smoothingM })}
+      />
 
-      <MoreSettings paths={['trackStyle.width', 'trackStyle.dash', 'trackStyle.smoothingM', 'marker.size']}>
+      <MoreSettings paths={['trackStyle.width', 'trackStyle.dash', 'marker.size']}>
         <RangeField
           label="Épaisseur de la trace"
           {...TRACK_WIDTH_RANGE}
@@ -185,14 +193,6 @@ export function TrackMarkerSection() {
           value={style.dash}
           labels={TRACK_DASH_LABELS}
           onChange={(dash) => updateStyle({ dash })}
-        />
-        <RangeField
-          label="Lissage de la trace"
-          tip="Moyenne des positions sur cette distance : gomme les zigzags du GPS, que la caméra suivrait sinon."
-          {...TRACK_SMOOTHING_RANGE}
-          value={style.smoothingM}
-          format={(v) => (v === 0 ? 'Aucun' : formatDistance(v))}
-          onChange={(smoothingM) => updateStyle({ smoothingM })}
         />
         <RangeField
           label="Taille du marqueur"

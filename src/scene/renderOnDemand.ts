@@ -4,7 +4,8 @@
  * - every frame while the film plays, while terrain tiles are loading and during a camera fit (their own `useFrame`);
  * - for WAKE_FRAMES frames after any change of the stores the scene reads (settings, film, playback, tracks, weather,
  *   highlighted region, labels, export), after a re-drape or a texture load (`wakeScene`): long enough for the
- *   temporal upscaling of the clouds to converge (~16 frames) and for effects run just after the change;
+ *   temporal upscaling of the clouds to fill (~16 frames) and for effects run just after the change;
+ * - by the clouds, until a still view has averaged CLOUD_SETTLE_FRAMES frames (`previewCloudPass`);
  * - by the orbit controls themselves (drei invalidates on each change, damping included), on a resize and by R3F on
  *   prop changes.
  * The video export drives its frames itself (`frameloop` 'never', see ExportController).
@@ -43,6 +44,30 @@ export function wakeScene(frames = WAKE_FRAMES): void {
 /** Time step of a frame, bounded: the first frame after an idle period would otherwise span the whole pause. */
 export function frameDelta(delta: number): number {
   return Math.min(delta, MAX_FRAME_DELTA_S)
+}
+
+/** Still frames the preview clouds average before the scene may sleep (CloudsLayer). */
+export const CLOUD_SETTLE_FRAMES = 32
+
+/** Cloud pass of a preview frame (CloudsLayer). */
+export interface PreviewCloudPass {
+  /** temporal upscaling: one pixel in 16 marched per frame, the others reprojected */
+  upscale: boolean
+  /** weight of this frame in the running average of the frames (without upscaling) */
+  alpha: number
+  /** ask for one more frame */
+  more: boolean
+}
+
+/**
+ * Cloud pass of a preview frame whose view has not changed for `still` frames (0: it just changed). Temporal
+ * upscaling is cheap while the view moves, but it never averages: each pixel keeps the one noisy ray marched for it,
+ * a grain a still view would keep for good. Once still, every pixel of the pass is marched and the frames are
+ * averaged (1/1 discards the upscaled history, then 1/2 … 1/CLOUD_SETTLE_FRAMES), frames asked for until then.
+ */
+export function previewCloudPass(still: number): PreviewCloudPass {
+  if (still <= 0) return { upscale: true, alpha: 1, more: true }
+  return { upscale: false, alpha: 1 / Math.min(still, CLOUD_SETTLE_FRAMES), more: still < CLOUD_SETTLE_FRAMES }
 }
 
 /** Keys of the app store whose change does not touch the scene (`terrainStats` is written by the scene itself). */

@@ -17,7 +17,8 @@
  * the pass of the other effects it would put back the raw HDR image (no haze, no tone mapping) along the ridges.
  * The colour grading (`settings.grading`, scene/GradingComposer.tsx) closes the chain, in the same pass after the SMAA.
  * Volumetric clouds (`settings.clouds`, scene/CloudsLayer.tsx) are composited by the aerial perspective; while they
- * are shown, the veil over the sky pixels is lighter (the clouds themselves cover it).
+ * are shown, the veil over the sky pixels is lighter (the clouds themselves cover it). A sea of clouds rendered as a
+ * surface (scene/CloudSeaSurface.tsx) is a mesh of the scene instead, hazed by the aerial perspective like the terrain.
  * The precomputed scattering textures ship with the package and are served locally at /atmosphere/ (see
  * vite.config.ts): generating them at start-up runs in idle callbacks, which never fire while a heavy scene
  * keeps the main thread busy, and the lights would stay black.
@@ -31,17 +32,19 @@ import type { AerialPerspectiveEffect, SkyLightProbe, SunDirectionalLight } from
 import { AerialPerspective, Atmosphere, Sky, SkyLight, Stars, SunLight, type AtmosphereApi } from '@takram/three-atmosphere/r3f'
 import { samplePath, trackPathOf } from '../flyover/path'
 import { mslLocalToEcef } from '../geo/geoid'
-import { sunDateAt, sunDayMs } from '../flyover/sun'
+import { shotSunShiftMs, sunDateAt, sunDayMs } from '../flyover/sun'
 import { useAppStore } from '../state/store'
 import { CLEAR_SCENE_WEATHER, hazeExtinction, sceneWeatherAt } from '../weather/sceneWeather'
 import type { SceneWeather } from '../weather/sceneWeather'
 import { useWeatherStore } from '../weather/store'
 import { createCloudNoiseTexture } from './cloudNoise'
+import { CloudSeaSurface } from './CloudSeaSurface'
 import { CloudsLayer } from './CloudsLayer'
 import { DEFAULT_GROUND_HEIGHT_M } from './CameraRig'
 import { useGradingEffect } from './GradingComposer'
 import { nightFillIntensity, sceneExposure, sunElevation } from './exposure'
 import { useTerrainContext } from './TerrainLayer'
+import { useFilmClock } from './usePacing'
 import { SHADOW_MAP_SIZE, TerrainShadow } from './terrainShadow'
 import { WeatherEffect } from './weatherEffect'
 
@@ -73,6 +76,8 @@ export function AtmosphereLayer() {
   const [sun, setSun] = useState<SunDirectionalLight | null>(null)
   /** day used when the track has no timestamps */
   const [today] = useState(() => Date.now())
+  /** film clock: a 'situation' shot may move the sun (`shotSunShiftMs`) */
+  const clock = useFilmClock()
   /** sun date, weather under the marker and the ground there for its haze */
   const path = track ? trackPathOf(track) : null
   const weatherEffect = useMemo(() => new WeatherEffect({ logarithmicDepth: gl.capabilities.logarithmicDepthBuffer }), [gl])
@@ -83,7 +88,8 @@ export function AtmosphereLayer() {
   const dateRef = useRef<Date | null>(null)
   const cloudMode = useAppStore((s) => s.settings.clouds.mode)
   const weatherLoaded = useWeatherStore((s) => s.series !== null && s.trackId !== null && s.trackId === track?.id)
-  const cloudsOn = cloudMode === 'manuel' || cloudMode === 'mer' || (cloudMode === 'meteo' && weatherLoaded)
+  const seaSurface = useAppStore((s) => s.settings.clouds.mode === 'mer' && s.settings.clouds.seaRender === 'surface')
+  const cloudsOn = !seaSurface && (cloudMode === 'manuel' || cloudMode === 'mer' || (cloudMode === 'meteo' && weatherLoaded))
   const noise = useMemo(() => createCloudNoiseTexture(), [])
   useEffect(() => () => noise.dispose(), [noise])
   /** local vertical in ECEF, for the sun elevation */
@@ -113,12 +119,13 @@ export function AtmosphereLayer() {
     const atmosphere = atmosphereRef.current
     if (!frame || !up || !atmosphere) return
     const { playback, settings } = useAppStore.getState()
-    const date = sunDateAt(path, playback.progress, {
+    const sunDate = sunDateAt(path, playback.progress, {
       sunFromTrack: settings.sunFromTrack,
       solarHour: settings.sunHour,
       lon: frame.origin.lon,
       dayMs: sunDayMs(settings.sunDate, track?.stats.startTime, today),
     })
+    const date = new Date(sunDate.getTime() + shotSunShiftMs(clock, playback.timeS ?? clock.timeAtProgress(playback.progress)))
     atmosphere.updateByDate(date)
     dateRef.current = date
     const elevation = sunElevation(atmosphere.sunDirection, up)
@@ -222,6 +229,7 @@ export function AtmosphereLayer() {
         <SkyLight ref={skyLightRef} />
         <SunLight ref={setSun} />
       </group>
+      {seaSurface && <CloudSeaSurface sun={sun} sky={skyLightRef} nightFill={nightFillRef} path={path} />}
       <EffectComposer multisampling={0}>
         {cloudsOn && <CloudsLayer date={dateRef} path={path} noise={noise} />}
         <AerialPerspective ref={aerialRef} stbnTexture={noise} />

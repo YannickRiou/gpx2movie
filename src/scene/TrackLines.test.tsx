@@ -4,6 +4,7 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import { Line2 } from 'three/addons/lines/Line2.js'
 import type { InterleavedBufferAttribute, TypedArray } from 'three'
 import type { TerrainEngine, Track, TrackPoint } from '../core/types'
+import { buildSequence } from '../flyover/sequence'
 import { createLocalFrame } from '../geo/ellipsoid'
 import type { TrackLineSet } from './TrackLines'
 
@@ -431,6 +432,17 @@ describe('draw-on (« trace qui se dessine »)', () => {
     const lead = { ...makeTrack('a', [segmentA]), stats: { distanceM: 200, ascentM: 0, descentM: 0, pointCount: 2 } }
     expect(drawOnDistances([lead, makeTrack('b', [segmentB])], 0.25, null)).toEqual([50, Infinity])
     expect(drawOnDistances([], 0.5, null)).toEqual([])
+  })
+
+  it('« À la suite »: the stages flown whole, the current one to the marker, the next ones not yet', () => {
+    const tracks = [makeTrack('a', [segmentA]), makeTrack('b', [segmentB]), makeTrack('c', [segmentA])]
+    const sequence = buildSequence(tracks)
+    const [a, b] = sequence.stages
+    const at = (b.startM + (b.endM - b.startM) / 2) / sequence.stages[2].endM
+    const [da, db, dc] = drawOnDistances(tracks, at, null, sequence)
+    expect(da).toBeCloseTo(a.endM + (b.endM - b.startM) / 2, 6)
+    expect(db).toBeCloseTo((b.endM - b.startM) / 2, 6)
+    expect(dc).toBe(0)
   })
 
   it('cuts every segment at a distance counted along the whole track, then draws it whole again', () => {

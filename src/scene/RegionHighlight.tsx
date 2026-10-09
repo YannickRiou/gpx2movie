@@ -35,7 +35,7 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js'
 import type { TerrainEngine } from '../core/types'
 import { isExportBusy, registerDrapeFlush, useExportStore } from '../export/store'
-import { highlightsRegion } from '../film/model'
+import { filmRegionId, highlightsRegion } from '../film/model'
 import { REGION_AREA_MARGIN_M, regionHighlightOpacity } from '../flyover/filmCamera'
 import { centroid } from '../geo/lonLat'
 import { syncRegion, useRegionStore } from '../osm/region'
@@ -47,7 +47,7 @@ import { useTerrainContext } from './TerrainLayer'
 import { REDRAPE_DEBOUNCE_MS, REDRAPE_MAX_WAIT_MS, buildDrapeBuffer, computeDrapedPositions } from './TrackLines'
 import { createGlowMaterial } from './trackLineStyle'
 import { useDebouncedCallback } from './useDebouncedCallback'
-import { useFilmClock } from './usePacing'
+import { useFilmClock, useFilmTrack } from './usePacing'
 
 /** Ink over the outside of the region, at this opacity. */
 const DARK = new Color(LABEL_PANEL_COLOR)
@@ -114,8 +114,9 @@ function drawNameTexture(text: string): { texture: CanvasTexture; width: number;
 }
 
 export function RegionHighlight() {
-  const track = useAppStore((s) => s.tracks[0])
+  const track = useFilmTrack()
   const wanted = useAppStore((s) => highlightsRegion(s.settings.film))
+  const regionId = useAppStore((s) => filmRegionId(s.settings.film))
   const exaggeration = useAppStore((s) => s.settings.exaggeration)
   const region = useRegionStore((s) => s.region)
   const { engine, frame } = useTerrainContext()
@@ -125,8 +126,8 @@ export function RegionHighlight() {
     clockRef.current = clock
   })
 
-  // one region per track box, only while a shot highlights it (syncRegion is idempotent); forgotten on unmount
-  useEffect(() => syncRegion(track?.bounds ?? null, wanted), [track, wanted])
+  // one region per track box and place, only while a shot highlights it (syncRegion is idempotent); forgotten on unmount
+  useEffect(() => syncRegion(track?.bounds ?? null, wanted, regionId), [track, wanted, regionId])
   useEffect(() => () => syncRegion(null, false), [])
 
   const parts = useMemo(() => {

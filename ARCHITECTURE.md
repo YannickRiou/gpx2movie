@@ -51,32 +51,34 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/marker*.ts` + `trackLineStyle.ts` | track and marker (see "Track and marker") | pure: `TrackStyle`, `DEFAULT_TRACK_STYLE`, `MarkerSettings`, `DEFAULT_MARKER`, `isValidTrackStyle`, `isValidMarker`, `withTrackStyleDefaults`, `withMarkerDefaults` (`markerSettings.ts`); `MARKER_FIGURE_PATHS`, `circlePath` (`markerFigures.ts`); `drawBadge`, `readableInk`, `squareCrop`, `fileToAvatarDataUrl`, `loadMarkerImage` (`markerBadge.ts`, 2D canvas); `markerBadge`, `badgeTexture`, `headsLeft`, `placeMarker`, `useMarkerImage`, `MARKER_SCREEN_FACTOR` (`markerSprite.ts`); `createGlowMaterial`, `applyDash`, `quantizedPixelSize`, `cumulativeDistances`, `cutAt`, `cutLine` (`trackLineStyle.ts`); `TrackMarkerSection` (`src/ui`) |
 | `src/flyover/path.ts` | flyover path | `buildTrackPath(track): TrackPath` (concatenated segments, cumulative distances, `time` in ms or NaN), `trackPathOf(track)` (same path, cached per track), `samplePath(path, distanceM): PathSample` (`ele` and `time` interpolated only if both neighbors have them), `recordedTimeAt(path, distanceM)` (fills points without a time), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)`, `pickProjectedPath(screen, distM, px, py, maxPx)` (point of the projected track closest to the pointer) |
 | `src/flyover/smooth.ts` | track smoothing (see "Track and marker") | `smoothPoints(points, windowM)`, `smoothTrack(track, windowM)`, `smoothedTrackPath(track, windowM)` (smoothed positions, recorded distances and times) |
-| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad? })` → `{ target, position, marker }`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
-| `src/flyover/cameraSettings.ts` | camera styles and presets | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
+| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad?, aimProgress?, cameraProgress? })` → `{ target, position, marker }`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
+| `src/flyover/cameraSettings.ts` | camera styles and presets | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `withCameraDefaults`, `turnSmoothingM(camera, lengthM)`, `advanceProgress(progress, dt, speed, durationS)` |
+| `src/flyover/timeSmoothing.ts` | camera smoothing in film time | `timeSmoothing(clock, timeS, motionS, camera)` → `{ aimProgress, cameraProgress, timeS }`, `windowAverage`, `easedEndTimeS`, `smoothsInTime`, `TIME_SMOOTHING_SAMPLES` |
 | `src/flyover/climbs.ts` | detected climbs | `detectClimbs`, `climbsOf(track)` (cached per track), exported thresholds, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | 3D labels | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`…; `setLabelSource(id, labels)` (prefixed, unique ids), `useLabelSources` |
 | `src/flyover/pacing.ts` | flyover pacing | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance`; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses given by the film); `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
 | `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha`, `START_HEIGHTS`, `START_HEIGHT_LABELS`, `highlightsRegion`; `autoStops`, `stopCandidates`, `materializeStops`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `attachToStop`, `followStops`, `edgeScrollSpeed`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
-| `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `regionDistanceM`, `regionHighlightOpacity`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
-| `src/flyover/sun.ts` | sun date, sunrise / sunset | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
+| `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)` (`options.follow`: `FollowedFlight`), `markerAt`, `framedGroup`, `overviewView`, `regionView`, `situationTarget`, `situationFramingOf`, `regionDistanceM`, `regionHighlightOpacity`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
+| `src/flyover/sun.ts` | sun date, sunrise / sunset | `shotSunShiftMs(clock, timeS)`, `SHOT_SUN_HOURS`, `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | track colored by a metric | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (label, unit, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposure under the atmosphere | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
 | `src/weather/*` | weather of the outing (archive, or forecast for a planned outing) | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays` (source and days), `forecastCacheKey`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION`; `weatherAt(series, timeMs, lon, lat)`, `weatherAtTimes(series, timesMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel`; `useWeatherStore`, `syncWeather` |
 | `src/plan/timing.ts` | estimated times of a planned outing (see "Planned outing") | `PLAN_ACTIVITIES`, `PLAN_ACTIVITY_LABELS`, `PACE_RANGE`, `OutingPlan`, `stretchHours`, `estimateElapsedS`, `withEstimatedTimes`, `withoutTimes`, `planActivityOf`, `localDepartureMs`, `localDayAndTime`, `localUtcOffsetMin` |
 | `src/plan/roadbook.ts` | roadbook (see "Planned outing") | `steepSections`, `roadbookLandmarks`, `buildRoadbook` → `Roadbook` (`rows`, `steep`, totals), `formatPlaceClock`, `passageText`, `roadbookSummary`, `longestSteepText`, `roadbookText`, thresholds `STEEP_PERCENT`, `VERY_STEEP_PERCENT`, `STEEP_MIN_LENGTH_M`, `STEEP_MERGE_GAP_M`, `SAME_PLACE_M`, `ROADBOOK_LANDMARKS` |
-| `src/osm/region.ts` + `src/scene/regionMesh.ts` + `src/scene/RegionHighlight.tsx` | administrative region of the outing, framed and highlighted by the region view (see "Film and timeline", Camera) | `regionName`, `regionCandidatesQuery`, `parseRegionCandidates`, `chooseRegion`, `regionGeometryQuery`, `parseRegionGeometry`, `simplifyRings`, `fetchRegion`, `regionFrame`, `REGION_MIN_RATIO`, `REGION_MAX_POINTS`; `useRegionStore`, `syncRegion`, `holdRegion`; pure, tested: `buildRegionMesh`, `ringDepths`, `labelPoint`, `ringSegments`, `LABEL_GRID`; `RegionHighlight` |
+| `src/osm/region.ts` + `src/scene/regionMesh.ts` + `src/scene/RegionHighlight.tsx` | administrative region of the outing, framed and highlighted by the region view (see "Film and timeline", Camera) | `regionName`, `regionCandidatesQuery`, `regionKind`, `REGION_KIND_LABELS`, `parseRegionCandidates`, `containingRegions`, `chooseRegion`, `candidateId`, `regionGeometryQuery`, `parseRegionGeometry`, `simplifyRings`, `fetchRegion`, `regionFrame`, `REGION_MIN_RATIO`, `REGION_MAX_POINTS`; `useRegionStore`, `syncRegion`, `holdRegion`; pure, tested: `buildRegionMesh`, `ringDepths`, `labelPoint`, `ringSegments`, `LABEL_GRID`; `RegionHighlight` |
 | `src/osm/*` | OpenStreetMap landmarks | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures`; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `splitHidden`, `DEFAULT_LANDMARK_SETTINGS`, `withLandmarkDefaults`, `LANDMARK_DISTANCE_RANGE`, `KIND_LABELS`, `KIND_BADGES`; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
-| `src/overlay/*` | film overlay | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `withOverrides`, `resolveOverlayTheme`, `leaderboardRows`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (bridge to the export), `OverlayCanvas` |
+| `src/overlay/*` | film overlay | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `prepareOverlayFilm`, `overlayFilmFrameAt`, `stageCardAt`, `stageDipAt`, `createOverlayFilmCache`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `withOverrides`, `resolveOverlayTheme`, `leaderboardRows`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (bridge to the export), `OverlayCanvas` |
 | `src/export/*` | video export | `buildFrameSchedule`, `VIDEO_ASPECTS`, `VIDEO_RESOLUTIONS`, `videoSize`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `nativeEncoder.ts` (desktop ffmpeg): `exportCodec`, `createExportEncoder`, `createNativeVideoEncoder`, `wavFile`, `settle`, `renderSettledFrame`, `composeFrame`, `composeOverlayFrame`, `fillSky` (export sky, reused by the poster), `useExportStore`, `videoFileName`, `overlayBaseName`, `ALPHA_CANDIDATES`, `chooseVideoDestination`, `warnsInMemory`, `filmRate`, `ExportController`; `batch.ts` (batch rendering): pure, tested: `buildBatchJobs`, `formatKey`, `batchBaseName`, `estimateBatch`, `runBatch`, `batchProgressLabel`, `batchSummary`; `exportJob`, `useBatchStore` |
 | `src/poster/*` | poster (see "Poster") | pure, tested: `PosterSettings`, `DEFAULT_POSTER`, `POSTER_FORMATS`, `posterSize`, `isValidPoster`, `withPosterDefaults`; `posterContent`, `posterFigure`, `availableFigures`, `posterStats`, `totalStats`, `trackLine`, `POSTER_LIST_MAX`; `posterLayout` (boxes), `fitText`, `fitLines`, `fitTrackList`, `wrapText`, `truncate`; `drawPoster`, `coverCrop`, `POSTER_THEMES`, `POSTER_FONTS`; `framingPath`, `planFlatMap` (`view.ts`); not pure: `renderFlatMap` (`view.ts`), `currentPosterContent`, `startPoster`, `usePosterPreview`, `previewKey` (`export.ts`), `PosterPanel` |
-| `src/flyover/race.ts` | ghost race | `RACE_SYNC_MODES`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers`; `useRace`, `RaceMarkers` |
+| `src/flyover/race.ts` | ghost race | `RACE_SYNC_MODES`, `RACE_CAMERAS`, `STAGE_TRANSITIONS`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers`; `useRace`, `RaceMarkers` |
+| `src/flyover/sequence.ts` + `follow.ts` | several tracks (see "Several tracks") | `Stage`, `Sequence`, `playsInSequence`, `buildSequence`, `sequenceOf`, `filmSequenceOf`, `filmTrackOf`, `stageAt`, `sequenceLandmarks`; `filmFollowOf(tracks, race, smoothingM)`; hooks `useFilmTrack`, `useFilmSequence` (`scene/usePacing.ts`) |
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | weather in the scene | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction`; `WeatherEffect` |
-| `src/osm/paths.ts` + `src/route/graph.ts` + `src/route/planner.ts` + `src/terrain/heightAt.ts` + `src/osm/geocode.ts` + `src/ui/RoutePanel.tsx` | scouting (future route) | `pathsQuery` (`highway` ways in a box aligned on a 0.02° grid, without motorways or private ways), `parsePaths`, `fetchPaths` (Overpass client, shared queue and cache); `buildGraph` (nodes = points shared by ways, cost = length × way-type factor: trails 1, main roads 3), `nearestNode`, `shortestPath` (A*), `routeThrough` (`RouteError`, point more than `MAX_SNAP_M` = 500 m from a path); `computeRouteTrack` (paths within 2 km of the points, route densified to 20 m, `fetchHeights` elevations at zoom 13, `gpx` track without times, points stored as waypoints "Départ" (start) / "Étape n" (stage n) / "Arrivée" (finish)), `useRouteStore` (draft outside the settings: no presets, no undo; pins `setLabelSource('route', …)`), `planAreaAround`, `isRouteTrack`; `findPlace` / `parseCoordinates` (Nominatim, on submit only, 1 request/s); store `planArea` / `setPlanArea`: terrain without a track (the scene mounts as soon as `bounds` exists; flyover, track, water and export only with a track); "Point de passage ici" (waypoint here) entry in `TrackMenu` |
 | `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | reflective water | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater`; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH`; `WaterLayer`, `WATER_LIFT_M`; `useWaterStore` (`osm/store.ts`) |
 | `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | volumetric clouds | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `withCloudDefaults`, `seaTopFor`, `cloudCoversAt`, `sceneCloudsFrom`, `seaOfClouds`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor`; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
+| `src/scene/cloudSea.ts` + `src/scene/CloudSeaSurface.tsx` | surface sea of clouds | `seaRelief`, `billow`, `gradientNoise`, `octaveWeight`, `seaNoisePoint`, `seaBaseAltitude`, `curvatureDropM`, `edgeFade`, `rimFade`, `buildRadialGrid`, `terrainBoxOf`, `terrainGridCentres`, `seaReliefGlsl`, `glslFloat`; `CloudSeaSurface` |
 | `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | color grading | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms`; `GradingEffect`; `useGradingEffect`, `GradingComposer` |
 | `src/project/*` | project document, history, presets | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
-| `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import") |
+| `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`, `isProjectThumbnail`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import") |
 | `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefix` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | zustand state | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` (shell); `shell.ts` (pure, tested: `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`); `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`); `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `runImport`, `loadSample`, `chainLoadedTracks`); `importFlow.ts` (import orchestration without React, tested) |
@@ -117,8 +119,9 @@ idle, no more frames. A frame is requested on every frame while the film plays, 
 change in the stores read by the scene (application except `terrainStats` and `loading`, weather, highlighted region,
 labels, export), after
 a drape (track, water, labels), the loading of the label font or the marker image, and for each
-texture from the three loaders (sky, clouds): the time for the temporal upsampling of the clouds to converge
-(~16 frames). OrbitControls (drei) requests its own frames, damping included. The time step of a frame is
+texture from the three loaders (sky, clouds): the time for the temporal upsampling of the clouds to fill
+(~16 frames). The clouds ask for frames themselves until a still view has averaged `CLOUD_SETTLE_FRAMES` = 32
+frames (`previewCloudPass`, below). OrbitControls (drei) requests its own frames, damping included. The time step of a frame is
 capped at `MAX_FRAME_DELTA_S` = 0.25 s (`frameDelta`), and `wakeScene` resets the clock when the scene was asleep
 (`clock.getDelta()`): playback and reframing do not jump after a pause.
 The export keeps `frameloop 'never'` and draws its own frames. Measured with software rendering: no more frame requests
@@ -126,7 +129,8 @@ once the margin has elapsed (~30 s there, one frame per second; ~0.5 s on a real
 counted in frames (retry of a failed tile, unloading) wait for the next frame.
 
 Cloud preview: lightened "bas" (low) preset (`PREVIEW_MARCH`: 120 steps of at least 150 m, 15 for shadows, instead of
-200, 100 m and 25), at half resolution and temporally upsampled; the export goes back to the chosen quality.
+200, 100 m and 25), at full resolution, temporally upsampled while the view changes, averaged with the "bas" marches
+once it is still (see "Volumetric clouds", Quality); the export goes back to the chosen quality.
 
 ## Terrain engine — design
 
@@ -367,7 +371,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   terrain sampler), with no state from one frame to the next, so the video export can render any frame in isolation.
   Orbit and cinematic (`movesWithTime`) follow the film time (`timeS`, or progress × duration when missing) and therefore keep
   turning during pacing pauses; the other styles depend only on progress. Heading = chord
-  [d − w, d + w] (w = 2% of the track, 150 m–1.5 km, × smoothing), automatic distance 4% of the track (600 m–4 km, × distance).
+  [d − w, d + w] (2w = « Lissage des virages » `turnSmoothingM` in metres; 0 = « Auto »: w = 2% of the track,
+  150 m–1.5 km, × the `smoothing` multiplier of the presets and older projects), automatic distance 4% of the track (600 m–4 km, × distance).
   Styles (`settings.camera.style`): `chase` (behind the marker), `sway` (swing toward the outside of bends:
   50° · tanh(0.8 · T / 50°), T = sum of turn angles weighted by a tent over ±2w, continuous and calm), `orbit` (6°/s
   around the marker from the start heading), `top` (≥ 70°, distance × 2.5, north or heading up), `cinematic` (distance × 1.6,
@@ -385,10 +390,32 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   then the camera is kept `MIN_TERRAIN_CLEARANCE_M` (40 m) above the actual terrain below it (a bump narrower than a
   cell). About 65 terrain samples per frame. On ±15 m bumps 30 m wide, the frame-to-frame height change drops from
   3–35 m to 0.16 m on flat ground, the change of vertical speed from 1–70 m to under 2.5 m on hills.
-- **Camera settings**: `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp }` and named
+  **Smoothing in film time** (`src/flyover/timeSmoothing.ts`, applied by `computeFilmView`; still no frame-to-frame
+  state): the aim point follows the marker's progress averaged over « Lissage de la visée » `aimSmoothingS` (0 by
+  default: on the marker), the camera follows it averaged over « Lissage de la caméra » `cameraSmoothingS` (3 s by
+  default), each a raised-cosine window of 21 fixed samples of `clock.progressAtTime` centred on the film time; the
+  camera then stands around its own point of the track (`cameraProgress`, heading and sway measured there) at the
+  aim's height, looking at the aim (`aimProgress`), the marker staying on its progress. The progress is averaged, not
+  the placements: at constant speed it is unchanged (the look of a film stays the same away from speed changes), the
+  averaged point stays on the track (no corner cut, no angle to average), and a sample costs a clock look-up, not a
+  placement. Speed changes, pacing pauses and stops are anticipated and eased: a stop entered over 1.5 s jerks about
+  half as much at 3 s, a quarter at 7.5 s; the start of the flight (the flight view was still during the opening, then
+  at full speed) no longer jumps. Edges: the clock holds the progress outside the flight (0 during the opening, 1
+  during the closing) and clamps the film time, so the windows reach across the shots without a jump; the shot curves,
+  the stop cameras (orbit angle, « Vue large », « Fixe » held motion time) and the camera keys keep the marker's time
+  and progress, so a framing pinned for an item is the one seen during it. « Fin en douceur » `endingS` (0 by
+  default): over its last seconds the camera time slows down at a constant rate to a stop (`easedEndTimeS`: speed 1 →
+  0, held from the end of the flight at half the ease short of it), the time-based motions (orbit, cinema) too; the
+  aim keeps following the marker to the finish, so the camera stops and turns to watch it. `filmViewMovesWithTime` is
+  true during every stop when one of the three is on (the export then renders those frames instead of repeating one).
+- **Camera settings**: `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp, turnSmoothingM,
+  aimSmoothingS, cameraSmoothingS, endingS }` (a camera saved before the last four gets them from `DEFAULT_CAMERA`,
+  `withCameraDefaults` in `SETTING_UPGRADES`: « Auto » keeps its multiplier, so the turns look the same) and named
   presets (`CAMERA_PRESETS`: Poursuite (chase), Hélicoptère (helicopter), Drone haut (high drone), Vue du dessus (top view), Orbite (orbit), Cinéma (cinema)) in
   `src/flyover/cameraSettings.ts`; `settings.flyoverDurationS` (15–600 s, 60 by default) = duration at ×1, the timeline
-  speed applies on top. "Survol" tab (`src/ui/CameraPanel.tsx`, "Caméra" and "Durée et rythme" sections). While paused, a camera setting change repositions the camera.
+  speed applies on top. "Survol" tab (`src/ui/CameraPanel.tsx`, "Caméra" and "Durée et rythme" sections; the
+  smoothing sliders under the camera's « Plus de réglages », « Lissage des virages » showing the « Auto » length for
+  the first track). While paused, a camera setting change repositions the camera.
   "Cadrer la caméra pendant cet élément" (frame the camera during this item; inspector of a text or a media item): `addItemCamera` places a framing where
   the marker is at the start of the item (selected, to be adjusted) and, if the marker moves during the item, a second one at
   its end that keeps the framing that was there: neighboring framings keep their values (between the end of the item and the
@@ -433,7 +460,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   `USE_LOGARITHMIC_DEPTH_BUFFER`; the define is added to the effect, otherwise the whole scene is seen as infinitely far.
 - **Track**: unlit materials; their color is divided by `renderer.toneMappingExposure` (`applyExposure`).
 - **Sun at the time of the outing** (`settings.sunFromTrack`, on by default): when the first track is timestamped, the lighting
-  date is the **recorded** time of the point under the marker (`sunDateAt`), updated every frame by
+  date is the **recorded** time of the point under the marker (`sunDateAt`; shifted during a situation shot that
+  moves the sun, `shotSunShiftMs`, see "Film and timeline"), updated every frame by
   `atmosphereRef.current.updateByDate(date)` in `useFrame` (not the `date` prop: the two do not combine). Points without
   a time are filled by interpolation over distance (`recordedTimeAt`); a pause or a jump between segments is crossed
   instantly. Without timestamps or with the option unchecked: fixed solar time. The timeline shows the recorded time at the marker
@@ -561,7 +589,11 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   startHeight?, highlight? }` (1–30 s; default descente 6 s / 5 s; a shot switched to `situation` while it still has its
   default duration gets `SITUATION_DURATION_S`, 9 s, for its long dive (`updateShot`; saved films keep theirs); `transition` `'enchaine'` by default, `'coupe'`,
   `'fondu-noir'`, `'fondu-blanc'`, `dipS` 0.3–2 s, 1 s by default: optional, an old film stays continuous;
-  `startHeight` `'region'` (default) or `'pays'` and `highlight` (default off) for a `situation` shot, see below);
+  `startHeight` `'region'` (default) or `'pays'`, `highlight` (default off) and `regionId` (« Lieu », OSM area
+  `relation/<id>` or `way/<id>`, absent = automatic) and `holdS` (« Maintien », 0–10 s, `SITUATION_HOLD_RANGE`,
+  absent = 0) and its framing, `tiltDeg` (1–60°), `distanceKm` (5–400 km), `heading` (`'libre'` / `'boussole'`),
+  `bearingDeg` (0–359°), `headroomPct` (0–30 %), all absent by default (`SituationFraming`), and `moveSun` (default
+  off) for a `situation` shot, see below);
   `autoStops` (generated stops) and `autoMode`: `'temps-forts'` (default for new projects) or `'rythme'` (earlier
   projects);
   `stops[]` `{ id, atM, durationS (0.5–60 s), camera: 'film' | 'orbite' | 'large' | 'fixe', label?, source?: { kind, ref? } }`
@@ -651,14 +683,44 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   of the frame (`groundReach`, flat ground, 50° vertical field of view) stays within 400 km of the track's box
   (`REGION_REACH_M`; the terrain area of a film with a region view reaches 500 km, `REGION_AREA_MARGIN_M`), never
   closer than the overview. A single move (geometric distance, smootherstep), which passes the overview distance on the way
-  without stopping there: no jerk, never backing up. The camera far plane (5,000 km) limits nothing; seen from above,
+  without stopping there: no jerk, never backing up. **Hold and push-in** (« Durées » in the inspector: « Maintien »,
+  then « Plongée » at the opening, « Remontée » then « Maintien » at the closing): `holdS` of the shot's `durationS`
+  is spent still on the region view (`situationTiming`: hold + move = duration, so the clock and the timeline keep
+  reading `durationS`; a move made longer than 30 s in all shortens the hold), the smootherstep move takes the rest
+  (`shotBlend(…, holdS)`). Without a hold (every film saved before), the move takes the whole shot: exactly the
+  curve of before. **Framing** (« Cadrage », `regionView(…, { framing })`, pure): « Inclinaison » `tiltDeg` from the
+  vertical (default 25°, `SITUATION_TILT_DEFAULT_DEG`, = `REGION_PITCH_DEG` 65° above the horizon); « Distance »
+  `distanceKm` used as is instead of the automatic distance (« Auto » at the left of the slider; no « Pays » or
+  portrait factor, « Hauteur » greyed out), still within the reach of the terrain for that tilt and never nearer
+  than the overview; « Cap » « Libre » (the overview's side, as before) or « Boussole » (looking toward
+  `bearingDeg`, « Orientation », 0° = north up: camera on the opposite side of the target); « Marge » (`headroomPct`,
+  in « Plus de réglages »): view and target moved up along the frame's vertical by 2 · h · distance · tan(25°), so the
+  target sits h of the frame height below the middle. « Capturer la vue actuelle »: `FlyoverRig` registers
+  (`registerFramingCapture`, `src/osm/region.ts`, so the UI does not import three.js) a reader of its camera around
+  `situationTarget` (region centre when the shot highlights and it is loaded, else the track's), and
+  `situationFramingOf` turns it into tilt, distance and bearing, rounded and clamped (heading set to « Boussole »).
+  A compass bearing opposite to the flight's direction makes the camera turn quickly during the push-in (directions
+  are nlerped, as for every shot). **Moving sun** (« Soleil » › « Faire bouger le soleil », `moveSun`): a time lapse
+  of `SHOT_SUN_HOURS` (2 h) of the day over the whole shot, added to the sun date of the frame
+  (`shotSunShiftMs(clock, timeS)` in `src/flyover/sun.ts`, applied by `AtmosphereLayer`, so the clouds and the
+  weather under the marker follow it): opening −2 h · (1 − u)², closing +2 h · u² (u = share of the shot). Chosen as
+  the simplest that joins the flight: the shot ends (starts) exactly at the flight's own sun, with the sun slowing to
+  a stop there, so no jump of light or of shadow speed at the boundary; the shadows sweep the relief seen from above.
+  No setting of its own (hours, direction): a start before dawn simply rises the sun. A pure function of the film
+  time: preview and export light the same frames. Only with the atmosphere (the fixed lights have no sun date). The camera far plane (5,000 km) limits nothing; seen from above,
   the engine picks coarse tiles (loading in time: `docs/tests-gpu.md`). **Region highlight** ("Mettre en avant la
   région" (highlight the region) in the shot inspector, under "Hauteur de départ" (start height), "Hauteur de fin" for
   the closing; `highlight`, off by default: no Overpass request and an unchanged framing for every film saved before,
   the user opts in): while the opening or the closing highlights it (`highlightsRegion`), `RegionHighlight` calls
-  `syncRegion` with the first track's box (`src/osm/region.ts`: Overpass `is_in`, admin levels 4 to 6, the smallest
-  boundary that contains the track's box and is at least 5 times larger, rings stitched with `stitchRings` and
-  simplified to 2,000 points, same queue and cache as the landmarks); `FlyoverRig` and the export frame it
+  `syncRegion` with the first track's box and the place chosen (`src/osm/region.ts`: one Overpass `is_in` request for
+  the areas around the centre of the box, tags and box only: admin levels 4 to 6, `boundary=national_park` /
+  `protected_area`, `leisure=nature_reserve`, `place=island`, `natural=mountain_range`, relations and closed ways;
+  those containing the whole box, smallest first, are offered in « Lieu » (`containingRegions`, store `candidates`);
+  `regionId` of the first shot that highlights (`filmRegionId`; `setFilmPlace` writes both shots: one place per film,
+  one region in the store), else the automatic choice, unchanged: the smallest administrative boundary that contains
+  the track's box and is at least 5 times larger (`chooseRegion`, `autoId`); a saved place no longer offered falls
+  back to it. Then the geometry of the chosen area only, rings stitched with `stitchRings` (a closed way is one ring)
+  and simplified to 2,000 points, same queue and cache as the landmarks); `FlyoverRig` and the export frame it
   (`useRegionStore.frame`), and the camera is placed again when it arrives, except during a video export: the export
   holds the region it started with (`holdRegion`, none if it was still loading) and an answer arriving meanwhile is
   applied at its end, so neither the framing nor the highlight changes mid-film. No boundary, offline or a failed query
@@ -674,8 +736,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   cannot be occluded correctly anyway), drawn after the terrain and the track line, under the ghost line, the marker
   and the labels. Unlit colours divided by the exposure. Opacity `regionHighlightOpacity(clock, timeS)`, pure: from the
   share of the region view in the shot (1 − `shotWeight` at the opening, `shotWeight` at the closing), smootherstep
-  between 0.55 and 0.85 (`REGION_HIGHLIGHT_FADE`): whole at the top, gone a little before the middle of the dive, back
-  as the closing climbs; held whole until the cut with "Coupe" or a fade. Shots always move with time
+  between 0.55 and 0.85 (`REGION_HIGHLIGHT_FADE`): whole at the top and during the hold, gone a little before the
+  middle of the dive, back as the closing climbs; held whole until the cut with "Coupe" or a fade. Shots always move with time
   (`filmViewMovesWithTime`), so the export draws every frame of it; hidden on the poster's overview still. OpenStreetMap
   is credited while a region is loaded (status bar, burned-in credits). Stop camera: `film`, the
   flight camera continues (the marker holds, so does the camera, except the orbit and cinematic styles, which keep their motion);
@@ -968,10 +1030,15 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
 - **Mes projets** (`platform/projectLibrary.ts`, `ui/library.ts`, "Projet" tab): `getPlatform().projectLibrary`
   (null on the website without Cache Storage). Two text files per project, named by a checked id (`[a-z0-9-]`, never a
   path coming from elsewhere): the document `<id>.openflyover.json` (the one from "Enregistrer", media included) then the entry
-  `<id>.entry.json` (`ProjectEntry { id, name, updatedAt, summary, sizeBytes }`, the only one read for the list; an unreadable
+  `<id>.entry.json` (`ProjectEntry { id, name, updatedAt, summary, sizeBytes, thumbnail? }`, the only one read for the list; an unreadable
   entry is discarded). Desktop: `<app data>/projects/` (plugin-fs, `readFile` / `writeFile` in UTF-8, same permissions as
   the packs). Website: cache `openflyover-projects-v1` (keys `/openflyover-projects/<file>`, `persist()` requested
-  once). No thumbnail: no capture of the current 3D view exists outside the poster. `useLibraryStore { entries,
+  once). **Thumbnail**: each write takes the 3D view (`scene/thumbnail.ts`, loaded with the scene: the canvas has no
+  `preserveDrawingBuffer`, so `invalidate` asks for one frame and R3F's `addAfterEffect` copies it in the same
+  animation-frame task onto a 2D canvas over the CSS sky, 240 px on its longest side, JPEG 0.7, ~10 KB) into the entry as a
+  data URL (`isProjectThumbnail`: an image data URL of 80,000 characters at most, otherwise dropped on save and on
+  read). No picture (hidden page, no frame within 2 s, tainted canvas): the entry keeps its last one; entries from
+  before have none and show an empty frame in the list. `useLibraryStore { entries,
   currentId }`: "Garder dans Mes projets" (keep in my projects) creates the entry of the open project; then **automatic save**
   (`installLibraryAutosave`, installed by `App`) 3 s after the last change to the settings, the tracks or the name
   (`createAutosave`: restarted on each change, retried later during an export or a batch render, never two
@@ -1021,9 +1088,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
 
 ## Planned outing (route scouting)
 
-Before an outing: load a **planned** route (GPX from Komoot, Visorando, IGNrando…, usually without times, or a route
-computed in "Préparer une sortie"), fly over it, know at what time you will pass each point, where the sun will be
-and what the weather will be like.
+Before an outing: load a **planned** route (GPX from Komoot, Visorando, IGNrando…, usually without times), fly over
+it, know at what time you will pass each point, where the sun will be and what the weather will be like.
 
 - **Estimated times** (`src/plan/timing.ts`, pure, tested): `estimateElapsedS(segments, activity, pace)` gives the
   seconds since the start at each point, without breaks, step by step on the smoothed elevation as for the D+
@@ -1477,9 +1543,10 @@ and what the weather will be like.
 - `@takram/three-clouds` 0.7.6 (MIT, same family and same versions as `three-atmosphere` / `three-geospatial`).
   `CloudsLayer` (in the `AtmosphereLayer` `EffectComposer`, before `AerialPerspective`, which composites them) is mounted only
   with the atmosphere, in `manuel` or `mer` mode, or in `meteo` mode once the weather of the first track is loaded.
-- Setting `settings.clouds { mode: 'meteo' | 'manuel' | 'mer' | 'aucun', coverage, altitudeM, seaTopM, quality }` (default
-  `meteo`, 0.4, 1,200 m, 2,000 m, `medium`; `SETTING_CHECKS`: `isValidClouds`; `SETTING_UPGRADES`: `withCloudDefaults`
-  for projects saved before `seaTopM`), "Nuages" (clouds) block of the "Atmosphère et météo" section.
+- Setting `settings.clouds { mode: 'meteo' | 'manuel' | 'mer' | 'aucun', coverage, altitudeM, seaTopM, seaRender, quality }`
+  (default `meteo`, 0.4, 1,200 m, 2,000 m, `volume`, `medium`; `SETTING_CHECKS`: `isValidClouds`; `SETTING_UPGRADES`:
+  `withCloudDefaults` for projects saved before `seaTopM` and `seaRender`), "Nuages" (clouds) block of the "Atmosphère
+  et météo" section.
 - Pure (`sceneClouds.ts`, tested): `cloudCoversAt` gives the cover of the three layers (Open-Meteo low / mid / high at
   the sun date under the marker, via `sceneConditionsAt`; missing layer = total; manual: low = `coverage`,
   mid 60%, high 40%). `sceneCloudsFrom`: the library has only one `coverage`; the layer that asks for the most
@@ -1500,24 +1567,84 @@ and what the weather will be like.
   library rises towards the top of the layer for every texel at nearly the same height, so the top is flat at the
   scale of the scene and the shape noise erodes it into billows of 100–200 m, with gentle dips over the empty texels;
   density 0.3 (cumulus 0.2). Same drift with the wind and same export path as the other modes.
+  Shape (October 2026, after a real-GPU screenshot: a flat, uniform whitish sheet): coverage 0.95 and exponent 0.75,
+  so the dips over the empty texels break the sheet; a crisper threshold (`coverageFilterWidth` 0.3 instead of 0.6),
+  a density decreasing from the base to the top (`densityProfile` −0.5·h + 1 instead of 0.75·h + 0.25: dense bottom,
+  wispy top), a shape noise of 4 km instead of 3.3 km (`shapePeriodM`, `shapeRepeat` of the effect, cumulus-scale
+  billows) and a density of 0.15: the light enters the billows, which shade each other at a low sun, instead of
+  a flat white surface. `SceneClouds` carries the optional shape (`CloudShape`) and period; the other modes keep the
+  library defaults. The visible tops sit a little below `seaTopM` (the density fades towards the top of the layer).
+- Surface sea of clouds (`seaRender: 'surface'`, « Rendu de la mer de nuages » › « Nappe », shown under the top of the
+  sea): `CloudSeaSurface`, a mesh of the scene in `AtmosphereLayer` instead of `CloudsLayer` (not mounted then), to
+  compare with the volumetric sea on a real GPU. One draw call: a radial grid centred under the camera
+  (`buildRadialGrid`: 8 m to 300 km, 256 sectors, rings growing by 1 + 2π/256 so the cells stay square, ~112k
+  vertices), lifted in the vertex shader to `seaTopM` × exaggeration minus the relief, along the curvature of the Earth
+  (−r²/2R), and displaced into cumulus billows (`seaRelief`, pure and tested, written to GLSL by `seaReliefGlsl` from
+  the same constants): rounded domes on a jittered grid (smooth maximum between neighbours) in five octaves from
+  2.2 km down to 110 m (75 to 8 m high, unexaggerated) over a 9 km swell, in a domain warped by 380 m; an octave
+  covering fewer than 6 cells (vertex) or pixels (fragment) fades to its mean: noise-free by construction, flat at the
+  horizon. Drift: `cloudDrift` of the same wind × film time, as in the volumetric mode.
+  Shading (fragment, per pixel): normal by finite differences of the relief, steepened ×2 for the shading only
+  (cumulus domes are rounder than a sea can be displaced); sun direction, colour × intensity of the Takram `SunLight`
+  and irradiance of the `SkyLight` probe (plus the night fill) set every frame, so golden hour turns it warm; wrap
+  lighting (0.25), creases darker than the tops (occlusion from the relief), self-shadowing from the coarse relief
+  probed toward the sun at 60, 180 and 450 m, forward scattering (Henyey-Greenstein, g 0.6) through the rims and thin
+  tops; seen from below, a grey overcast ceiling. The aerial perspective hazes it like the terrain.
+  Soft edges: a 256² grid of terrain altitudes over the terrain area (tracks + `AREA_MARGIN_M`, lon/lat of the
+  samples computed once per area), a half-float texture sampled again (debounced, flushed by the export) when tiles
+  arrive; the cloud fades over its last 120 m (× exaggeration) above the terrain (`edgeFade`) and is discarded where
+  invisible (no depth written). A pure function of the settings, film time and camera: the export draws the same sea.
 - Wind: the archive's wind at the start of the outing (constant for the film, 4 m/s westerly breeze by default) × 2 at altitude
   × `CLOUD_TIMELAPSE` (20). Drift = wind × film time (`playback.timeS`, otherwise `clock.timeAtProgress`): offsets of
   the weather texture (Jacobian of the shader's cube-sphere UV, `weatherOffsetFor`) and of the shape textures (ECEF
   displacement × repeat) set directly on every frame, library velocities at zero: nothing accumulates.
-- Quality: preview with the `low` preset, half resolution, temporal upsampling. Export (`isExportBusy`): preset
-  `settings.clouds.quality`, full resolution, no upsampling and no shadow map TAA; the effect's `update`
-  is wrapped: 2 / 4 / 6 renders per frame with the frame counter set to k (noise slice) and `temporalAlpha`
-  = 1/(k+1) — the first discards the history, the following ones average (still camera, zero velocity). An exported
-  frame therefore never depends on the previous ones, whatever the number of `settle` renders.
+- Quality: preview with the `low` preset, full resolution (half until October 2026). While the view changes (camera, sun, cover, layers or
+  drift differ from the previous frame: `cloudInputs`), temporal upsampling: one pixel in 16 is marched per frame and
+  the others are reprojected, cheap but never averaged: each pixel keeps the single noisy ray marched for it, and on
+  the dense sea of clouds the jitter of the march start (up to two steps of 150 m and more) showed as a regular grain
+  of 4 × 4 cloud pixels (8 × 8 screen pixels at half resolution: the speckle of the user's real-GPU screenshot) that
+  a still view kept for good, whatever the number of frames drawn. Once the inputs are those of the previous frame
+  (`previewCloudPass`), every pixel of the pass is marched with the marches of the `low` preset (`STILL_MARCH`: 200
+  steps of at least 100 m, 25 for the shadow map) and the frames are averaged (`temporalAlpha` 1, 1/2 … 1/32: the
+  first discards the upsampled history), the clouds asking for frames until 32 are averaged; any change goes back to
+  upsampling and `PREVIEW_MARCH`. Cost: while the view moves, 1/16 of the canvas pixels marched per frame (1/64 at
+  half resolution before); once still, 32 frames marching every pixel, ~0.5–1 s on a real GPU (estimate; the first
+  one compiles the variant of the shader without upsampling once); the view stays interactive, any input goes back
+  to upsampling. Export (`isExportBusy`): preset `settings.clouds.quality`, full resolution, no upsampling and no
+  shadow map TAA; the effect's `update` is wrapped: 16 / 24 / 32 renders per frame (`EXPORT_SAMPLES`, low / medium /
+  high; 2 / 4 / 6 before) with the frame counter set to k (noise slice) and `temporalAlpha` = 1/(k+1) — the first
+  discards the history, the following ones average (still camera, zero velocity). An exported frame therefore never
+  depends on the previous ones, whatever the number of `settle` renders. The export cost of the clouds grows in
+  proportion (×6 for "Moyenne").
+- Grain, measured with SwiftShader (sea of clouds at 1,800 m, noon, still view 681 × 383, no terrain; mean absolute
+  difference between neighbouring pixels in a cloud-only crop, 8-bit, 0.6 on a smooth sky): before (upsampled, never
+  averaged) 5.9; still view averaged over 32 frames 0.7–0.9 at half resolution, 1.0 at full resolution (sharper); exported frame
+  "Moyenne" (medium) 9.7 with 4 renders, 2.4–2.9 with 24 (real shape detail included). Two still views differing only
+  by their noise slices: 1.46 apart with the golden-ratio noise, 1.99 with the former one. The grain is the march, not
+  SwiftShader: the sky and the terrain of the same frames are smooth (0.6), and the same speckle shows on the user's
+  real GPU. A plain average of the export renders (no variance clipping) was tried and dropped: its brightness
+  depended on the noise slices (unexplained). Verified: the root cause (upsampling keeps one noisy ray per pixel, the
+  resolve shader never averages it) and the numbers above; inferred: the cost on a real GPU.
 - Local resources: textures served at `/clouds/` by the `vite.config.ts` plugin (~2.8 MB). The spatio-temporal blue
   noise (STBN) of the Takram examples is not in the package (downloaded from GitHub, NVIDIA license): it is
-  replaced by an interleaved gradient noise generated at startup (`cloudNoise.ts`, 128 × 128 × 64), also passed to
+  replaced by an interleaved gradient noise generated at startup (`cloudNoise.ts`, 128 × 128 × 64; slice z shifted by
+  z × the golden ratio, modulo 1, so that consecutive slices stratify the march start of a pixel), also passed to
   `AerialPerspective` (otherwise it downloads it as soon as the clouds provide their shadow map).
 - Limits: the terrain is lit by sources (`SunLight`), so cloud shadows do not reach it (the
   sun stays dimmed by the weather); layers at a fixed altitude for the whole film; in the preview, temporal upsampling
-  trails when the camera moves fast; high cost on a weak GPU ("Aucun" (none) mode). In software rendering
-  (SwiftShader, headless tests) the clouds turn black once the sun is below ~35° (every mode), because of their
-  shadow map: with `cloudLayers[i].shadow = false` they render; not checked on a GPU.
+  trails when the camera moves fast, and the moving or playing preview keeps the grain of the upsampling (only a still
+  view and the export average); high cost on a weak GPU ("Aucun" (none) mode). The edge of the sea of clouds against
+  the relief is where the march stops on the depth of the terrain: three-clouds 0.7.6 has no option to soften it
+  (no soft-particle or depth-fade parameter); the lower density and the wispy top of the sea soften it somewhat.
+- Cloud shadow map (`SHADOW_MAX_FAR_M` = 50 km, `shadow.temporalPass` off): by default the library spreads its
+  cascades over the camera's far plane (5,000 km here, `FlyoverCanvas`), so the first of the two 256² cascades of the
+  preview covered ~1,000 km; below a sun of ~35° every cloud turned black (SwiftShader, every mode). Limited to
+  50 km, the clouds render down to a sun at the horizon, self-shadowed; the reprojection of the shadow map still made
+  the clouds beyond its range black at a low sun, so it is off (export already without it; the preview averages the
+  jitter of the shadow map with the frames of a still view). Beyond 50 km the clouds get the light of the short march
+  towards the sun only. Verified with SwiftShader (golden hour, sea of clouds, with relief): black before, lit and
+  self-shadowed after; not yet on a GPU. The resolve also drops a non-finite history or output (`guardResolve`,
+  defensive: a single NaN frame would otherwise stay in the history for good).
 
 ## Reflective water (phase 3)
 
@@ -1554,9 +1681,15 @@ and what the weather will be like.
 
 ## Ghost race (phase 7)
 
-- Progress remains the distance fraction of the first track (followed by the camera); each other track receives a
-  marker placed by `raceAt(race, progress)`, a pure function. Setting `settings.race { enabled, sync }`, "Course
-  fantôme" (ghost race) block in the track list (from two tracks).
+- Progress remains the distance fraction of the first track; each other track receives a
+  marker placed by `raceAt(race, progress)`, a pure function. Setting `settings.race { enabled, sync, camera? }`,
+  « En parallèle » in the « Plusieurs traces » block of the track list (from two tracks, see "Several tracks").
+- Camera (« Caméra sur », `camera`, absent = `'premiere'`: the first track, as before): `'tete'` the racer ahead
+  (`rankRacers`; once it has finished, the first one still racing), a cut when the lead changes; `'ensemble'` the
+  first track's flight view moved to the centre of all the racers and pulled back until their spread fits the frame
+  (`framedGroup`, × `GROUP_FRAMING_MARGIN` = 1.4, never nearer than the flight view: continuous). Another track chosen
+  in the list is made the first one (`flyTrack`). The film's marker stays on the first track
+  (`FollowedFlight.markerOnFilm`). « Classement à l'image » toggles the overlay's leaderboard widget.
 - Synchronization: `elapsed` (same time elapsed since each start), `clock` (same recorded time; waiting at the start,
   stopped at the finish), `distance` (same fraction of each track). The first two require timestamps on all the
   tracks, otherwise fall back to `distance`.
@@ -1564,6 +1697,44 @@ and what the weather will be like.
   gaps compared at equal fraction (exact on the same route); displayed as "+1 min 20", "−350 m".
 - `RaceMarkers` (after `FlyoverRig` in `TerrainLayer`): same kind of marker as the head (`settings.marker`, see "Track
   and marker") in the track color with an ink edge, same screen size as the main marker. Limit: the stops of the lead track are crossed instantly (playback advances by distance).
+
+## Several tracks (« Plusieurs traces »)
+
+- Block of the track list from two tracks: « La première » (default, nothing changes: the first track is flown, the
+  others drawn), « À la suite », « En parallèle » (the ghost race). Stored in `settings.race`, no migration: « En
+  parallèle » is `enabled` (as before), « À la suite » the optional `sequence` flag (ignored while `enabled`), with
+  `stageCards` (absent = on) and `stageTransition` (`'coupe'`, `'fondu-noir'` (absent), `'fondu-blanc'`); a project
+  saved before has neither, so its film is unchanged; one track is never a sequence (`playsInSequence`).
+- « À la suite » (`src/flyover/sequence.ts`, pure): the film flies a **sequence track** (`buildSequence`: the tracks'
+  segments one after the other in list order, id `suite:<ids>`, name `chainName`, never stored), cached on the tracks'
+  ids, points and names (`sequenceOf`) so it keeps its identity. Unlike « Enchaîner en un seul parcours », nothing is
+  merged: each track stays a stage (`Stage`: `startM` / `endM` along the sequence, `from` / `to` fractions of the
+  progress) with its colour, name and stats; the stage order is the list order (up arrow on a track: `moveTrack`).
+  `filmTrackOf(tracks, race)` (hook `useFilmTrack`) replaces `tracks[0]` wherever the film is concerned: film source
+  and clock (`useFilmSource`, `getFilmSource`: landmarks of every stage along the sequence, `sequenceLandmarks`, a
+  landmark near two stages once), FlyoverRig and the export, timeline, track picker, climbs and their labels,
+  kilometre labels, landmark, climb, roadbook and point-of-interest panels (seeking in metres along the film), region
+  highlight, water. Stops, speed sections, camera keys and landmark titles are anchored in metres along the sequence:
+  the first stage keeps the first track's metres, so switching mode keeps what was placed on it.
+- Clock: `FilmClockFor.cutsM` (the stages' starts) → `clock.cuts` (`{ atM, timeS }`, like the camera keys), read by
+  the timeline (one segment per stage in the « Plans » lane, `.film-tl__stage`: name and a band in the track's colour)
+  and the overlay (`overlayTime` copies them into `OverlayTime.cutsS`).
+- Camera (`src/flyover/follow.ts`, `filmFollowOf` → `FilmViewOptions.follow`): the flight camera flies the stage under
+  the marker on its own smoothed path at its own progress (`stageAt`), so it never glides across the jump between two
+  stages: a cut at the film time the marker reaches it. The shots still frame the whole sequence. A pure function of
+  the progress, passed by FlyoverRig and by the export's prefetch (`viewAt`): preview and export agree.
+- Overlay: `prepareOverlayFilm` / `overlayFilmFrameAt`: the live widgets show the stage under the marker (its distance,
+  D+, time, profile, mini-map), the opening and closing cards the name and totals of the sequence. A stage card
+  (`stageCardAt`, `StageCard`: name, « Étape 2 sur 3 · date », distance, D+; centred, `STAGE_CARD_S` = 5 s from the
+  flight start for the first, from its cut for the others) drawn even while the overlay is off, the live widgets
+  giving way to it; the first stage's card gives way to the title card when that is on. Dip of the cut
+  (`stageDipAt`, `DIP_DEFAULT_S` centred on it) merged with the shot dips; both enter the export's held-frame key.
+- Drawn lines with « trace qui se dessine » (`drawOnDistances(…, sequence)`): stages flown whole, the current one to the
+  marker, the next ones not yet. Start and finish labels name every stage's ends.
+- Limits: the weather, the sun date and the clouds follow the first track (weather store, `AtmosphereLayer`,
+  `CloudsLayer`), so the sun of a later stage is that of the first track at the same fraction and only the first
+  stage gets weather in the overlay; time smoothing of the camera must not average across a stage cut (as for a
+  shot that cuts).
 
 ## Track chaining
 
@@ -1686,8 +1857,8 @@ differs goes through `src/platform/`.
   `https://www.strava.com/oauth/authorize*` (Strava import); two fixed
   scopes, `$APPDATA/tiles` and `$APPDATA/projects` with their contents (`fs:scope`), in addition to the paths the dialog plugin adds for each
   chosen file and the two folders of a command-line render: nothing else is readable. CSP: `connect-src` /
-  `img-src` list the tile hosts (`src/terrain/sources.ts`), Open-Meteo (archive and forecast), the two Overpass servers and
-  Nominatim, plus `https://www.strava.com` (`connect-src` only, Strava import), `ipc:` and `blob:`; `style-src 'unsafe-inline'` with `dangerousDisableAssetCspModification:
+  `img-src` list the tile hosts (`src/terrain/sources.ts`), Open-Meteo (archive and forecast), the two Overpass servers,
+  plus `https://www.strava.com` (`connect-src` only, Strava import), `ipc:` and `blob:`; `style-src 'unsafe-inline'` with `dangerousDisableAssetCspModification:
   ["style-src"]` (Tauri would otherwise add a nonce that cancels `unsafe-inline`). **Any new source must also be added
   to the CSP in `tauri.conf.json`.**
 - **Verified**: `cargo check --target x86_64-pc-windows-msvc` passes (configuration, permissions, icons, `generate_context!`),
@@ -1722,6 +1893,15 @@ JavaScript.
   `nativeCodecFor` on the JavaScript side): `-c:v libvpx-vp9 -crf <qualité> -b:v 0 -deadline good -cpu-used 4 -row-mt 1`,
   sound `-c:a libopus`, `-f webm`; `crf` standard 34, high 31, maximum 26 (tried with the ffmpeg of an Ubuntu install: VP9 +
   Opus read by `ffprobe`, 44.1 kHz WAV resampled automatically).
+- **H.264 on the GPU** (`h264_encoder`): before the first MP4 export of a run (outside the lock), ffmpeg encodes a
+  tenth of a second of black (`probe_args`: `-f lavfi -i color=c=black:s=256x256:d=0.1 … -f null -`, 5 s at most,
+  then killed) with `h264_nvenc`, then `h264_vaapi`; the first that succeeds is kept for the run (`OnceLock`, name
+  written to stderr), `libx264` otherwise (not probed). A real encode, not `ffmpeg -encoders`: an ffmpeg built with
+  NVENC or VAAPI may have no GPU or driver to run it. NVENC: `-c:v h264_nvenc -preset p5 -rc vbr -cq <crf> -b:v 0
+  -pix_fmt yuv420p`; VAAPI: `-vaapi_device /dev/dri/renderD128` before the inputs, `-c:v h264_vaapi -rc_mode CQP
+  -qp <crf>`, filter `scale=out_color_matrix=bt709,format=nv12,hwupload`. Same numbers as the crf of libx264 (same
+  0–51 scale, approximate equivalents: sizes may differ). A failure during an export with a GPU encoder is reported
+  like any other (no retry on the processor in the middle of a file). WebM stays VP9 on the processor.
 - **Path**: the path of the file chosen in the "Enregistrer" dialog at the start of the export (`WritableFile.path`, set
   by `openWritablePath`; batch render folder included). `video_open` refuses a relative path or one outside the fs
   scope (where the dialog plugin adds each chosen file). The handle opened by the dialog writes nothing; it is
@@ -1747,7 +1927,8 @@ JavaScript.
   Rejected: `ffmpeg` as a sidecar (`bundle.externalBin`, 70 to 100 MB per platform, GPL license with x264); `rav1e` (AV1
   in pure Rust, too slow in 4K, less universal playback).
 - **Verified**: `cargo check --target x86_64-pc-windows-msvc`; JavaScript tests with a fake invoke
-  (`nativeEncoder.test.ts`). To be checked on a Linux desktop (`cargo test`, real export): `docs/tests-gpu.md`, section 7.
+  (`nativeEncoder.test.ts`); GPU probe without a GPU (both fail, `libx264` kept). To be checked on a Linux desktop
+  (`cargo test`, real export, NVENC / VAAPI): `docs/tests-gpu.md`, section 7.
 
 ## Offline packs (phase 6)
 

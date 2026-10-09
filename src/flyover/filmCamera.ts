@@ -12,7 +12,8 @@
  * above the ground. 'descente' eases over the whole shot; 'saut' holds the overview and moves in JUMP_S.
  * 'situation' eases over the whole shot like 'descente', from (or to) the region view: the overview's side, much
  * higher and steeper (`regionDistanceM`: tens to hundreds of kilometres), aimed at the highlighted administrative
- * region when there is one, in one move that passes the overview's distance on the way.
+ * region when there is one, in one move that passes the overview's distance on the way; it may hold the region view
+ * first (`holdS`) and the shot's framing may set its tilt, distance, compass heading and headroom (`regionView`).
  * 'balayage': the overview turns SWEEP_DEG around its target (ending on the flight's side) during the first
  * SWEEP_SHARE of the opening, then glides like 'descente' over the rest; the closing plays it backwards.
  * A shot whose transition cuts ('coupe', dips to black or white) holds its wide view and cuts at the boundary with
@@ -22,13 +23,14 @@ import { Vector3 } from 'three'
 import { clamp, smootherstep } from '../core/math'
 import type { LocalFrame, LonLat } from '../core/types'
 import type { ClockStop, FilmClock, FilmState } from '../film/clock'
-import { shotCuts } from '../film/model'
-import type { FilmShot, ShotStyle, StartHeight } from '../film/model'
+import { SITUATION_DISTANCE_KM_RANGE, SITUATION_TILT_DEFAULT_DEG, SITUATION_TILT_RANGE, shotCuts, situationTiming } from '../film/model'
+import type { FilmShot, ShotStyle, SituationFraming, StartHeight } from '../film/model'
 import type { HeightSampler } from '../scene/TrackLines'
 import { MIN_GROUND_CLEARANCE_M, computeCameraView, movesWithTime, type CameraView, type CameraViewOptions } from './camera'
-import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings, type CameraStyle } from './cameraSettings'
-import type { TrackPath } from './path'
+import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings } from './cameraSettings'
+import { samplePath, type TrackPath } from './path'
 import { cameraKeyEaseM, keyedCamera } from './cameraKeys'
+import { smoothsInTime, timeSmoothing } from './timeSmoothing'
 
 export { smootherstep }
 export { CAMERA_KEY_EASE_S, cameraKeyEaseM, keyedCamera } from './cameraKeys'
@@ -43,7 +45,7 @@ export const OVERVIEW_PITCH_DEG = 40
  * COUNTRY_DISTANCE_FACTOR × farther. A highlighted region is framed instead: its box fills the frame height (width
  * in portrait) with REGION_FIT_MARGIN.
  */
-export const REGION_PITCH_DEG = 65
+export const REGION_PITCH_DEG = 90 - SITUATION_TILT_DEFAULT_DEG
 export const REGION_DISTANCE_FACTOR = 8
 export const REGION_MIN_DISTANCE_M = 55_000
 export const REGION_MAX_DISTANCE_M = 165_000
@@ -69,12 +71,22 @@ export const STOP_ORBIT_MAX_DEG = 120
 /** 'large' stop: at the middle of its window, the camera is this much farther and this much higher (degrees of pitch). */
 export const STOP_WIDE_DISTANCE_FACTOR = 2.5
 export const STOP_WIDE_PITCH_DEG = 20
+/** Racers framed together (« Toutes les traces »): their spread around their centre × this fills half the frame height. */
+export const GROUP_FRAMING_MARGIN = 1.4
 const DEG = Math.PI / 180
 const UP = new Vector3(0, 1, 0)
 
-/** Fraction (0 = first view, 1 = second) of a shot `localS` seconds into it: opening overview → flight, closing flight → overview. */
-export function shotBlend(style: ShotStyle, phase: 'opening' | 'closing', localS: number, lengthS: number): number {
+/**
+ * Fraction (0 = first view, 1 = second) of a shot `localS` seconds into it: opening overview → flight, closing
+ * flight → overview. A 'situation' shot holds its region view `holdS` seconds (opening: first; closing: last) and
+ * moves by smootherstep over the rest; with no hold, over the whole shot, like 'descente'.
+ */
+export function shotBlend(style: ShotStyle, phase: 'opening' | 'closing', localS: number, lengthS: number, holdS = 0): number {
   if (!(lengthS > 0)) return 1
+  if (style === 'situation' && holdS > 0) {
+    const { holdS: hold, moveS } = situationTiming({ durationS: lengthS, holdS })
+    return ramp(phase === 'opening' ? localS - hold : localS, moveS)
+  }
   if (style === 'balayage') {
     const u = localS / lengthS
     return smootherstep(phase === 'opening' ? (u - SWEEP_SHARE) / (1 - SWEEP_SHARE) : u / (1 - SWEEP_SHARE))
@@ -105,7 +117,7 @@ export function turnedView(view: CameraView, angleRad: number): CameraView {
  */
 export function shotWeight(shot: FilmShot, phase: 'opening' | 'closing', localS: number, lengthS: number): number {
   if (shotCuts(shot)) return phase === 'opening' ? 0 : 1
-  return shotBlend(shot.style, phase, localS, lengthS)
+  return shotBlend(shot.style, phase, localS, lengthS, shot.holdS)
 }
 
 /** Share of the region view in a highlighting 'situation' shot below which its highlight is gone, above which it is whole. */
@@ -161,11 +173,14 @@ export function heldMotionTimeS(stop: Pick<ClockStop, 'startS' | 'holdStartS' | 
   return timeS + (middle - timeS) * weight
 }
 
-/** True when the view changes with the film time alone (progress unchanged): shots, orbiting or widening stops, orbit / cinema. */
-export function filmViewMovesWithTime(state: FilmState, style: CameraStyle): boolean {
+/**
+ * True when the view changes with the film time alone (progress unchanged): shots, orbiting or widening stops, every
+ * stop with a smoothing in time, orbit / cinema.
+ */
+export function filmViewMovesWithTime(state: FilmState, camera: CameraSettings): boolean {
   if (state.phase === 'opening' || state.phase === 'closing') return true
-  if (state.phase === 'stop' && (state.stop?.camera === 'orbite' || state.stop?.camera === 'large')) return true
-  return movesWithTime(style)
+  if (state.phase === 'stop' && (state.stop?.camera === 'orbite' || state.stop?.camera === 'large' || smoothsInTime(camera))) return true
+  return movesWithTime(camera.style)
 }
 
 // ---------------------------------------------------------------------------
@@ -252,9 +267,9 @@ export interface RegionFrame {
 
 /**
  * Distance of the region view of a 'situation' shot: from the track's box `diagonal` long, or fitting the `region`
- * box; × COUNTRY_DISTANCE_FACTOR for « Pays ». Its frame reaches no farther than REGION_REACH_M beyond the track's
- * box (`halfSideM` = its smaller half side, `offsetM` = distance from the region's centre to the track's); never
- * nearer than the overview.
+ * box; × COUNTRY_DISTANCE_FACTOR for « Pays »; or the distance chosen (`chosenM`, as is). Its frame, `pitchDeg`
+ * above the horizon, reaches no farther than REGION_REACH_M beyond the track's box (`halfSideM` = its smaller half
+ * side, `offsetM` = distance from the region's centre to the track's); never nearer than the overview.
  */
 export function regionDistanceM(
   diagonal: number,
@@ -263,14 +278,16 @@ export function regionDistanceM(
   height: StartHeight = 'region',
   region?: Pick<RegionFrame, 'widthM' | 'heightM'>,
   offsetM = 0,
+  pitchDeg = REGION_PITCH_DEG,
+  chosenM?: number,
 ): number {
   const overview = overviewDistanceM(diagonal, aspect)
   const regional = region
     ? (REGION_FIT_MARGIN * Math.max(region.widthM, region.heightM)) / (2 * Math.tan((CAMERA_FOV_DEG / 2) * DEG))
     : clamp(REGION_DISTANCE_FACTOR * diagonal, REGION_MIN_DISTANCE_M, REGION_MAX_DISTANCE_M)
-  const wanted = regional * portraitFactor(aspect) * (height === 'pays' ? COUNTRY_DISTANCE_FACTOR : 1)
+  const wanted = chosenM ?? regional * portraitFactor(aspect) * (height === 'pays' ? COUNTRY_DISTANCE_FACTOR : 1)
   const reachM = halfSideM + REGION_REACH_M - offsetM
-  return Math.max(overview, Math.min(wanted, reachM / groundReach(REGION_PITCH_DEG, aspect)))
+  return Math.max(overview, Math.min(wanted, reachM / groundReach(pitchDeg, aspect)))
 }
 
 /** Centre of the track's box on the ground, the box diagonal (relief included) and its smaller half side. */
@@ -286,17 +303,20 @@ function trackFraming(path: TrackPath, frame: LocalFrame, sample: HeightSampler 
   return { target, diagonal, halfSideM }
 }
 
-/** View of `target` from `distance` away, `pitchDeg` above the horizon, on the side the `joined` view looks from. */
+/** Horizontal direction from the target to the camera of the `joined` view (the side it looks from). */
+const sideOf = (joined: CameraView) => joined.position.clone().sub(joined.target).setY(0)
+
+/** View of `target` from `distance` away, `pitchDeg` above the horizon, on the horizontal `side` of it. */
 function viewFromSide(
   target: Vector3,
-  joined: CameraView,
+  side: Vector3,
   pitchDeg: number,
   distance: number,
   frame: LocalFrame,
   sample: HeightSampler | null,
   exaggeration: number,
 ): CameraView {
-  const back = joined.position.clone().sub(joined.target).setY(0)
+  const back = side.clone()
   if (back.lengthSq() < 1e-12) back.set(1, 0, 1)
   back.normalize().multiplyScalar(Math.cos(pitchDeg * DEG)).addScaledVector(UP, Math.sin(pitchDeg * DEG))
   const position = target.clone().addScaledVector(back, distance)
@@ -316,12 +336,31 @@ export function overviewView(
   joined: CameraView,
 ): CameraView {
   const { target, diagonal } = trackFraming(path, frame, sample, exaggeration)
-  return viewFromSide(target, joined, OVERVIEW_PITCH_DEG, overviewDistanceM(diagonal, aspect), frame, sample, exaggeration)
+  return viewFromSide(target, sideOf(joined), OVERVIEW_PITCH_DEG, overviewDistanceM(diagonal, aspect), frame, sample, exaggeration)
 }
 
 /**
- * Region view of a 'situation' shot: the overview's side, higher and steeper, aimed at the centre of the highlighted
- * `region` when there is one (else at the overview's target).
+ * What the region view of a 'situation' shot aims at: the centre of the highlighted `region` when there is one, else
+ * the overview's target; on the ground.
+ */
+export function situationTarget(
+  path: TrackPath,
+  frame: LocalFrame,
+  sample: HeightSampler | null,
+  exaggeration: number,
+  region: RegionFrame | null = null,
+): Vector3 {
+  if (!region) return trackFraming(path, frame, sample, exaggeration).target
+  const { lon, lat } = region.centre
+  return frame.toLocal(lon, lat, (sample?.(lon, lat) ?? 0) * exaggeration)
+}
+
+/**
+ * Region view of a 'situation' shot: by default the overview's side, higher and steeper, aimed at the centre of the
+ * highlighted `region` when there is one (else at the overview's target). `framing` (« Cadrage », each field
+ * optional): tilt from the vertical, distance (km, as is, instead of the automatic one; still within the reach of
+ * the terrain and never nearer than the overview), heading north up turned by a bearing ('boussole'), headroom (the
+ * view moved up by that share of the frame height, so the target sits that much below the middle).
  */
 export function regionView(
   path: TrackPath,
@@ -330,17 +369,46 @@ export function regionView(
   exaggeration: number,
   aspect: number,
   joined: CameraView,
-  { height = 'region', region = null }: { height?: StartHeight; region?: RegionFrame | null } = {},
+  {
+    height = 'region',
+    region = null,
+    framing = {},
+  }: { height?: StartHeight; region?: RegionFrame | null; framing?: SituationFraming } = {},
 ): CameraView {
-  const framing = trackFraming(path, frame, sample, exaggeration)
-  let target = framing.target
-  if (region) {
-    const { lon, lat } = region.centre
-    target = frame.toLocal(lon, lat, (sample?.(lon, lat) ?? 0) * exaggeration)
+  const track = trackFraming(path, frame, sample, exaggeration)
+  const target = region ? situationTarget(path, frame, sample, exaggeration, region) : track.target
+  const offsetM = Math.hypot(target.x - track.target.x, target.z - track.target.z)
+  const pitchDeg = framing.tiltDeg === undefined ? REGION_PITCH_DEG : 90 - framing.tiltDeg
+  const chosenM = framing.distanceKm === undefined ? undefined : framing.distanceKm * 1000
+  const distance = regionDistanceM(track.diagonal, track.halfSideM, aspect, height, region ?? undefined, offsetM, pitchDeg, chosenM)
+  // 'boussole': looking toward the bearing (+X east, -Z north), so the camera stands on the opposite side
+  const bearing = (framing.bearingDeg ?? 0) * DEG
+  const side = framing.heading === 'boussole' ? new Vector3(-Math.sin(bearing), 0, Math.cos(bearing)) : sideOf(joined)
+  const view = viewFromSide(target, side, pitchDeg, distance, frame, sample, exaggeration)
+  const headroom = (framing.headroomPct ?? 0) / 100
+  if (headroom <= 0) return view
+  // up in the frame: perpendicular to the line of sight, in its vertical plane
+  const back = view.position.clone().sub(view.target).normalize()
+  const up = UP.clone().addScaledVector(back, -back.y).normalize()
+  const shift = up.multiplyScalar(2 * headroom * distance * Math.tan((CAMERA_FOV_DEG / 2) * DEG))
+  return { target: view.target.clone().add(shift), position: keepAboveGround(view.position.clone().add(shift), frame, sample, exaggeration) }
+}
+
+/**
+ * Framing of the region view that sees its `target` from `position` (« Capturer la vue actuelle »): tilt from the
+ * vertical, distance and compass bearing of the line of sight, rounded and kept within their ranges.
+ */
+export function situationFramingOf(position: Vector3, target: Vector3): Required<Pick<SituationFraming, 'tiltDeg' | 'distanceKm' | 'bearingDeg'>> {
+  const back = position.clone().sub(target)
+  const distance = Math.max(1, back.length())
+  const tilt = Math.acos(clamp(back.y / distance, -1, 1)) / DEG
+  const bearing = (Math.atan2(-back.x, back.z) / DEG + 360) % 360
+  const { min, max, step } = SITUATION_DISTANCE_KM_RANGE
+  return {
+    tiltDeg: clamp(Math.round(tilt), SITUATION_TILT_RANGE.min, SITUATION_TILT_RANGE.max),
+    distanceKm: clamp(Math.round(distance / 1000 / step) * step, min, max),
+    bearingDeg: Math.round(bearing) % 360,
   }
-  const offsetM = Math.hypot(target.x - framing.target.x, target.z - framing.target.z)
-  const distance = regionDistanceM(framing.diagonal, framing.halfSideM, aspect, height, region ?? undefined, offsetM)
-  return viewFromSide(target, joined, REGION_PITCH_DEG, distance, frame, sample, exaggeration)
 }
 
 /** View `k` of the way from `a` to `b` (exactly `a` at 0 and `b` at 1). */
@@ -366,15 +434,57 @@ export function blendViews(
   return { target, position: keepAboveGround(position, frame, sample, exaggeration) }
 }
 
+/** Marker position on the draped track at `progress` (as `computeCameraView` places it). */
+export function markerAt(path: TrackPath, progress: number, frame: LocalFrame, sample: HeightSampler | null, exaggeration: number, liftM: number): Vector3 {
+  const at = samplePath(path, clamp(progress, 0, 1) * path.lengthM)
+  return frame.toLocal(at.lon, at.lat, (sample?.(at.lon, at.lat) ?? at.ele ?? 0) * exaggeration + liftM)
+}
+
+/**
+ * `view` moved to the centre of the `group` positions (on the ground), from the same direction, far enough for their
+ * spread to fit the frame (GROUP_FRAMING_MARGIN) and never nearer than `view`: continuous as the racers move.
+ */
+export function framedGroup(
+  view: CameraView,
+  group: readonly { lon: number; lat: number; ele?: number }[],
+  frame: LocalFrame,
+  sample: HeightSampler | null,
+  exaggeration: number,
+  aspect: number,
+): CameraView {
+  if (group.length < 2) return view
+  const points = group.map((g) => frame.toLocal(g.lon, g.lat, (sample?.(g.lon, g.lat) ?? g.ele ?? 0) * exaggeration))
+  const target = points.reduce((sum, p) => sum.add(p), new Vector3()).divideScalar(points.length)
+  const spread = Math.max(...points.map((p) => Math.hypot(p.x - target.x, p.z - target.z)))
+  const back = view.position.clone().sub(view.target)
+  const fit = (GROUP_FRAMING_MARGIN * spread * portraitFactor(aspect)) / Math.tan((CAMERA_FOV_DEG / 2) * DEG)
+  const distance = Math.max(back.length(), fit)
+  if (back.lengthSq() < 1e-12) back.copy(UP)
+  const position = target.clone().addScaledVector(back.normalize(), distance)
+  return { target, position: keepAboveGround(position, frame, sample, exaggeration) }
+}
+
 // ---------------------------------------------------------------------------
 // Film view
 // ---------------------------------------------------------------------------
+
+/** What the flight camera flies instead of the film track at a progress (several tracks, `flyover/follow.ts`). */
+export interface FollowedFlight {
+  path: TrackPath
+  progress: number
+  /** the film's marker stays on the film track (a ghost racer is followed); else it is on `path` (a stage) */
+  markerOnFilm?: boolean
+  /** positions the camera frames together (« Toutes les traces ») */
+  group?: readonly { lon: number; lat: number; ele?: number }[]
+}
 
 export interface FilmViewOptions extends Omit<CameraViewOptions, 'timeS' | 'orbitRad'> {
   /** width / height of the frame (overview framing) */
   aspect: number
   /** administrative region of the outing, framed by a 'situation' shot that highlights it (osm/region.ts) */
   region?: RegionFrame | null
+  /** what the flight camera follows at a film progress (null or absent: the film track itself) */
+  follow?: ((progress: number) => FollowedFlight | null) | null
 }
 
 export interface FilmView extends CameraView {
@@ -385,7 +495,11 @@ export interface FilmView extends CameraView {
 /**
  * Camera at film time `timeS` and `progress` (the store's: the export nudges it to re-place the camera). The
  * time-based flight styles follow the flight time, so they start where the opening hands over. The camera keys
- * set the framing along the track, a stop's camera adds its own move.
+ * set the framing along the track, a stop's camera adds its own move. The aim and the camera follow the progress
+ * smoothed in film time (`timeSmoothing.ts`; the camera keys and the stops keep the marker's progress and time). With
+ * several tracks, the flight camera flies what `options.follow` gives (a stage, a ghost racer, the racers together);
+ * the shots still frame the film track. The smoothed progresses are carried along the followed path only while it is
+ * the same one (never averaged across a stage cut or a change of leader).
  */
 export function computeFilmView(
   path: TrackPath,
@@ -397,14 +511,33 @@ export function computeFilmView(
   options: FilmViewOptions,
 ): FilmView {
   const state = clock.stateAt(timeS)
-  const { aspect, region, ...flightOptions } = options
+  const { aspect, region, follow, ...flightOptions } = options
   const stop = state.stop
   const easeM = cameraKeyEaseM(path.lengthM, options.durationS ?? DEFAULT_FLYOVER_DURATION_S)
   const keyed = keyedCamera(options.camera ?? DEFAULT_CAMERA, clock.cameraKeys, progress * path.lengthM, easeM)
   const camera = stop?.camera === 'large' ? widenedCamera(keyed, stopBump(state.localS, state.lengthS)) : keyed
   const orbitRad = stop?.camera === 'orbite' ? stopOrbitRad(stop.addedS, state.localS, state.lengthS) : 0
   const motionS = stop?.camera === 'fixe' ? heldMotionTimeS(stop, state.timeS) - clock.openingS : state.flightTimeS
-  const flight = computeCameraView(path, progress, frame, sample, { ...flightOptions, camera, timeS: motionS, orbitRad })
+  const smoothing = timeSmoothing(clock, state.timeS, motionS, camera)
+  const followed = follow?.(progress) ?? null
+  const flightPath = followed?.path ?? path
+  // a smoothed progress on the followed path, dropped when it falls on another stage or racer
+  const along = (p: number | undefined) => {
+    if (p === undefined || !followed) return p
+    const other = follow?.(p)
+    return other && other.path === followed.path ? other.progress : undefined
+  }
+  const flown = computeCameraView(flightPath, followed?.progress ?? progress, frame, sample, {
+    ...flightOptions,
+    camera,
+    orbitRad,
+    ...smoothing,
+    aimProgress: along(smoothing.aimProgress),
+    cameraProgress: along(smoothing.cameraProgress),
+  })
+  const marker = followed?.markerOnFilm ? markerAt(path, progress, frame, sample, options.exaggeration, options.liftM) : flown.marker
+  const framed = followed?.group ? framedGroup(flown, followed.group, frame, sample, options.exaggeration, aspect) : flown
+  const flight = followed ? { ...framed, marker } : flown
   if (state.phase !== 'opening' && state.phase !== 'closing') return flight
 
   const shot = state.phase === 'opening' ? clock.opening : clock.closing
@@ -413,6 +546,7 @@ export function computeFilmView(
       ? regionView(path, frame, sample, options.exaggeration, aspect, flight, {
           height: shot.startHeight,
           region: shot.highlight ? region : null,
+          framing: shot,
         })
       : overviewView(path, frame, sample, options.exaggeration, aspect, flight)
   const turned = shot.style === 'balayage' ? turnedView(overview, sweepRad(state.phase, state.localS, state.lengthS)) : overview

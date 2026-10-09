@@ -238,6 +238,28 @@ describe('computeCameraView — styles', () => {
     const held = computeCameraView(northbound, 0.25, frame, null, { ...options({ style: 'orbit' }), timeS: 20 })
     expect(azimuthFromTarget(held.position, held.target)).toBeCloseTo(-Math.PI / 3, 3)
   })
+
+  it('turn smoothing in metres: the automatic window given in metres is the same view', () => {
+    const path = twisty()
+    const auto = 2 * Math.min(1500, Math.max(150, path.lengthM * 0.02)) * 1.5
+    for (const progress of [0.2, 0.5, 0.8]) {
+      const a = computeCameraView(path, progress, frame, hills, options({ style: 'sway', smoothing: 1.5 }))
+      const b = computeCameraView(path, progress, frame, hills, options({ style: 'sway', smoothing: 1, turnSmoothingM: auto }))
+      expect(a.position.distanceTo(b.position)).toBeLessThan(1e-6)
+    }
+  })
+
+  it('time smoothing: the aim and the camera on their own progress, the marker on its own', () => {
+    const at = (aimProgress?: number, cameraProgress?: number) =>
+      computeCameraView(northbound, 0.5, frame, null, { ...options(), aimProgress, cameraProgress })
+    const plain = at()
+    expect(at(0.5, 0.5).position.distanceTo(plain.position)).toBeLessThan(1e-6)
+    const behind = at(0.48, 0.45)
+    expect(behind.marker.distanceTo(plain.marker)).toBe(0)
+    // northbound: the aim 2% of the track (88 m) and the camera 5% (220 m) further south
+    expect(plain.target.z - behind.target.z).toBeCloseTo(-0.02 * northbound.lengthM, 0)
+    expect(plain.position.z - behind.position.z).toBeCloseTo(-0.05 * northbound.lengthM, 0)
+  })
 })
 
 describe('computeCameraView — continuity and clearance (every style)', () => {

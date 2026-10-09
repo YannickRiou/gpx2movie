@@ -45,8 +45,7 @@ Linux **desktop application** (Tauri), from the same code.
 | Light | physically based sky and haze, sun at the actual time of the outing, terrain shadows, starry night, automatic exposure |
 | Weather | historical weather for the day of the outing (Open-Meteo), or the forecast for an upcoming outing (up to 16 days), shown in a panel and in the scene; volumetric clouds derived from low, mid and high cloud cover (or set by hand), pushed by the wind |
 | Landmarks | summits, passes, huts, lakes… from OpenStreetMap; climbs detected and categorized (cat. 4 to HC); 3D labels; the movie slows down at passes, summits and huts on the track and shows their name; any landmark can be hidden one by one |
-| Scouting | an outing not done yet, drawn by placing points on the terrain: the route follows OpenStreetMap paths, with its elevations, and is flown over like a track |
-| Planned outing | for a route without times (Komoot, Visorando, IGNrando, or drawn in "Préparer une sortie"): date, start time, activity and pace give the estimated passing time at each point, the sun and the weather forecast of the day |
+| Planned outing | for a route without times (Komoot, Visorando, IGNrando…): date, start time, activity and pace give the estimated passing time at each point, the sun and the weather forecast of the day |
 | Roadbook | before setting off: the steep sections (up and down), the passes, summits, huts and water points on the way, with the km, elevation, D+ and passing time; to copy or save as text |
 | Points of interest | your own places ("Picnic", "Paul's chalet"), placed with a right-click on the terrain or at the marker, with an icon (hut, bivouac, summit…), shown like landmarks in the view and in the movie |
 | Track | colored by speed, slope, elevation, heart rate, cadence, power or temperature; width, dashes or dots, glow, track that draws itself as the marker passes; smoothing of GPS jitter |
@@ -125,9 +124,9 @@ application is built with `npm run tauri:build`; installers for the three system
 | `npm run lint` | code analysis (oxlint) |
 | `npm run e2e` | end-to-end tests in a real browser (see below) |
 
-The suite has **about 1,580 tests** (9 October 2026), each file next to its module (`src/**/*.test.ts`); network calls
-and the video encoder are mocked. `npm run e2e` drives the app in a headless Chromium through six scenarios (home,
-tabs, timeline, project, export, scouting); its options are documented at the top of `e2e/run.mjs`. The rendering
+The suite has **about 1,570 tests** (9 October 2026), each file next to its module (`src/**/*.test.ts`); network calls
+and the video encoder are mocked. `npm run e2e` drives the app in a headless Chromium through five scenarios (home,
+tabs, timeline, project, export); its options are documented at the top of `e2e/run.mjs`. The rendering
 quality is checked by eye ([`docs/tests-gpu.md`](docs/tests-gpu.md)).
 
 ## Data sources
@@ -143,7 +142,7 @@ All sources are open and keyless; the code declares them in `src/terrain/sources
 | EOX Sentinel-2 cloudless | world satellite images | CC BY-NC-SA 4.0, **no commercial use** |
 | OpenTopoMap | world topographic map | CC BY-SA |
 | Open-Meteo | historical weather and forecast | CC BY 4.0, **non-commercial** API |
-| OpenStreetMap (Overpass, Nominatim) | landmarks, water bodies, scouting paths, place search | ODbL |
+| OpenStreetMap (Overpass) | landmarks, water bodies | ODbL |
 
 The track itself is never sent: services only receive the tile area, a few points rounded to 1 km for the weather and
 the rectangle around the track for landmarks. Displayed attributions, offline-pack rules, request limits and the

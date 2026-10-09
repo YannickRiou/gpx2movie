@@ -200,8 +200,8 @@ export function getSettingsHistory(): History {
     apply: applySettings,
     subscribe: (listener) =>
       useAppStore.subscribe((state, previous) => {
-        // settings changed together with the tracks or the plan area are a side effect (regional imagery), not a step
-        if (state.settings !== previous.settings && state.tracks === previous.tracks && state.planArea === previous.planArea) {
+        // settings changed together with the tracks are a side effect of the import (regional imagery), not a step
+        if (state.settings !== previous.settings && state.tracks === previous.tracks) {
           listener(state.settings, previous.settings)
         }
       }),

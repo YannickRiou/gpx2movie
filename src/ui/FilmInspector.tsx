@@ -13,6 +13,14 @@ import {
   SHOT_STYLES,
   SHOT_TRANSITIONS,
   SHOT_TRANSITION_LABELS,
+  SITUATION_BEARING_RANGE,
+  SITUATION_DISTANCE_KM_RANGE,
+  SITUATION_HEADINGS,
+  SITUATION_HEADING_LABELS,
+  SITUATION_HEADROOM_RANGE,
+  SITUATION_HOLD_RANGE,
+  SITUATION_TILT_DEFAULT_DEG,
+  SITUATION_TILT_RANGE,
   START_HEIGHTS,
   START_HEIGHT_LABELS,
   STOP_CAMERAS,
@@ -20,8 +28,9 @@ import {
   STOP_DURATION_RANGE,
   SYNC_OFFSET_RANGE,
   shotDipColor,
+  situationTiming,
 } from '../film/model'
-import type { Film, MediaLayout, MediaSync, ShotStyle, ShotTransition, StartHeight, StopCamera } from '../film/model'
+import type { Film, FilmShot, MediaLayout, MediaSync, ShotStyle, ShotTransition, StartHeight, StopCamera } from '../film/model'
 import {
   addItemCamera,
   attachToStop,
@@ -29,6 +38,7 @@ import {
   formatFilmTime,
   formatSpeedFactor,
   removeFilmItem,
+  setFilmPlace,
   updateCameraKey,
   updateMedia,
   updateMusic,
@@ -42,7 +52,8 @@ import {
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { buildTrackPath } from '../flyover/path'
-import { useRegionStore, type RegionStatus } from '../osm/region'
+import { SHOT_SUN_HOURS } from '../flyover/sun'
+import { REGION_KIND_LABELS, candidateId, captureFraming, useRegionStore, type RegionStatus } from '../osm/region'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
@@ -50,7 +61,7 @@ import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber, formatPercent } from './format'
 import { Icon } from './icons'
 import { FilmTextStyleFields } from './OverlayPanel'
-import { RangeField } from './PanelSection'
+import { InfoTip, MoreSettings, RangeField } from './PanelSection'
 import { nextGridIndex } from './shell'
 import { showToast } from './toast'
 
@@ -81,6 +92,226 @@ const REGION_HINTS: Record<RegionStatus, string> = {
   ready: 'les alentours sont assombris, la vue cadre la région entière.',
   none: 'Aucune région administrative ne contient toute la trace : le plan reste sans mise en avant.',
   error: 'Région indisponible pour le moment (hors ligne ?) : le plan reste sans mise en avant.',
+}
+/** Hint under « Mettre en avant la région » (`highlight` on: how the search for the region went). */
+export function RegionHint({ id, highlight }: { id: string; highlight: boolean }) {
+  const regionStatus = useRegionStore((s) => s.status)
+  const regionName = useRegionStore((s) => s.region?.name)
+  return (
+    <p id={id} className="field__hint">
+      {highlight && regionStatus === 'ready' && regionName ? `${regionName} : ` : ''}
+      {REGION_HINTS[highlight ? regionStatus : 'idle']}
+    </p>
+  )
+}
+
+/** Titled group of fields of a 'situation' shot (« Lieu », « Durées », « Cadrage », « Soleil »). */
+function InspectorGroup({ title, children }: { title: string; children: ReactNode }) {
+  const id = useId()
+  return (
+    <section className="film-inspector__group" aria-labelledby={id}>
+      <h3 id={id} className="film-inspector__group-title">
+        {title}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
+/**
+ * « Durées » of a 'situation' shot: « Maintien » on the region view, then the move (« Plongée » at the opening,
+ * « Remontée » at the closing, held after it); the shot lasts their sum (`durationS`, read by the clock and the
+ * timeline), at most SHOT_DURATION_RANGE.max: a longer move shortens the hold, never the other way.
+ */
+function SituationTimings({
+  phase,
+  durationS,
+  holdS,
+  onChange,
+}: {
+  phase: 'opening' | 'closing'
+  durationS: number
+  holdS: number | undefined
+  onChange(patch: { durationS: number; holdS: number | undefined }): void
+}) {
+  const timing = situationTiming({ durationS, holdS })
+  const max = SHOT_DURATION_RANGE.max
+  const set = (hold: number, move: number) => {
+    const moveS = Math.min(Math.max(move, SHOT_DURATION_RANGE.min), max)
+    const kept = Math.min(hold, max - moveS)
+    onChange({ durationS: kept + moveS, holdS: kept > 0 ? kept : undefined })
+  }
+  return (
+    <InspectorGroup title="Durées">
+      <RangeField
+        label="Maintien"
+        {...SITUATION_HOLD_RANGE}
+        value={timing.holdS}
+        format={seconds}
+        onChange={(hold) => set(hold, timing.moveS)}
+        wide={false}
+        tip={
+          phase === 'opening'
+            ? 'Temps passé immobile sur la vue de la région, région en pleine lumière, avant la plongée.'
+            : 'Temps passé immobile sur la vue de la région à la fin du film.'
+        }
+      />
+      <RangeField
+        label={phase === 'opening' ? 'Plongée' : 'Remontée'}
+        {...SHOT_DURATION_RANGE}
+        value={timing.moveS}
+        format={seconds}
+        onChange={(move) => set(timing.holdS, move)}
+        wide={false}
+        tip={
+          phase === 'opening'
+            ? 'Durée du mouvement de la vue de la région jusqu’au survol ; la mise en avant s’efface pendant ce temps.'
+            : 'Durée du mouvement du survol jusqu’à la vue de la région ; la mise en avant apparaît pendant ce temps.'
+        }
+      />
+      <p className="field__hint">Durée du plan : {seconds(durationS)}</p>
+    </InspectorGroup>
+  )
+}
+
+/**
+ * « Cadrage » of the region view of a 'situation' shot: start (end) height, distance (« Auto » at the left of its
+ * slider), tilt, heading free or north up with its bearing, « Capturer la vue actuelle »; the headroom in « Plus de
+ * réglages ». Every field left at its default keeps the automatic framing.
+ */
+function SituationFramingFields({
+  phase,
+  shot,
+  onChange,
+}: {
+  phase: 'opening' | 'closing'
+  shot: FilmShot
+  onChange(patch: Partial<FilmShot>): void
+}) {
+  const id = useId()
+  const heading = shot.heading ?? 'libre'
+  const capture = () => {
+    const framing = captureFraming(shot.highlight === true)
+    if (!framing) return void showToast({ kind: 'error', text: 'Vue 3D indisponible : rien à capturer.' })
+    onChange({ ...framing, heading: 'boussole' })
+    showToast({ kind: 'success', text: 'Cadrage repris de la vue 3D' })
+  }
+  return (
+    <InspectorGroup title="Cadrage">
+      <div className="field">
+        <label className="field__label" htmlFor={`${id}-height`}>
+          {phase === 'opening' ? 'Hauteur de départ' : 'Hauteur de fin'}
+        </label>
+        <select
+          id={`${id}-height`}
+          className="select"
+          value={shot.startHeight ?? 'region'}
+          disabled={shot.distanceKm !== undefined}
+          onChange={(e) => onChange({ startHeight: e.currentTarget.value as StartHeight })}
+        >
+          {START_HEIGHTS.map((height) => (
+            <option key={height} value={height}>
+              {START_HEIGHT_LABELS[height]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <RangeField
+        label="Distance"
+        min={0}
+        max={SITUATION_DISTANCE_KM_RANGE.max}
+        step={SITUATION_DISTANCE_KM_RANGE.step}
+        value={shot.distanceKm ?? 0}
+        format={(km) => (km === 0 ? 'Auto' : `${formatNumber(km)} km`)}
+        onChange={(km) => onChange({ distanceKm: km === 0 ? undefined : Math.max(km, SITUATION_DISTANCE_KM_RANGE.min) })}
+        tip="Distance de la caméra au centre de la vue. Tout à gauche : automatique (la région entière, ou selon la hauteur de départ)."
+      />
+      <RangeField
+        label="Inclinaison"
+        {...SITUATION_TILT_RANGE}
+        value={shot.tiltDeg ?? SITUATION_TILT_DEFAULT_DEG}
+        format={formatDegrees}
+        onChange={(tiltDeg) => onChange({ tiltDeg })}
+        wide={false}
+        tip="Écart de la caméra par rapport à la verticale : petit, la carte vue d’au-dessus ; grand, la vue rasante."
+      />
+      <div className="field">
+        <div className="field__label-row">
+          <span id={`${id}-heading`} className="field__label">
+            Cap
+          </span>
+          <InfoTip text="Libre : la vue de la région regarde dans le sens du survol, sans tourner pendant le mouvement. Boussole : le nord en haut, tourné de l’orientation." />
+        </div>
+        <div className="segmented" role="radiogroup" aria-labelledby={`${id}-heading`}>
+          {SITUATION_HEADINGS.map((h) => (
+            <label key={h} className="segmented__option">
+              <input type="radio" name={`${id}-heading`} value={h} checked={heading === h} onChange={() => onChange({ heading: h === 'libre' ? undefined : h })} />
+              {SITUATION_HEADING_LABELS[h]}
+            </label>
+          ))}
+        </div>
+      </div>
+      {heading === 'boussole' && (
+        <RangeField
+          label="Orientation"
+          {...SITUATION_BEARING_RANGE}
+          value={shot.bearingDeg ?? 0}
+          format={formatDegrees}
+          onChange={(bearingDeg) => onChange({ bearingDeg: bearingDeg === 0 ? undefined : bearingDeg })}
+          wide={false}
+          tip="Direction regardée par la caméra : 0° le nord en haut, 90° l’est en haut."
+        />
+      )}
+      <MoreSettings paths={[]}>
+        <RangeField
+          label="Marge"
+          {...SITUATION_HEADROOM_RANGE}
+          value={shot.headroomPct ?? 0}
+          format={(pct) => `${formatNumber(pct)} %`}
+          onChange={(pct) => onChange({ headroomPct: pct === 0 ? undefined : pct })}
+          wide={false}
+          tip="Place laissée au-dessus du centre de la vue (titre, ciel) : le centre descend de cette part de la hauteur de l’image."
+        />
+      </MoreSettings>
+      <button type="button" className="btn btn--secondary" onClick={capture} data-tip="Reprend l’inclinaison, la distance et l’orientation de la vue 3D actuelle (cap Boussole)">
+        <Icon name="crosshair" size={16} />
+        Capturer la vue actuelle
+      </button>
+    </InspectorGroup>
+  )
+}
+
+/**
+ * « Lieu »: the place highlighted, among the areas that contain the track (smallest first, osm/region.ts), or the
+ * automatic administrative region. A place saved but not offered (still loading, or no longer containing the track)
+ * stays selected; the highlight then falls back to the automatic one.
+ */
+function PlaceSelect({ value, onChange }: { value: string | null; onChange(regionId: string | null): void }) {
+  const id = useId()
+  const candidates = useRegionStore((s) => s.candidates)
+  const autoId = useRegionStore((s) => s.autoId)
+  const loading = useRegionStore((s) => s.status === 'loading')
+  const auto = candidates.find((c) => candidateId(c) === autoId)
+  const known = value === null || candidates.some((c) => candidateId(c) === value)
+  return (
+    <div className="field">
+      <div className="field__label-row">
+        <label className="field__label" htmlFor={id}>
+          Lieu
+        </label>
+        <InfoTip text="La zone mise en avant et cadrée : région administrative, parc, espace protégé, île ou massif qui contient toute la trace (OpenStreetMap), du plus petit au plus grand." />
+      </div>
+      <select id={id} className="select" value={value ?? ''} onChange={(e) => onChange(e.currentTarget.value || null)}>
+        <option value="">{auto ? `Automatique (${auto.name})` : 'Automatique'}</option>
+        {candidates.map((c) => (
+          <option key={candidateId(c)} value={candidateId(c)}>
+            {c.name} · {REGION_KIND_LABELS[c.kind]}
+          </option>
+        ))}
+        {!known && <option value={value ?? ''}>{loading ? 'Recherche des lieux…' : 'Lieu enregistré (introuvable)'}</option>}
+      </select>
+    </div>
+  )
 }
 const STOP_CAMERA_HINTS: Record<StopCamera, string> = {
   film: 'La caméra du survol continue, sans mouvement ajouté.',
@@ -153,9 +384,8 @@ export function FilmInspector() {
   const item = useAppStore((s) => s.filmSelection)
   const { track, film, pacing } = useFilmSource()
   const clock = useFilmClock()
-  const regionStatus = useRegionStore((s) => s.status)
-  const regionName = useRegionStore((s) => s.region?.name)
   const path = useMemo(() => (track ? buildTrackPath(track) : null), [track])
+  const atmosphere = useAppStore((s) => s.settings.atmosphere)
   if (!item || !track || !path) return null
   const lengthM = track.stats.distanceM
   const change = (fn: (f: Film) => Film, stops: boolean) => editFilm((f) => ({ film: fn(f) }), { stops, step: false })
@@ -298,47 +528,57 @@ export function FilmInspector() {
         </div>
         {shot.style === 'situation' && (
           <>
-            <div className="field">
-              <label className="field__label" htmlFor={`${id}-height`}>
-                {item === 'opening' ? 'Hauteur de départ' : 'Hauteur de fin'}
+            <InspectorGroup title="Lieu">
+              <label className="checkbox checkbox--switch">
+                <input
+                  type="checkbox"
+                  checked={shot.highlight === true}
+                  aria-describedby={`${id}-highlight-hint`}
+                  onChange={(e) => change((f) => updateShot(f, item, { highlight: e.currentTarget.checked }), false)}
+                />
+                Mettre en avant la région
               </label>
-              <select
-                id={`${id}-height`}
-                className="select"
-                value={shot.startHeight ?? 'region'}
-                onChange={(e) => change((f) => updateShot(f, item, { startHeight: e.currentTarget.value as StartHeight }), false)}
-              >
-                {START_HEIGHTS.map((height) => (
-                  <option key={height} value={height}>
-                    {START_HEIGHT_LABELS[height]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <label className="checkbox checkbox--switch">
-              <input
-                type="checkbox"
-                checked={shot.highlight === true}
-                aria-describedby={`${id}-highlight-hint`}
-                onChange={(e) => change((f) => updateShot(f, item, { highlight: e.currentTarget.checked }), false)}
-              />
-              Mettre en avant la région
-            </label>
-            <p id={`${id}-highlight-hint`} className="field__hint">
-              {shot.highlight && regionStatus === 'ready' && regionName ? `${regionName} : ` : ''}
-              {REGION_HINTS[shot.highlight ? regionStatus : 'idle']}
-            </p>
+              <RegionHint id={`${id}-highlight-hint`} highlight={shot.highlight === true} />
+              {shot.highlight === true && (
+                <PlaceSelect value={shot.regionId ?? null} onChange={(regionId) => change((f) => setFilmPlace(f, regionId), false)} />
+              )}
+            </InspectorGroup>
+            <SituationTimings
+              phase={item}
+              durationS={shot.durationS}
+              holdS={shot.holdS}
+              onChange={(patch) => change((f) => updateShot(f, item, patch), false)}
+            />
+            <SituationFramingFields phase={item} shot={shot} onChange={(patch) => change((f) => updateShot(f, item, patch), false)} />
+            <InspectorGroup title="Soleil">
+              <label className="checkbox checkbox--switch">
+                <input
+                  type="checkbox"
+                  checked={shot.moveSun === true}
+                  aria-describedby={`${id}-sun-hint`}
+                  onChange={(e) => change((f) => updateShot(f, item, { moveSun: e.currentTarget.checked || undefined }), false)}
+                />
+                Faire bouger le soleil
+              </label>
+              <p id={`${id}-sun-hint`} className="field__hint">
+                {item === 'opening'
+                  ? `Accéléré : le soleil part de ${SHOT_SUN_HOURS} h avant le départ et ralentit jusqu’à l’heure du survol ; les ombres balaient le relief.`
+                  : `Accéléré : le soleil repart de l’heure de l’arrivée et avance de ${SHOT_SUN_HOURS} h ; les ombres balaient le relief.`}
+                {!atmosphere && ' Avec l’atmosphère seulement.'}
+              </p>
+            </InspectorGroup>
           </>
         )}
-        {range(
-          'duration',
-          'Durée',
-          shot.durationS,
-          SHOT_DURATION_RANGE,
-          seconds,
-          (durationS) => change((f) => updateShot(f, item, { durationS }), false),
-          shot.style === 'aucune',
-        )}
+        {shot.style !== 'situation' &&
+          range(
+            'duration',
+            'Durée',
+            shot.durationS,
+            SHOT_DURATION_RANGE,
+            seconds,
+            (durationS) => change((f) => updateShot(f, item, { durationS }), false),
+            shot.style === 'aucune',
+          )}
         <div className="field">
           <label className="field__label" htmlFor={`${id}-transition`}>
             Transition

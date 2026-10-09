@@ -6,11 +6,11 @@
  * pictures of the photos and the frames of the video clips shown by a frame before it is composed
  * (`loadFrameMedia`, decoded at the frame's time: never real-time playback; `releaseFrameMedia` after the export).
  * `overlayExtras` reads what both draw beyond the track (timeline texts and photos, credits of the sources in use,
- * ghost-race leaderboard, dip of a shot transition).
+ * ghost-race leaderboard, dip of a shot transition, card and dip of a stage « À la suite »).
  */
 import type { Track } from '../core/types'
-import { transitionDipAt } from '../film/model'
-import type { FilmMedia } from '../film/model'
+import { DIP_DEFAULT_S, dipAlpha, transitionDipAt } from '../film/model'
+import type { FilmMedia, TransitionDip } from '../film/model'
 import type { DrawOverlay } from '../export/capture'
 import { getMediaBitmaps, mediaToLoad, useMediaStore } from '../film/media'
 import { createExportVideos } from '../film/video'
@@ -22,9 +22,12 @@ import { useWeatherStore } from '../weather/store'
 import type { WeatherSeries } from '../weather/series'
 import { trackPathOf } from '../flyover/path'
 import { buildRace, raceAt, raceTrackOf } from '../flyover/race'
+import type { RaceSettings } from '../flyover/race'
+import { filmSequenceOf, filmTrackOf } from '../flyover/sequence'
+import type { Sequence } from '../flyover/sequence'
 import { loadLogo } from './assets'
-import { leaderboardRows, overlayCredits, overlayFrameAt, prepareOverlayTrack, recordedAtProgress } from './data'
-import type { LeaderboardRow, OverlayTrack } from './data'
+import { leaderboardRows, overlayCredits, overlayFilmFrameAt, prepareOverlayFilm, recordedAtProgress, stageCardAt } from './data'
+import type { LeaderboardRow, OverlayFilm } from './data'
 import { drawOverlay } from './draw'
 import type { OverlayAssets, OverlayExtras, OverlayTime } from './draw'
 
@@ -40,19 +43,33 @@ function leaderboardAt(progress: number): LeaderboardRow[] | undefined {
   return leaderboardRows(raceAt(race, progress), tracks)
 }
 
+/** Dip of the cut between two stages « À la suite » at the frame's time, null without one (or with a plain cut). */
+export function stageDipAt(race: Pick<RaceSettings, 'stageTransition'>, time: OverlayTime): TransitionDip | null {
+  const transition = race.stageTransition ?? 'fondu-noir'
+  if (transition === 'coupe') return null
+  const alpha = Math.max(0, ...(time.cutsS ?? []).map((cutS) => dipAlpha(time.timeS, cutS, DIP_DEFAULT_S)))
+  return alpha > 0 ? { color: transition === 'fondu-blanc' ? 'white' : 'black', alpha } : null
+}
+
+/** The stronger of two dips. */
+const strongerDip = (a: TransitionDip | null, b: TransitionDip | null) => (b && b.alpha > (a?.alpha ?? 0) ? b : a)
+
 /**
  * What the overlay draws beyond the track at film time `time` and `progress`, from the stores: the texts and photos
  * of the timeline, the credits of the sources in use (as the status bar: relief, imagery, weather and OpenStreetMap
- * once loaded), the ghost-race leaderboard and the dip of a shot transition.
+ * once loaded), the ghost-race leaderboard, the dip of a shot transition, and « À la suite » the card and the dip of
+ * each stage.
  */
 export function overlayExtras(time: OverlayTime, progress: number): OverlayExtras {
-  const { settings } = useAppStore.getState()
+  const { settings, tracks } = useAppStore.getState()
+  const sequence = filmSequenceOf(tracks, settings.race)
   return {
     time,
     leaderboard: leaderboardAt(progress),
     texts: settings.film.texts,
     media: settings.film.media,
-    dip: transitionDipAt(settings.film, time),
+    dip: strongerDip(transitionDipAt(settings.film, time), sequence ? stageDipAt(settings.race, time) : null),
+    stage: sequence && settings.race.stageCards !== false ? stageCardAt(sequence, time) : null,
     credits: overlayCredits({
       terrainSourceId: settings.terrainSourceId,
       imagerySourceId: settings.imagerySourceId,
@@ -83,8 +100,9 @@ export async function loadFrameMedia(timeS: number, progress: number): Promise<v
   const { media } = settings.film
   if (media.some((m) => m.kind === 'video')) exportVideos ??= createExportVideos((id) => useMediaStore.getState().table[id])
   let recordedMs: number | undefined
-  if (tracks[0] && media.some((m) => m.sync?.follow)) {
-    recordedMs = recordedAtProgress(trackPathOf(tracks[0]), progress)
+  const track = filmTrackOf(tracks, settings.race)
+  if (track && media.some((m) => m.sync?.follow)) {
+    recordedMs = recordedAtProgress(trackPathOf(track), progress)
   }
   await Promise.all([getMediaBitmaps().load(mediaToLoad(media, timeS)), exportVideos?.load(media, timeS, recordedMs)])
 }
@@ -100,10 +118,33 @@ export interface OverlayDrawer {
   dispose(): void
 }
 
-export function createOverlayDrawer(): OverlayDrawer {
+/**
+ * Overlay data of the film of the stores (`prepareOverlayFilm`), made again only when the film track, its sequence or
+ * the weather changes: shared by the preview and the export drawer.
+ */
+export function createOverlayFilmCache(): () => OverlayFilm | null {
   let track: Track | undefined
+  let sequence: Sequence | null = null
   let series: WeatherSeries | null = null
-  let data: OverlayTrack | null = null
+  let data: OverlayFilm | null = null
+  return () => {
+    const { tracks, settings } = useAppStore.getState()
+    const nextSequence = filmSequenceOf(tracks, settings.race)
+    const next = nextSequence?.track ?? tracks[0]
+    if (!next) return null
+    const weather = useWeatherStore.getState().series
+    if (next !== track || nextSequence !== sequence || weather !== series || !data) {
+      track = next
+      sequence = nextSequence
+      series = weather
+      data = prepareOverlayFilm(next, nextSequence, weather)
+    }
+    return data
+  }
+}
+
+export function createOverlayDrawer(): OverlayDrawer {
+  const film = createOverlayFilmCache()
   let logoSource = ''
   let assets: OverlayAssets = {}
   let disposed = false
@@ -126,17 +167,11 @@ export function createOverlayDrawer(): OverlayDrawer {
 
   return {
     draw(ctx, at, width, height) {
-      const { tracks, settings } = useAppStore.getState()
-      const first = tracks[0]
-      if (!first) return
-      const weather = useWeatherStore.getState().series
-      if (first !== track || weather !== series || !data) {
-        track = first
-        series = weather
-        data = prepareOverlayTrack(first, weather)
-      }
+      const data = film()
+      if (!data) return
+      const { settings } = useAppStore.getState()
       const video = (item: FilmMedia, clipS: number) => exportVideos?.get(item, clipS)
-      drawOverlay(ctx, overlayFrameAt(data, at.progress), settings.overlay, { width, height }, { ...assets, ...photoAssets(), video }, overlayExtras(at.time, at.progress))
+      drawOverlay(ctx, overlayFilmFrameAt(data, at.progress), settings.overlay, { width, height }, { ...assets, ...photoAssets(), video }, overlayExtras(at.time, at.progress))
     },
     dispose() {
       disposed = true

@@ -6,17 +6,20 @@ import {
   CAMERA_STYLES,
   findCameraPreset,
   FLYOVER_DURATION_RANGE,
+  turnSmoothingM,
 } from '../flyover/cameraSettings'
 import type { CameraSettings, CameraStyle } from '../flyover/cameraSettings'
-import { addCameraKey } from '../film/timeline'
+import { DEFAULT_FILM, SITUATION_DURATION_S } from '../film/model'
+import { addCameraKey, updateShot } from '../film/timeline'
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { PACING_RANGES } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
-import { editFilm, setFlightTiming, useFilmClock } from '../scene/usePacing'
+import { editFilm, setFlightTiming, useFilmClock, useFilmTrack } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber, formatPercent, formatSecondsShort } from './format'
 import { Icon } from './icons'
 import type { IconName } from './icons'
+import { RegionHint } from './FilmInspector'
 import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
 import { TrackMarkerSection } from './TrackMarkerSection'
 
@@ -39,14 +42,41 @@ interface Slider {
   label: string
   /** ⓘ next to the label */
   tip: string
-  format(value: number): string
+  /** `autoM`: the length « Lissage des virages » takes in Auto for the first track, when there is one */
+  format(value: number, autoM?: number): string
 }
+
+/** 0 -> `none`, else "2,5 s" */
+const formatSmoothingS = (none: string) => (v: number) => (v === 0 ? none : formatSecondsShort(v))
 
 const SLIDERS: Slider[] = [
   { key: 'distance', label: 'Distance', tip: 'Multiple de la distance automatique, choisie selon la longueur de la trace.', format: (v) => `×${formatNumber(v, 1)}` },
   { key: 'pitchDeg', label: 'Inclinaison', tip: 'Angle de la caméra au-dessus de l’horizon.', format: formatDegrees },
   { key: 'headingOffsetDeg', label: 'Visée', tip: 'Direction de la caméra par rapport au trajet ; positive = vers la droite.', format: formatDegrees },
-  { key: 'smoothing', label: 'Lissage des virages', tip: 'Plus haut : la caméra tourne plus calmement dans les virages.', format: (v) => `×${formatNumber(v, 2)}` },
+  {
+    key: 'turnSmoothingM',
+    label: 'Lissage des virages',
+    tip: 'Longueur de trace sur laquelle se mesure la direction du trajet : plus longue, la caméra tourne plus calmement dans les virages. Auto : selon la longueur de la trace.',
+    format: (v, autoM) => (v > 0 ? formatDistance(v) : autoM === undefined ? 'Auto' : `Auto · ${formatDistance(autoM)}`),
+  },
+  {
+    key: 'aimSmoothingS',
+    label: 'Lissage de la visée',
+    tip: 'Le point visé suit le marqueur en moyenne sur cette durée : arrêts et changements de vitesse ne secouent pas l’image.',
+    format: formatSmoothingS('Aucun'),
+  },
+  {
+    key: 'cameraSmoothingS',
+    label: 'Lissage de la caméra',
+    tip: 'La caméra suit le marqueur en moyenne sur cette durée : elle anticipe arrêts et changements de vitesse au lieu de freiner sec.',
+    format: formatSmoothingS('Aucun'),
+  },
+  {
+    key: 'endingS',
+    label: 'Fin en douceur',
+    tip: 'Pendant ces dernières secondes du survol, la caméra ralentit jusqu’à s’arrêter et regarde le marqueur finir.',
+    format: formatSmoothingS('Aucune'),
+  },
 ]
 
 interface PacingSlider {
@@ -86,9 +116,52 @@ const STYLE_HINTS: Record<CameraStyle, string> = {
   cinematic: 'Plus loin et plus bas, avec un lent mouvement latéral.',
 }
 
+/** Tips of the « Plan de situation » switches. */
+const SITUATION_TIPS = {
+  opening: 'Vue de très haut sur la région, alentours assombris et nom affiché, puis plongée vers la trace.',
+  closing: 'À la fin, la caméra remonte jusqu’à la vue de très haut sur la région, alentours assombris et nom affiché.',
+}
+
+/**
+ * « Plan de situation » of the opening and the closing, on: style 'situation' with the region highlighted (as in the
+ * inspector); off: the default style back (and its duration, when the shot still has the one 'situation' gave it).
+ */
+function SituationShotSwitches() {
+  const film = useAppStore((s) => s.settings.film)
+  const id = useId()
+  const isOn = (key: 'opening' | 'closing') => film[key].style === 'situation' && film[key].highlight === true
+  const toggle = (key: 'opening' | 'closing', on: boolean) =>
+    editFilm((f) => {
+      if (on) return { film: updateShot(f, key, { style: 'situation', highlight: true }) }
+      const back = f[key].durationS === SITUATION_DURATION_S ? { durationS: DEFAULT_FILM[key].durationS } : {}
+      return { film: updateShot(f, key, { style: DEFAULT_FILM[key].style, ...back }) }
+    })
+  const any = isOn('opening') || isOn('closing')
+  return (
+    <>
+      {(['opening', 'closing'] as const).map((key) => (
+        <div key={key} className="field__label-row">
+          <label className="checkbox checkbox--switch">
+            <input
+              type="checkbox"
+              checked={isOn(key)}
+              aria-describedby={any ? `${id}-region-hint` : undefined}
+              onChange={(e) => toggle(key, e.currentTarget.checked)}
+            />
+            {key === 'opening' ? 'Plan de situation à l’ouverture' : 'Plan de situation à la clôture'}
+          </label>
+          <InfoTip text={SITUATION_TIPS[key]} />
+        </div>
+      ))}
+      {any && <RegionHint id={`${id}-region-hint`} highlight />}
+    </>
+  )
+}
+
 /**
  * « Survol » tab: sections Caméra (preset, style tiles; fine parameters under « Plus de réglages ») and Durée et rythme
- * (flyover duration, slow-downs on/off; their details under « Plus de réglages »).
+ * (flyover duration, situation shots of the opening and closing, slow-downs on/off; their details under « Plus de
+ * réglages »).
  */
 export function CameraPanel() {
   const camera = useAppStore((s) => s.settings.camera)
@@ -101,12 +174,14 @@ export function CameraPanel() {
   const preset = findCameraPreset(camera)
   const update = (patch: Partial<CameraSettings>) => setSetting('camera', { ...camera, ...patch })
   const updatePacing = (patch: Partial<PacingSettings>) => setFlightTiming({ pacing: { ...pacing, ...patch } })
-  const lengthM = useAppStore((s) => s.tracks[0]?.stats.distanceM ?? 0)
+  const lengthM = useFilmTrack()?.stats.distanceM ?? 0
   /** a camera key at the marker with the framing seen there (one undo step, selected for the inspector) */
   const keepFraming = () => {
     const atM = useAppStore.getState().playback.progress * lengthM
     editFilm((f) => addCameraKey(f, atM, keyedCamera(camera, film.cameraKeys, atM, cameraKeyEaseM(lengthM, durationS))))
   }
+  /** « Lissage des virages » in Auto for the first track */
+  const autoTurnM = lengthM > 0 ? turnSmoothingM({ ...camera, turnSmoothingM: 0 }, lengthM) : undefined
 
   return (
     <>
@@ -172,10 +247,22 @@ export function CameraPanel() {
           </label>
         )}
 
-        <MoreSettings paths={['camera.distance', 'camera.pitchDeg', 'camera.headingOffsetDeg', 'camera.smoothing']}>
+        <MoreSettings
+          paths={[
+            'camera.distance',
+            'camera.pitchDeg',
+            'camera.headingOffsetDeg',
+            'camera.smoothing',
+            'camera.turnSmoothingM',
+            'camera.aimSmoothingS',
+            'camera.cameraSmoothingS',
+            'camera.endingS',
+          ]}
+        >
           {SLIDERS.map(({ key, label, tip, format }) => {
             const range = CAMERA_RANGES[key]
             const inputId = `${id}-${key}`
+            const value = format(camera[key], autoTurnM)
             return (
               <div key={key} className="field">
                 <div className="field__label-row">
@@ -194,10 +281,10 @@ export function CameraPanel() {
                     step={range.step}
                     value={camera[key]}
                     onChange={(e) => update({ [key]: Number(e.currentTarget.value) })}
-                    aria-valuetext={format(camera[key])}
+                    aria-valuetext={value}
                   />
                   <output className="range-row__value range-row__value--wide" htmlFor={inputId}>
-                    {format(camera[key])}
+                    {value}
                   </output>
                 </div>
               </div>
@@ -243,6 +330,8 @@ export function CameraPanel() {
             {stopCount === 0 ? 'aucun arrêt' : `${stopCount} arrêt${stopCount > 1 ? 's' : ''}`}
           </p>
         </div>
+
+        <SituationShotSwitches />
 
         <div className="field__label-row">
           <label className="checkbox checkbox--switch">

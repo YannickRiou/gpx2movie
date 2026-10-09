@@ -17,11 +17,13 @@ import {
 import type { VideoEncoderKind } from './index'
 import {
   DESKTOP_PROJECT_ROOT,
+  MAX_THUMBNAIL_LENGTH,
   WEB_PROJECT_CACHE,
   cleanProjectName,
   createDesktopLibraryFiles,
   createProjectLibrary,
   createWebLibraryFiles,
+  isProjectThumbnail,
   parseProjectEntry,
   projectFileNames,
   sortProjectEntries,
@@ -554,6 +556,33 @@ describe('offline tile cache', () => {
     expect(await library.load('w1')).toBe('{"a":2}')
     await library.remove('w1')
     expect(await library.list()).toEqual([])
+  })
+
+  it('« Mes projets »: a thumbnail kept in the entry, older entries without one, bad pictures dropped', async () => {
+    const jpeg = 'data:image/jpeg;base64,/9j/4AAQ=='
+    expect(isProjectThumbnail(jpeg)).toBe(true)
+    expect(isProjectThumbnail('data:text/html;base64,PGI+')).toBe(false)
+    expect(isProjectThumbnail('javascript:alert(1)')).toBe(false)
+    expect(isProjectThumbnail(`data:image/jpeg;base64,${'A'.repeat(MAX_THUMBNAIL_LENGTH)}`)).toBe(false)
+    expect(parseProjectEntry(JSON.stringify({ ...entry('a', 1), thumbnail: 'data:image/svg+xml,<svg/>' }), 'a')).toEqual(entry('a', 1))
+
+    const storage = fakeCaches()
+    let ids = 0
+    const library = createProjectLibrary(createWebLibraryFiles(storage), () => 5, () => `t${++ids}`)
+    // an entry written before thumbnails existed
+    await createWebLibraryFiles(storage).write('old.entry.json', JSON.stringify(entry('old', 1)))
+    const first = await library.save(null, { name: 'Vercors', summary: '', text: '{}', thumbnail: jpeg })
+    expect(first.thumbnail).toBe(jpeg)
+    // no new picture (view not readable): the entry keeps its own, also through a rename
+    expect((await library.save('t1', { name: 'Vercors', summary: '', text: '{"a":1}' })).thumbnail).toBe(jpeg)
+    expect((await library.rename('t1', 'Vercors sud')).thumbnail).toBe(jpeg)
+    expect((await library.save(null, { name: 'Écrins', summary: '', text: '{}', thumbnail: 'pas une image' })).thumbnail).toBeUndefined()
+    const listed = await library.list()
+    expect(listed.map((e) => [e.id, e.thumbnail])).toEqual([
+      ['t2', undefined],
+      ['t1', jpeg],
+      ['old', undefined],
+    ])
   })
 
   it('« Mes projets »: on the desktop, and on the web only with Cache Storage', () => {

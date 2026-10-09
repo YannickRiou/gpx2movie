@@ -8,7 +8,19 @@ import { OSM_ATTRIBUTION } from '../osm/overpass'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import type { Racer } from '../flyover/race'
-import { cumulativeAscent, leaderboardRows, miniMapOutline, overlayCredits, overlayFrameAt, prepareOverlayTrack } from './data'
+import { buildSequence } from '../flyover/sequence'
+import {
+  cumulativeAscent,
+  leaderboardRows,
+  miniMapOutline,
+  overlayCredits,
+  overlayFilmFrameAt,
+  overlayFrameAt,
+  prepareOverlayFilm,
+  prepareOverlayTrack,
+  STAGE_CARD_S,
+  stageCardAt,
+} from './data'
 
 /** metres per degree of latitude on the haversine sphere */
 const M_PER_DEG = (6371008.8 * Math.PI) / 180
@@ -219,5 +231,40 @@ describe('leaderboardRows', () => {
 
   it('is empty without racers', () => {
     expect(leaderboardRows([], tracks)).toEqual([])
+  })
+})
+
+describe('« À la suite »', () => {
+  const a = buildTrack({ name: 'J1', source: 'gpx', segments: [{ points: line(11, (i) => ({ ele: 1000 + i * 10, time: T0 + i * 60_000 })) }] })
+  // J2: ~8 km farther east, untimed
+  const b = buildTrack({ name: 'J2', source: 'gpx', segments: [{ points: line(21, (i) => ({ lon: 6.9, ele: 1100 + i * 10, time: undefined })) }] })
+  const sequence = buildSequence([a, b])
+  const film = prepareOverlayFilm(sequence.track, sequence)
+  const cut = sequence.stages[1].from
+
+  it('the figures of the stage under the marker, the name and totals of the whole for the cards', () => {
+    const first = overlayFilmFrameAt(film, cut / 2)
+    expect(first.distanceM).toBeCloseTo(sequence.stages[0].endM / 2, 6)
+    expect(first.elapsedS).toBeCloseTo(300, 6)
+    expect(first.track.name).toBe('J1 → J2')
+    expect(first.track.stats.distanceM).toBeCloseTo(sequence.stages[1].endM, 6)
+    const second = overlayFilmFrameAt(film, cut)
+    expect(second.distanceM).toBe(0)
+    expect(second.ele).toBeCloseTo(1100, 6)
+    expect(second.elapsedS).toBeUndefined()
+    // one track: as before
+    const alone = prepareOverlayFilm(a, null)
+    expect(overlayFilmFrameAt(alone, 0.5)).toEqual(overlayFrameAt(alone.whole, 0.5))
+  })
+
+  it('a card for each stage as it starts: the first with the flight, the others at their cut', () => {
+    const time = (timeS: number) => ({ timeS, openingS: 6, flightS: 60, totalS: 70, cutsS: [30] })
+    expect(stageCardAt(sequence, time(5))).toBeNull()
+    expect(stageCardAt(sequence, time(6))).toMatchObject({ name: 'J1', index: 0, count: 2, startS: 6, durationS: STAGE_CARD_S, startTime: T0 })
+    expect(stageCardAt(sequence, time(6 + STAGE_CARD_S))).toBeNull()
+    const second = stageCardAt(sequence, time(31))
+    expect(second).toMatchObject({ name: 'J2', index: 1, startS: 30, ascentM: b.stats.ascentM })
+    expect(second?.distanceM).toBeCloseTo(sequence.stages[1].endM - sequence.stages[1].startM, 6)
+    expect(second?.startTime).toBeUndefined()
   })
 })

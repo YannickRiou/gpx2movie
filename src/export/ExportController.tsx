@@ -24,13 +24,14 @@ import type { LocalFrame, TerrainEngine } from '../core/types'
 import { mixFilmAudio } from '../film/audio'
 import type { FilmClock } from '../film/clock'
 import { useMediaStore } from '../film/media'
-import { transitionDipAt } from '../film/model'
 import { computeFilmView, filmViewMovesWithTime, overviewView, type FilmView } from '../flyover/filmCamera'
+import { filmFollowOf } from '../flyover/follow'
 import type { TrackPath } from '../flyover/path'
+import { filmTrackOf } from '../flyover/sequence'
 import { smoothedTrackPath } from '../flyover/smooth'
 import { loadOverlayFonts } from '../overlay/assets'
-import { overlayTime, overlayTimedState } from '../overlay/draw'
-import { loadFrameMedia, releaseFrameMedia } from '../overlay/exportOverlay'
+import { filmTextOpacity, overlayTime, overlayTimedState } from '../overlay/draw'
+import { loadFrameMedia, overlayExtras, releaseFrameMedia } from '../overlay/exportOverlay'
 import { useTerrainContext } from '../scene/TerrainLayer'
 import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
 import { useFilmClock } from '../scene/usePacing'
@@ -86,7 +87,7 @@ function viewAt(
   engine: TerrainEngine | null,
   aspect: number,
 ): FilmView {
-  const { settings } = useAppStore.getState()
+  const { settings, tracks } = useAppStore.getState()
   const sampler: HeightSampler | null = engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null
   return computeFilmView(path, clock, timeS ?? clock.timeAtProgress(progress), progress, frame, sampler, {
     exaggeration: settings.exaggeration,
@@ -95,6 +96,7 @@ function viewAt(
     durationS: settings.flyoverDurationS,
     aspect,
     region: useRegionStore.getState().frame,
+    follow: filmFollowOf(tracks, settings.race, settings.trackStyle.smoothingM),
   })
 }
 
@@ -231,7 +233,8 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     objectFit: canvas.style.objectFit,
   }
   const isCanceled = () => deps.signal.aborted || exportStore().cancelRequested
-  const track = useAppStore.getState().tracks[0]
+  const { tracks, settings: { race } } = useAppStore.getState()
+  const track = filmTrackOf(tracks, race)
   // the path FlyoverRig places the camera on
   const path = track ? smoothedTrackPath(track, useAppStore.getState().settings.trackStyle.smoothingM) : null
   const timings: ExportTimings = { ...EMPTY_TIMINGS }
@@ -379,12 +382,13 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     if (isCanceled()) throw new ExportCanceledError()
     // WebCodecs, else the system's ffmpeg (desktop app on Linux)
     session = await createExportEncoder(compositor, { ...request, audio })
-    /** opacities of the timed overlay (cards, timeline texts, photos and clips, dip) at a frame, '' without overlay */
+    /** opacities of the timed overlay (cards, timeline texts, photos and clips, dips, stage card) at a frame, '' without overlay */
     const overlayKey = (progress: number, timeS: number) => {
       if (!deps.overlay()) return ''
       const time = overlayTime(filmClock, progress, timeS)
-      const dip = transitionDipAt(settings.film, time)?.alpha
-      return overlayTimedState(settings.overlay, settings.film.texts, time, settings.film.media, dip).join()
+      const { dip, stage } = overlayExtras(time, progress)
+      const card = stage ? filmTextOpacity(stage, timeS) : 0
+      return [...overlayTimedState(settings.overlay, settings.film.texts, time, settings.film.media, dip?.alpha), card].join()
     }
     let previous = Number.NaN
     const sceneMovesWithTime =
@@ -399,7 +403,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       const progress = schedule[i]
       // held frames (holds, stops) repeat the composed image as is, unless the view, the scene (animated figurine,
       // drifting clouds, rippling water) or the overlay moves with time
-      const timed = sceneMovesWithTime || filmViewMovesWithTime(filmClock.stateAt(times[i]), settings.camera.style)
+      const timed = sceneMovesWithTime || filmViewMovesWithTime(filmClock.stateAt(times[i]), settings.camera)
       const overlayNow = overlayKey(progress, times[i])
       if (progress !== previous || ((timed || previousTimed) && times[i] !== frameTimeS) || overlayNow !== previousOverlay) {
         frameTimeS = times[i]

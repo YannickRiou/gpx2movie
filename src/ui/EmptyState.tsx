@@ -1,13 +1,9 @@
 import { useAppStore } from '../state/store'
 import { Icon } from './icons'
 import { chooseProjectToOpen, chooseTracksToImport, loadSample } from './projectActions'
-import { PlaceForm } from './RoutePanel'
 import { StravaImport } from './StravaImport'
 
-/**
- * Welcome card on the stage until a track is loaded: drop hint, file picker, Strava, the sample, open a project, and a
- * place to show for a route not walked yet (« Préparer une sortie »).
- */
+/** Welcome card on the stage until a track is loaded: drop hint, file picker, Strava, the sample, open a project. */
 export function EmptyState() {
   const loading = useAppStore((s) => s.loading)
   return (
@@ -31,7 +27,6 @@ export function EmptyState() {
       <button type="button" className="empty__link" onClick={() => void chooseProjectToOpen()} disabled={loading}>
         Ouvrir un projet…
       </button>
-      <PlaceForm />
     </section>
   )
 }

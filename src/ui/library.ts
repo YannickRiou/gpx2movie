@@ -122,9 +122,20 @@ function putEntry(entry: ProjectEntry): void {
   useLibraryStore.setState({ entries: sortProjectEntries([entry, ...entries.filter((e) => e.id !== entry.id)]) })
 }
 
+/** Thumbnail of the 3D view for the entry, undefined when it cannot be taken (the save goes on without it). */
+async function viewThumbnail(): Promise<string | undefined> {
+  try {
+    // the scene's chunk: loaded already whenever there is a view to take
+    const { captureThumbnail } = await import('../scene/thumbnail')
+    return (await captureThumbnail()) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 /**
- * Write the open project to entry `id` (a new one when null); it becomes the open entry and the top bar shows it saved,
- * unless another project was opened during the write.
+ * Write the open project to entry `id` (a new one when null), with a thumbnail of the view; it becomes the open entry
+ * and the top bar shows it saved, unless another project was opened during the write.
  */
 async function writeOpenProject(library: ProjectLibrary, id: string | null): Promise<ProjectEntry> {
   const state = useAppStore.getState()
@@ -132,7 +143,14 @@ async function writeOpenProject(library: ProjectLibrary, id: string | null): Pro
   const name = effectiveProjectName(state.projectName, state.tracks[0]?.name)
   const text = serializeProject(state, name, useMediaStore.getState().table)
   const opened = openedCount
-  const entry = await library.save(id, { name, summary: projectSummary(state.tracks, name), text })
+  const thumbnail = await viewThumbnail()
+  const entry = await library.save(id, {
+    name,
+    summary: projectSummary(state.tracks, name),
+    text,
+    // the view of another project opened meanwhile is not this one's
+    thumbnail: opened === openedCount ? thumbnail : undefined,
+  })
   putEntry(entry)
   if (opened === openedCount) {
     // a change made during the write differs from `snapshot`: saved again by the autosave
