@@ -3,6 +3,7 @@ import {
   CLEAR_SCENE_WEATHER,
   CLEAR_VISIBILITY_M,
   hazeExtinction,
+  withManualHaze,
   sceneConditionsAt,
   sceneWeatherAt,
   sceneWeatherFrom,
@@ -179,5 +180,15 @@ describe('hazeExtinction', () => {
     expect(hazeExtinction(1)).toBe(0)
     expect(hazeExtinction(0.5)).toBe(0)
     expect(hazeExtinction(11)).toBeCloseTo((3.912 * 10) / CLEAR_VISIBILITY_M, 12)
+  })
+})
+
+describe('withManualHaze', () => {
+  it('adds the haze set by hand to the weather, within the bound', () => {
+    expect(withManualHaze(1, 0)).toBe(1)
+    // at 1 on a clear day: visibility 60 km ÷ 20 = 3 km
+    expect(withManualHaze(1, 1)).toBe(20)
+    expect(withManualHaze(25, 1)).toBe(30)
+    expect(withManualHaze(1, 2)).toBe(20)
   })
 })

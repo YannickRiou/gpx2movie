@@ -7,9 +7,10 @@ import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
 import { CLOUD_ALTITUDE_RANGE, type CloudMode, type CloudQuality } from '../weather/sceneClouds'
+import { HAZE_RANGE } from '../weather/sceneWeather'
 import { useWeatherStore } from '../weather/store'
 import { GradingPanel } from './GradingPanel'
-import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
+import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
 import { formatNumber } from './format'
 
 const ZOOM_OFFSETS: { value: Settings['imageryZoomOffset']; label: string }[] = [
@@ -548,7 +549,7 @@ export function SettingsPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Atmosphère et météo" keys={['atmosphere', 'shadows', 'exposureEv', 'weatherScene', 'clouds']}>
+      <PanelSection title="Atmosphère et météo" keys={['atmosphere', 'shadows', 'exposureEv', 'weatherScene', 'clouds', 'haze']}>
         <label className="checkbox checkbox--switch" htmlFor={atmosphereId}>
           <input
             id={atmosphereId}
@@ -584,6 +585,16 @@ export function SettingsPanel() {
         )}
 
         {settings.atmosphere && <CloudsControl weatherReady={weatherReady} />}
+
+        {settings.atmosphere && (
+          <RangeField
+            label="Brume"
+            {...HAZE_RANGE}
+            value={settings.haze}
+            format={(v) => (v === 0 ? 'Aucune' : `${formatNumber(v * 100)} %`)}
+            onChange={(haze) => setSetting('haze', haze)}
+          />
+        )}
 
         {settings.atmosphere && (
           <MoreSettings paths={['exposureEv', 'weatherScene.strength']} label="Exposition et intensité">
