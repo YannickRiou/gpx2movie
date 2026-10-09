@@ -55,7 +55,8 @@ export const SUN_INTENSITY = 2.0
 
 /** Camera spot before the first fit (the rig snaps to the tracks as soon as they exist). */
 const CAMERA = { fov: CAMERA_FOV_DEG, near: 1, far: 5e6, position: [0, 2000, 3000] as [number, number, number] }
-const GL = { antialias: true, logarithmicDepthBuffer: true, alpha: true }
+/** `high-performance`: on a machine with two GPUs (laptops), ask for the discrete one for the scene and the export. */
+const GL = { antialias: true, logarithmicDepthBuffer: true, alpha: true, powerPreference: 'high-performance' as const }
 
 const wrapperStyle: CSSProperties = {
   position: 'relative',
