@@ -5,11 +5,19 @@ then run `git status` and `npm run typecheck`.
 
 ## Branches, PRs, repository
 
-- `master`: everything merged (PRs #1 to #10; #8 on 8 October 2026: small follow-ups, on-demand rendering, sweep,
+- `master`: everything merged (PRs #1 to #11; #8 on 8 October 2026: small follow-ups, on-demand rendering, sweep,
   slow-motion on the beat, per-element styles and framing, command-line rendering, reconnaissance, technical docs;
   #9 on 8 October 2026: full project review and fixes; #10 on 9 October 2026: technical debt, small and medium
-  roadmap features, documentation in English).
-- `ai-dev/confident-darwin-83rxik` (cloud session): the rest of the roadmap (see "Work in progress").
+  roadmap features, documentation in English; #11 on 9 October 2026: end of the roadmap).
+- History rewritten on 9 October 2026 (every branch): all commits authored by Yannick Riou
+  (`59170639+YannickRiou@users.noreply.github.com`), messages in English. Old clones: `git fetch` then
+  `git reset --hard origin/<branch>`. New commits: same identity, English messages.
+- `ai-dev/confident-darwin-83rxik` (cloud session): review fixes, simplifications, knowledge base (see "Work in
+  progress").
+- `lot-suites` (not merged, the user's work in progress): route scouting with planned times, forecast weather and a
+  roadbook; opening / closing transitions (cross-dissolve, cut, fade to black or white); saving on close; in
+  progress: locator map from very high up with the region highlighted (2 `filmCamera` tests failing), Strava import.
+  Next: merge it (27 conflicting files with `master`).
 - Method: one branch per batch, one PR with a manual test procedure, merge (`gh pr merge N --merge`), then a new
   branch from `origin/master`.
 - **Push**: just `git push`. The `origin` remote is `git@github-yannickriou:YannickRiou/gpx2movie.git`, an SSH alias
@@ -73,30 +81,25 @@ See `git log` and PRs #1 to #7 (waves 3 and 4: overview map, points of interest,
 titles at landmarks, sync to music, multi-track poster and flat map, one film per track in a folder,
 "Mes projets" ("My projects"), native Linux encoder, installers); technical details in `ARCHITECTURE.md`, features in `README.md`.
 
-## Work in progress (branch `ai-dev/confident-darwin-83rxik`): end of the roadmap
+## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (92 files, 1,477 tests), `npm run build`,
-`npm run e2e` with `OPENFLYOVER_E2E_ONLY=accueil,onglets,timeline,projet` (reconnaissance fails here for lack of
-elevation tiles, as on `master`). Screen checks done in Chromium without a GPU: rolling credits (2D overlay drawn on a
-canvas), "Contenu / Style / Visibilité" tabs of the overlay elements.
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (92 files, 1,478 tests), `npm run build`,
+`cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
-- **Labels**: "Départ" / "Arrivée" (one "Départ et arrivée" label for a loop, `endpointLabels`, `labels.endpoints`);
-  photos pinned where they were taken (`MediaAsset.lon` / `lat` read from EXIF GPS when a photo is added,
-  `photoLabels`, `labels.photos`; photos added before keep no position).
-- **Rendering**: "Brume" (haze) slider, `settings.haze` 0–1 added to the weather's `hazeScale` (`withManualHaze`;
-  at 1 on a clear day, visibility 3 km).
-- **Marker**: animated figurine (`marker.animated`, `figureMotion(timeS)`: bounce and sway, a function of the film
-  time only, so the export matches the preview and a paused film keeps its pose).
-- **Overlay**: rolling credits under the closing card (`end.credits`, `creditLines`, `creditsRollProgress`; the
-  card and the lines roll up to the last frame); "Contenu" / "Style" / "Visibilité" tabs in each element
-  (`WidgetGroup`: `children`, `style`, `visibility`).
-- **Pacing**: "Transitions" (`pacing.transitionS`, 0.5–4 s, default 1.5 s as before): easing into and out of
-  pauses, stops and speed sections. This is the chosen reading of "adjustable transitions between sections".
-- **Presets by family** (`PRESET_SCOPES`): "Style de carte", "Trace, marqueur et étiquettes", "Habillage", "Prise de
-  vue (caméra, cadrage, lumière)"; a family preset stores and applies only its keys (`PRESET_SCOPE_KEYS`). This
-  covers "themes savable separately" and "saved shots".
-- Older projects: `withLabelDefaults`, `withPacingDefaults`, `withMarkerDefaults` fill the new fields; `haze` and
-  `end.credits` take their defaults.
+- **Review fixes**: held export frames re-rendered when the scene moves with time (animated figurine, clouds, water);
+  settings panel and inspector `inert` during an export, batch cancel from the top bar; overlay element tabs as
+  pressed buttons; unique "Générique" field id; `exposureEv` only in the camera-shot preset family; image pickers
+  patch the current settings; path and climb caches keyed by the points (recolouring keeps them); track lines flush
+  their pending re-drape before an export frame; manual haze measured from the ground on untimed tracks; Latin
+  Extended font files loaded for the overlay; weather cache refreshes the last use; a photo with a bad position keeps
+  its picture; ffmpeg's error output drained in a thread (a full pipe could block frame writes and cancel).
+- **Simplifications**: `core/guards.ts` (`isRecord`, `inRange`, `oneOf`, `withDefaults`), `DEFAULT_LABELS`,
+  `formatPercent`, `formatSecondsShort`; test-only `assembleFilm`, `TileNode.depth` and the `usePacing` alias removed.
+- **Knowledge base**: `docs/how-it-works.html` rewritten for readers who do not know web development.
+- **Left for later** (proposed, not done): one `RangeField` for the ~15 hand-written sliders, `Fold` merged into
+  `PanelSection`, shared "Position" / "Texte" / "Taille" fields, duplicated poster and terrain constants, test-only
+  pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer`; "Texte libre" drawn like a timeline text (behaviour
+  change, needs the user's OK).
 
 ## Visual checks still to do (never seen on screen)
 
