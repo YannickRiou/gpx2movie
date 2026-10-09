@@ -11,9 +11,19 @@ import { ModifiedMarker } from './ModifiedMarker'
  * Foldable section of a tab, flat with a sticky header (title, « modifié / Par défaut » of `keys` if given, chevron).
  * Open at first; the content stays mounted when folded.
  */
-export function PanelSection({ title, keys, children }: { title: string; keys?: (keyof Settings)[]; children: ReactNode }) {
+export function PanelSection({
+  title,
+  keys,
+  hidden = false,
+  children,
+}: {
+  title: string
+  keys?: (keyof Settings)[]
+  hidden?: boolean
+  children: ReactNode
+}) {
   return (
-    <details className="fold panel-section" open>
+    <details className="fold panel-section" open hidden={hidden}>
       <summary className="fold__summary">
         <h2 className="section-title fold__title">{title}</h2>
         {/* the marker's button must not fold the section */}

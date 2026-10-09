@@ -7,7 +7,6 @@ import { getPlatform } from './platform'
 import { getSettingsHistory, installHistoryShortcuts, installSliderGestures } from './project/history'
 import { editFilm, useFilmClock } from './scene/usePacing'
 import { useAppStore } from './state/store'
-import type { Settings } from './state/store'
 import { CameraPanel } from './ui/CameraPanel'
 import { ClimbList } from './ui/ClimbList'
 import { EmptyState } from './ui/EmptyState'
@@ -17,8 +16,8 @@ import { Icon } from './ui/icons'
 import type { IconName } from './ui/icons'
 import { LandmarkPanel } from './ui/LandmarkPanel'
 import { installCloseGuard, installLibraryAutosave } from './ui/library'
-import { ModifiedMarker } from './ui/ModifiedMarker'
 import { OverlayPanel } from './ui/OverlayPanel'
+import { PanelSection } from './ui/PanelSection'
 import { PoiPanel } from './ui/PoiPanel'
 import { RoutePanel } from './ui/RoutePanel'
 import { chooseFilesToOpen, openFiles, saveProject } from './ui/projectActions'
@@ -114,25 +113,6 @@ function SeekShortcuts() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
   return null
-}
-
-/** Foldable section of a tab (still mounted when folded: the weather panel syncs the weather store). */
-function Fold({ title, keys, hidden, children }: { title: string; keys?: (keyof Settings)[]; hidden: boolean; children: ReactNode }) {
-  return (
-    <details className="fold" open hidden={hidden}>
-      <summary className="fold__summary">
-        <h2 className="section-title fold__title">{title}</h2>
-        {/* the marker's button must not fold the section */}
-        {keys && (
-          <span className="fold__marker" onClick={(e) => e.preventDefault()}>
-            <ModifiedMarker keys={keys} label={title} />
-          </span>
-        )}
-        <Icon name="chevron-down" size={16} />
-      </summary>
-      {children}
-    </details>
-  )
 }
 
 export default function App() {
@@ -396,20 +376,20 @@ export default function App() {
             <>
               <TrackList />
               <RoutePanel />
-              <Fold title="Montées et étiquettes" keys={['labels']} hidden={!hasTracks}>
+              <PanelSection title="Montées et étiquettes" keys={['labels']} hidden={!hasTracks}>
                 <ClimbList />
-              </Fold>
-              <Fold title="Feuille de route" hidden={!hasTracks}>
+              </PanelSection>
+              <PanelSection title="Feuille de route" hidden={!hasTracks}>
                 <RoadbookPanel />
-              </Fold>
-              <Fold title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
+              </PanelSection>
+              <PanelSection title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
                 <WeatherPanel />
-              </Fold>
-              <Fold title="Hors ligne" hidden={!hasTracks}>
+              </PanelSection>
+              <PanelSection title="Hors ligne" hidden={!hasTracks}>
                 <Suspense>
                   <OfflinePanel />
                 </Suspense>
-              </Fold>
+              </PanelSection>
             </>,
           )}
           {panel(
