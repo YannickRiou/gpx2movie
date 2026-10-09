@@ -13,13 +13,15 @@ import {
   SHOT_STYLES,
   SHOT_TRANSITIONS,
   SHOT_TRANSITION_LABELS,
+  START_HEIGHTS,
+  START_HEIGHT_LABELS,
   STOP_CAMERAS,
   STOP_CAMERA_LABELS,
   STOP_DURATION_RANGE,
   SYNC_OFFSET_RANGE,
   shotDipColor,
 } from '../film/model'
-import type { Film, MediaLayout, MediaSync, ShotStyle, ShotTransition, StopCamera } from '../film/model'
+import type { Film, MediaLayout, MediaSync, ShotStyle, ShotTransition, StartHeight, StopCamera } from '../film/model'
 import {
   addItemCamera,
   attachToStop,
@@ -40,6 +42,7 @@ import {
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { buildTrackPath } from '../flyover/path'
+import { useRegionStore, type RegionStatus } from '../osm/region'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
@@ -70,6 +73,14 @@ const TRANSITION_HINTS: Record<ShotTransition, string> = {
   coupe: 'Le plan reste fixe ; l’image passe d’un coup entre le plan et le survol.',
   'fondu-noir': 'Le plan reste fixe ; l’image passe par le noir entre le plan et le survol.',
   'fondu-blanc': 'Le plan reste fixe ; l’image passe par le blanc entre le plan et le survol.',
+}
+/** « Mettre en avant la région »: what it does, then how the search for the region went (found: after its name). */
+const REGION_HINTS: Record<RegionStatus, string> = {
+  idle: 'Assombrit les alentours de la région administrative de la sortie (OpenStreetMap) et la cadre en entier.',
+  loading: 'Recherche de la région…',
+  ready: 'les alentours sont assombris, la vue cadre la région entière.',
+  none: 'Aucune région administrative ne contient toute la trace : le plan reste sans mise en avant.',
+  error: 'Région indisponible pour le moment (hors ligne ?) : le plan reste sans mise en avant.',
 }
 const STOP_CAMERA_HINTS: Record<StopCamera, string> = {
   film: 'La caméra du survol continue, sans mouvement ajouté.',
@@ -142,6 +153,8 @@ export function FilmInspector() {
   const item = useAppStore((s) => s.filmSelection)
   const { track, film, pacing } = useFilmSource()
   const clock = useFilmClock()
+  const regionStatus = useRegionStore((s) => s.status)
+  const regionName = useRegionStore((s) => s.region?.name)
   const path = useMemo(() => (track ? buildTrackPath(track) : null), [track])
   if (!item || !track || !path) return null
   const lengthM = track.stats.distanceM
@@ -283,6 +296,40 @@ export function FilmInspector() {
             {SHOT_HINTS[shot.style]}
           </p>
         </div>
+        {shot.style === 'situation' && (
+          <>
+            <div className="field">
+              <label className="field__label" htmlFor={`${id}-height`}>
+                {item === 'opening' ? 'Hauteur de départ' : 'Hauteur de fin'}
+              </label>
+              <select
+                id={`${id}-height`}
+                className="select"
+                value={shot.startHeight ?? 'region'}
+                onChange={(e) => change((f) => updateShot(f, item, { startHeight: e.currentTarget.value as StartHeight }), false)}
+              >
+                {START_HEIGHTS.map((height) => (
+                  <option key={height} value={height}>
+                    {START_HEIGHT_LABELS[height]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <label className="checkbox checkbox--switch">
+              <input
+                type="checkbox"
+                checked={shot.highlight === true}
+                aria-describedby={`${id}-highlight-hint`}
+                onChange={(e) => change((f) => updateShot(f, item, { highlight: e.currentTarget.checked }), false)}
+              />
+              Mettre en avant la région
+            </label>
+            <p id={`${id}-highlight-hint`} className="field__hint">
+              {shot.highlight && regionStatus === 'ready' && regionName ? `${regionName} : ` : ''}
+              {REGION_HINTS[shot.highlight ? regionStatus : 'idle']}
+            </p>
+          </>
+        )}
         {range(
           'duration',
           'Durée',

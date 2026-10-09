@@ -30,8 +30,7 @@ import { isValidMarker, isValidTrackStyle, withMarkerDefaults, withTrackStyleDef
 import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS, PLAYBACK_SPEEDS } from '../state/store'
 import type { AppState, Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
-import { isValidClouds } from '../weather/sceneClouds'
-import { HAZE_RANGE } from '../weather/sceneWeather'
+import { isValidClouds, withCloudDefaults } from '../weather/sceneClouds'
 
 export const PROJECT_FORMAT = 'openflyover-project'
 export const PROJECT_VERSION = 2
@@ -118,7 +117,6 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   exposureEv: (v) => v >= -4 && v <= 4,
   grading: isValidGrading,
   weatherScene: (v) => v.strength >= 0 && v.strength <= 1,
-  haze: (v) => v >= HAZE_RANGE.min && v <= HAZE_RANGE.max,
   clouds: isValidClouds,
   water: (v) => v.strength >= 0 && v.strength <= 1,
   trackColorBy: (v) => (TRACK_COLOR_MODES as readonly string[]).includes(v),
@@ -149,6 +147,7 @@ export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unkno
   labels: withLabelDefaults,
   pacing: withPacingDefaults,
   landmarks: withLandmarkDefaults,
+  clouds: withCloudDefaults,
 }
 
 

@@ -31,6 +31,7 @@ import { FlyoverRig } from './FlyoverRig'
 import { isIdentityGrading } from './grading'
 import { Labels } from './Labels'
 import { RaceMarkers } from './RaceMarkers'
+import { RegionHighlight } from './RegionHighlight'
 import { useRenderOnDemand } from './renderOnDemand'
 import { TerrainLayer } from './TerrainLayer'
 import { TrackLines } from './TrackLines'
@@ -103,6 +104,7 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
               <>
                 <TrackLines />
                 <WaterLayer />
+                <RegionHighlight />
                 <FlyoverRig />
                 <RaceMarkers />
               </>

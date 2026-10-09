@@ -12,7 +12,7 @@ import { addCameraKey } from '../film/timeline'
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { PACING_RANGES } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
-import { editFilm, useFilmClock } from '../scene/usePacing'
+import { editFilm, setFlightTiming, useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber, formatPercent, formatSecondsShort } from './format'
 import { Icon } from './icons'
@@ -100,7 +100,7 @@ export function CameraPanel() {
   const id = useId()
   const preset = findCameraPreset(camera)
   const update = (patch: Partial<CameraSettings>) => setSetting('camera', { ...camera, ...patch })
-  const updatePacing = (patch: Partial<PacingSettings>) => setSetting('pacing', { ...pacing, ...patch })
+  const updatePacing = (patch: Partial<PacingSettings>) => setFlightTiming({ pacing: { ...pacing, ...patch } })
   const lengthM = useAppStore((s) => s.tracks[0]?.stats.distanceM ?? 0)
   /** a camera key at the marker with the framing seen there (one undo step, selected for the inspector) */
   const keepFraming = () => {
@@ -231,7 +231,7 @@ export function CameraPanel() {
               max={FLYOVER_DURATION_RANGE.max}
               step={FLYOVER_DURATION_RANGE.step}
               value={durationS}
-              onChange={(e) => setSetting('flyoverDurationS', Number(e.currentTarget.value))}
+              onChange={(e) => setFlightTiming({ durationS: Number(e.currentTarget.value) })}
               aria-valuetext={formatSeconds(durationS)}
             />
             <output className="range-row__value range-row__value--wide" htmlFor={`${id}-duration`}>

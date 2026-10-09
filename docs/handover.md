@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (97 files, 1,561 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (98 files, 1,583 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -109,11 +109,12 @@ features included), `npm run build`,
 - **Second simplification pass**: `RangeField` (optional ⓘ tip and spoken value) for the settings sliders;
   `cumulativeDistances` in `geo/lonLat`; shared `createCanvas` / `createAbortError` for DEM and imagery; terrain area
   margins in `terrain/engine`; one `CAMERA_FOV_DEG`; `Fold` merged into `PanelSection`.
-- **Ported from the old branch chain**: landmark hiding (`settings.landmarks.hiddenIds`, eye button in "Repères"; the
-  roadbook still lists hidden landmarks), point smoothing (`trackStyle.smoothingM`, recorded distances kept; ghost
-  racers, labels, picking, mini-map and poster keep the recorded points), texts and media attached to a stop
-  (`stopId`, `followStops`; landmark-title and duration changes do not move attached items yet), timeline edge
-  scrolling (`edgeScrollSpeed`), fold state remembered per section title (`FOLDS_KEY`).
+- **Ported from the old branch chain**: landmark hiding (`settings.landmarks.hiddenIds`, eye button in "Repères",
+  also left out of the roadbook), point smoothing (`trackStyle.smoothingM`, recorded distances kept; ghost racers follow
+  their smoothed lines; labels, picking, mini-map and poster keep the recorded points), texts and media attached to a
+  stop (`stopId`, `followStops`, also on landmark-title, duration and pacing changes through `setLandmarkTitles` and
+  `setFlightTiming`; resetting the "Durée et rythme" section or landmarks arriving later do not move them), timeline
+  edge scrolling (`edgeScrollSpeed`), fold state remembered per section title (`FOLDS_KEY`).
 - **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
   constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
   "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK); a text added with T attached to
@@ -148,22 +149,14 @@ Done (tests green, never seen on screen):
   deleted (`lib.rs`, `cancel_all` in `video.rs`).
 - Shared helpers: `core/errors.ts` (`errorMessage`), `clamp` from `core/math.ts` everywhere.
 
-**Interrupted 1 — locator map from very high up, region highlighted** (user's request: like the "Valais/Wallis" view
-of MapDirector: an almost top-down view of the whole administrative region of the outing, outside darkened, glowing
-white border, name of the region in the centre, orange dot at the outing, then the dive):
-
-- done: `src/osm/region.ts` (Overpass `is_in` then `out geom`, admin levels 4 to 6, the smallest region that contains
-  the track and is at least 5 times larger, rings stitched with `stitchRings`, simplified to 2,000 points, cache);
-  `regionDistanceM` / `regionView` rewritten in `src/flyover/filmCamera.ts` (start height "Région" / "Pays"
-  (region / country), `StartHeight`, 55–165 km for "Région", × 2.5 for "Pays", framing on the region's box); terrain
-  engine: wider area and zoom cap outside the corridor (`src/terrain/quadtree.ts`, `engine.ts`,
-  `src/scene/TerrainLayer.tsx`, `REGION_AREA_MARGIN_M`).
-- left: the `src/scene/RegionHighlight.tsx` rendering (named in `region.ts`, **not written yet**: darken outside the
-  region, glowing line, name, dot, fade during the dive, same in preview and export); calling `syncRegion` /
-  `useRegionStore` from the film (nothing does yet); the setting in the opening inspector ("Hauteur de départ" (start
-  height), "Mettre en avant la région" (highlight the region)); the OpenStreetMap credit when the region is shown;
-  the atmosphere seen from very high up (clouds cut above a certain height?); the user documentation (README,
-  `docs/tests-gpu.md`). `ARCHITECTURE.md` describes the camera part and what is missing.
+- **Region highlight** (was "Interrupted 1", finished on 9 October 2026; the user's reference: MapDirector's
+  "Valais/Wallis" view): shot inspector "Hauteur de départ" / "Hauteur de fin" and "Mettre en avant la région"
+  (`FilmShot.highlight`, off by default), `syncRegion` called by `src/scene/RegionHighlight.tsx` only while a shot
+  highlights the region, darkened outside, glowing border, name, orange dot, fading out during the dive
+  (`regionHighlightOpacity`), OpenStreetMap credit; details in `ARCHITECTURE.md` (Camera). 98 test files, 1,568 tests.
+  Seen only in headless Chromium without tiles (mocked Overpass): look, contrast on real imagery and loading of the
+  coarse tiles from very high up still to check on a GPU; the atmosphere seen from very high up (clouds?) was not
+  looked at.
 
 **Interrupted 2 — Strava import** (almost finished): `src/strava/api.ts` (authorization, token exchange and refresh,
 list of activities, GPS / time / altitude / sensor streams), `src/strava/track.ts` (streams → `Track`),
@@ -174,8 +167,10 @@ list of activities, GPS / time / altitude / sensor streams), `src/strava/track.t
 application" (Client ID / Secret pasted once, kept in the platform storage of this browser or this computer, sent
 only to strava.com), because the token exchange requires the secret and the project has no server; no Strava key is
 in the code. Documented in the user guide (`docs/user-guide.html`, "Import a track"), `ARCHITECTURE.md` ("Strava import") and
-`docs/tests-gpu.md` (section 6 bis). Left: review the whole, real test (CORS of `www.strava.com/oauth/token` from the
-browser to be confirmed).
+`docs/tests-gpu.md` (section 6 bis). **Checked by the user on 9 October 2026 with the Windows desktop application**:
+connection and import of real activities through the API work. The website path (browser `fetch` of
+`www.strava.com/oauth/token`) has not been tried yet; the desktop webview applies the same cross-origin rules, so it
+is expected to work.
 
 ## Visual checks still to do (never seen on screen)
 
@@ -190,6 +185,9 @@ remain the source for each work item.
   atmosphere chain: SMAA, merged into the same pass as tone mapping, reads the pass input (image before
   aerial perspective and tone mapping) on detected edges; if light fringes appear on ridges,
   move it into its own pass.
+- Region highlight ("Depuis la région" › "Mettre en avant la région", sample in the Alps): the region's border on the
+  relief, readable name and dot, outside darkened but still legible, fade during the dive, same frames in a 1080p
+  export, "Pays" start height, 9:16.
 - Safe zones: button under "Recadrer" ("Reframe") (absent in "Libre" ("Free")), G, labels readable on a narrow preview, button
   strip in 9:16 and 4:5, 93% / 90% margins in 16:9, nothing in the export.
 
@@ -289,30 +287,27 @@ remain the source for each work item.
 
 ## Proposed next steps
 
-The roadmap is built except one feature. What remains:
+The roadmap is built. What remains:
 
-1. **Region highlight** (the only unfinished work item, "Interrupted 1" above): `src/scene/RegionHighlight.tsx`,
-   wiring `syncRegion` / `useRegionStore` to the film, "Hauteur de départ" ("Région" / "Pays") and "Mettre en avant
-   la région" in the opening inspector (`START_HEIGHT_LABELS` exists but is not shown), OpenStreetMap credit, docs.
-2. In the user's hands: tests on the machine with a GPU (`docs/tests-gpu.md`), first launch of the desktop
-   application, command-line rendering once on a real machine, a real Strava import (CORS of the token exchange from
-   the browser to confirm), signing certificates if wanted, then a first `v0.1.0` tag (release published by
-   `desktop.yml`).
-3. Before a public release: decide on the Garmin FIT SDK license (see "Limits and open points").
-4. Extensions proposed and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only
-   export on the Linux desktop, a built-in openh264 encoder; the ported features' known limits (roadbook lists hidden
-   landmarks, smoothing not applied to ghost racers / labels / mini-map / poster).
-5. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+1. In the user's hands: tests on the machine with a GPU (`docs/tests-gpu.md`, region highlight included),
+   command-line rendering once on a real machine, Strava import on the website (done on the Windows desktop
+   application), signing certificates if wanted, then a first `v0.1.0` tag (release published by `desktop.yml`).
+2. Polish from real use still in progress (`docs/roadmap.md`, last section): sea of clouds in place of the manual
+   haze slider, steadier flyover camera (target height and ground clearance smoothed along the track).
+3. Extensions proposed and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only
+   export on the Linux desktop, a built-in openh264 encoder; heart rate from separate FIT `hr` messages (chest strap
+   in swim files), not read by the in-house FIT decoder.
+4. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.
 
 ## Limits and open points
 
-- Garmin FIT SDK license (not free, redistribution "except in the cases provided for"): to decide before public release; personal
-  use OK. Esri terms (no key) to re-read for online use. Open-Meteo and EOX non-commercial; OpenTopoMap,
-  Esri and swisstopo allowed in offline packs for personal use, with a low daily limit (`docs/sources.md`,
-  "Attributions, licenses and offline use"). Yale star catalog: license not stated.
+- FIT files are read by an in-house decoder (`src/import/fit.ts`, MIT); the Garmin FIT SDK, whose license forbids
+  redistribution, is no longer a dependency. Esri terms (no key) to re-read for online use. Open-Meteo and EOX
+  non-commercial; OpenTopoMap, Esri and swisstopo allowed in offline packs for personal use, with a low daily limit
+  (`docs/sources.md`, "Attributions, licenses and offline use"). Yale star catalog: license not stated.
 - HEIC photos refused (the browser does not decode them); EXIF read only in JPEG files.
 - Videos: 50 MB at most (the project contains them: ~1.33 × their size in the JSON file), not placed
   by GPS (synced only by time, the track must be timestamped); an old project edited by hand with a video missing from its table keeps it in the film without

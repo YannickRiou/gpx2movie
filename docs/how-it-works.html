@@ -320,7 +320,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
   <div class="facts">
     <span><b>2</b> targets: static website, desktop app</span>
     <span><b>0</b> servers or API keys shipped</span>
-    <span><b>1,561</b> unit tests in <b>97</b> files</span>
+    <span><b>1,583</b> unit tests in <b>98</b> files</span>
     <span><b>6</b> end-to-end scenarios</span>
     <span>export up to <b>4K · 60 fps</b></span>
   </div>
@@ -428,7 +428,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
       <article class="term">
         <h4>Node.js, npm and packages</h4>
         <p>Node.js runs JavaScript outside a browser, which is handy for development tools. npm installs "packages" (code written by others) listed in <code>package.json</code> into a <code>node_modules/</code> folder.</p>
-        <p class="here"><b>Here:</b> Node 24 is needed to develop, test and build, never to run the app: the finished website is a folder of plain files. Main packages: React, three.js, zustand, mediabunny, the Garmin FIT SDK and the Takram sky and cloud libraries.</p>
+        <p class="here"><b>Here:</b> Node 24 is needed to develop, test and build, never to run the app: the finished website is a folder of plain files. Main packages: React, three.js, zustand, mediabunny and the Takram sky and cloud libraries.</p>
       </article>
       <article class="term">
         <h4>React, components and state</h4>
@@ -490,7 +490,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
       <article class="term">
         <h4>GPX and FIT files</h4>
         <p>GPX is a text file (XML) listing points with latitude, longitude, and often height and time; almost every GPS app can export it. FIT is Garmin's compact binary format; it can also hold heart rate, cadence, power and temperature.</p>
-        <p class="here"><b>Here:</b> <code>src/import/gpx.ts</code> reads GPX; <code>src/import/fit.ts</code> reads FIT with Garmin's FIT SDK, which is downloaded only when the first FIT file is opened.</p>
+        <p class="here"><b>Here:</b> <code>src/import/gpx.ts</code> reads GPX; <code>src/import/fit.ts</code> reads FIT with a small decoder of its own, written from the public FIT protocol description and downloaded only when the first FIT file is opened.</p>
       </article>
       <article class="term">
         <h4>Coordinates and the local frame</h4>
@@ -542,7 +542,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
       <article class="term">
         <h4>Tests and end-to-end tests</h4>
         <p>Tests are small programs that check the code automatically. Unit tests call one module with known inputs and compare the answer. End-to-end (e2e) tests start the real app in a browser without a window and click through it like a user.</p>
-        <p class="here"><b>Here:</b> Vitest runs 1,561 unit tests in 97 files, in a simulated browser called jsdom. <code>npm run e2e</code> drives the app in headless Chromium with puppeteer-core. <code>cargo test</code> checks the Rust code.</p>
+        <p class="here"><b>Here:</b> Vitest runs 1,583 unit tests in 98 files, in a simulated browser called jsdom. <code>npm run e2e</code> drives the app in headless Chromium with puppeteer-core. <code>cargo test</code> checks the Rust code.</p>
       </article>
       <article class="term">
         <h4>Linting</h4>
@@ -1130,7 +1130,7 @@ npm run tauri:build   # desktop app and its installers, in src-tauri/target/rele
       </tbody>
     </table>
   </div>
-  <p>The code itself is under the MIT license. One dependency is not free software: the Garmin FIT SDK, which reads FIT files (see the limits below). Fonts are under the SIL Open Font License; icons come from Lucide (ISC license).</p>
+  <p>The code itself is under the MIT license, FIT reader included: the Garmin FIT SDK, whose license forbids redistribution, is not used. Fonts are under the SIL Open Font License; icons come from Lucide (ISC license).</p>
 </section>
 
 <!-- ================================================================== 9 -->
@@ -1140,7 +1140,6 @@ npm run tauri:build   # desktop app and its installers, in src-tauri/target/rele
   <ul class="limits">
     <li><span class="tag warn">to check</span><span>Never seen on a real graphics card: export speed, smoothness, sound and the final look. Development uses software rendering. The checklist is <a href="tests-gpu.md"><code>docs/tests-gpu.md</code></a>.</span></li>
     <li><span class="tag warn">to check</span><span>The desktop app has not been launched or packaged on a real machine, and the installer workflows have not run yet. Installers are not signed, so Windows and macOS warn on first launch.</span></li>
-    <li><span class="tag warn">to decide</span><span>The Garmin FIT SDK license forbids redistribution "except as provided", yet the published site contains it. Fine for personal use; to settle before a wide release.</span></li>
     <li><span class="tag">licenses</span><span>Esri terms to re-read for online use; EOX and Open-Meteo are non-commercial; the license of the star catalog (Yale Bright Star Catalog) is not stated.</span></li>
     <li><span class="tag">browsers</span><span>Export not tested in Firefox or Safari. Without direct writing to disk, the video is built in memory (about twice its size); the drawer warns above an estimated 1.5 GB. HTTPS is required outside <code>localhost</code>.</span></li>
     <li><span class="tag">hosting</span><span>The website must be served at the root of a domain: a few paths (<code>/samples/</code>, <code>/fonts/</code>, <code>/favicon.svg</code>) are written in full.</span></li>

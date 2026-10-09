@@ -1,7 +1,16 @@
-import { Encoder, Profile, Utils } from '@garmin/fitsdk'
 import { describe, expect, it } from 'vitest'
-import { buildFitActivity, toArrayBuffer, toSemicircles, writeMesg } from './__fixtures__/fit-activity'
-import { parseFit, readUtcOffset, recordToPoint, semicirclesToDegrees } from './fit'
+import {
+  buildFitActivity,
+  encodeFit,
+  ENUM,
+  fitSeconds,
+  SINT32,
+  toArrayBuffer,
+  toSemicircles,
+  UINT8,
+  UINT32,
+} from './__fixtures__/fit-activity'
+import { FIT_EPOCH_MS, parseFit, readUtcOffset, recordToPoint, semicirclesToDegrees } from './fit'
 
 describe('semicirclesToDegrees', () => {
   it('maps the semicircle range onto degrees', () => {
@@ -40,7 +49,7 @@ describe('recordToPoint', () => {
 
 describe('readUtcOffset', () => {
   const at = Date.parse('2025-01-10T12:00:00Z')
-  const local = (offsetMin: number) => (at + offsetMin * 60_000 - Utils.FIT_EPOCH_MS) / 1000
+  const local = (offsetMin: number) => (at + offsetMin * 60_000 - FIT_EPOCH_MS) / 1000
   it('reads the local clock offset of the activity, to the quarter hour', () => {
     expect(readUtcOffset({ activityMesgs: [{ timestamp: new Date(at), localTimestamp: local(-300) }] })).toBe(-300)
     expect(readUtcOffset({ activityMesgs: [{ timestamp: new Date(at), localTimestamp: local(345) + 2 }] })).toBe(345)
@@ -54,7 +63,7 @@ describe('readUtcOffset', () => {
 })
 
 describe('parseFit', () => {
-  it('decodes an activity encoded with the SDK', async () => {
+  it('decodes an encoded activity', async () => {
     const tracks = await parseFit(buildFitActivity(), 'Rando matin.FIT')
     expect(tracks).toHaveLength(1)
     const track = tracks[0]
@@ -103,11 +112,27 @@ describe('parseFit', () => {
   })
 
   it('rejects a FIT file without any positioned record', async () => {
-    const encoder = new Encoder()
-    writeMesg(encoder, Profile.MesgNum.FILE_ID, { type: 'activity', manufacturer: 'development', product: 1 })
-    writeMesg(encoder, Profile.MesgNum.RECORD, { timestamp: new Date(), heartRate: 90 })
-    await expect(parseFit(toArrayBuffer(encoder.close()), 'indoor.fit')).rejects.toThrow(
-      /aucun enregistrement avec position/,
-    )
+    const indoor = encodeFit([
+      { num: 0, fields: [[0, ENUM, 4]] },
+      { num: 20, fields: [[253, UINT32, fitSeconds(Date.now())], [3, UINT8, 90]] },
+    ])
+    await expect(parseFit(indoor, 'indoor.fit')).rejects.toThrow(/aucun enregistrement avec position/)
+  })
+
+  it('reads compressed timestamp headers, big-endian messages and skips developer fields', async () => {
+    const t0 = fitSeconds(Date.parse('2025-07-12T07:00:46Z')) // t0 % 32 = 30: the 5-bit offset rolls over
+    const position: [number, number, number][] = [
+      [0, SINT32, toSemicircles(45.5)],
+      [1, SINT32, toSemicircles(6.5)],
+    ]
+    const file = encodeFit([
+      { num: 20, fields: [[253, UINT32, t0], ...position, [3, UINT8, 100]], devFieldSizes: [2, 1] },
+      { num: 20, fields: [...position, [3, UINT8, 101]], bigEndian: true, timeOffset: (t0 + 5) & 0x1f },
+    ])
+    const [p0, p1] = (await parseFit(file, 'x.fit'))[0].segments[0].points
+    expect(p0).toMatchObject({ hr: 100, time: Date.parse('2025-07-12T07:00:46Z') })
+    expect(p1).toMatchObject({ hr: 101, time: Date.parse('2025-07-12T07:00:51Z') })
+    expect(p1.lat).toBeCloseTo(45.5, 7)
+    expect(p1.lon).toBeCloseTo(6.5, 7)
   })
 })

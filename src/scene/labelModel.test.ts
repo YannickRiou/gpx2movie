@@ -68,16 +68,21 @@ describe('label texts and sources', () => {
     expect(kmLabels(east, 0)).toEqual([])
   })
 
-  it('labels the start and the finish of the track, or one label for a loop', () => {
+  it('pins the start and the finish of the track with a flag, or one pin for a loop, named or not', () => {
     const east = buildTrack({ name: 'est', source: 'gpx', segments: [{ points: [6.8, 6.85, 6.9].map((lon) => ({ lon, lat: 45.9 })) }] })
     const ends = endpointLabels(east)
     expect(ends.map((l) => [l.text, l.icon, l.lon])).toEqual([
-      ['Départ', 'epingle', 6.8],
+      ['Départ', 'drapeau', 6.8],
       ['Arrivée', 'drapeau', 6.9],
     ])
     expect(ends[0]).toMatchObject({ kind: 'endpoint', priority: ENDPOINT_PRIORITY })
+    expect(endpointLabels(east, false).map((l) => [l.text, l.icon, l.lon])).toEqual([
+      ['', 'drapeau', 6.8],
+      ['', 'drapeau', 6.9],
+    ])
     const loop = buildTrack({ name: 'boucle', source: 'gpx', segments: [{ points: [6.8, 6.85, 6.8].map((lon) => ({ lon, lat: 45.9 })) }] })
     expect(endpointLabels(loop).map((l) => l.text)).toEqual(['Départ et arrivée'])
+    expect(endpointLabels(loop, false).map((l) => l.text)).toEqual([''])
     expect(ENDPOINT_PRIORITY).toBeLessThan(POI_PRIORITY)
   })
 

@@ -70,6 +70,11 @@ export const START_HEIGHTS = ['region', 'pays'] as const
 /** Height of the region view of a 'situation' shot (flyover/filmCamera.ts `regionDistanceM`). */
 export type StartHeight = (typeof START_HEIGHTS)[number]
 export const START_HEIGHT_LABELS: Record<StartHeight, string> = { region: 'Région', pays: 'Pays' }
+
+/** The film opens or closes on a 'situation' shot that highlights the region (osm/region.ts is then asked for it). */
+export function highlightsRegion(film: Pick<Film, 'opening' | 'closing'>): boolean {
+  return [film.opening, film.closing].some((shot) => shot.style === 'situation' && shot.highlight === true)
+}
 /** Duration given to a shot when 'situation' is picked, if it was shorter (seconds): the dive is long. */
 export const SITUATION_DURATION_S = 9
 

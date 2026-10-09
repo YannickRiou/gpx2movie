@@ -9,6 +9,7 @@ import {
   CINEMATIC_PITCH_FACTOR,
   computeCameraView,
   MIN_GROUND_CLEARANCE_M,
+  MIN_TERRAIN_CLEARANCE_M,
   movesWithTime,
   smoothedTurn,
   TOP_DISTANCE_FACTOR,
@@ -165,9 +166,11 @@ describe('computeCameraView — chase (default)', () => {
     const sample = (_lon: number, lat: number) => (onRidge(lat) ? 2000 : 1000)
     const view = computeCameraView(northbound, 0.5, frame, sample, options())
     expect(frame.toLonLat(view.position).lat).toBeLessThan(45.8965)
+    // the ground grid (37.5 m cells here) softens the cliffs over a cell: the line clears the ridge inside them
+    const cell = 37.5 / M_PER_DEG_LAT
     for (let f = 0; f <= 1; f += 0.01) {
       const at = frame.toLonLat(view.position.clone().lerp(view.target, f))
-      if (onRidge(at.lat)) expect(at.height).toBeGreaterThan(2000)
+      if (onRidge(at.lat - cell) && onRidge(at.lat + cell)) expect(at.height).toBeGreaterThan(2000)
     }
   })
 })
@@ -259,7 +262,48 @@ describe('computeCameraView — continuity and clearance (every style)', () => {
   it.each(CAMERA_STYLES)('%s keeps the ground clearance under the camera', (style) => {
     for (const view of viewsAt(style, 80)) {
       const at = frame.toLonLat(view.position)
-      expect(at.height).toBeGreaterThanOrEqual(hills(at.lon, at.lat) + MIN_GROUND_CLEARANCE_M - 0.5)
+      // above the ground grid, which follows these smooth hills within a metre
+      expect(at.height).toBeGreaterThanOrEqual(hills(at.lon, at.lat) + MIN_GROUND_CLEARANCE_M - 1)
     }
+  })
+})
+
+describe('computeCameraView — rough terrain (every style)', () => {
+  // ±15 m bumps about 30 m wide, on flat ground or on the hills
+  const BUMP = 15
+  const bumps = (lon: number, lat: number) =>
+    BUMP * Math.sin(((lon - 6.85) * M_PER_DEG_LON) / 4.3 + 0.7) * Math.sin(((lat - 45.9) * M_PER_DEG_LAT) / 5.7 + 0.3)
+  const flatBumpy = (lon: number, lat: number) => 1000 + bumps(lon, lat)
+  const hillsBumpy = (lon: number, lat: number) => hills(lon, lat) + bumps(lon, lat)
+  // 60 s at 30 fps over 80% of the 4.4 km track: the marker moves ~2 m per frame
+  const FRAMES = 1800
+  const heights = (sample: (lon: number, lat: number) => number, style: CameraStyle) =>
+    Array.from({ length: FRAMES + 1 }, (_, i) => {
+      const view = computeCameraView(northbound, 0.1 + (0.8 * i) / FRAMES, frame, sample, options({ style }))
+      const at = frame.toLonLat(view.position)
+      // never below the actual terrain, whatever the smoothing
+      expect(at.height).toBeGreaterThanOrEqual(sample(at.lon, at.lat) + MIN_TERRAIN_CLEARANCE_M - 0.01)
+      return view.position.y
+    })
+
+  it.each(CAMERA_STYLES)('%s does not ride the bumps', (style) => {
+    // flat ground: the camera height barely moves from frame to frame (the point samples gave 3–35 m)
+    const flat = heights(flatBumpy, style)
+    for (let i = 1; i <= FRAMES; i++) expect(Math.abs(flat[i] - flat[i - 1])).toBeLessThan(BUMP / 20)
+    // hills: the vertical speed changes gently from frame to frame (the point samples gave 1–70 m)
+    const hilly = heights(hillsBumpy, style)
+    for (let i = 1; i < FRAMES; i++) expect(Math.abs(hilly[i + 1] - 2 * hilly[i] + hilly[i - 1])).toBeLessThan(BUMP / 4)
+  })
+
+  it('keeps the marker on the draped track and is deterministic', () => {
+    const at = (p: number) => computeCameraView(northbound, p, frame, hillsBumpy, options({ style: 'cinematic' }))
+    const view = at(0.4)
+    const below = frame.toLonLat(view.marker)
+    expect(below.height).toBeCloseTo(hillsBumpy(below.lon, below.lat) + LIFT, 3)
+    // no state from one call to the next: the same inputs give the same view after other frames
+    at(0.7)
+    const again = at(0.4)
+    expect(again.position.equals(view.position)).toBe(true)
+    expect(again.target.equals(view.target)).toBe(true)
   })
 })

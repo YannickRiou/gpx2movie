@@ -14,7 +14,6 @@ const {
   buildDrapeBuffer,
   computeDrapedPositions,
   writeLinePositions,
-  createSharedResources,
   syncTrackLineSets,
   drapeTrackLineSet,
   disposeTrackLineSet,
@@ -162,13 +161,12 @@ function fakeEngine(height: number): TerrainEngine {
 }
 
 describe('syncTrackLineSets', () => {
-  it('builds one solid + one ghost + one glow Line2 per segment (segments are not joined) plus the two markers', () => {
+  it('builds one solid + one ghost + one glow Line2 per segment (segments are not joined) (no start / end mesh: Labels pins them)', () => {
     const group = new Group()
     const sets = new Map<string, TrackLineSet>()
-    const shared = createSharedResources()
     const track = makeTrack('a', [segmentA, [{ lon: 6, lat: 45 }], segmentB])
 
-    syncTrackLineSets(group, sets, [track], frame, shared, 800, 600)
+    syncTrackLineSets(group, sets, [track], frame, 800, 600)
 
     const set = sets.get('a')!
     expect(group.children).toEqual([set.object])
@@ -182,8 +180,7 @@ describe('syncTrackLineSets', () => {
     expect(set.segments[0].glow.geometry).toBe(set.segments[0].solid.geometry)
     expect(set.segments[0].glow.visible).toBe(false)
     expect(set.object.children.filter((o) => o instanceof Line2)).toHaveLength(6)
-    expect(set.object.children).toContain(set.startMarker)
-    expect(set.object.children).toContain(set.endMarker)
+    expect(set.object.children).toHaveLength(6)
 
     // materials: 4 px screen-space lines, ghost without depth test at 25 %
     expect(set.solidMaterial.linewidth).toBe(LINE_WIDTH_PX)
@@ -196,24 +193,22 @@ describe('syncTrackLineSets', () => {
     expect(set.ghostMaterial.opacity).toBe(GHOST_OPACITY)
     expect(set.segments[0].ghost.renderOrder).toBeGreaterThan(set.segments[0].solid.renderOrder)
 
-    syncTrackLineSets(group, sets, [], frame, shared, 800, 600)
-    shared.dispose()
+    syncTrackLineSets(group, sets, [], frame, 800, 600)
   })
 
   it('keeps an unchanged track, rebuilds a replaced one and drops a removed one (disposing resources)', () => {
     const group = new Group()
     const sets = new Map<string, TrackLineSet>()
-    const shared = createSharedResources()
     const a = makeTrack('a', [segmentA])
     const b = makeTrack('b', [segmentB])
 
-    syncTrackLineSets(group, sets, [a, b], frame, shared, 800, 600)
+    syncTrackLineSets(group, sets, [a, b], frame, 800, 600)
     const setA = sets.get('a')!
     const setB = sets.get('b')!
     expect(group.children).toHaveLength(2)
 
     // same track objects: nothing is rebuilt
-    syncTrackLineSets(group, sets, [a, b], frame, shared, 800, 600)
+    syncTrackLineSets(group, sets, [a, b], frame, 800, 600)
     expect(sets.get('a')).toBe(setA)
     expect(sets.get('b')).toBe(setB)
 
@@ -223,7 +218,7 @@ describe('syncTrackLineSets', () => {
     const ghostDispose = vi.spyOn(setA.ghostMaterial, 'dispose')
     const bGeometryDispose = vi.spyOn(setB.segments[0].geometry, 'dispose')
     const a2 = makeTrack('a', [segmentA], '#00ff00')
-    syncTrackLineSets(group, sets, [a2], frame, shared, 800, 600)
+    syncTrackLineSets(group, sets, [a2], frame, 800, 600)
 
     expect(geometryDispose).toHaveBeenCalledTimes(1)
     expect(solidDispose).toHaveBeenCalledTimes(1)
@@ -237,52 +232,45 @@ describe('syncTrackLineSets', () => {
     expect(setA.object.parent).toBeNull()
     expect(setB.object.parent).toBeNull()
 
-    // shared marker resources survive per-track disposal
-    expect(setA2.startMarker?.geometry).toBe(shared.markerGeometry)
-
-    syncTrackLineSets(group, sets, [], frame, shared, 800, 600)
+    syncTrackLineSets(group, sets, [], frame, 800, 600)
     expect(sets.size).toBe(0)
     expect(group.children).toHaveLength(0)
-    shared.dispose()
   })
 
   it('rebuilds when the local frame changes and builds nothing without a frame', () => {
     const group = new Group()
     const sets = new Map<string, TrackLineSet>()
-    const shared = createSharedResources()
     const a = makeTrack('a', [segmentA])
 
-    syncTrackLineSets(group, sets, [a], null, shared, 800, 600)
+    syncTrackLineSets(group, sets, [a], null, 800, 600)
     expect(sets.size).toBe(0)
     expect(group.children).toHaveLength(0)
 
-    syncTrackLineSets(group, sets, [a], frame, shared, 800, 600)
+    syncTrackLineSets(group, sets, [a], frame, 800, 600)
     const first = sets.get('a')!
     const otherFrame = createLocalFrame(6.6, 45.6)
-    syncTrackLineSets(group, sets, [a], otherFrame, shared, 800, 600)
+    syncTrackLineSets(group, sets, [a], otherFrame, 800, 600)
     const second = sets.get('a')!
     expect(second).not.toBe(first)
     expect(second.frame).toBe(otherFrame)
     expect(group.children).toEqual([second.object])
 
-    syncTrackLineSets(group, sets, [], frame, shared, 800, 600)
-    shared.dispose()
+    syncTrackLineSets(group, sets, [], frame, 800, 600)
   })
 
   it('smooths the points before densifying, keeps the recorded distances and rebuilds when the smoothing changes', () => {
     const group = new Group()
     const sets = new Map<string, TrackLineSet>()
-    const shared = createSharedResources()
     // northwards every ~11 m, zigzagging 4 m east and west
     const zigzag: TrackPoint[] = Array.from({ length: 30 }, (_, i) => ({ lon: 6.5 + (i % 2 === 0 ? 5e-5 : -5e-5), lat: 45.5 + i * 1e-4 }))
     const a = makeTrack('a', [zigzag])
 
-    syncTrackLineSets(group, sets, [a], frame, shared, 800, 600)
+    syncTrackLineSets(group, sets, [a], frame, 800, 600)
     const raw = sets.get('a')!
     expect(raw.smoothingM).toBe(0)
     expect(raw.segments[0].source).toBe(a.segments[0].points)
 
-    syncTrackLineSets(group, sets, [a], frame, shared, 800, 600, 100)
+    syncTrackLineSets(group, sets, [a], frame, 800, 600, 100)
     const smoothed = sets.get('a')!
     expect(smoothed).not.toBe(raw)
     expect(raw.object.parent).toBeNull()
@@ -292,17 +280,16 @@ describe('syncTrackLineSets', () => {
     // same distance scale as the recorded line (and the marker), though the smoothed line is shorter
     expect(segment.dist[segment.dist.length - 1]).toBeCloseTo(raw.segments[0].dist[raw.segments[0].dist.length - 1], 3)
 
-    syncTrackLineSets(group, sets, [a], frame, shared, 800, 600, 100)
+    syncTrackLineSets(group, sets, [a], frame, 800, 600, 100)
     expect(sets.get('a')).toBe(smoothed)
-    syncTrackLineSets(group, sets, [], frame, shared, 800, 600)
-    shared.dispose()
+    syncTrackLineSets(group, sets, [], frame, 800, 600)
   })
 })
 
 describe('applyExposure', () => {
   it('divides the line colours by the exposure and restores them at 1', () => {
     const sets = new Map<string, TrackLineSet>()
-    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA])], frame, createSharedResources(), 800, 600)
+    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA])], frame, 800, 600)
     const set = sets.get('a')!
 
     applyExposure(sets.values(), 10)
@@ -321,7 +308,7 @@ describe('applyTrackColors', () => {
     const sets = new Map<string, TrackLineSet>()
     const low = makeTrack('low', [segmentA]) // 1000 -> 1050 m over 12 densified points
     const high = makeTrack('high', [segmentB]) // 1100 -> 1110 m
-    syncTrackLineSets(new Group(), sets, [low, high], frame, createSharedResources(), 800, 600)
+    syncTrackLineSets(new Group(), sets, [low, high], frame, 800, 600)
     const setLow = sets.get('low')!
     const setHigh = sets.get('high')!
     const geometry = setLow.segments[0].geometry
@@ -361,7 +348,7 @@ describe('applyTrackColors', () => {
 
   it('greys out a track without the quantity', () => {
     const sets = new Map<string, TrackLineSet>()
-    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA])], frame, createSharedResources(), 800, 600)
+    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA])], frame, 800, 600)
     applyTrackColors(sets.values(), 'heartRate')
     const colors = colorStart(sets.get('a')!)!
     expect(new Color().setRGB(colors.getX(0), colors.getY(0), colors.getZ(0)).getHexString()).toBe('55626b')
@@ -384,18 +371,15 @@ describe('writeLineColors', () => {
 })
 
 describe('drapeTrackLineSet', () => {
-  it('drapes every segment on the terrain and puts the markers on the first and last point', () => {
+  it('drapes every segment on the terrain, from the first point to the last', () => {
     const group = new Group()
     const sets = new Map<string, TrackLineSet>()
-    const shared = createSharedResources()
     const track = makeTrack('a', [segmentA, segmentB])
-    syncTrackLineSets(group, sets, [track], frame, shared, 800, 600)
+    syncTrackLineSets(group, sets, [track], frame, 800, 600)
     const set = sets.get('a')!
 
     drapeTrackLineSet(set, fakeEngine(2000), 1.5)
     const h = 2000 * 1.5 + LINE_LIFT_M
-    expectLocal(set.startMarker!.position.toArray(), 0, 6.5, 45.5, h)
-    expectLocal(set.endMarker!.position.toArray(), 0, lastPoint.lon, lastPoint.lat, h)
 
     // geometry of the first segment: segment 0 starts at the first point, last segment ends at the last
     const startA = set.segments[0].geometry.getAttribute('instanceStart') as InterleavedBufferAttribute
@@ -403,9 +387,8 @@ describe('drapeTrackLineSet', () => {
     expect(startA.count).toBe(set.segments[0].buffer.count - 1)
     const endB = set.segments[1].geometry.getAttribute('instanceEnd') as InterleavedBufferAttribute
     const lastSegment = endB.count - 1
-    expect(endB.getX(lastSegment)).toBeCloseTo(set.endMarker!.position.x, 3)
-    expect(endB.getY(lastSegment)).toBeCloseTo(set.endMarker!.position.y, 3)
-    expect(endB.getZ(lastSegment)).toBeCloseTo(set.endMarker!.position.z, 3)
+    const end = () => [endB.getX(lastSegment), endB.getY(lastSegment), endB.getZ(lastSegment)]
+    expectLocal(end(), 0, lastPoint.lon, lastPoint.lat, h)
 
     // a re-drape without terrain falls back to the recorded elevations, in place
     const bufferBefore = startA.data
@@ -413,18 +396,17 @@ describe('drapeTrackLineSet', () => {
     expect((set.segments[0].geometry.getAttribute('instanceStart') as InterleavedBufferAttribute).data).toBe(
       bufferBefore,
     )
-    expectLocal(set.startMarker!.position.toArray(), 0, 6.5, 45.5, 1000 + LINE_LIFT_M)
-    expectLocal(set.endMarker!.position.toArray(), 0, lastPoint.lon, lastPoint.lat, 1110 + LINE_LIFT_M)
+    expectLocal(startA.data.array as TypedArray, 0, 6.5, 45.5, 1000 + LINE_LIFT_M)
+    expectLocal(end(), 0, lastPoint.lon, lastPoint.lat, 1110 + LINE_LIFT_M)
 
     disposeTrackLineSet(set)
-    shared.dispose()
   })
 })
 
 describe('applyTrackStyle', () => {
   it('sets the widths (times the render scale), the glow and the dashes of every material', () => {
     const sets = new Map<string, TrackLineSet>()
-    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA])], frame, createSharedResources(), 800, 600)
+    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA])], frame, 800, 600)
     const set = sets.get('a')!
     drapeTrackLineSet(set, null, 1)
 
@@ -453,7 +435,7 @@ describe('draw-on (« trace qui se dessine »)', () => {
 
   it('cuts every segment at a distance counted along the whole track, then draws it whole again', () => {
     const sets = new Map<string, TrackLineSet>()
-    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA, segmentB])], frame, createSharedResources(), 800, 600)
+    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA, segmentB])], frame, 800, 600)
     const set = sets.get('a')!
     drapeTrackLineSet(set, null, 1)
     const [first, second] = set.segments

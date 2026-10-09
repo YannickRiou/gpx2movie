@@ -26,7 +26,7 @@ import { create } from 'zustand'
 import { clamp } from '../core/math'
 import { FLYOVER_DURATION_RANGE } from '../flyover/cameraSettings'
 import { getSettingsHistory } from '../project/history'
-import { editFilm, getFilmSource } from '../scene/usePacing'
+import { editFilm, getFilmSource, setFlightTiming } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatFilmTime } from './timeline'
 import { materializeStops } from './assemble'
@@ -375,7 +375,7 @@ export function fitFilmToMusic(): { kind: 'success' | 'info'; text: string } {
   if (!source.track || !(endS > 0)) return { kind: 'info', text: 'Pas de musique dans le film.' }
   const totalFor = (durationS: number) => filmClockFor({ ...source, durationS }).totalTime()
   const durationS = durationForFilmEnd(endS, totalFor, source.durationS, FLYOVER_DURATION_RANGE)
-  if (durationS !== source.durationS) getSettingsHistory().transaction(() => useAppStore.getState().setSetting('flyoverDurationS', durationS))
+  if (durationS !== source.durationS) getSettingsHistory().transaction(() => setFlightTiming({ durationS }))
   const total = totalFor(durationS)
   if (Math.abs(total - endS) < 0.5) return { kind: 'success', text: `Le film dure maintenant ${formatFilmTime(total)} : il finit avec la musique.` }
   return {

@@ -9,6 +9,8 @@ import {
   filmWind,
   isValidClouds,
   sceneCloudsFrom,
+  seaOfClouds,
+  seaTopFor,
   weatherOffsetFor,
 } from './sceneClouds'
 import type { SceneConditions } from './sceneWeather'
@@ -32,6 +34,15 @@ describe('settings', () => {
     expect(isValidClouds({ ...DEFAULT_CLOUDS, quality: 'ultra' as never })).toBe(false)
     expect(isValidClouds({ ...DEFAULT_CLOUDS, coverage: 1.2 })).toBe(false)
     expect(isValidClouds({ ...DEFAULT_CLOUDS, altitudeM: 50 })).toBe(false)
+    expect(isValidClouds({ ...DEFAULT_CLOUDS, mode: 'mer', seaTopM: 2400 })).toBe(true)
+    expect(isValidClouds({ ...DEFAULT_CLOUDS, seaTopM: 100 })).toBe(false)
+  })
+
+  it('proposes a sea of clouds three quarters of the way up the track', () => {
+    // Tour du Mont-Blanc, day 1: 1,010 → 1,656 m
+    expect(seaTopFor(1010, 1655.9)).toBe(1500)
+    expect(seaTopFor(undefined, 2000)).toBe(DEFAULT_CLOUDS.seaTopM)
+    expect(seaTopFor(-50, 0)).toBe(300)
   })
 })
 
@@ -41,6 +52,7 @@ describe('cloudCoversAt', () => {
     expect(cloudCoversAt(DEFAULT_CLOUDS, undefined)).toBeNull()
     const unknown = { ...CONDITIONS, cloudCover: NaN, cloudCoverLow: NaN, cloudCoverMid: NaN, cloudCoverHigh: NaN }
     expect(cloudCoversAt(DEFAULT_CLOUDS, unknown)).toBeNull()
+    expect(cloudCoversAt({ ...DEFAULT_CLOUDS, mode: 'mer' }, CONDITIONS)).toBeNull()
   })
 
   it('follows the layers of the weather, a missing layer counting as the total', () => {
@@ -101,6 +113,24 @@ describe('sceneCloudsFrom', () => {
     expect(tall.map((l) => l.altitudeM)).toEqual([4400, 8400, 14000])
     expect(tall[0].heightM).toBe(flat[0].heightM)
     expect(sceneCloudsFrom(covers, { ...GEOMETRY, groundM: 3000 })!.layers[2].altitudeM).toBe(8500)
+  })
+})
+
+describe('seaOfClouds', () => {
+  it('fills the scene with one dense layer whose top is the chosen altitude, exaggerated like the relief', () => {
+    const sea = seaOfClouds(1500, 1)
+    const [low, mid, high] = sea.layers
+    expect(sea.coverage).toBeGreaterThan(0.8)
+    expect(sea.coverage).toBeLessThanOrEqual(1)
+    expect(low.altitudeM + low.heightM).toBe(1500)
+    expect(low.heightM).toBeGreaterThan(0)
+    expect(low.densityScale).toBeGreaterThan(0.2)
+    // texels pulled towards full cover: a flat top
+    expect(low.weatherExponent).toBeLessThan(1)
+    expect([mid.heightM, high.heightM, mid.densityScale, high.densityScale]).toEqual([0, 0, 0, 0])
+    const tall = seaOfClouds(1500, 2).layers[0]
+    expect(tall.altitudeM + tall.heightM).toBe(3000)
+    expect(tall.heightM).toBe(low.heightM)
   })
 })
 

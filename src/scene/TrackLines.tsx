@@ -2,7 +2,7 @@
  * TrackLines — draws every loaded track draped on the terrain.
  *
  * Per track segment: one Line2 (solid, 4 px) plus a "ghost" clone rendered without depth test at 25 %
- * opacity, so the parts hidden by the relief are still hinted. Start / end markers are small spheres.
+ * opacity, so the parts hidden by the relief are still hinted. The start and the finish are pins drawn by `Labels`.
  *
  * Draping is cheap to redo: each densified point stores its local position at height 0 and its local "up"
  * vector (both exact, derived from the ellipsoid), so re-draping is `base + up * height` with no trigonometry.
@@ -29,9 +29,6 @@ import {
   Color,
   Group,
   SRGBColorSpace,
-  Mesh,
-  MeshStandardMaterial,
-  SphereGeometry,
   Vector3,
   type InterleavedBufferAttribute,
 } from 'three'
@@ -90,10 +87,6 @@ export const REDRAPE_DEBOUNCE_MS = 150
  * wait: the line is re-draped at least this often during a burst of changes (milliseconds).
  */
 export const REDRAPE_MAX_WAIT_MS = 600
-/** Start / end marker spheres (metres, true scale). */
-export const MARKER_RADIUS_M = 12
-export const START_COLOR = '#3F6B4A'
-export const END_COLOR = '#1C2A33'
 
 // ---------------------------------------------------------------------------
 // Pure helpers (unit-tested)
@@ -259,34 +252,8 @@ export interface TrackLineSet {
   solidMaterial: LineMaterial
   ghostMaterial: LineMaterial
   glowMaterial: LineMaterial
-  startMarker: Mesh | null
-  endMarker: Mesh | null
   /** distance the lines are drawn up to (Infinity = whole), NaN when it must be applied again (after a drape) */
   drawnM: number
-}
-
-/** Resources shared by every track of one TrackLines instance. */
-export interface SharedResources {
-  markerGeometry: SphereGeometry
-  startMaterial: MeshStandardMaterial
-  endMaterial: MeshStandardMaterial
-  dispose(): void
-}
-
-export function createSharedResources(): SharedResources {
-  const markerGeometry = new SphereGeometry(MARKER_RADIUS_M, 24, 16)
-  const startMaterial = new MeshStandardMaterial({ color: new Color(START_COLOR), roughness: 0.6, metalness: 0 })
-  const endMaterial = new MeshStandardMaterial({ color: new Color(END_COLOR), roughness: 0.6, metalness: 0 })
-  return {
-    markerGeometry,
-    startMaterial,
-    endMaterial,
-    dispose() {
-      markerGeometry.dispose()
-      startMaterial.dispose()
-      endMaterial.dispose()
-    },
-  }
 }
 
 function createLineMaterials(
@@ -316,7 +283,6 @@ function createLineMaterials(
 export function buildTrackLineSet(
   track: Track,
   frame: LocalFrame,
-  shared: SharedResources,
   width: number,
   height: number,
   smoothingM = 0,
@@ -350,16 +316,6 @@ export function buildTrackLineSet(
     segments.push({ index, source, points, buffer, positions, dist, shortened: -1, geometry, solid, ghost, glow })
   }
 
-  let startMarker: Mesh | null = null
-  let endMarker: Mesh | null = null
-  if (segments.length > 0) {
-    startMarker = new Mesh(shared.markerGeometry, shared.startMaterial)
-    startMarker.name = 'track-start'
-    endMarker = new Mesh(shared.markerGeometry, shared.endMaterial)
-    endMarker.name = 'track-end'
-    object.add(startMarker, endMarker)
-  }
-
   return {
     track,
     frame,
@@ -369,8 +325,6 @@ export function buildTrackLineSet(
     solidMaterial: materials.solid,
     ghostMaterial: materials.ghost,
     glowMaterial: materials.glow,
-    startMarker,
-    endMarker,
     drawnM: Number.NaN,
   }
 }
@@ -383,7 +337,6 @@ export function disposeTrackLineSet(set: TrackLineSet): void {
   set.object.removeFromParent()
   for (const segment of set.segments) segment.geometry.dispose()
   for (const material of materialsOf(set)) material.dispose()
-  // marker geometry / materials are shared and disposed with the component
 }
 
 export function drapeTrackLineSet(set: TrackLineSet, engine: TerrainEngine | null, exaggeration: number): void {
@@ -396,15 +349,6 @@ export function drapeTrackLineSet(set: TrackLineSet, engine: TerrainEngine | nul
     if (segment.geometry.getAttribute('instanceDistanceStart')) segment.solid.computeLineDistances()
   }
   set.drawnM = Number.NaN
-  const first = set.segments[0]
-  const last = set.segments[set.segments.length - 1]
-  if (set.startMarker && first) {
-    set.startMarker.position.set(first.positions[0], first.positions[1], first.positions[2])
-  }
-  if (set.endMarker && last) {
-    const o = (last.buffer.count - 1) * 3
-    set.endMarker.position.set(last.positions[o], last.positions[o + 1], last.positions[o + 2])
-  }
 }
 
 /**
@@ -516,7 +460,6 @@ export function syncTrackLineSets(
   sets: Map<string, TrackLineSet>,
   tracks: readonly Track[],
   frame: LocalFrame | null,
-  shared: SharedResources,
   width: number,
   height: number,
   smoothingM = 0,
@@ -531,7 +474,7 @@ export function syncTrackLineSets(
       sets.delete(track.id)
     }
     if (!frame) continue
-    const set = buildTrackLineSet(track, frame, shared, width, height, smoothingM)
+    const set = buildTrackLineSet(track, frame, width, height, smoothingM)
     group.add(set.object)
     sets.set(track.id, set)
   }
@@ -570,7 +513,6 @@ export function TrackLines() {
 
   const groupRef = useRef<Group>(null)
   const setsRef = useRef<Map<string, TrackLineSet>>(new Map())
-  const sharedRef = useRef<SharedResources | null>(null)
   const sizeRef = useRef(size)
   /** exposure the line colours were last compensated for (NaN = after a rebuild) */
   const exposureRef = useRef(Number.NaN)
@@ -613,9 +555,8 @@ export function TrackLines() {
   useEffect(() => {
     const group = groupRef.current
     if (!group) return
-    sharedRef.current ??= createSharedResources()
     const { width, height } = sizeRef.current
-    syncTrackLineSets(group, setsRef.current, tracks, frame, sharedRef.current, width, height, smoothingM)
+    syncTrackLineSets(group, setsRef.current, tracks, frame, width, height, smoothingM)
     exposureRef.current = Number.NaN
     styleRef.current = null
     drapeAll(engine, exaggeration)
@@ -671,8 +612,6 @@ export function TrackLines() {
     () => () => {
       for (const set of setsRef.current.values()) disposeTrackLineSet(set)
       setsRef.current.clear()
-      sharedRef.current?.dispose()
-      sharedRef.current = null
     },
     [],
   )

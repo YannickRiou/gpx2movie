@@ -136,8 +136,8 @@ reproduce it next to the box.
       in the export; off: the figurine as before.
 - [ ] "Départ et arrivée" (start and finish) labels at both ends, a single label on a loop; "Photos, là où elles ont été
       prises" (photos where they were taken): a phone photo with GPS pinned at the right place, caption as its text.
-- [ ] "Brume" (haze) slider from 0 to 100 %: the distance fades progressively, with and without weather, at sunset
-      too; identical in the export.
+- [ ] "Mer de nuages" (sea of clouds): a flat, dense layer filling the valleys, summits above « Sommet de la mer de
+      nuages » emerging, warm at sunset (clouds not black at a low sun, unlike SwiftShader); identical in the export.
 - [ ] "Générique" (credits) of the closing card: the card holds, then card and lines roll up and leave the frame on the
       last frame, in 16:9 and 9:16, in the 3 overlay styles; readable on snow.
 - [ ] "Transitions" (Survol tab) at 0.5 s then 4 s: easing into a stop, a pause and a "Vitesse" section shorter / longer,

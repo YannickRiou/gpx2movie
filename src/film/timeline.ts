@@ -767,14 +767,21 @@ const sameTime = (a: number, b: number) => Math.abs(a - b) < 0.015
  * `after` (an edit of `before`) with its attached texts and media following their stop: an item the edit did not
  * move or stretch itself keeps its offset to the start of the stop's hold (an item fitted to the hold stays fitted,
  * stretched with it); an item whose stop is not among the film's own stops any more (removed, automatic stops back)
- * becomes free where it is. `clockOf` gives the clock of a film (same track and pacing). `after` itself when nothing
- * changes.
+ * becomes free where it is. `clockOf` gives the clock of a film (same track and pacing); `clockBefore` the clock of
+ * `before` when the change also moves what the clock is made from (flyover duration, pacing). `after` itself when
+ * nothing changes.
  */
-export function followStops(before: Film, after: Film, clockOf: (film: Film) => FilmClock): Film {
+export function followStops(
+  before: Film,
+  after: Film,
+  clockOf: (film: Film) => FilmClock,
+  clockBefore: (film: Film) => FilmClock = clockOf,
+): Film {
   if (!after.texts.some((t) => t.stopId !== undefined) && !after.media.some((m) => m.stopId !== undefined)) return after
   const own = new Set(after.autoStops ? [] : after.stops.map((s) => s.id))
-  // only the stops, the speed portions and the shots move a stop in film time
+  // only the stops, the speed portions, the shots and the clock (duration, pacing) move a stop in film time
   const moves =
+    clockBefore !== clockOf ||
     before.stops !== after.stops ||
     before.speeds !== after.speeds ||
     before.opening !== after.opening ||
@@ -790,7 +797,7 @@ export function followStops(before: Film, after: Film, clockOf: (film: Film) => 
     }
     const old = previous.find((p) => p.id === item.id)
     if (!moves || !old || old.startS !== item.startS || old.durationS !== item.durationS) return item
-    clocks ??= { from: clockOf(before), to: clockOf(after) }
+    clocks ??= { from: clockBefore(before), to: clockOf(after) }
     const from = clocks.from.stops.find((s) => s.id === item.stopId)
     const to = clocks.to.stops.find((s) => s.id === item.stopId)
     if (!from || !to) return item

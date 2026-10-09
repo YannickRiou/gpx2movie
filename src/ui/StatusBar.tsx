@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { useRegionStore } from '../osm/region'
 import { useLandmarkStore, useWaterStore } from '../osm/store'
 import { overlayCredits } from '../overlay/data'
 import { useAppStore } from '../state/store'
@@ -23,11 +24,12 @@ export function StatusBar() {
   const imagerySourceId = useAppStore((s) => s.settings.imagerySourceId)
   const weather = useWeatherStore((s) => s.status === 'ready')
   const landmarks = useLandmarkStore((s) => Object.values(s.landmarks).some((list) => list.length > 0))
-  // OpenStreetMap is credited for the water as well as for the landmarks
+  // OpenStreetMap is credited for the water and the highlighted region as well as for the landmarks
   const water = useWaterStore((s) => s.polygons > 0)
+  const region = useRegionStore((s) => s.region !== null)
   const dialog = useRef<HTMLDialogElement>(null)
 
-  const credits = overlayCredits({ terrainSourceId, imagerySourceId, weather, landmarks: landmarks || water })
+  const credits = overlayCredits({ terrainSourceId, imagerySourceId, weather, landmarks: landmarks || water || region })
 
   return (
     <footer className="status">

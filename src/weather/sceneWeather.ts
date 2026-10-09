@@ -184,15 +184,6 @@ export function sceneWeatherAt(
   return sceneWeatherFrom(sceneConditionsAt(series, timeMs, lon, lat), settings.strength)
 }
 
-/** « Brume » set by hand (0–1), on top of the weather: at 1, visibility down to 60 km ÷ 20 = 3 km. */
-export const HAZE_RANGE = { min: 0, max: 1, step: 0.05 } as const
-const MANUAL_HAZE_SCALE = 19
-
-/** `hazeScale` of the weather (1 = clear) plus the haze set by hand, within the weather's own bound. */
-export function withManualHaze(hazeScale: number, haze: number): number {
-  return Math.min(MAX_HAZE_SCALE, hazeScale + MANUAL_HAZE_SCALE * Math.min(1, Math.max(0, haze)))
-}
-
 /** Extra extinction coefficient of the haze at the ground (1/m): Koschmieder with visibility 60 km ÷ hazeScale. */
 export function hazeExtinction(hazeScale: number): number {
   return (KOSCHMIEDER * Math.max(0, hazeScale - 1)) / CLEAR_VISIBILITY_M

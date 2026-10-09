@@ -22,7 +22,7 @@ import { nearestOnPath, recordedTimeAt, samplePath, trackPathOf } from '../flyov
 import type { TrackPath } from '../flyover/path'
 import { trackMetricValues } from '../flyover/trackColor'
 import { computeElevationGain } from '../import/stats'
-import { KIND_BADGES, buildLandmarks } from '../osm/landmarks'
+import { KIND_BADGES, buildLandmarks, splitHidden } from '../osm/landmarks'
 import type { Landmark, LandmarkSettings } from '../osm/landmarks'
 import type { OsmFeature } from '../osm/overpass'
 import { formatAscent, formatClock, formatDistance, formatDuration, formatNumber } from '../ui/format'
@@ -183,9 +183,16 @@ export function steepSections(track: Track): SteepSection[] {
 // Key points
 // ---------------------------------------------------------------------------
 
-/** OSM landmarks of the roadbook among the corridor features of a track, ordered along it (no cap). */
-export function roadbookLandmarks(features: readonly OsmFeature[], track: Track): Landmark[] {
-  return buildLandmarks(features, trackPathOf(track), ROADBOOK_LANDMARKS, Infinity)
+/**
+ * OSM landmarks of the roadbook among the corridor features of a track, ordered along it (no cap), without those
+ * hidden one by one (`LandmarkSettings.hiddenIds`).
+ */
+export function roadbookLandmarks(
+  features: readonly OsmFeature[],
+  track: Track,
+  hiddenIds: readonly string[] = [],
+): Landmark[] {
+  return splitHidden(buildLandmarks(features, trackPathOf(track), ROADBOOK_LANDMARKS, Infinity), hiddenIds).shown
 }
 
 /** Climb since the start up to `distanceM` (the rule of the track stats, per segment). */
