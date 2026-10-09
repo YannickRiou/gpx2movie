@@ -527,7 +527,7 @@ The icons in `src-tauri/icons/` come from `public/favicon.svg`. To regenerate th
 | `npm run lint` | code analysis (oxlint) |
 | `npm run e2e` | end-to-end tests in a real browser (see below) |
 
-The suite has **about 1,480 tests** (9 October 2026). Each test file sits next to its module
+The suite has **about 1,540 tests** (9 October 2026). Each test file sits next to its module
 (`src/**/*.test.ts`). Network calls and the video encoder are mocked.
 
 The manual checks to run on a machine with a real graphics card are listed in

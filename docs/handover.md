@@ -85,7 +85,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (92 files, 1,478 tests), `npm run build`,
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (96 files, 1,539 tests, `lot-suites` included), `npm run build`,
 `cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
 - **Review fixes**: held export frames re-rendered when the scene moves with time (animated figurine, clouds, water);
@@ -107,8 +107,9 @@ Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (92 files, 
 
 State at the last `lot-suites` commit (8 October 2026, evening): typecheck, lint (0 errors), build and `cargo check
 --target x86_64-pc-windows-msvc` OK; vitest: 2 tests failing out of 1,487 (`src/flyover/filmCamera.test.ts`, "region
-view"). In this merge, `src/flyover/filmCamera.test.ts` and the `src/osm` tests pass; the full suite is to be run
-again. Nothing from this batch has been seen in a browser.
+view": they still asserted the old distances). In the merge, these two tests follow the new region view (55–165 km,
+eased dive) and the full suite passes: 1,539 tests in 96 files, `cargo test --locked` included (plugins oauth and
+opener). Nothing from this batch has been seen in a browser.
 
 Done (tests green, never seen on screen):
 
