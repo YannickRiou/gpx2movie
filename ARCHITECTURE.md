@@ -1457,8 +1457,8 @@ and what the weather will be like.
   the exposure; under the veil, the SH coefficients of the sky light tend toward their luminance.
 - `WeatherEffect` (`src/scene/weatherEffect.ts`, after the aerial perspective, same `EffectPass`): the Takram effect has no
   density setting, hence an exponential height fog (β0 = 3.912·(hazeScale − 1)/60 km at ground level under the marker;
-  `hazeScale` = the weather's plus 19 × `settings.haze`, the "Brume" slider, `withManualHaze`, at most 30,
-  analytic integral along the ray), veiled sky, distance pulled toward gray under the veil, desaturation; logarithmic
+  `hazeScale` of the weather, at most 30, analytic integral along the ray; the manual "Brume" slider, a uniform white
+  veil, was removed: older projects and presets that still carry `haze` load without it, unknown keys are ignored), veiled sky, distance pulled toward gray under the veil, desaturation; logarithmic
   depth read as in the Takram effect; uniforms prefixed `weather*`.
 - Limits: weather from a single point applied to the whole scene.
 

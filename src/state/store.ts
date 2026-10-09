@@ -80,8 +80,6 @@ export interface Settings {
   weather: { enabled: boolean }
   /** the weather of the outing drives the scene (clouds dim the sun, haze, veiled sky), strength 0..1 (atmosphere only) */
   weatherScene: WeatherSceneSettings
-  /** haze set by hand, 0–1, on top of the weather (atmosphere only, see `withManualHaze`) */
-  haze: number
   /** volumetric clouds: from the weather of the outing, manual or none; export quality (atmosphere only) */
   clouds: CloudSettings
   /** lakes and rivers of OpenStreetMap drawn as reflective water (Overpass API, network) */
@@ -193,7 +191,6 @@ export const DEFAULT_SETTINGS: Settings = {
   labels: DEFAULT_LABELS,
   weather: { enabled: true },
   weatherScene: DEFAULT_WEATHER_SCENE,
-  haze: 0,
   clouds: DEFAULT_CLOUDS,
   water: DEFAULT_WATER,
   overlay: DEFAULT_OVERLAY,

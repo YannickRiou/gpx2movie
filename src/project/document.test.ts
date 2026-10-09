@@ -189,6 +189,14 @@ describe('serializeProject / parseProject', () => {
     expect(sanitizeSettings({ landmarks: { ...DEFAULT_SETTINGS.landmarks, hiddenIds: [1] } }).invalid).toEqual(['landmarks'])
   })
 
+  it('loads older projects with the manual haze setting, since removed, without a warning', () => {
+    const d = doc()
+    d.settings = { ...(d.settings as object), haze: 0.6 }
+    const loaded = parseProject(JSON.stringify(d))
+    expect(loaded.settings).not.toHaveProperty('haze')
+    expect(loaded.warnings).toEqual([])
+  })
+
   it('loads the clouds of older projects without the sea of clouds and validates its top', () => {
     const { seaTopM: _ignored, ...older } = DEFAULT_SETTINGS.clouds
     const { settings, invalid } = sanitizeSettings({ clouds: { ...older, mode: 'manuel' } })

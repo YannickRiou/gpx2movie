@@ -33,7 +33,7 @@ import { samplePath, trackPathOf } from '../flyover/path'
 import { mslLocalToEcef } from '../geo/geoid'
 import { sunDateAt, sunDayMs } from '../flyover/sun'
 import { useAppStore } from '../state/store'
-import { CLEAR_SCENE_WEATHER, hazeExtinction, sceneWeatherAt, withManualHaze } from '../weather/sceneWeather'
+import { CLEAR_SCENE_WEATHER, hazeExtinction, sceneWeatherAt } from '../weather/sceneWeather'
 import type { SceneWeather } from '../weather/sceneWeather'
 import { useWeatherStore } from '../weather/store'
 import { createCloudNoiseTexture } from './cloudNoise'
@@ -73,7 +73,7 @@ export function AtmosphereLayer() {
   const [sun, setSun] = useState<SunDirectionalLight | null>(null)
   /** day used when the track has no timestamps */
   const [today] = useState(() => Date.now())
-  /** sun date and weather (timed tracks), ground under the marker for the haze (every track) */
+  /** sun date, weather under the marker and the ground there for its haze */
   const path = track ? trackPathOf(track) : null
   const weatherEffect = useMemo(() => new WeatherEffect({ logarithmicDepth: gl.capabilities.logarithmicDepthBuffer }), [gl])
   useEffect(() => () => weatherEffect.dispose(), [weatherEffect])
@@ -128,15 +128,12 @@ export function AtmosphereLayer() {
     let hazeBaseY = 0
     const { series, trackId } = useWeatherStore.getState()
     const weatherOn = series && trackId === track?.id && settings.weatherScene.enabled
-    if (path && path.count > 0 && (weatherOn || settings.haze > 0)) {
+    if (path && path.count > 0 && weatherOn) {
       const marker = samplePath(path, Math.min(1, Math.max(0, playback.progress)) * path.lengthM)
-      if (weatherOn) weather = sceneWeatherAt(series, date.getTime(), marker.lon, marker.lat, settings.weatherScene)
+      weather = sceneWeatherAt(series, date.getTime(), marker.lon, marker.lat, settings.weatherScene)
       const ground = engine?.sampleHeight(marker.lon, marker.lat) ?? marker.ele ?? 0
       hazeBaseY = frame.toLocal(marker.lon, marker.lat, ground * settings.exaggeration, _marker).y
     }
-    // the haze set by hand thickens the weather's (also read for the haze colour below)
-    const hazeScale = withManualHaze(weather.hazeScale, settings.haze)
-    if (hazeScale !== weather.hazeScale) weather = { ...weather, hazeScale }
     weatherRef.current = weather
 
     gl.toneMappingExposure = sceneExposure(elevation, settings.exposureEv + weather.exposureCompensationEv)

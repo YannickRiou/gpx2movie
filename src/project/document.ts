@@ -31,7 +31,6 @@ import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS, PLAYBACK_SPEEDS } from '../state/st
 import type { AppState, Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
 import { isValidClouds, withCloudDefaults } from '../weather/sceneClouds'
-import { HAZE_RANGE } from '../weather/sceneWeather'
 
 export const PROJECT_FORMAT = 'openflyover-project'
 export const PROJECT_VERSION = 2
@@ -118,7 +117,6 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   exposureEv: (v) => v >= -4 && v <= 4,
   grading: isValidGrading,
   weatherScene: (v) => v.strength >= 0 && v.strength <= 1,
-  haze: (v) => v >= HAZE_RANGE.min && v <= HAZE_RANGE.max,
   clouds: isValidClouds,
   water: (v) => v.strength >= 0 && v.strength <= 1,
   trackColorBy: (v) => (TRACK_COLOR_MODES as readonly string[]).includes(v),

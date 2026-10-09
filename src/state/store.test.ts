@@ -219,7 +219,6 @@ describe('settings and misc', () => {
       labels: { climbs: true, waypoints: true, kmStep: 0, endpoints: false, photos: false, size: 1, rangeKm: 70 },
       weather: { enabled: true },
       weatherScene: { enabled: true, strength: 1 },
-      haze: 0,
       clouds: { mode: 'meteo', coverage: 0.4, altitudeM: 1200, seaTopM: 2000, quality: 'medium' },
       water: { enabled: true, strength: 1 },
       overlay: DEFAULT_OVERLAY,
