@@ -191,6 +191,8 @@ Cloud preview: lightened "bas" (low) preset (`PREVIEW_MARCH`: 120 steps of at le
      On each `change` of the controls (orbit, pan, zoom, damping, fit; not while playing or exporting), `liftAboveGround` raises the
      camera to `FREE_CAMERA_CLEARANCE_M` = 30 m above the exaggerated terrain under it (`engine.sampleHeight`): the tile mesh cuts the
      corners of the elevation grid by a few tens of metres on steep relief; below the flyover's 80 m, so a flyover view is never moved.
+     Also when the ground changes under a camera sitting still: on `engine.onChange` (finer tiles, at most once per frame) and on
+     a change of the exaggeration, one sample, `wakeScene` only if the camera was lifted (same conditions).
 8. **State** (`store.ts`): `tracks: Track[]`, `addTracks`, `removeTrack`, `clearTracks`, `settings { terrainSourceId, imagerySourceId,
    imageryZoomOffset, exaggeration, wireframe }`, `setSetting`, `terrainStats`, `bounds` (union of the tracks) and `frameOrigin` (centroid of the
    first batch rounded to 0.01°, fixed as long as a track remains); the engine `area` is derived in the scene (`TerrainLayer`).

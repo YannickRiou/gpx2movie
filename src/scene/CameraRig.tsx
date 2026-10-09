@@ -6,8 +6,10 @@
  * animate position and target over ~800 ms with ease-in-out. Any user interaction cancels the animation.
  *
  * Whenever the controls move the camera (orbit, pan, zoom, damping, fit), it is lifted to stay
- * FREE_CAMERA_CLEARANCE_M above the draped relief, so it never looks at the tiles from below. Nothing is sampled
- * while the view sits still, nor while the film plays or a video is exported (FlyoverRig drives the camera then).
+ * FREE_CAMERA_CLEARANCE_M above the draped relief, so it never looks at the tiles from below; also when the ground
+ * changes under a camera sitting still (tiles loaded, reported by the engine, or another exaggeration): one sample,
+ * and a frame drawn only if it moved. Nothing is sampled otherwise, nor while the film plays or a video is exported
+ * (FlyoverRig drives the camera then).
  */
 import { useCallback, useEffect, useMemo, useRef, type ComponentRef } from 'react'
 import { invalidate, useFrame } from '@react-three/fiber'
@@ -18,7 +20,7 @@ import { isExportBusy, useExportStore } from '../export/store'
 import { centroid } from '../geo/ellipsoid'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
-import { frameDelta } from './renderOnDemand'
+import { frameDelta, wakeScene } from './renderOnDemand'
 import type { HeightSampler } from './TrackLines'
 
 type OrbitControlsImpl = ComponentRef<typeof OrbitControls>
@@ -144,6 +146,7 @@ interface FitAnimation {
 export function CameraRig() {
   const bounds = useAppStore((s) => s.bounds)
   const fitRequest = useAppStore((s) => s.fitRequest)
+  const exaggeration = useAppStore((s) => s.settings.exaggeration)
   const { engine, frame } = useTerrainContext()
 
   const controlsRef = useRef<OrbitControlsImpl>(null)
@@ -205,15 +208,25 @@ export function CameraRig() {
   }, [])
 
   const sampler = useMemo<HeightSampler | null>(() => (engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null), [engine])
-  // fired by the controls only when they moved the camera, damping and fit included
+  // fired by the controls only when they moved the camera, damping and fit included; true when it lifted the camera
   const keepAboveGround = useCallback(() => {
     const controls = controlsRef.current
-    if (!controls || !sampler || !frame) return
+    if (!controls || !sampler || !frame) return false
     const { playback, settings } = useAppStore.getState()
-    if (playback.playing || isExportBusy(useExportStore.getState().phase)) return
+    if (playback.playing || isExportBusy(useExportStore.getState().phase)) return false
     const camera = controls.object
-    if (liftAboveGround(camera.position, frame, sampler, settings.exaggeration)) camera.lookAt(controls.target)
+    if (!liftAboveGround(camera.position, frame, sampler, settings.exaggeration)) return false
+    camera.lookAt(controls.target)
+    return true
   }, [sampler, frame])
+  // the ground changing under a camera sitting still: finer tiles (at most once per frame) or another exaggeration
+  useEffect(() => {
+    const lift = () => {
+      if (keepAboveGround()) wakeScene()
+    }
+    lift()
+    return engine?.onChange(lift)
+  }, [engine, exaggeration, keepAboveGround])
 
   return (
     <OrbitControls
