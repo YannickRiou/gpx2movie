@@ -342,6 +342,19 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    the current lots): overlay-only export on the
    Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop. Dropped by the user: GoPro GPS time (GPMF).
 
+**Before the final release (`v0.1.0`), once the lots above are merged**
+- **Final review** (user's request): one full pass over the product before tagging. Code: dead code and unused
+  exports, consistency of naming and comments with the surrounding code, error handling and French messages, no
+  secret or personal data, licences and attributions of every source (`docs/sources.md`), desktop CSP and permissions.
+  Product: every feature present in both the website and the desktop app, French labels and tips consistent, defaults
+  sensible, old projects still loading. Docs: README, user guide, ARCHITECTURE and how-it-works matching the code.
+  Run the full checks and `npm run e2e`; list what only a GPU can confirm in `docs/tests-gpu.md`.
+- **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
+  and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
+  lens effects), memory (tile and DEM caches, textures, long sessions), export speed (cloud renders per frame,
+  motion-blur sub-frames, native encoder), size of the desktop installers, CI duration. Keep only changes with a
+  measured gain and no visible regression.
+
 **Later, once the desktop and web versions are finished and working**
 - **Web app highly usable on mobile** (large lot, user's request). Today the interface is built for a desktop screen,
   mouse and keyboard. To cover: a layout for phone and tablet widths (panels as bottom sheets, one panel at a time,
