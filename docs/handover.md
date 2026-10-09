@@ -297,16 +297,34 @@ remain the source for each work item.
 
 ## Proposed next steps
 
-The roadmap is built. What remains:
+Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by owner:
 
-1. In the user's hands: tests on the machine with a GPU (`docs/tests-gpu.md`, region highlight included),
-   command-line rendering once on a real machine, Strava import on the website (done on the Windows desktop
-   application), signing certificates if wanted, then a first `v0.1.0` tag (release published by `desktop.yml`).
-2. Polish from real use still in progress (`docs/roadmap.md`, last section): sea of clouds in place of the manual
-   haze slider, steadier flyover camera (target height and ground clearance smoothed along the track).
-3. Extensions proposed and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only
-   export on the Linux desktop, a built-in openh264 encoder.
-4. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+**In progress (code)**
+1. Volumetric clouds: grain (accumulation does not converge with render on demand and one render per exported
+   frame), flat look of the « Mer de nuages », hard edge against the relief, black clouds at low sun (cloud shadow
+   map). Being fixed; to judge on a real GPU.
+2. « Mer de nuages » as a surface (« Nappe »): noise-free mesh layer as an alternative to the volumetric one, to
+   compare on a real GPU; keep the better one (or both).
+3. On the work branch, not yet merged: « Lissage de la trace » out of « Plus de réglages », « Plan de situation à
+   l'ouverture / à la clôture » switches in the « Survol » tab (nothing on by default), WebGL context asking for the
+   high-performance GPU.
+
+**Proposed, waiting for the user's go**
+4. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
+5. Extensions not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
+   Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop.
+6. Commit `32a3818` message mentions the `CLAUDE.md` file name; `CLAUDE.md` and `.claude/` are in the repository
+   (configuration files). Rewriting history or removing them only on the user's request.
+
+**In the user's hands**
+7. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
+   steady camera, free camera, start / finish pins, export.
+8. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
+   remove them; delete the old branches (`lot-suites`, `landmarks-hide`, `track-style`, `ui-polish`,
+   `timeline-polish`, `export-stream`, `timeline-videos`, `water`): the session cannot delete remote branches.
+9. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
+   application); signing certificates if wanted; then a first `v0.1.0` tag (release published by `desktop.yml`).
+10. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.
