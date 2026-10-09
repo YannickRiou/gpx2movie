@@ -161,6 +161,13 @@ reproduce it next to the box.
       the preview and to the export, "Revenir au style" (back to the style); a single Ctrl+Z after a drag in the color picker.
 - [ ] Ghost race ranking in the 3 styles: color dots and gaps aligned, no width jump,
       "Tête" (lead), then "Arrivée" (finish).
+- [ ] "Plusieurs traces" › "À la suite" with two days of a hike: the film flies day 1 then day 2, a clean cut at the
+      darkest point of the dip (no camera glide between the two days), the stage card (name, « Étape 2 sur 2 », date,
+      distance, D+) centred for 5 s, the counters, profile and mini-map those of the stage; one segment per stage on the
+      timeline; "Coupe" and "Fondu au blanc"; the up arrow swaps the stages; same frames in the export (16:9, 9:16).
+- [ ] "Plusieurs traces" › "En parallèle", "Caméra sur" « Celle en tête » (a cut when the lead changes or finishes)
+      and « Toutes les traces » (all racers in the frame, the camera pulls back as they spread, no jump); a track
+      chosen in the list becomes the first one; "Classement à l'image" with the overlay on; same in the export.
 
 - [ ] Close the tab (Chrome, Firefox): nothing asked without changes, nor with a "Mes projets" project changed more than
       3 s ago; "Quitter le site ?" (leave site?, the browser's own wording) with "Modifié" outside "Mes projets", during an

@@ -58,7 +58,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/labelModel.ts` + `labelSources.ts` | 3D labels | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`…; `setLabelSource(id, labels)` (prefixed, unique ids), `useLabelSources` |
 | `src/flyover/pacing.ts` | flyover pacing | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance`; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses given by the film); `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
 | `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha`, `START_HEIGHTS`, `START_HEIGHT_LABELS`, `highlightsRegion`; `autoStops`, `stopCandidates`, `materializeStops`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `attachToStop`, `followStops`, `edgeScrollSpeed`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
-| `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `situationTarget`, `situationFramingOf`, `regionDistanceM`, `regionHighlightOpacity`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
+| `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)` (`options.follow`: `FollowedFlight`), `markerAt`, `framedGroup`, `overviewView`, `regionView`, `situationTarget`, `situationFramingOf`, `regionDistanceM`, `regionHighlightOpacity`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | sun date, sunrise / sunset | `shotSunShiftMs(clock, timeS)`, `SHOT_SUN_HOURS`, `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | track colored by a metric | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (label, unit, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposure under the atmosphere | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
@@ -67,10 +67,11 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/plan/roadbook.ts` | roadbook (see "Planned outing") | `steepSections`, `roadbookLandmarks`, `buildRoadbook` → `Roadbook` (`rows`, `steep`, totals), `formatPlaceClock`, `passageText`, `roadbookSummary`, `longestSteepText`, `roadbookText`, thresholds `STEEP_PERCENT`, `VERY_STEEP_PERCENT`, `STEEP_MIN_LENGTH_M`, `STEEP_MERGE_GAP_M`, `SAME_PLACE_M`, `ROADBOOK_LANDMARKS` |
 | `src/osm/region.ts` + `src/scene/regionMesh.ts` + `src/scene/RegionHighlight.tsx` | administrative region of the outing, framed and highlighted by the region view (see "Film and timeline", Camera) | `regionName`, `regionCandidatesQuery`, `regionKind`, `REGION_KIND_LABELS`, `parseRegionCandidates`, `containingRegions`, `chooseRegion`, `candidateId`, `regionGeometryQuery`, `parseRegionGeometry`, `simplifyRings`, `fetchRegion`, `regionFrame`, `REGION_MIN_RATIO`, `REGION_MAX_POINTS`; `useRegionStore`, `syncRegion`, `holdRegion`; pure, tested: `buildRegionMesh`, `ringDepths`, `labelPoint`, `ringSegments`, `LABEL_GRID`; `RegionHighlight` |
 | `src/osm/*` | OpenStreetMap landmarks | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures`; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `splitHidden`, `DEFAULT_LANDMARK_SETTINGS`, `withLandmarkDefaults`, `LANDMARK_DISTANCE_RANGE`, `KIND_LABELS`, `KIND_BADGES`; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
-| `src/overlay/*` | film overlay | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `withOverrides`, `resolveOverlayTheme`, `leaderboardRows`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (bridge to the export), `OverlayCanvas` |
+| `src/overlay/*` | film overlay | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `prepareOverlayFilm`, `overlayFilmFrameAt`, `stageCardAt`, `stageDipAt`, `createOverlayFilmCache`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `withOverrides`, `resolveOverlayTheme`, `leaderboardRows`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (bridge to the export), `OverlayCanvas` |
 | `src/export/*` | video export | `buildFrameSchedule`, `VIDEO_ASPECTS`, `VIDEO_RESOLUTIONS`, `videoSize`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `nativeEncoder.ts` (desktop ffmpeg): `exportCodec`, `createExportEncoder`, `createNativeVideoEncoder`, `wavFile`, `settle`, `renderSettledFrame`, `composeFrame`, `composeOverlayFrame`, `fillSky` (export sky, reused by the poster), `useExportStore`, `videoFileName`, `overlayBaseName`, `ALPHA_CANDIDATES`, `chooseVideoDestination`, `warnsInMemory`, `filmRate`, `ExportController`; `batch.ts` (batch rendering): pure, tested: `buildBatchJobs`, `formatKey`, `batchBaseName`, `estimateBatch`, `runBatch`, `batchProgressLabel`, `batchSummary`; `exportJob`, `useBatchStore` |
 | `src/poster/*` | poster (see "Poster") | pure, tested: `PosterSettings`, `DEFAULT_POSTER`, `POSTER_FORMATS`, `posterSize`, `isValidPoster`, `withPosterDefaults`; `posterContent`, `posterFigure`, `availableFigures`, `posterStats`, `totalStats`, `trackLine`, `POSTER_LIST_MAX`; `posterLayout` (boxes), `fitText`, `fitLines`, `fitTrackList`, `wrapText`, `truncate`; `drawPoster`, `coverCrop`, `POSTER_THEMES`, `POSTER_FONTS`; `framingPath`, `planFlatMap` (`view.ts`); not pure: `renderFlatMap` (`view.ts`), `currentPosterContent`, `startPoster`, `usePosterPreview`, `previewKey` (`export.ts`), `PosterPanel` |
-| `src/flyover/race.ts` | ghost race | `RACE_SYNC_MODES`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers`; `useRace`, `RaceMarkers` |
+| `src/flyover/race.ts` | ghost race | `RACE_SYNC_MODES`, `RACE_CAMERAS`, `STAGE_TRANSITIONS`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers`; `useRace`, `RaceMarkers` |
+| `src/flyover/sequence.ts` + `follow.ts` | several tracks (see "Several tracks") | `Stage`, `Sequence`, `playsInSequence`, `buildSequence`, `sequenceOf`, `filmSequenceOf`, `filmTrackOf`, `stageAt`, `sequenceLandmarks`; `filmFollowOf(tracks, race, smoothingM)`; hooks `useFilmTrack`, `useFilmSequence` (`scene/usePacing.ts`) |
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | weather in the scene | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction`; `WeatherEffect` |
 | `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | reflective water | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater`; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH`; `WaterLayer`, `WATER_LIFT_M`; `useWaterStore` (`osm/store.ts`) |
 | `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | volumetric clouds | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `withCloudDefaults`, `seaTopFor`, `cloudCoversAt`, `sceneCloudsFrom`, `seaOfClouds`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor`; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
@@ -1658,9 +1659,15 @@ it, know at what time you will pass each point, where the sun will be and what t
 
 ## Ghost race (phase 7)
 
-- Progress remains the distance fraction of the first track (followed by the camera); each other track receives a
-  marker placed by `raceAt(race, progress)`, a pure function. Setting `settings.race { enabled, sync }`, "Course
-  fantôme" (ghost race) block in the track list (from two tracks).
+- Progress remains the distance fraction of the first track; each other track receives a
+  marker placed by `raceAt(race, progress)`, a pure function. Setting `settings.race { enabled, sync, camera? }`,
+  « En parallèle » in the « Plusieurs traces » block of the track list (from two tracks, see "Several tracks").
+- Camera (« Caméra sur », `camera`, absent = `'premiere'`: the first track, as before): `'tete'` the racer ahead
+  (`rankRacers`; once it has finished, the first one still racing), a cut when the lead changes; `'ensemble'` the
+  first track's flight view moved to the centre of all the racers and pulled back until their spread fits the frame
+  (`framedGroup`, × `GROUP_FRAMING_MARGIN` = 1.4, never nearer than the flight view: continuous). Another track chosen
+  in the list is made the first one (`flyTrack`). The film's marker stays on the first track
+  (`FollowedFlight.markerOnFilm`). « Classement à l'image » toggles the overlay's leaderboard widget.
 - Synchronization: `elapsed` (same time elapsed since each start), `clock` (same recorded time; waiting at the start,
   stopped at the finish), `distance` (same fraction of each track). The first two require timestamps on all the
   tracks, otherwise fall back to `distance`.
@@ -1668,6 +1675,44 @@ it, know at what time you will pass each point, where the sun will be and what t
   gaps compared at equal fraction (exact on the same route); displayed as "+1 min 20", "−350 m".
 - `RaceMarkers` (after `FlyoverRig` in `TerrainLayer`): same kind of marker as the head (`settings.marker`, see "Track
   and marker") in the track color with an ink edge, same screen size as the main marker. Limit: the stops of the lead track are crossed instantly (playback advances by distance).
+
+## Several tracks (« Plusieurs traces »)
+
+- Block of the track list from two tracks: « La première » (default, nothing changes: the first track is flown, the
+  others drawn), « À la suite », « En parallèle » (the ghost race). Stored in `settings.race`, no migration: « En
+  parallèle » is `enabled` (as before), « À la suite » the optional `sequence` flag (ignored while `enabled`), with
+  `stageCards` (absent = on) and `stageTransition` (`'coupe'`, `'fondu-noir'` (absent), `'fondu-blanc'`); a project
+  saved before has neither, so its film is unchanged; one track is never a sequence (`playsInSequence`).
+- « À la suite » (`src/flyover/sequence.ts`, pure): the film flies a **sequence track** (`buildSequence`: the tracks'
+  segments one after the other in list order, id `suite:<ids>`, name `chainName`, never stored), cached on the tracks'
+  ids, points and names (`sequenceOf`) so it keeps its identity. Unlike « Enchaîner en un seul parcours », nothing is
+  merged: each track stays a stage (`Stage`: `startM` / `endM` along the sequence, `from` / `to` fractions of the
+  progress) with its colour, name and stats; the stage order is the list order (up arrow on a track: `moveTrack`).
+  `filmTrackOf(tracks, race)` (hook `useFilmTrack`) replaces `tracks[0]` wherever the film is concerned: film source
+  and clock (`useFilmSource`, `getFilmSource`: landmarks of every stage along the sequence, `sequenceLandmarks`, a
+  landmark near two stages once), FlyoverRig and the export, timeline, track picker, climbs and their labels,
+  kilometre labels, landmark, climb, roadbook and point-of-interest panels (seeking in metres along the film), region
+  highlight, water. Stops, speed sections, camera keys and landmark titles are anchored in metres along the sequence:
+  the first stage keeps the first track's metres, so switching mode keeps what was placed on it.
+- Clock: `FilmClockFor.cutsM` (the stages' starts) → `clock.cuts` (`{ atM, timeS }`, like the camera keys), read by
+  the timeline (one segment per stage in the « Plans » lane, `.film-tl__stage`: name and a band in the track's colour)
+  and the overlay (`overlayTime` copies them into `OverlayTime.cutsS`).
+- Camera (`src/flyover/follow.ts`, `filmFollowOf` → `FilmViewOptions.follow`): the flight camera flies the stage under
+  the marker on its own smoothed path at its own progress (`stageAt`), so it never glides across the jump between two
+  stages: a cut at the film time the marker reaches it. The shots still frame the whole sequence. A pure function of
+  the progress, passed by FlyoverRig and by the export's prefetch (`viewAt`): preview and export agree.
+- Overlay: `prepareOverlayFilm` / `overlayFilmFrameAt`: the live widgets show the stage under the marker (its distance,
+  D+, time, profile, mini-map), the opening and closing cards the name and totals of the sequence. A stage card
+  (`stageCardAt`, `StageCard`: name, « Étape 2 sur 3 · date », distance, D+; centred, `STAGE_CARD_S` = 5 s from the
+  flight start for the first, from its cut for the others) drawn even while the overlay is off, the live widgets
+  giving way to it; the first stage's card gives way to the title card when that is on. Dip of the cut
+  (`stageDipAt`, `DIP_DEFAULT_S` centred on it) merged with the shot dips; both enter the export's held-frame key.
+- Drawn lines with « trace qui se dessine » (`drawOnDistances(…, sequence)`): stages flown whole, the current one to the
+  marker, the next ones not yet. Start and finish labels name every stage's ends.
+- Limits: the weather, the sun date and the clouds follow the first track (weather store, `AtmosphereLayer`,
+  `CloudsLayer`), so the sun of a later stage is that of the first track at the same fraction and only the first
+  stage gets weather in the overlay; time smoothing of the camera must not average across a stage cut (as for a
+  shot that cuts).
 
 ## Track chaining
 

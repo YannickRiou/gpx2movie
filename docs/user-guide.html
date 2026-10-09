@@ -348,10 +348,12 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
     <li><div><strong>Add more if needed.</strong> "+ Ajouter" (add) in the track list adds tracks. "Ouvrir" (<kbd>Ctrl+O</kbd>) accepts a track or a saved project.</div></li>
   </ol>
   <h3 class="sub">Several tracks</h3>
-  <p>The flyover, weather, landmarks and climbs follow the <strong>first</strong> track; the arrow on another track makes it the flown-over one, and its colour chip changes its colour. With two tracks or more:</p>
+  <p>The flyover, weather, landmarks and climbs follow the <strong>first</strong> track; the arrow on another track makes it the flown-over one, and its colour chip changes its colour. With two tracks or more, "Plusieurs traces" (several tracks) chooses how the film plays them:</p>
   <ul>
-    <li>"Course fantôme" (ghost race) replays them together with a live leaderboard;</li>
-    <li>"Enchaîner en un seul parcours" (chain into a single route) merges them in order of start time, for a multi-day outing or a recording split in two files. The message offers "Annuler" (undo).</li>
+    <li>"La première" (the first one, default): the first track is flown, the others are only drawn;</li>
+    <li>"À la suite" (one after the other): the film flies every track in the order of the list, each one a stage with its own colour, name and figures (the overlay counters, profile and mini-map are those of the stage). The timeline shows one segment per stage; a card gives the name, date, distance and D+ of each stage as it starts ("Carton au début de chaque étape"), and "Entre deux étapes" picks the cut: "Coupe" (cut), "Fondu au noir" (dip to black, default) or "Fondu au blanc". The up arrow on a track moves it one stage earlier. The weather, the sun and the clouds still follow the first track;</li>
+    <li>"En parallèle" (side by side, the ghost race) replays them together: "Synchronisation" (same elapsed time, same clock time or same distance), "Caméra sur" (camera on) the first track, another track (it then becomes the first one), "Celle en tête" (the one ahead) or "Toutes les traces" (all of them in the frame), and "Classement à l'image" (leaderboard in the film, with the overlay on);</li>
+    <li>"Enchaîner en un seul parcours" (chain into a single route) merges them in order of start time, for a multi-day outing or a recording split in two files. The message offers "Annuler" (undo). Unlike "À la suite", the tracks become one (one colour, one set of figures).</li>
   </ul>
   <h3 class="sub">From Strava</h3>
   <p>"Strava" in the track list (or "Importer depuis Strava" on first launch) imports your activities. OpenFlyover ships no Strava key, so you create your own Strava application once:</p>
@@ -400,7 +402,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
     <table class="wide">
       <thead><tr><th>Tab</th><th>What you set there</th></tr></thead>
       <tbody>
-        <tr><td>"Trace"</td><td>Your tracks, ghost race, roadbook, climbs and terrain labels ("Montées et étiquettes"), weather of the outing, offline preparation ("Hors ligne")</td></tr>
+        <tr><td>"Trace"</td><td>Your tracks, "Plusieurs traces" (one after the other or side by side), roadbook, climbs and terrain labels ("Montées et étiquettes"), weather of the outing, offline preparation ("Hors ligne")</td></tr>
         <tr><td>"Carte"</td><td>Base map (aerial photos, topographic maps, historical IGN photos), relief exaggeration, track colouring (speed, slope, elevation, heart rate, cadence, power, temperature), light and sun time, atmosphere, clouds and water, colour grading, OpenStreetMap landmarks</td></tr>
         <tr><td>"Survol"</td><td>Camera preset ("Poursuite", "Hélicoptère", "Drone haut", "Vue du dessus", "Orbite", "Cinéma"), camera style, film duration (15 s to 10 min), pacing at highlights, track and marker. Camera smoothing sits in "Caméra" › "Plus de réglages": "Lissage des virages" (metres of track, "Auto" by default), "Lissage de la visée" and "Lissage de la caméra" (seconds: the view eases into stops and speed changes instead of jerking), "Fin en douceur" (the camera slows to a stop over the last seconds and watches the marker finish)</td></tr>
         <tr><td>"Habillage"</td><td>Overlay on the film: style ("Éditorial", "Diffusion", "Application"), colours and fonts, titles, counters, profile and mini-map, weather, logo and text, source credits</td></tr>

@@ -330,14 +330,13 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    « Maintien » / « Plongée », « Cadrage » with « Capturer la vue actuelle », « Faire bouger le soleil »; see
    ARCHITECTURE.md, "Film and timeline", Camera). To check on a GPU (`docs/tests-gpu.md`); the place list was only
    tested against a mocked Overpass.
-7. **Several tracks: « À la suite » or « En parallèle »** (user's request; MapDirector always puts imported GPX one
-   after the other). Today: the first track is flown, the others are only drawn; « Enchaîner en un seul parcours »
-   merges them into one track (sequence, but the stages lose their own colour, name and stats); « Course fantôme »
-   replays them together (sync by elapsed time, clock time or distance, leaderboard, camera on the first track).
-   Proposed: one « Plusieurs traces » choice — « À la suite » without merging (each stage keeps its colour, name and
-   figures; timeline segments per stage, stage cards and transitions between them) and « En parallèle » as a
-   generalised ghost race (camera on the lead, on a chosen track or framing all of them; leaderboard optional;
-   same sync modes).
+7. **Several tracks: « À la suite » or « En parallèle »**: done on the work branch (ARCHITECTURE.md, "Several
+   tracks"). « Plusieurs traces » in the track list: « La première » (default, unchanged), « À la suite » (stages
+   with their own colour, name and figures, one timeline segment each, stage card, cut or dip between stages, order
+   of the list) and « En parallèle » (the ghost race, camera on the first track, the one ahead or all of them,
+   leaderboard toggle). Left: the sun, the clouds and the weather of a later stage still follow the first track (a
+   one-line change in `AtmosphereLayer` / `CloudsLayer` / the weather store, owned by the clouds work); no hold or
+   camera move between stages (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
 8. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
    the current lots): overlay-only export on the
    Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop. Dropped by the user: GoPro GPS time (GPMF).
