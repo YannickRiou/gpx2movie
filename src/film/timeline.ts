@@ -435,11 +435,12 @@ export function addItemCamera(
 /** Length of a text added on the timeline (seconds). */
 export const NEW_TEXT_S = 4
 
-/** A text added at film time `startS`, centred low, normal size; with its new id. */
-export function addText(film: Film, startS: number): { film: Film; id: string } {
+/** A text added at film time `startS`, centred low, normal size, or attached to `stop` (`attachToStop`); with its new id. */
+export function addText(film: Film, startS: number, stop: ClockStop | null = null): { film: Film; id: string } {
   const id = nextFilmId(film, 'text')
   const text: FilmText = { id, startS: roundS(Math.max(0, startS)), durationS: NEW_TEXT_S, text: 'Nouveau texte', anchor: 'bottom-center', size: 1 }
-  return { film: { ...film, texts: [...film.texts, text] }, id }
+  const next = { ...film, texts: [...film.texts, text] }
+  return { film: stop ? attachToStop(next, id, stop) : next, id }
 }
 
 /** Length of a photo added on the timeline (seconds). */

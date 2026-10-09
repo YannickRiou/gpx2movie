@@ -656,6 +656,10 @@ describe('texts and media attached to a stop', () => {
     const free = attachToStop(f, 'text-1', null)
     expect('stopId' in free.texts[0]).toBe(false)
     expect(free.texts[0].startS).toBe(f.texts[0].startS)
+    // a text added (T) with a stop selected is attached to it
+    const added = addText(film, 3, stop1)
+    expect(added.film.texts.at(-1)).toMatchObject({ id: added.id, stopId: 'stop-1', startS: round(stop1.holdStartS), durationS: 4 })
+    expect(isValidFilm(added.film)).toBe(true)
     // a video keeps its length
     const clip: Film = { ...film, media: [{ ...photo('media-1', 40, 12), kind: 'video' }] }
     expect(attachToStop(clip, 'media-1', stop1).media[0]).toMatchObject({ stopId: 'stop-1', startS: round(stop1.holdStartS), durationS: 12 })

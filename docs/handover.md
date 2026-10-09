@@ -129,10 +129,10 @@ features included), `npm run build`,
   older entries show an empty frame. Seen in headless Chromium (software GPU), not on a GPU nor in the desktop app.
 - **Linux desktop export on the GPU**: MP4 encoded with `h264_nvenc`, else `h264_vaapi`, else `libx264`, chosen by a
   real ffmpeg probe once per run (`video.rs`); not tried on a GPU.
+- **T with a stop selected**: the new text is attached to that stop (`addText` with the stop, one undo step).
 - **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
   constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
-  "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK); a text added with T attached to
-  the selected stop.
+  "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK).
 
 ## Work merged from `lot-suites`
 
@@ -340,7 +340,7 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    camera move between stages (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
 8. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
    the current lots): overlay-only export on the
-   Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop. Dropped by the user: GoPro GPS time (GPMF).
+   Linux desktop, a built-in openh264 encoder. Dropped by the user: GoPro GPS time (GPMF).
 
 **Before the final release (`v0.1.0`), once the lots above are merged**
 - **Final review** (user's request): one full pass over the product before tagging. Code: dead code and unused

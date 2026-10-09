@@ -832,7 +832,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   duration, other stop, speed portions, shots); an item whose stop is no longer one of the film's own stops (deleted,
   "Arrêts automatiques" checked again) becomes free where it is; moving the attached item changes its offset.
   Inspector: "Attaché à : Aucun arrêt / <arrêt>" (attached to: no stop / a stop) for a text, a photo or a video
-  (attaching to a generated stop writes the stops out first; one undo step). Landmarks and stops: the generated stops
+  (attaching to a generated stop writes the stops out first; one undo step); T with a stop selected adds the text
+  attached to it (`addText(film, startS, stop)`, same undo step). Landmarks and stops: the generated stops
   follow the landmarks but carry nothing; written out, a stop keeps its meters and only its film time moves with the
   slow-downs. Landmarks are not saved but fetched again: the first ones published for a track (project opened, track
   imported) move nothing, the film was saved with the times they gave.
