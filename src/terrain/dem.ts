@@ -13,15 +13,7 @@ import { clamp } from '../core/math'
 import type { DemEncoding, HeightGrid } from '../core/types'
 
 /** Height encoded by a Terrarium (0, 0, 0) pixel; several providers use it as a nodata sentinel. */
-export const TERRARIUM_NODATA = -32768
-
-export function decodeTerrariumPixel(r: number, g: number, b: number): number {
-  return r * 256 + g + b / 256 - 32768
-}
-
-export function decodeMapboxPixel(r: number, g: number, b: number): number {
-  return -10000 + (r * 65536 + g * 256 + b) * 0.1
-}
+const TERRARIUM_NODATA = -32768
 
 /**
  * Decode raw RGBA pixels (as returned by `getImageData`) into a height grid. Pure and synchronous.
@@ -173,18 +165,4 @@ export function sampleGrid(grid: HeightGrid, u: number, v: number): number {
   if (valid === 0) return NaN
   // Sitting exactly on a nodata pixel: the valid neighbours carry no weight, fall back to their mean.
   return weightSum > 1e-9 ? weighted / weightSum : plain / valid
-}
-
-/** Min / max of the valid heights; both NaN when the grid holds no data. */
-export function gridMinMax(grid: HeightGrid): { min: number; max: number } {
-  const data = grid.data
-  let min = Infinity
-  let max = -Infinity
-  for (let i = 0; i < data.length; i++) {
-    const h = data[i]
-    if (h !== h) continue
-    if (h < min) min = h
-    if (h > max) max = h
-  }
-  return min === Infinity ? { min: NaN, max: NaN } : { min, max }
 }

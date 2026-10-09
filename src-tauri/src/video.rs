@@ -2,7 +2,8 @@
 //! frames of the export on its standard input (src/export/nativeEncoder.ts). Its arguments are fixed here; the only
 //! path it writes is the file picked in the save dialog (checked against the fs scope, where the dialog plugin adds
 //! it). The soundtrack, when the film has one, is handed over first as a WAV file in the temporary folder. MP4 is
-//! encoded on the GPU when ffmpeg can (NVENC, VAAPI), on the processor otherwise (libx264).
+//! encoded on the GPU when ffmpeg can (NVENC, VAAPI), on the processor otherwise (libx264). The overlay alone keeps
+//! its alpha (WebM / VP9).
 
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -124,11 +125,12 @@ fn h264_args(encoder: H264, crf: &str) -> Vec<OsString> {
 }
 
 /// Arguments of ffmpeg: raw RGBA frames on stdin, the optional WAV soundtrack, MP4 / H.264 (+ AAC) by `encoder` at
-/// `output`, or WebM / VP9 (+ Opus) when its name ends in `.webm` (`encoder` unused). Colours converted and tagged as
-/// BT.709, what players assume for HD video.
-fn ffmpeg_args(width: u32, height: u32, fps: u32, crf: u8, encoder: H264, sound: Option<&Path>, output: &Path) -> Vec<OsString> {
+/// `output`, or WebM / VP9 (+ Opus) when its name ends in `.webm` or the film is `transparent` (`encoder` unused).
+/// Colours converted and tagged as BT.709, what players assume for HD video.
+#[allow(clippy::too_many_arguments)]
+fn ffmpeg_args(width: u32, height: u32, fps: u32, crf: u8, encoder: H264, transparent: bool, sound: Option<&Path>, output: &Path) -> Vec<OsString> {
     let (size, fps, crf) = (format!("{width}x{height}"), fps.to_string(), crf.to_string());
-    let webm = is_webm(output);
+    let webm = transparent || is_webm(output);
     let vaapi = !webm && encoder == H264::Vaapi;
     let mut args = os(&["-hide_banner", "-loglevel", "error", "-nostats"]);
     if vaapi {
@@ -141,7 +143,7 @@ fn ffmpeg_args(width: u32, height: u32, fps: u32, crf: u8, encoder: H264, sound:
     if webm {
         // constant quality (-b:v 0); "good" with cpu-used 4 and row threads: a few times slower than x264, not dozens
         args.extend(os(&["-c:v", "libvpx-vp9", "-crf", &crf, "-b:v", "0", "-deadline", "good", "-cpu-used", "4", "-row-mt", "1"]));
-        args.extend(os(&["-pix_fmt", "yuv420p"]));
+        args.extend(os(&["-pix_fmt", if transparent { "yuva420p" } else { "yuv420p" }]));
     } else {
         args.extend(h264_args(encoder, &crf));
     }
@@ -282,13 +284,13 @@ pub async fn video_sound(request: Request<'_>, videos: State<'_, VideoState>) ->
 
 /// ffmpeg started on `output`, reading its frames from the pipe.
 #[allow(clippy::too_many_arguments)]
-fn start(app: &AppHandle, output: PathBuf, width: u32, height: u32, fps: u32, quality: &str, encoder: H264, sound: Option<PathBuf>) -> Result<Session, String> {
-    let crf = crf(quality, is_webm(&output)).ok_or(format!("Qualité inconnue : {quality}"))?;
+fn start(app: &AppHandle, output: PathBuf, width: u32, height: u32, fps: u32, quality: &str, encoder: H264, transparent: bool, sound: Option<PathBuf>) -> Result<Session, String> {
+    let crf = crf(quality, transparent || is_webm(&output)).ok_or(format!("Qualité inconnue : {quality}"))?;
     if !output.is_absolute() || !app.fs_scope().is_allowed(&output) {
         return Err("Ce fichier n'a pas été choisi dans la fenêtre « Enregistrer ».".into());
     }
     let mut ffmpeg = Command::new("ffmpeg")
-        .args(ffmpeg_args(width, height, fps, crf, encoder, sound.as_deref(), &output))
+        .args(ffmpeg_args(width, height, fps, crf, encoder, transparent, sound.as_deref(), &output))
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -305,7 +307,8 @@ fn start(app: &AppHandle, output: PathBuf, width: u32, height: u32, fps: u32, qu
     Ok(Session { ffmpeg, input, frame_bytes, output, sound, errors })
 }
 
-/// Start ffmpeg writing `path` (picked in the save dialog) and return the id of the session.
+/// Start ffmpeg writing `path` (picked in the save dialog) and return the id of the session; `transparent`: the overlay
+/// alone, with its alpha.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn video_open(
@@ -316,16 +319,17 @@ pub async fn video_open(
     height: u32,
     fps: u32,
     quality: String,
+    transparent: bool,
     sound: Option<u32>,
 ) -> Result<u32, String> {
     // before the lock: the first MP4 export probes the GPU (WebM is always encoded on the processor)
-    let encoder = if is_webm(&path) { H264::X264 } else { h264_encoder() };
+    let encoder = if transparent || is_webm(&path) { H264::X264 } else { h264_encoder() };
     let mut videos = lock(&videos);
     let sound = match sound {
         Some(id) => Some(videos.sounds.remove(&id).ok_or("Son du film introuvable.")?),
         None => None,
     };
-    match start(&app, path, width, height, fps, &quality, encoder, sound.clone()) {
+    match start(&app, path, width, height, fps, &quality, encoder, transparent, sound.clone()) {
         Ok(session) => {
             let id = videos.new_id();
             videos.sessions.insert(id, session);
@@ -396,7 +400,7 @@ mod tests {
 
     #[test]
     fn reads_rgba_frames_and_writes_an_h264_mp4() {
-        let args = text(&ffmpeg_args(1920, 1080, 30, 20, H264::X264, None, Path::new("/films/Tour.mp4")));
+        let args = text(&ffmpeg_args(1920, 1080, 30, 20, H264::X264, false, None, Path::new("/films/Tour.mp4")));
         assert!(args.contains("-f rawvideo -pix_fmt rgba -s 1920x1080 -r 30 -i - -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p"));
         assert!(args.contains("-pix_fmt yuv420p -vf scale=out_color_matrix=bt709 -colorspace bt709"));
         assert!(args.ends_with("-movflags +faststart -f mp4 -y /films/Tour.mp4"));
@@ -406,7 +410,7 @@ mod tests {
 
     #[test]
     fn encodes_on_an_nvidia_gpu_at_constant_quality() {
-        let args = text(&ffmpeg_args(1920, 1080, 30, 20, H264::Nvenc, None, Path::new("/films/Tour.mp4")));
+        let args = text(&ffmpeg_args(1920, 1080, 30, 20, H264::Nvenc, false, None, Path::new("/films/Tour.mp4")));
         assert!(args.starts_with("-hide_banner -loglevel error -nostats -f rawvideo"));
         assert!(args.contains("-i - -c:v h264_nvenc -preset p5 -rc vbr -cq 20 -b:v 0 -pix_fmt yuv420p -vf scale=out_color_matrix=bt709 -colorspace"));
         assert!(args.ends_with("-movflags +faststart -f mp4 -y /films/Tour.mp4"));
@@ -414,7 +418,7 @@ mod tests {
 
     #[test]
     fn uploads_the_frames_to_the_vaapi_device() {
-        let args = text(&ffmpeg_args(1920, 1080, 30, 17, H264::Vaapi, Some(Path::new("/tmp/s.wav")), Path::new("/films/Tour.mp4")));
+        let args = text(&ffmpeg_args(1920, 1080, 30, 17, H264::Vaapi, false, Some(Path::new("/tmp/s.wav")), Path::new("/films/Tour.mp4")));
         assert!(args.starts_with("-hide_banner -loglevel error -nostats -vaapi_device /dev/dri/renderD128 -f rawvideo"));
         assert!(args.contains("-i /tmp/s.wav -c:v h264_vaapi -rc_mode CQP -qp 17 -vf scale=out_color_matrix=bt709,format=nv12,hwupload -colorspace bt709"));
         assert!(!args.contains("yuv420p"));
@@ -433,7 +437,7 @@ mod tests {
 
     #[test]
     fn adds_the_soundtrack_as_a_second_input() {
-        let args = text(&ffmpeg_args(1080, 1920, 60, 17, H264::X264, Some(Path::new("/tmp/s.wav")), Path::new("/films/Tour.mp4")));
+        let args = text(&ffmpeg_args(1080, 1920, 60, 17, H264::X264, false, Some(Path::new("/tmp/s.wav")), Path::new("/films/Tour.mp4")));
         assert!(args.contains("-i - -i /tmp/s.wav -c:v libx264"));
         assert!(args.contains("-c:a aac -b:a 192k -movflags"));
     }
@@ -442,16 +446,31 @@ mod tests {
     fn writes_vp9_and_opus_in_webm_when_the_name_ends_in_webm() {
         assert!(is_webm(Path::new("/films/Tour.WebM")));
         assert!(!is_webm(Path::new("/films/Tour.mp4")));
-        let args = text(&ffmpeg_args(1920, 1080, 30, 31, H264::X264, Some(Path::new("/tmp/s.wav")), Path::new("/films/Tour.webm")));
+        let args = text(&ffmpeg_args(1920, 1080, 30, 31, H264::X264, false, Some(Path::new("/tmp/s.wav")), Path::new("/films/Tour.webm")));
         assert!(args.contains("-i /tmp/s.wav -c:v libvpx-vp9 -crf 31 -b:v 0"));
         assert!(args.contains("-c:a libopus -b:a 192k"));
         assert!(args.ends_with("-f webm -y /films/Tour.webm"));
         assert!(!args.contains("movflags"));
         // the H.264 encoder found on the machine does not change WebM
         for encoder in [H264::Nvenc, H264::Vaapi] {
-            let other = text(&ffmpeg_args(1920, 1080, 30, 31, encoder, Some(Path::new("/tmp/s.wav")), Path::new("/films/Tour.webm")));
+            let other = text(&ffmpeg_args(1920, 1080, 30, 31, encoder, false, Some(Path::new("/tmp/s.wav")), Path::new("/films/Tour.webm")));
             assert_eq!(other, args);
         }
+    }
+
+    #[test]
+    fn keeps_the_alpha_of_a_transparent_film_in_vp9_webm() {
+        let args = text(&ffmpeg_args(1920, 1080, 30, 31, H264::Nvenc, true, None, Path::new("/films/Tour habillage.webm")));
+        assert!(args.contains("-f rawvideo -pix_fmt rgba -s 1920x1080 -r 30 -i - -c:v libvpx-vp9 -crf 31 -b:v 0"));
+        assert!(args.contains("-row-mt 1 -pix_fmt yuva420p -vf scale=out_color_matrix=bt709 -colorspace bt709"));
+        assert!(args.ends_with("-f webm -y /films/Tour habillage.webm"));
+        assert!(!args.contains("nvenc"));
+        // WebM even when the name typed in the save dialog says otherwise: MP4 / H.264 has no alpha
+        let renamed = text(&ffmpeg_args(1920, 1080, 30, 31, H264::X264, true, None, Path::new("/films/Tour.mp4")));
+        assert!(renamed.contains("-c:v libvpx-vp9") && renamed.contains("-pix_fmt yuva420p"));
+        assert!(renamed.ends_with("-f webm -y /films/Tour.mp4"));
+        let opaque = text(&ffmpeg_args(1920, 1080, 30, 31, H264::X264, false, None, Path::new("/films/Tour.webm")));
+        assert!(opaque.contains("-pix_fmt yuv420p") && !opaque.contains("yuva"));
     }
 
     #[test]

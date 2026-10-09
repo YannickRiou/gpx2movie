@@ -4,7 +4,8 @@
  * contract as the WebCodecs session (`VideoEncodeSession`): each frame of the compositor is read back
  * (`getImageData`) and sent as raw RGBA bytes, a binary body rather than JSON; `video_frame` answers once ffmpeg took
  * it. MP4 / H.264, plus AAC when the film has sound (the mixed soundtrack handed over first as a WAV file); WebM / VP9
- * and Opus when the name typed in the save dialog ends in `.webm`. Never transparent: the overlay alone needs WebCodecs.
+ * and Opus when the name typed in the save dialog ends in `.webm`. The overlay alone (`transparent`) is WebM / VP9 with
+ * its alpha, like the WebCodecs export.
  *
  * Also the choice between both encoders: `exportCodec` (what the export panel shows) and `createExportEncoder`.
  */
@@ -52,7 +53,8 @@ export async function exportCodec(
   invoke: Invoke = tauriInvoke,
 ): Promise<CodecCandidate | null> {
   if (capabilities.videoEncoder !== 'native') return pickCodec(options, undefined, options.transparent ? ALPHA_CANDIDATES : CODEC_CANDIDATES)
-  return !options.transparent && (await nativeVideoAvailable(invoke)) ? NATIVE_CODEC : null
+  if (!(await nativeVideoAvailable(invoke))) return null
+  return options.transparent ? NATIVE_WEBM_CODEC : NATIVE_CODEC
 }
 
 /** `BatchContext.containerOf` for the frame rate and quality of « Vidéo »: the container a film of that size would get. */
@@ -67,9 +69,7 @@ export function createExportEncoder(
   options: VideoEncodeOptions,
   capabilities: Capabilities = getPlatform().capabilities,
 ): Promise<VideoEncodeSession> {
-  return capabilities.videoEncoder === 'native' && !options.transparent
-    ? createNativeVideoEncoder(canvas, options)
-    : createVideoEncoder(canvas, options)
+  return capabilities.videoEncoder === 'native' ? createNativeVideoEncoder(canvas, options) : createVideoEncoder(canvas, options)
 }
 
 /** The soundtrack as a 16-bit PCM WAV file (the second input of ffmpeg). */
@@ -111,14 +111,15 @@ export async function createNativeVideoEncoder(
   options: VideoEncodeOptions,
   invoke: Invoke = tauriInvoke,
 ): Promise<VideoEncodeSession> {
-  const { width, height, fps, quality, destination, audio } = options
+  const { width, height, fps, quality, destination, audio, transparent = false } = options
   if (!destination?.path) throw new Error("Le film doit être écrit sur le disque : choisissez où l'enregistrer.")
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error("Impossible de lire l'image de composition.")
   const sound = audio && audio.channels.length > 0 ? ((await invoke('video_sound', wavFile(audio))) as number) : null
-  const id = (await invoke('video_open', { path: destination.path, width, height, fps, quality, sound })) as number
+  const id = (await invoke('video_open', { path: destination.path, width, height, fps, quality, transparent, sound })) as number
   const frameOptions = { headers: { [SESSION_HEADER]: String(id) } }
-  const codec = nativeCodecFor(destination.path)
+  // the overlay alone is always WebM (video.rs), whatever the name
+  const codec = transparent ? NATIVE_WEBM_CODEC : nativeCodecFor(destination.path)
   let canceled = false
 
   return {

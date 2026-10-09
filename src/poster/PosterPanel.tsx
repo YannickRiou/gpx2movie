@@ -18,6 +18,7 @@ import { useAppStore } from '../state/store'
 import { ModifiedMarker } from '../ui/ModifiedMarker'
 import { formatNumber } from '../ui/format'
 import { Icon } from '../ui/icons'
+import { TextField } from '../ui/PanelSection'
 import { withShortcut } from '../ui/shortcuts'
 import { effectiveProjectName } from '../ui/shell'
 import { showToast } from '../ui/toast'
@@ -192,35 +193,8 @@ export function PosterPanel({ modes, onClose, hidden }: { modes: ReactNode; onCl
         </div>
       </fieldset>
 
-      <div className="field">
-        <label className="field__label" htmlFor={`${id}-title-input`}>
-          Titre
-        </label>
-        <input
-          id={`${id}-title-input`}
-          className="input"
-          type="text"
-          value={poster.title}
-          placeholder={defaultTitle}
-          disabled={busy}
-          onChange={(e) => set({ title: e.currentTarget.value })}
-        />
-      </div>
-
-      <div className="field">
-        <label className="field__label" htmlFor={`${id}-subtitle`}>
-          Sous-titre
-        </label>
-        <input
-          id={`${id}-subtitle`}
-          className="input"
-          type="text"
-          value={poster.subtitle}
-          placeholder="Avant la date de la sortie"
-          disabled={busy}
-          onChange={(e) => set({ subtitle: e.currentTarget.value })}
-        />
-      </div>
+      <TextField label="Titre" value={poster.title} placeholder={defaultTitle} disabled={busy} onChange={(title) => set({ title })} />
+      <TextField label="Sous-titre" value={poster.subtitle} placeholder="Avant la date de la sortie" disabled={busy} onChange={(subtitle) => set({ subtitle })} />
 
       <fieldset className="field fieldset" disabled={busy}>
         <legend className="field__label">Chiffres clés</legend>

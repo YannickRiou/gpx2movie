@@ -469,7 +469,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
     <li>A video filmed during the outing can be <strong>synced to the route</strong>: "Caler sur le parcours" places it where the marker passes at the time it was filmed. "Décalage de l'horloge" fixes a wrong camera clock; "Suivre la vitesse du survol" plays it at the marker's pace (it is then silent).</li>
     <li>"Baisser la musique sous les vidéos" lowers the music by 10 dB under videos with sound. The speaker button mutes playback only; the export keeps the sound.</li>
     <li>In the panel of a text or a photo, "Cadrer la caméra pendant cet élément" sets a framing for its duration.</li>
-    <li>"Attaché à" (attached to), in the panel of a text, a photo or a video, links it to one of your stops: it then follows the stop when you move it, and becomes free again if the stop is removed.</li>
+    <li>"Attaché à" (attached to), in the panel of a text, a photo or a video, links it to one of your stops: it then follows the stop when you move it, and becomes free again if the stop is removed. A text added with <kbd>T</kbd> while a stop is selected is attached to it straight away.</li>
     <li>While you drag a block near the left or right edge of the timeline, the timeline scrolls by itself. Folded sections of the panels stay folded the next time.</li>
   </ul>
 </section>
@@ -505,7 +505,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
     </div>
     <div>
       <h4>Overlay only</h4>
-      <p>"Habillage seul (fond transparent)" exports counters, profile, map, titles and credits on a transparent WebM, frame-aligned with the normal video, for your editing software.</p>
+      <p>"Habillage seul (fond transparent)" exports counters, profile, map, titles and credits on a transparent WebM, frame-aligned with the normal video, for your editing software (on Linux, the desktop app encodes it with <code>ffmpeg</code> too).</p>
     </div>
     <div>
       <h4>Several formats</h4>

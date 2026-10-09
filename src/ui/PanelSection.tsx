@@ -155,3 +155,35 @@ export function RangeField({
     </div>
   )
 }
+
+export function TextField({
+  label,
+  value,
+  placeholder,
+  disabled = false,
+  onChange,
+}: {
+  label: string
+  value: string
+  placeholder?: string
+  disabled?: boolean
+  onChange(value: string): void
+}) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label className="field__label" htmlFor={id}>
+        {label}
+      </label>
+      <input
+        id={id}
+        className="input"
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(e) => onChange(e.currentTarget.value)}
+      />
+    </div>
+  )
+}

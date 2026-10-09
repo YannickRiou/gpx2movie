@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (100 files, 1,643 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (100 files, 1,642 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (12). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -129,10 +129,13 @@ features included), `npm run build`,
   older entries show an empty frame. Seen in headless Chromium (software GPU), not on a GPU nor in the desktop app.
 - **Linux desktop export on the GPU**: MP4 encoded with `h264_nvenc`, else `h264_vaapi`, else `libx264`, chosen by a
   real ffmpeg probe once per run (`video.rs`); not tried on a GPU.
-- **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
-  constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
-  "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK); a text added with T attached to
-  the selected stop.
+- **T with a stop selected**: the new text is attached to that stop (`addText` with the stop, one undo step).
+- **Overlay-only export on the Linux desktop**: WebM / VP9 with alpha through ffmpeg (`yuva420p`), like the web;
+  alpha checked with ffprobe and a decoded frame in the container, not tried in an editor (`docs/tests-gpu.md`).
+- **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
+  `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
+  list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept); "Texte libre" drawn like a
+  timeline text (behaviour change, needs the user's OK).
 
 ## Work merged from `lot-suites`
 
@@ -339,8 +342,26 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    one-line change in `AtmosphereLayer` / `CloudsLayer` / the weather store, owned by the clouds work); no hold or
    camera move between stages (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
 8. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
-   the current lots): overlay-only export on the
-   Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop. Dropped by the user: GoPro GPS time (GPMF).
+   the current lots): a built-in openh264 encoder (patents checked: recommended to drop). Dropped by the user: GoPro GPS time (GPMF).
+
+**Before the final release (`v0.1.0`), once the lots above are merged**
+- **Final review** (user's request): one full pass over the product before tagging. Code: dead code and unused
+  exports, consistency of naming and comments with the surrounding code, error handling and French messages, no
+  secret or personal data, licences and attributions of every source (`docs/sources.md`), desktop CSP and permissions.
+  Product: every feature present in both the website and the desktop app, French labels and tips consistent, defaults
+  sensible, old projects still loading. Docs: README, user guide, ARCHITECTURE and how-it-works matching the code.
+  Run the full checks and `npm run e2e`; list what only a GPU can confirm in `docs/tests-gpu.md`.
+  Maintainability (user's requirement): code easy for a human to maintain and understand, kept to the essentials;
+  remove needless complexity (indirections, options and abstractions used once, speculative code, duplicated logic),
+  split or simplify modules and functions that are too long. Comments (user's rule): short and relevant, never a
+  substitute for the documentation; the code should explain itself (names, structure), a comment only states a why
+  the code cannot show, and anything longer belongs in ARCHITECTURE.md or docs/. Trim the long header and block
+  comments accordingly.
+- **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
+  and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
+  lens effects), memory (tile and DEM caches, textures, long sessions), export speed (cloud renders per frame,
+  motion-blur sub-frames, native encoder), size of the desktop installers, CI duration. Keep only changes with a
+  measured gain and no visible regression.
 
 **Later, once the desktop and web versions are finished and working**
 - **Web app highly usable on mobile** (large lot, user's request). Today the interface is built for a desktop screen,

@@ -56,9 +56,9 @@ export interface OverlayPhotoStyle {
   shadow?: { color: string; blur: number; offsetY: number }
 }
 
-const FRAUNCES = '"Fraunces", Georgia, serif'
-const PLEX = '"IBM Plex Sans", system-ui, sans-serif'
-const PLEX_CONDENSED = '"IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif'
+export const FRAUNCES = '"Fraunces", Georgia, serif'
+export const PLEX = '"IBM Plex Sans", system-ui, sans-serif'
+export const PLEX_CONDENSED = '"IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif'
 
 /** Families of the fonts the user can pick (`OverlayOverrides`): bundled faces, or system ones with fallbacks. */
 export const OVERLAY_FONT_FAMILIES: Record<OverlayFontId, string> = {
@@ -70,12 +70,12 @@ export const OVERLAY_FONT_FAMILIES: Record<OverlayFontId, string> = {
   mono: 'ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace',
 }
 
-const PAPER = '#F5F2EA'
-const INK = '#1C2A33'
-const INK_SOFT = '#55626B'
-const TRAIL_RED = '#C23B22'
-const TRAIL_RED_LIGHT = '#FF8A5C'
-const GLACIER = '#A9CCD9'
+export const PAPER = '#F5F2EA'
+export const INK = '#1C2A33'
+export const INK_SOFT = '#55626B'
+export const TRAIL_RED = '#C23B22'
+export const TRAIL_RED_LIGHT = '#FF8A5C'
+export const GLACIER = '#A9CCD9'
 const MOSS = '#3F6B4A'
 
 export const OVERLAY_THEMES: Record<OverlayStyleId, OverlayTheme> = {

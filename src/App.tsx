@@ -100,7 +100,10 @@ function SeekShortcuts() {
         e.preventDefault()
         if (e.repeat) return
         if (action === 'add-stop') editFilm((f) => addStop(f, Math.round(store.playback.progress * (getFilmSource().track ?? store.tracks[0]).stats.distanceM)), { stops: true })
-        else editFilm((f) => addText(f, playhead))
+        else {
+          const selectedStop = c.stops.find((s) => s.id === store.filmSelection) ?? null
+          editFilm((f) => addText(f, playhead, selectedStop), { stops: selectedStop !== null })
+        }
         return
       }
       const t = seekTime(action, playhead, total)

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Capabilities, WritableFile } from '../platform'
 import { ExportCanceledError } from './encoder'
-import { NATIVE_CODEC, SESSION_HEADER, createNativeVideoEncoder, exportCodec, wavFile, type Invoke } from './nativeEncoder'
+import { NATIVE_CODEC, NATIVE_WEBM_CODEC, SESSION_HEADER, createNativeVideoEncoder, exportCodec, wavFile, type Invoke } from './nativeEncoder'
 
 const OPTIONS = { width: 4, height: 2, fps: 30, quality: 'high' as const }
 const NATIVE: Capabilities = { isDesktop: true, videoEncoder: 'native', canStreamToDisk: true }
@@ -34,10 +34,10 @@ describe('exportCodec', () => {
     expect(await exportCodec(OPTIONS, NATIVE, missing)).toBeNull()
   })
 
-  it('never encodes a transparent film natively', async () => {
-    const { invoke } = fakeInvoke()
-    expect(await exportCodec({ ...OPTIONS, transparent: true }, NATIVE, invoke)).toBeNull()
-    expect(invoke).not.toHaveBeenCalled()
+  it('encodes a transparent film natively as WebM / VP9, when ffmpeg is installed', async () => {
+    expect(await exportCodec({ ...OPTIONS, transparent: true }, NATIVE, fakeInvoke().invoke)).toEqual(NATIVE_WEBM_CODEC)
+    const missing = vi.fn<Invoke>(async () => false)
+    expect(await exportCodec({ ...OPTIONS, transparent: true }, NATIVE, missing)).toBeNull()
   })
 })
 
@@ -59,7 +59,7 @@ describe('createNativeVideoEncoder', () => {
     const { invoke, calls, commands } = fakeInvoke()
     const file = fakeFile()
     const session = await createNativeVideoEncoder(fakeCanvas(), { ...OPTIONS, destination: file }, invoke)
-    expect(calls[0].args).toEqual({ path: '/films/Tour.mp4', width: 4, height: 2, fps: 30, quality: 'high', sound: null })
+    expect(calls[0].args).toEqual({ path: '/films/Tour.mp4', width: 4, height: 2, fps: 30, quality: 'high', transparent: false, sound: null })
     expect(session.audioCodec).toBeNull()
     expect(session.extension).toBe('.mp4')
     await session.addFrame(0)
@@ -92,6 +92,14 @@ describe('createNativeVideoEncoder', () => {
     expect(session.codec).toEqual({ container: 'webm', codec: 'vp9' })
     expect(session.audioCodec).toBe('opus')
     expect([session.mimeType, session.extension]).toEqual(['video/webm', '.webm'])
+  })
+
+  it('keeps the alpha of the overlay alone, in WebM / VP9 whatever the name', async () => {
+    const { invoke, calls } = fakeInvoke()
+    const session = await createNativeVideoEncoder(fakeCanvas(), { ...OPTIONS, destination: fakeFile('/films/Tour habillage.mp4'), transparent: true }, invoke)
+    expect(calls[0].args).toMatchObject({ transparent: true, sound: null })
+    expect(session.codec).toEqual(NATIVE_WEBM_CODEC)
+    expect(session.extension).toBe('.webm')
   })
 
   it('cancels once, removing the file, and refuses frames afterwards', async () => {

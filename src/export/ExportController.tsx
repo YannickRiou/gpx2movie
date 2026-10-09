@@ -39,7 +39,7 @@ import { holdRegion, useRegionStore } from '../osm/region'
 import { useWaterStore } from '../osm/store'
 import { useAppStore } from '../state/store'
 import { REPLACE_EPSILON, composeFrame, composeOverlayFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
-import { ExportCanceledError, createVideoEncoder, type VideoEncodeSession } from './encoder'
+import { ExportCanceledError, type VideoEncodeSession } from './encoder'
 import { createExportEncoder } from './nativeEncoder'
 import { buildFrameSchedule, buildFrameTimes } from './schedule'
 import {
@@ -172,7 +172,7 @@ async function runOverlayOnly(request: ExportRequest, deps: RunDeps, schedule: n
     const ctx = compositor.getContext('2d')
     if (!ctx) throw new Error("Impossible de créer l'image de composition.")
     if (drawOverlay) await loadOverlayFonts()
-    session = await createVideoEncoder(compositor, { ...request, transparent: true })
+    session = await createExportEncoder(compositor, { ...request, transparent: true })
     for (let i = 0; i < schedule.length; i++) {
       if (isCanceled()) throw new ExportCanceledError()
       const progress = schedule[i]

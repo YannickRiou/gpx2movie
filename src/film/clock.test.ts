@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Track } from '../core/types'
-import { buildPacing, DEFAULT_PACING, flightPacing, PAUSE_EASE_S } from '../flyover/pacing'
+import { buildPacing } from '../flyover/__fixtures__/pacing'
+import { DEFAULT_PACING, flightPacing, PAUSE_EASE_S } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
 import { buildTrack } from '../import/stats'
 import type { Landmark } from '../osm/landmarks'

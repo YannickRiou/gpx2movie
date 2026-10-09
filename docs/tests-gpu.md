@@ -237,6 +237,9 @@ On Linux (Ubuntu 22.04 or later, WebKitGTK without WebCodecs: export through the
 - [ ] `sudo apt install ffmpeg`, restart: MP4 (H.264) announced; 1080p 30 fps export of a film with music, file played
       by VLC and the system player, sound present and in sync, colors identical to the preview.
 - [ ] Standard / maximum quality: different sizes, no missing frame (number of frames = the one in the drawer).
+- [ ] "Habillage seul (fond transparent)": WebM (VP9) announced, `<trace> habillage.webm` written; opened in an editor
+      that reads VP9 alpha (Kdenlive, Shotcut) on a track above a video: the footage shows around the counters, map and
+      titles, half-transparent panels blend, same length as the film.
 - [ ] Command line: `openflyover --rendu <dossier> --sortie <dossier> --formats 16:9@720p` (then with
       `--prereglage`): one film per track, `rendu-en-lot.txt`, window closed, exit code 0 (`echo $?`); unknown
       option or empty folder: message and code 2. On Windows too (`openflyover.exe` in the installation folder).

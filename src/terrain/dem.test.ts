@@ -1,14 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HeightGrid } from '../core/types'
-import {
-  TERRARIUM_NODATA,
-  decodeDem,
-  decodeDemPixels,
-  decodeMapboxPixel,
-  decodeTerrariumPixel,
-  gridMinMax,
-  sampleGrid,
-} from './dem'
+import { decodeDem, decodeDemPixels, sampleGrid } from './dem'
 
 type Pixel = [r: number, g: number, b: number, a?: number]
 
@@ -23,11 +15,15 @@ function grid(width: number, height: number, values: number[]): HeightGrid {
 }
 
 describe('pixel formulas', () => {
+  const decodeTerrariumPixel = (...rgb: Pixel) => decodeDemPixels(pixels(rgb), 1, 1, 'terrarium').data[0]
+  const decodeMapboxPixel = (...rgb: Pixel) => decodeDemPixels(pixels(rgb), 1, 1, 'mapbox').data[0]
+
   it('terrarium: h = R*256 + G + B/256 - 32768', () => {
     expect(decodeTerrariumPixel(128, 0, 0)).toBe(0)
     expect(decodeTerrariumPixel(131, 232, 128)).toBeCloseTo(1000.5, 9)
     expect(decodeTerrariumPixel(127, 156, 0)).toBe(-100)
-    expect(decodeTerrariumPixel(0, 0, 0)).toBe(TERRARIUM_NODATA)
+    // the (0, 0, 0) sentinel
+    expect(decodeTerrariumPixel(0, 0, 0)).toBeNaN()
   })
 
   it('mapbox: h = -10000 + (R*65536 + G*256 + B)*0.1', () => {
@@ -155,17 +151,5 @@ describe('sampleGrid', () => {
 
   it('returns NaN for an empty grid', () => {
     expect(sampleGrid(grid(0, 0, []), 0.5, 0.5)).toBeNaN()
-  })
-})
-
-describe('gridMinMax', () => {
-  it('ignores NaN', () => {
-    expect(gridMinMax(grid(2, 2, [NaN, 5, -3, 10]))).toEqual({ min: -3, max: 10 })
-  })
-
-  it('returns NaN/NaN for a grid without data', () => {
-    const r = gridMinMax(grid(1, 2, [NaN, NaN]))
-    expect(r.min).toBeNaN()
-    expect(r.max).toBeNaN()
   })
 })

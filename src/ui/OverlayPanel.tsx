@@ -32,7 +32,7 @@ import { getPlatform } from '../platform'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
 import { formatNumber, formatPercent } from './format'
-import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
+import { InfoTip, MoreSettings, PanelSection, RangeField, TextField } from './PanelSection'
 
 const COUNTER_LABELS: Record<CounterId, string> = {
   distance: 'Distance',
@@ -46,25 +46,6 @@ const COUNTER_LABELS: Record<CounterId, string> = {
 type WidgetKey = Exclude<keyof OverlaySettings, 'enabled' | 'style' | 'overrides'>
 
 const percent = formatPercent
-
-function TextField({ label, value, placeholder, onChange }: { label: string; value: string; placeholder?: string; onChange(v: string): void }) {
-  const id = useId()
-  return (
-    <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
-      <input
-        id={id}
-        className="input"
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.currentTarget.value)}
-      />
-    </div>
-  )
-}
 
 function AnchorField({ value, onChange }: { value: OverlayAnchor; onChange(v: OverlayAnchor): void }) {
   const id = useId()
