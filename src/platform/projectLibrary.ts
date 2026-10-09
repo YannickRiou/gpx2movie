@@ -126,7 +126,7 @@ export function createProjectLibrary(
   }
 }
 
-type DesktopFs = Pick<typeof TauriFs, 'exists' | 'readDir' | 'readFile' | 'writeFile' | 'mkdir' | 'remove' | 'BaseDirectory'>
+type DesktopFs = Pick<typeof TauriFs, 'exists' | 'readDir' | 'readFile' | 'writeFile' | 'mkdir' | 'remove' | 'rename' | 'BaseDirectory'>
 
 /** Files under `<app data>/projects/`, the folder made on the first write. */
 export function createDesktopLibraryFiles(loadFs: () => Promise<DesktopFs>): LibraryFiles {
@@ -154,7 +154,15 @@ export function createDesktopLibraryFiles(loadFs: () => Promise<DesktopFs>): Lib
         await fs.mkdir(DESKTOP_PROJECT_ROOT, { baseDir, recursive: true })
         madeDir = true
       }
-      await fs.writeFile(pathOf(name), new TextEncoder().encode(text), { baseDir })
+      // a sibling file renamed over the target: a crash mid-write never leaves a half-written project
+      const temp = `${pathOf(name)}.tmp`
+      try {
+        await fs.writeFile(temp, new TextEncoder().encode(text), { baseDir })
+        await fs.rename(temp, pathOf(name), { oldPathBaseDir: baseDir, newPathBaseDir: baseDir })
+      } catch (error) {
+        await fs.remove(temp, { baseDir }).catch(() => undefined)
+        throw error
+      }
     },
     async remove(name) {
       const { fs, baseDir } = await fsAndOptions()

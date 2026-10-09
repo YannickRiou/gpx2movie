@@ -25,7 +25,7 @@
     "security": {
       "csp": {
         "default-src": "'self'",
-        "script-src": "'self' 'wasm-unsafe-eval'",
+        "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
         "font-src": "'self' data:",
         "img-src": "'self' data: blob: https://tiles.mapterhorn.com https://s3.amazonaws.com https://data.geopf.fr https://wmts.geo.admin.ch https://services.arcgisonline.com https://tiles.maps.eox.at https://*.tile.opentopomap.org",
@@ -42,6 +42,7 @@
     "category": "Video",
     "license": "MIT",
     "shortDescription": "Films de survol 3D à partir de traces GPX et FIT",
+    "resources": { "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md" },
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "windows": {
       "digestAlgorithm": "sha256",

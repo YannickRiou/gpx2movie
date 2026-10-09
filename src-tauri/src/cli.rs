@@ -67,9 +67,48 @@ fn absolute(path: &Path) -> std::io::Result<PathBuf> {
     Ok(PathBuf::from(full.to_string_lossy().trim_start_matches(r"\\?\")))
 }
 
+/// Release builds on Windows have no console (windows_subsystem): borrow the one of the calling terminal so the
+/// messages and the exit code reach it. Standard handles that are redirected (`> file`) are kept.
+#[cfg(windows)]
+fn attach_parent_console() {
+    use std::ffi::c_void;
+    use std::fs::OpenOptions;
+    use std::os::windows::io::IntoRawHandle;
+
+    extern "system" {
+        fn AttachConsole(process_id: u32) -> i32;
+        fn GetStdHandle(std_handle: u32) -> *mut c_void;
+        fn SetStdHandle(std_handle: u32, handle: *mut c_void) -> i32;
+    }
+    const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
+    const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+    const STD_ERROR_HANDLE: u32 = -12i32 as u32;
+
+    // SAFETY: plain kernel32 calls; the handles given to SetStdHandle stay open for the life of the process
+    unsafe {
+        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
+            return; // no parent console (started from the Explorer)
+        }
+        for id in [STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+            let current = GetStdHandle(id);
+            if current.is_null() || current as isize == -1 {
+                if let Ok(console) = OpenOptions::new().write(true).open("CONOUT$") {
+                    SetStdHandle(id, console.into_raw_handle());
+                }
+            }
+        }
+    }
+}
+
 /// Reads the command line once at startup; on a bad one, says why and quits with 2.
 pub fn setup(app: &AppHandle) {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    #[cfg(windows)]
+    {
+        if !args.is_empty() {
+            attach_parent_console();
+        }
+    }
     let request = match parse_cli(&args).and_then(|r| r.map(prepare).transpose()) {
         Ok(request) => request,
         Err(message) => {
