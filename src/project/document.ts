@@ -24,6 +24,7 @@ import { LANDMARK_DISTANCE_RANGE, withLandmarkDefaults } from '../osm/landmarks'
 import { isValidOverlay, withOverlayDefaults } from '../overlay/settings'
 import { isValidPoster, withPosterDefaults } from '../poster/settings'
 import { isValidGrading } from '../scene/grading'
+import { isValidLens, withLensDefaults } from '../scene/lens'
 import { isValidLabelSettings, withLabelDefaults } from '../scene/labelModel'
 import { TRACK_COLOR_MODES } from '../flyover/trackColor'
 import { isValidMarker, isValidTrackStyle, withMarkerDefaults, withTrackStyleDefaults } from '../scene/markerSettings'
@@ -116,6 +117,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   film: isValidFilm,
   exposureEv: (v) => v >= -4 && v <= 4,
   grading: isValidGrading,
+  lens: isValidLens,
   weatherScene: (v) => v.strength >= 0 && v.strength <= 1,
   clouds: isValidClouds,
   water: (v) => v.strength >= 0 && v.strength <= 1,
@@ -149,6 +151,7 @@ export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unkno
   pacing: withPacingDefaults,
   landmarks: withLandmarkDefaults,
   clouds: withCloudDefaults,
+  lens: withLensDefaults,
 }
 
 

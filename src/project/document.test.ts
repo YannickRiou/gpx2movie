@@ -225,6 +225,14 @@ describe('serializeProject / parseProject', () => {
     expect(sanitizeSettings({ clouds: { ...DEFAULT_SETTINGS.clouds, seaRender: 'plat' } }).invalid).toEqual(['clouds'])
   })
 
+  it('loads projects saved before « Objectif » with every lens effect off, partial ones filled, and checks the ranges', () => {
+    expect(sanitizeSettings({ exaggeration: 1.2 }).settings.lens).toEqual(DEFAULT_SETTINGS.lens)
+    const partial = sanitizeSettings({ lens: { shutter: 0.5 } })
+    expect(partial.invalid).toEqual([])
+    expect(partial.settings.lens).toEqual({ ...DEFAULT_SETTINGS.lens, shutter: 0.5 })
+    expect(sanitizeSettings({ lens: { ...DEFAULT_SETTINGS.lens, bloom: 2 } }).invalid).toEqual(['lens'])
+  })
+
   it('rejects an unknown track colour mode and an out-of-range exposure', () => {
     const { settings, invalid } = sanitizeSettings({ trackColorBy: 'rainbow', exposureEv: 12 })
     expect(settings.trackColorBy).toBe(DEFAULT_SETTINGS.trackColorBy)

@@ -179,6 +179,7 @@ describe('settings and misc', () => {
       sunFromTrack: true,
       exposureEv: 0,
       grading: { preset: 'naturel', contrast: 0, saturation: 0, warmth: 0, vignette: 0 },
+      lens: { shutter: 0, bloom: 0, bloomRadius: 0.6, flare: 0, depthOfField: 0 },
       trackColorBy: 'none',
       trackStyle: { width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 },
       marker: { kind: 'boule', figure: 'randonneur', image: '', size: 1, animated: false },

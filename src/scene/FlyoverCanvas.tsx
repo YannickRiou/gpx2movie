@@ -17,7 +17,8 @@
  * albedo and a slope facing the sun peaks just under 1.0 (nothing clips).
  *
  * The colour grading (`settings.grading`) closes the post-processing of the atmosphere; without it, `GradingComposer`
- * grades the image over the same sky gradient, only while the grading is not « Naturel » (scene/GradingComposer.tsx).
+ * grades the image over the same sky gradient, only while the grading is not « Naturel » or an « Objectif » effect is on
+ * (scene/GradingComposer.tsx).
  */
 import { Suspense, lazy, useEffect, useMemo, type CSSProperties } from 'react'
 import { Canvas } from '@react-three/fiber'
@@ -28,6 +29,7 @@ import { createOverlayDrawer } from '../overlay/exportOverlay'
 import { CameraRig } from './CameraRig'
 import { FlyoverRig } from './FlyoverRig'
 import { isIdentityGrading } from './grading'
+import { lensActive } from './lens'
 import { Labels } from './Labels'
 import { RaceMarkers } from './RaceMarkers'
 import { RegionHighlight } from './RegionHighlight'
@@ -39,7 +41,7 @@ import { TrackMenu, TrackPicker } from './TrackPicker'
 
 // sky, clouds, post-processing and the geoid grid (~550 KB): loaded with the first track, not at startup
 const AtmosphereLayer = lazy(() => import('./AtmosphereLayer').then((m) => ({ default: m.AtmosphereLayer })))
-// post-processing without the atmosphere: only once a colour grading other than « Naturel » is chosen
+// post-processing without the atmosphere: only once a colour grading other than « Naturel » or a lens effect is chosen
 const GradingComposer = lazy(() => import('./GradingComposer').then((m) => ({ default: m.GradingComposer })))
 
 export const SKY_TOP_COLOR = '#A9CCD9'
@@ -81,7 +83,7 @@ function RenderOnDemand() {
 export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
   const atmosphere = useAppStore((s) => s.settings.atmosphere)
-  const graded = useAppStore((s) => !isIdentityGrading(s.settings.grading))
+  const postProcessed = useAppStore((s) => !isIdentityGrading(s.settings.grading) || lensActive(s.settings.lens, false))
   // the video export draws the film overlay through the same code as the preview
   const overlayDrawer = useMemo(createOverlayDrawer, [])
   useEffect(() => () => overlayDrawer.dispose(), [overlayDrawer])
@@ -112,7 +114,7 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
                 <AtmosphereLayer />
               </Suspense>
             )}
-            {!atmosphere && graded && (
+            {!atmosphere && postProcessed && (
               <Suspense fallback={null}>
                 <GradingComposer skyTop={SKY_TOP_COLOR} skyHorizon={SKY_HORIZON_COLOR} />
               </Suspense>

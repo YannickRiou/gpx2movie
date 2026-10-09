@@ -9,6 +9,7 @@ import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
 import { CLOUD_ALTITUDE_RANGE, SEA_TOP_RANGE, seaTopFor, type CloudMode, type CloudQuality, type SeaRender } from '../weather/sceneClouds'
 import { useWeatherStore } from '../weather/store'
 import { GradingPanel } from './GradingPanel'
+import { LensPanel } from './LensPanel'
 import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
 import { formatNumber, formatPercent } from './format'
 
@@ -403,7 +404,7 @@ function WaterControl() {
 
 /**
  * « Carte » tab (before the landmarks): sections Fond de carte, Relief et trace, Lumière, Atmosphère et météo, Couleurs
- * (`GradingPanel`), each with its essentials and its rarely used settings under « Plus de réglages ».
+ * (`GradingPanel`), Objectif (`LensPanel`), each with its essentials and its rarely used settings under « Plus de réglages ».
  */
 export function SettingsPanel() {
   const settings = useAppStore((s) => s.settings)
@@ -613,6 +614,7 @@ export function SettingsPanel() {
       </PanelSection>
 
       <GradingPanel />
+      <LensPanel />
     </>
   )
 }

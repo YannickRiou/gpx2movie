@@ -5,6 +5,7 @@ import { DEFAULT_OVERLAY } from '../overlay/settings'
 import { AREA_MARGIN_M } from '../terrain/engine'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
 import { DEFAULT_GRADING } from './grading'
+import { DEFAULT_LENS } from './lens'
 import { DEFAULT_MARKER, DEFAULT_TRACK_STYLE } from './markerSettings'
 
 vi.mock('@react-three/fiber', () => ({ useFrame: vi.fn(), useThree: vi.fn() }))
@@ -111,6 +112,7 @@ describe('engine options from settings', () => {
     sunFromTrack: true,
     exposureEv: 0,
     grading: DEFAULT_GRADING,
+    lens: DEFAULT_LENS,
     trackColorBy: 'none' as const,
     camera: { style: 'chase' as const, distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false, turnSmoothingM: 0, aimSmoothingS: 0, cameraSmoothingS: 3, endingS: 0 },
     flyoverDurationS: 60,
