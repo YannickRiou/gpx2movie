@@ -148,6 +148,23 @@ export function endCardOpacity(time: OverlayTime, start: number): number {
   return time.timeS <= startS ? 0 : ramp(time.timeS - startS, CARD_FADE_OUT * time.flightS)
 }
 
+/** Lines of the rolling credits: trimmed, blank ones dropped. */
+export function creditLines(credits: string | undefined): string[] {
+  return (credits ?? '').split('\n').map((line) => line.trim()).filter(Boolean)
+}
+
+/**
+ * How far the rolling credits are, 0–1: the card first holds still while it fades in, then card and credits roll
+ * up until the end of the film (the last line leaves the frame on the last frame).
+ */
+export function creditsRollProgress(time: OverlayTime, start: number): number {
+  const startS = time.openingS + start * time.flightS
+  const rollS = time.totalS - startS
+  const holdS = CARD_FADE_OUT * time.flightS
+  if (rollS <= holdS) return 0
+  return Math.min(1, Math.max(0, (time.timeS - startS - holdS) / (rollS - holdS)))
+}
+
 /**
  * Opacity of the opening or closing card at film time `time` (the larger one), 0 while the overlay is off. Pure
  * function of the time and the settings: the live widgets and the 3D labels give way to the cards.
@@ -186,7 +203,9 @@ export function overlayTimedState(
   if (!settings.enabled) return photos
   const title = settings.title.enabled ? titleCardOpacity(time, settings.title.end) : 0
   const end = settings.end.enabled ? endCardOpacity(time, settings.end.start) : 0
-  return [title, end, ...texts.map((text) => filmTextOpacity(text, time.timeS)), ...photos]
+  // the rolling credits move while the card is on
+  const roll = end > 0 && creditLines(settings.end.credits).length > 0 ? [creditsRollProgress(time, settings.end.start)] : []
+  return [title, end, ...roll, ...texts.map((text) => filmTextOpacity(text, time.timeS)), ...photos]
 }
 
 /** Part of a picture drawn over the frame (source rectangle of `drawImage`). */
@@ -994,6 +1013,27 @@ function endWidget(p: Painter, frame: OverlayFrame, settings: OverlaySettings, o
   return cardWidget(p, { title: e.title.trim() || frame.track.name, subtitle, titleScale: 0.6, cells }, e.anchor, e.size, opacity, m)
 }
 
+/**
+ * The closing card and the credits under it, centred, rolling up from the card's place in the middle of the frame
+ * (`progress` 0) until the last line has left the top (`progress` 1).
+ */
+function drawCreditsRoll(p: Painter, card: Widget, lines: readonly string[], size: number, progress: number): void {
+  const { ctx, theme, u } = p
+  const style: TextStyle = { family: theme.bodyFamily, weight: 500, sizePx: 2.2 * u * size, color: theme.text }
+  // readable over the relief without a panel
+  const shadowed = { ...p, theme: { ...theme, textShadow: theme.textShadow ?? { color: 'rgba(0, 0, 0, 0.6)', blur: 0.5 } } }
+  const lineH = style.sizePx * 1.5
+  const gap = 3 * u * size
+  const height = card.height + gap + lines.length * lineH
+  const from = (p.size.height - card.height) / 2
+  const top = from + (-height - from) * progress
+  ctx.save()
+  ctx.globalAlpha = card.opacity
+  card.draw((p.size.width - card.width) / 2, top)
+  lines.forEach((line, i) => fillText(shadowed, line, p.size.width / 2, top + card.height + gap + i * lineH + style.sizePx * 0.8, style, 'center'))
+  ctx.restore()
+}
+
 /** "Ciel dégagé · 8 à 17 °C · vent jusqu'à 25 km/h"; '' without weather. */
 export function weatherSummaryLine(summary: WeatherSummary | undefined): string {
   if (!summary) return ''
@@ -1269,6 +1309,7 @@ export function drawOverlay(
     if (w && w.opacity > 0.001) widgets.push(w)
   }
   const texts: { item: FilmText; opacity: number }[] = []
+  let roll: (() => void) | null = null
   let weather: Widget | null = null
   let endOpacity = 0
   if (settings.enabled) {
@@ -1281,7 +1322,13 @@ export function drawOverlay(
     const of = (key: StyledWidget): Painter =>
       settings[key].overrides ? { ...p, theme: resolveOverlayTheme(settings.style, widgetOverrides(settings, key)) } : p
     if (titleOpacity > 0) add(titleWidget(of('title'), frame, settings, titleOpacity))
-    if (endOpacity > 0) add(endWidget(of('end'), frame, settings, endOpacity))
+    if (endOpacity > 0) {
+      const card = endWidget(of('end'), frame, settings, endOpacity)
+      const credits = creditLines(settings.end.credits)
+      // with credits, the card heads a roll drawn over the other widgets instead of being laid out with them
+      if (credits.length === 0) add(card)
+      else roll = () => drawCreditsRoll(of('end'), card, credits, settings.end.size, creditsRollProgress(time, settings.end.start))
+    }
     if (settings.counters.enabled && live > 0) add(countersWidget(of('counters'), frame, settings, live))
     if (settings.profile.enabled && live > 0) add(profileWidget(of('profile'), frame, settings, live))
     weather = settings.weather.enabled && live > 0 ? weatherWidget(of('weather'), frame, settings, live) : null
@@ -1317,6 +1364,7 @@ export function drawOverlay(
     widget.draw(positions[i].x, positions[i].y)
     ctx.restore()
   })
+  roll?.()
   if ((weather && weather.opacity > 0.001) || (endOpacity > 0 && settings.end.showWeather && frame.track.stats.weather)) {
     // required by the Open-Meteo licence: with the other credits when they are drawn, else on its own
     if (!settings.credits.enabled) drawWeatherCredit(p)

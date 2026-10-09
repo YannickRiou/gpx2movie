@@ -5,6 +5,7 @@ import { fileToLogoDataUrl } from '../overlay/assets'
 import {
   COUNTER_IDS,
   CREDITS_POSITIONS,
+  END_CREDITS_MAX,
   END_START_MAX,
   END_START_MIN,
   OVERLAY_ANCHORS,
@@ -394,6 +395,21 @@ export function OverlayPanel() {
               />
               <AnchorField value={overlay.end.anchor} onChange={(anchor) => setWidget('end', { anchor })} />
               <SizeField value={overlay.end.size} onChange={(size) => setWidget('end', { size })} />
+              <div className="field">
+                <label className="field__label" htmlFor={`${id}-credits`}>
+                  Générique
+                </label>
+                <textarea
+                  id={`${id}-credits`}
+                  className="input input--multiline"
+                  rows={4}
+                  maxLength={END_CREDITS_MAX}
+                  placeholder={'Une ligne par nom\nMusique : …'}
+                  value={overlay.end.credits ?? ''}
+                  onChange={(e) => setWidget('end', { credits: e.currentTarget.value || undefined })}
+                />
+                <p className="field__hint">Rempli, il défile sous la carte jusqu’à la fin du film, centré.</p>
+              </div>
             </WidgetGroup>
           </PanelSection>
 

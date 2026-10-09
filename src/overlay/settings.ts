@@ -122,7 +122,12 @@ export interface EndCardSettings extends Sized {
   start: number
   /** weather summary line of the outing (when known) */
   showWeather: boolean
+  /** « Générique »: one name or line per line, rolling up under the card to the end of the film; absent or blank = none */
+  credits?: string
 }
+
+/** Longest rolling credits kept (characters). */
+export const END_CREDITS_MAX = 2000
 
 export interface CountersSettings extends Sized {
   fields: Record<CounterId, boolean>
@@ -285,6 +290,7 @@ export function isValidOverlay(o: OverlaySettings): boolean {
     within(o.title.end, TITLE_END_MIN, TITLE_END_MAX) &&
     validSized(o.end) &&
     within(o.end.start, END_START_MIN, END_START_MAX) &&
+    (o.end.credits === undefined || (typeof o.end.credits === 'string' && o.end.credits.length <= END_CREDITS_MAX)) &&
     validSized(o.counters) &&
     isAnchor(o.profile.anchor) &&
     within(o.profile.width, PROFILE_WIDTH_MIN, PROFILE_WIDTH_MAX) &&
