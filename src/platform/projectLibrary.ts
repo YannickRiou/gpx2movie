@@ -1,9 +1,9 @@
 /**
  * « Mes projets » behind `ProjectLibrary` (see platform.ts). Each project is two text files named by its id: the
  * document `<id>.openflyover.json` (tens of MB with its pictures and clips) and its entry `<id>.entry.json` (name,
- * date, summary, size), so the list reads only the small files. Desktop: files under `<app data>/projects/` (the
- * capability adds that folder to the fs scope). Web: one Cache Storage cache, `openflyover-projects-v1`. Both take
- * their storage as an argument (tests).
+ * date, summary, size, a thumbnail of a few KB), so the list reads only the small files. Desktop: files under
+ * `<app data>/projects/` (the capability adds that folder to the fs scope). Web: one Cache Storage cache,
+ * `openflyover-projects-v1`. Both take their storage as an argument (tests).
  */
 import type * as TauriFs from '@tauri-apps/plugin-fs'
 import type { ProjectEntry, ProjectLibrary } from './platform'
@@ -27,6 +27,9 @@ const PROJECT_ID = /^[a-z0-9-]{1,64}$/
 const DOCUMENT_SUFFIX = '.openflyover.json'
 const ENTRY_SUFFIX = '.entry.json'
 const MAX_NAME_LENGTH = 120
+/** longest thumbnail kept in an entry (data URL characters, ~60 KB of JPEG); a 240 px view takes ~10 KB */
+export const MAX_THUMBNAIL_LENGTH = 80_000
+const THUMBNAIL = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/
 
 /** File names of a project; the id is checked first, so a path never comes from outside. */
 export function projectFileNames(id: string): { document: string; entry: string } {
@@ -39,6 +42,11 @@ export function cleanProjectName(name: string): string {
   const clean = name.trim().replace(/\s+/g, ' ').slice(0, MAX_NAME_LENGTH).trim()
   if (!clean) throw new Error('Le nom du projet est vide.')
   return clean
+}
+
+/** A picture an entry may keep: an image data URL, not too long. */
+export function isProjectThumbnail(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= MAX_THUMBNAIL_LENGTH && THUMBNAIL.test(value)
 }
 
 /** Most recent first, then by name. */
@@ -56,7 +64,10 @@ export function parseProjectEntry(text: string, id: string): ProjectEntry | null
       typeof raw.summary === 'string' &&
       Number.isFinite(raw.updatedAt) &&
       Number.isFinite(raw.sizeBytes)
-    return valid ? (raw as ProjectEntry) : null
+    if (!valid) return null
+    // a damaged or oversized thumbnail is dropped, the entry kept
+    const { thumbnail, ...entry } = raw as ProjectEntry
+    return isProjectThumbnail(thumbnail) ? { ...entry, thumbnail } : entry
   } catch {
     return null
   }
@@ -81,13 +92,16 @@ export function createProjectLibrary(
       const entries = await Promise.all(ids.filter((id) => PROJECT_ID.test(id)).map((id) => readEntry(id).catch(() => null)))
       return sortProjectEntries(entries.filter((e) => e !== null))
     },
-    async save(id, { name, summary, text }) {
+    async save(id, { name, summary, text, thumbnail }) {
+      // no new picture (the view could not be read): the entry keeps the one it has
+      const picture = isProjectThumbnail(thumbnail) ? thumbnail : id && (await readEntry(id).catch(() => null))?.thumbnail
       const entry: ProjectEntry = {
         id: id ?? newId(),
         name: cleanProjectName(name),
         updatedAt: now(),
         summary,
         sizeBytes: new TextEncoder().encode(text).length,
+        ...(picture ? { thumbnail: picture } : {}),
       }
       // the document first: an entry never points to a document that was not written
       await files.write(projectFileNames(entry.id).document, text)

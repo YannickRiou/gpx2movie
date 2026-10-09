@@ -78,14 +78,16 @@ export interface ProjectEntry {
   summary: string
   /** size of the document (UTF-8 bytes) */
   sizeBytes: number
+  /** small JPEG of the 3D view at the last save (data URL), absent for older entries or when the view could not be read */
+  thumbnail?: string
 }
 
 /** Projects kept by the app (desktop: files in the app data folder; web: Cache Storage of the site). */
 export interface ProjectLibrary {
   /** most recent first; an entry that cannot be read is left out */
   list(): Promise<ProjectEntry[]>
-  /** write the document of entry `id`, or of a new entry when `id` is null */
-  save(id: string | null, project: { name: string; summary: string; text: string }): Promise<ProjectEntry>
+  /** write the document of entry `id`, or of a new entry when `id` is null; without `thumbnail` the entry keeps its own */
+  save(id: string | null, project: { name: string; summary: string; text: string; thumbnail?: string }): Promise<ProjectEntry>
   /** text of the document */
   load(id: string): Promise<string>
   /** the entry only: the document keeps its name until its next save */

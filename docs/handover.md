@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (97 files, 1,593 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (97 files, 1,594 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -125,6 +125,8 @@ features included), `npm run build`,
   are published again (`followLandmarks`, no undo step; the first landmarks of a track move nothing, since landmarks
   are not saved and the film was saved with the times they gave); the free camera is lifted above the terrain when
   tiles or the exaggeration change under it while it sits still. Not seen on screen.
+- **Thumbnails in "Mes projets"**: each write keeps a ~10 KB JPEG of the 3D view in the entry (`scene/thumbnail.ts`),
+  older entries show an empty frame. Seen in headless Chromium (software GPU), not on a GPU nor in the desktop app.
 - **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
   constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
   "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK); a text added with T attached to
@@ -341,7 +343,7 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    same sync modes).
 8. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
 9. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
-   the current lots): thumbnails in "Mes projets", overlay-only export on the
+   the current lots): overlay-only export on the
    Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop. Dropped by the user: GoPro GPS time (GPMF).
 
 **Later, once the desktop and web versions are finished and working**

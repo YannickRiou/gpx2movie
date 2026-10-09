@@ -79,6 +79,12 @@ function LibrarySection() {
                 const current = entry.id === currentId
                 return (
                   <li key={entry.id} className={current ? 'library__item library__item--current' : 'library__item'} aria-current={current || undefined}>
+                    {/* the view at the last save; an empty frame for older entries */}
+                    {entry.thumbnail ? (
+                      <img className="library__thumb" src={entry.thumbnail} alt="" />
+                    ) : (
+                      <span className="library__thumb" aria-hidden="true" />
+                    )}
                     {renaming?.id === entry.id ? (
                       <form
                         className="project__row"
