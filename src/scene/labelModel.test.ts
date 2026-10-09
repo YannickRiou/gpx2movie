@@ -13,6 +13,8 @@ import {
   distanceFade,
   KM_PRIORITY,
   kmLabels,
+  endpointLabels,
+  ENDPOINT_PRIORITY,
   withLabelDefaults,
   isValidLabelSettings,
   labelOpacity,
@@ -63,12 +65,25 @@ describe('label texts and sources', () => {
     expect(kmLabels(east, 0)).toEqual([])
   })
 
+  it('labels the start and the finish of the track, or one label for a loop', () => {
+    const east = buildTrack({ name: 'est', source: 'gpx', segments: [{ points: [6.8, 6.85, 6.9].map((lon) => ({ lon, lat: 45.9 })) }] })
+    const ends = endpointLabels(east)
+    expect(ends.map((l) => [l.text, l.icon, l.lon])).toEqual([
+      ['Départ', 'epingle', 6.8],
+      ['Arrivée', 'drapeau', 6.9],
+    ])
+    expect(ends[0]).toMatchObject({ kind: 'endpoint', priority: ENDPOINT_PRIORITY })
+    const loop = buildTrack({ name: 'boucle', source: 'gpx', segments: [{ points: [6.8, 6.85, 6.8].map((lon) => ({ lon, lat: 45.9 })) }] })
+    expect(endpointLabels(loop).map((l) => l.text)).toEqual(['Départ et arrivée'])
+    expect(ENDPOINT_PRIORITY).toBeLessThan(POI_PRIORITY)
+  })
+
   it('older projects get no kilometre markers; size and range stay within their bounds', () => {
     expect(isValidLabelSettings({ kmStep: 5, size: 1.2, rangeKm: 30 })).toBe(true)
     expect(isValidLabelSettings({ kmStep: 3, size: 1, rangeKm: 70 })).toBe(false)
     expect(isValidLabelSettings({ kmStep: 0, size: 3, rangeKm: 70 })).toBe(false)
     expect(isValidLabelSettings({ kmStep: 0, size: 1, rangeKm: 500 })).toBe(false)
-    expect(withLabelDefaults({ climbs: false, waypoints: true })).toEqual({ climbs: false, waypoints: true, kmStep: 0, size: 1, rangeKm: 70 })
+    expect(withLabelDefaults({ climbs: false, waypoints: true })).toEqual({ climbs: false, waypoints: true, kmStep: 0, endpoints: false, size: 1, rangeKm: 70 })
     expect(withLabelDefaults({ climbs: true, waypoints: true, kmStep: 5 })).toMatchObject({ kmStep: 5 })
   })
 
