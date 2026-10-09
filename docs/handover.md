@@ -12,8 +12,15 @@ then run `git status` and `npm run typecheck`.
 - History rewritten on 9 October 2026 (every branch): all commits authored by Yannick Riou
   (`59170639+YannickRiou@users.noreply.github.com`), messages in English. Old clones: `git fetch` then
   `git reset --hard origin/<branch>`. New commits: same identity, English messages.
-- `ai-dev/confident-darwin-83rxik` (cloud session): review fixes, simplifications, knowledge base (see "Work in
-  progress").
+- PR #12 (9 October 2026): review fixes, simplifications, knowledge base, `lot-suites` merge, Windows build fix
+  (`safeZoneLayout.ts`); the "Desktop installers" workflow then passed on master for the three systems.
+- `ai-dev/confident-darwin-83rxik` (cloud session, after PR #12): slider and helper simplifications, concise README and
+  user guide (`docs/user-guide.html`, `docs/deploying.md`, `docs/roadmap.md`), and the features ported from the old
+  branch chain (see "Work in progress").
+- Old branch chain `landmarks-hide` → `track-style` → `ui-polish` → `timeline-polish` → `export-stream` →
+  `timeline-videos` → `water` (7 October 2026): most of it reached master through other commits; what was missing
+  (landmark hiding, point smoothing, texts and media attached to a stop, timeline edge scrolling, remembered folds)
+  was ported on 9 October 2026. These branches and `lot-suites` can be deleted once this branch is merged.
 - `lot-suites` (the user's batch after PR #7, pushed, no PR of its own): route scouting with planned times, forecast
   weather and a roadbook; opening / closing transitions (continuous, cut, fade to black or white); saving on close;
   shared helpers; and two work items left unfinished there (locator map from very high up with the region
@@ -85,7 +92,8 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (96 files, 1,539 tests, `lot-suites` included), `npm run build`,
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (97 files, 1,561 tests, `lot-suites` and the ported
+features included), `npm run build`,
 `cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
 - **Review fixes**: held export frames re-rendered when the scene moves with time (animated figurine, clouds, water);
@@ -98,10 +106,18 @@ Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (96 files, 
 - **Simplifications**: `core/guards.ts` (`isRecord`, `inRange`, `oneOf`, `withDefaults`), `DEFAULT_LABELS`,
   `formatPercent`, `formatSecondsShort`; test-only `assembleFilm`, `TileNode.depth` and the `usePacing` alias removed.
 - **Knowledge base**: `docs/how-it-works.html` rewritten for readers who do not know web development.
-- **Left for later** (proposed, not done): one `RangeField` for the ~15 hand-written sliders, `Fold` merged into
-  `PanelSection`, shared "Position" / "Texte" / "Taille" fields, duplicated poster and terrain constants, test-only
-  pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer`; "Texte libre" drawn like a timeline text (behaviour
-  change, needs the user's OK).
+- **Second simplification pass**: `RangeField` (optional ⓘ tip and spoken value) for the settings sliders;
+  `cumulativeDistances` in `geo/lonLat`; shared `createCanvas` / `createAbortError` for DEM and imagery; terrain area
+  margins in `terrain/engine`; one `CAMERA_FOV_DEG`; `Fold` merged into `PanelSection`.
+- **Ported from the old branch chain**: landmark hiding (`settings.landmarks.hiddenIds`, eye button in "Repères"; the
+  roadbook still lists hidden landmarks), point smoothing (`trackStyle.smoothingM`, recorded distances kept; ghost
+  racers, labels, picking, mini-map and poster keep the recorded points), texts and media attached to a stop
+  (`stopId`, `followStops`; landmark-title and duration changes do not move attached items yet), timeline edge
+  scrolling (`edgeScrollSpeed`), fold state remembered per section title (`FOLDS_KEY`).
+- **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
+  constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
+  "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK); a text added with T attached to
+  the selected stop.
 
 ## Work merged from `lot-suites`
 
