@@ -1631,7 +1631,8 @@ differs goes through `src/platform/`.
   have them.
 - **Desktop installers** (`.github/workflows/desktop.yml`, instructions in `docs/installers.md`): `tauri-apps/tauri-action`
   on Windows (NSIS + MSI), macOS (`universal-apple-darwin`) and Ubuntu 22.04 (AppImage + deb), manually or on a
-  `v*` tag (draft release). Optional signing through the repository secrets: Windows, PFX imported into the store then
+  `v*` tag (a `release` job creates one draft release, the three builds upload to it by `releaseId`, a `publish`
+  job publishes it once they all succeed). Optional signing through the repository secrets: Windows, PFX imported into the store then
   thumbprint written to `src-tauri/tauri.windows.conf.json` (generated, never versioned; timestamping and SHA-256 in
   `tauri.conf.json`); macOS, Tauri's `APPLE_*` variables exported only if present (empty, they would make
   the build fail), ad hoc signing (`signingIdentity: "-"`) otherwise. No updater plugin.

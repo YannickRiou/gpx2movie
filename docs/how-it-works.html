@@ -1093,7 +1093,7 @@ npm run tauri:dev     # desktop app in development mode
 npm run tauri:build   # desktop app and its installers, in src-tauri/target/release/bundle/</code></pre>
   <ul>
     <li><strong>Website</strong>: copy the content of <code>dist/</code> to the root of a domain served over HTTPS. Outside <code>localhost</code>, browsers allow the video encoder and the creation of track identifiers only on HTTPS pages.</li>
-    <li><strong>Desktop installers</strong>: GitHub builds them for the three systems ("Desktop installers" workflow). For a release, set the same version in <code>src-tauri/tauri.conf.json</code> and <code>src-tauri/Cargo.toml</code>, then push a tag such as <code>v0.2.0</code>: a draft release is prepared. Details and signing: <a href="installers.md"><code>docs/installers.md</code></a>.</li>
+    <li><strong>Desktop installers</strong>: GitHub builds them for the three systems ("Desktop installers" workflow). For a release, set the same version in <code>src-tauri/tauri.conf.json</code> and <code>src-tauri/Cargo.toml</code>, then push a tag such as <code>v0.2.0</code>: a release with the installers is published once the three systems are built. Details and signing: <a href="installers.md"><code>docs/installers.md</code></a>.</li>
   </ul>
 
   <h3 class="sub">Conventions</h3>

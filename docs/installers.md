@@ -24,10 +24,10 @@ Allow 15 to 30 minutes per system (the Rust cache shortens later runs).
 
 - After *Run workflow* or a tag: *Actions* › the workflow run › at the bottom, *Artifacts* (one zip file per
   installer, kept 90 days).
-- After a tag, in addition: *Releases*, a **draft** release `OpenFlyover v0.2.0` with all the installers.
-  Only the repository owner can see it until it is published (*Edit* › *Publish release*). If
-  two drafts appear for the same tag (the three systems finish at the same time), keep the one that has
-  all the files and delete the other.
+- After a tag, in addition: *Releases*, the release `OpenFlyover v0.2.0` with all the installers, **published
+  automatically** once the three systems are built (public on a public repository). While the builds run, it stays
+  a draft that only the repository owner can see; if one system fails, it stays a draft: re-run the failed job
+  (*Re-run failed jobs*), which publishes it at the end, or publish it by hand (*Edit* › *Publish release*).
 
 ## Without a certificate (current situation)
 
