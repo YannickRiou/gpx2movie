@@ -1,1528 +1,1535 @@
 # OpenFlyover — architecture
 
-Objectif phase 1 : importer un GPX / FIT, afficher le relief 3D (élévation Mapterhorn ou AWS Terrarium)
-habillé d'orthophotos, la trace plaquée sur le relief, et une caméra orbitale. 100 % local, aucune clé d'API.
+Phase 1 goal: import a GPX / FIT file, show the 3D terrain (Mapterhorn or AWS Terrarium elevation) draped with
+orthophotos, the track draped on the terrain, and an orbit camera. 100% local, no API key.
 
-Phase 2 (survol caméra, timeline, profil) : section « Survol » en fin de document. Phases suivantes : atmosphère Takram,
-personnalisation complète via un document de projet unique, export vidéo WebCodecs, Tauri et packs hors ligne (voir README).
+Phase 2 (camera flyover, timeline, profile): "Flyover" section at the end of this document. Later phases: Takram atmosphere,
+full customization through a single project document, WebCodecs video export, Tauri and offline packs (see README).
 
 ## Stack
 
 - Vite 8 + React 19 + TypeScript (strict), oxlint.
 - three + @react-three/fiber + @react-three/drei, zustand, @garmin/fitsdk.
-- Tests : vitest (environment jsdom). Fichiers `*.test.ts` à côté des modules.
-- Pas de Tailwind : CSS vanilla avec variables (charte dans `src/ui/theme.css`).
+- Tests: vitest (jsdom environment). `*.test.ts` files sit next to their modules.
+- No Tailwind: vanilla CSS with variables (design system in `src/ui/theme.css`).
 
-## Conventions de coordonnées (voir `src/core/types.ts`)
+## Coordinate conventions (see `src/core/types.ts`)
 
-- WGS84 lon/lat en degrés. Hauteurs de la scène en mètres **au-dessus du niveau de la mer** (tuiles d'élévation,
-  GPX / FIT), placées par le repère local comme des hauteurs ellipsoïdales : toute la scène est N (ondulation du géoïde)
-  trop bas, ce qui ne compte que pour ce qui la lit en vrai ECEF. L'atmosphère et les nuages prennent donc
-  `mslLocalToEcef(frame)` (repère remonté de N à son origine) et les altitudes des nuages + N ; le reste (relief, trace,
-  libellés, caméra) reste en MSL, cohérent entre lui. N varie de ~0,4 m / 10 km autour du Mont-Blanc : décalage constant.
-- Scène Three.js dans un **repère local tangent** centré sur le centroïde du trip : +X est, +Y haut, +Z sud.
-  Les conversions ECEF → local sont faites en doubles JS, jamais dans le shader.
-- Tuiles Web Mercator, schéma XYZ (y = 0 au nord).
+- WGS84 lon/lat in degrees. Scene heights in meters **above mean sea level** (elevation tiles,
+  GPX / FIT), placed by the local frame as ellipsoidal heights: the whole scene sits N (geoid undulation)
+  too low, which only matters for what reads it in true ECEF. The atmosphere and the clouds therefore take
+  `mslLocalToEcef(frame)` (frame raised by N at its origin) and cloud altitudes + N; everything else (terrain, track,
+  labels, camera) stays in MSL, consistent with itself. N varies by ~0.4 m / 10 km around Mont Blanc: a constant offset.
+- Three.js scene in a **local tangent frame** centered on the trip centroid: +X east, +Y up, +Z south.
+  ECEF → local conversions run in JS doubles, never in the shader.
+- Web Mercator tiles, XYZ scheme (y = 0 at the north).
 
 ## Modules
 
-| Dossier | Rôle | Exports attendus |
+| Folder | Role | Expected exports |
 |---|---|---|
-| `src/core/types.ts` | contrats partagés | (figé) |
-| `src/core/math.ts` | petits outils numériques | `clamp(value, min, max)`, `lastIndexAtOrBelow(sorted, value)`, `firstIndexAtOrAbove(sorted, value)` (recherches dichotomiques sur tableaux croissants) |
-| `src/core/errors.ts` | message d'erreur montré à l'utilisateur | `errorMessage(error)` : message d'une `Error`, chaîne rejetée (commande Tauri), sinon « erreur inconnue » |
-| `src/geo/ellipsoid.ts` | WGS84 ↔ ECEF, repère local | `WGS84`, `lonLatToEcef(lon,lat,h,target?)`, `ecefToLonLat(v)`, `createLocalFrame(lon,lat): LocalFrame` ; `lonLat.ts` (sans three.js, importé par le reste de l'app) : `haversineM(a: LonLat, b: LonLat)`, `centroid(bounds)`, `expandBounds(bounds, marginM, minSizeM?)` (réexportés par `ellipsoid.ts`) |
-| `src/geo/geoid.ts` | géoïde EGM96 | `geoidUndulation(lon,lat)` (m, grille 1° bilinéaire, `egm96Grid.ts` généré par `scripts/gen-geoid.mjs` depuis la grille 15' de la NGA redistribuée par PROJ-data, domaine public ; 170 Ko ; 0,45 m RMS face à la grille 15', jusqu'à ~14 m sur les îles volcaniques), `mslToEllipsoidHeight`, `ellipsoidToMslHeight`, `mslLocalToEcef(frame, target?)` |
-| `src/geo/mercator.ts` | maths de tuiles | `lonLatToTileFrac(lon,lat,z)`, `tileBounds(key): LonLatBounds`, `tileCenter(key)`, `tilesForBounds(bounds,z): TileKey[]`, `tileCountForBounds(bounds,z)`, `zoomForTileBudget(bounds, maxTiles, minZoom, maxZoom)`, `tileGroundSizeM(key)`, `childrenOf(key)`, `parentOf(key)`, `tileKeyString(key)`, `parseTileKey(s)` (lève sur clé invalide), `tileContains(key, lon, lat)`, `lonLatToTileUV(key, lon, lat): {u,v}` (u,v ∈ [0,1], v=0 au nord), `tileUVToLonLat(key,u,v)`, `boundsIntersect(a,b)` |
-| `src/import/gpx.ts` | parse GPX | `parseGpx(text: string, fileName: string): Track[]` |
-| `src/import/fit.ts` | parse FIT | `parseFit(buffer: ArrayBuffer, fileName: string): Promise<Track[]>` |
-| `src/import/stats.ts` | stats & bounds, assemblage | `computeStats(segments): TrackStats`, `computeBounds(segments): LonLatBounds`, `densify(points, maxStepM): TrackPoint[]`, `buildTrack(init): Track`, `stripExtension(fileName)` (partagés par les deux parseurs) |
-| `src/import/chain.ts` | enchaînement de traces (voir « Enchaînement de traces ») | `chainTracks(tracks): Track`, `chainOrder`, `chainName`, `replaceByChain`, `followEachOther`, `CHAIN_OFFER_MAX_GAP_MS` |
-| `src/import/index.ts` | point d'entrée | `importFile(file: File, colorIndex?): Promise<Track[]>`, `importText(text, fileName, colorIndex?)`, `TRACK_COLORS`, `assignColors` |
-| `src/terrain/sources.ts` | catalogue de sources | `TERRAIN_SOURCES: TerrainSource[]`, `IMAGERY_SOURCES: ImagerySource[]`, `buildTileUrl(source, key): string`, `getTerrainSource(id)`, `getImagerySource(id)`, `sourceCovers(source, bounds \| point)` |
-| `src/terrain/fetch.ts` | fetch + cache bitmaps | `createTileFetcher(opts?: {concurrency?, maxEntries?, retryDelayMs?, storedTiles?}): TileFetcher`, `TileFetchError` (`status`, `url`), `isAbortError(e)`, `downloadTile(url, signal?, retryDelayMs?)` (même politique de réessais), `setStoredTileReader(reader)` + `StoredTileReader` (`covers`, `get` : packs hors ligne lus avant le réseau) |
-| `src/terrain/dem.ts` | décodage élévation | `decodeDem(bitmap, encoding): HeightGrid`, `sampleGrid(grid, u, v): number` (bilinéaire, NaN-safe) |
-| `src/terrain/heightField.ts` | champ de hauteur multi-niveaux | `class HeightField { set(key, grid); delete(key); has(key); sampleHeight(lon, lat): number \| undefined }` (tuile la plus profonde contenant le point) |
-| `src/terrain/imagery.ts` | texture composée | `loadImageryTexture: LoadImageryTexture` |
-| `src/terrain/mesh.ts` | géométrie d'une tuile | `buildTileGeometry(key, grid, frame, opts: BuildTileGeometryOptions): TileGeometryResult` |
-| `src/terrain/quadtree.ts` + `engine.ts` | LOD, chargement, groupe Three | `createTerrainEngine(options: TerrainEngineOptions, deps?: Partial<EngineDeps>, tuning?: Partial<EngineTuning>): TerrainEngine` (deps injectables pour les tests) |
-| `src/scene/*.tsx` | composants R3F | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `TrackPicker` (+ `TrackMenu`, DOM), `CameraRig`, `FlyoverRig`, `useDebouncedCallback` |
-| `src/scene/marker*.ts` + `trackLineStyle.ts` | trace et marqueur (voir « Trace et marqueur ») | purs : `TrackStyle`, `DEFAULT_TRACK_STYLE`, `MarkerSettings`, `DEFAULT_MARKER`, `isValidTrackStyle`, `isValidMarker`, `withTrackStyleDefaults`, `withMarkerDefaults` (`markerSettings.ts`) ; `MARKER_FIGURE_PATHS`, `circlePath` (`markerFigures.ts`) ; `drawBadge`, `readableInk`, `squareCrop`, `fileToAvatarDataUrl`, `loadMarkerImage` (`markerBadge.ts`, canvas 2D) ; `markerBadge`, `badgeTexture`, `headsLeft`, `placeMarker`, `useMarkerImage`, `MARKER_SCREEN_FACTOR` (`markerSprite.ts`) ; `createGlowMaterial`, `applyDash`, `quantizedPixelSize`, `cumulativeDistances`, `cutAt`, `cutLine` (`trackLineStyle.ts`) ; `TrackMarkerSection` (`src/ui`) |
-| `src/flyover/path.ts` | chemin de survol | `buildTrackPath(track): TrackPath` (segments concaténés, distances cumulées, `time` en ms ou NaN), `trackPathOf(track)` (même chemin, en cache par trace), `samplePath(path, distanceM): PathSample` (`ele` et `time` interpolés seulement si les deux voisins les ont), `recordedTimeAt(path, distanceM)` (comble les points sans heure), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)`, `pickProjectedPath(screen, distM, px, py, maxPx)` (point de la trace projetée le plus proche du pointeur) |
-| `src/flyover/camera.ts` | caméra de survol | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad? })`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
-| `src/flyover/cameraSettings.ts` | styles et préréglages caméra | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
-| `src/flyover/climbs.ts` | montées détectées | `detectClimbs`, `climbsOf(track)` (cache par trace), seuils exportés, `CATEGORY_THRESHOLDS` |
-| `src/scene/labelModel.ts` + `labelSources.ts` | étiquettes 3D | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`… ; `setLabelSource(id, labels)` (ids préfixés et uniques), `useLabelSources` |
-| `src/flyover/pacing.ts` | rythme du survol | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance` ; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses données par le film) ; `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
-| `src/film/*` | film et timeline (pur) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS` ; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles` ; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`) ; `timeline.ts` : échelle, règle, aimantation, `dragFilm`, `stopPositionAt`, ajouts / retraits (`removeFilmItem` passe un plan à « aucune »), `hasFilmItem`, `addMedia`, `updateMedia`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt` ; `model.ts` : `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE` ; `audio.ts` : musique et son des vidéos (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`) ; `beats.ts` : rythme de la musique (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`) ; `pois.ts` : points d'intérêt (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`) ; `exif.ts` : `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs` ; `media.ts` et `video.ts` (seuls modules non purs du dossier) : `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad` ; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
-| `src/flyover/filmCamera.ts` | caméra du film | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `blendViews`, `shotBlend`, `stopOrbitRad`, `filmViewMovesWithTime` |
-| `src/flyover/sun.ts` | date du soleil, lever / coucher | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
-| `src/flyover/trackColor.ts` | trace colorée par une grandeur | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (libellé, unité, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
-| `src/scene/exposure.ts` | exposition sous l'atmosphère | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
-| `src/weather/*` | météo historique de la sortie | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION` ; `weatherAt(series, timeMs, lon, lat)`, `weatherAtTimes(series, timesMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel` ; `useWeatherStore`, `syncWeather` |
-| `src/osm/*` | repères OpenStreetMap | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures` ; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `LANDMARK_DISTANCE_RANGE` ; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
-| `src/overlay/*` | habillage du film | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `withOverrides`, `resolveOverlayTheme`, `leaderboardRows`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (pont vers l'export), `OverlayCanvas` |
-| `src/export/*` | export vidéo | `buildFrameSchedule`, `VIDEO_ASPECTS`, `VIDEO_RESOLUTIONS`, `videoSize`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `nativeEncoder.ts` (ffmpeg du bureau) : `exportCodec`, `createExportEncoder`, `createNativeVideoEncoder`, `wavFile`, `settle`, `renderSettledFrame`, `composeFrame`, `composeOverlayFrame`, `fillSky` (ciel de l'export, repris par l'affiche), `useExportStore`, `videoFileName`, `overlayBaseName`, `ALPHA_CANDIDATES`, `chooseVideoDestination`, `warnsInMemory`, `filmRate`, `ExportController` ; `batch.ts` (rendu en lot) : purs, testés : `buildBatchJobs`, `formatKey`, `batchBaseName`, `estimateBatch`, `runBatch`, `batchProgressLabel`, `batchSummary` ; `exportJob`, `useBatchStore` |
-| `src/poster/*` | affiche (voir « Affiche ») | purs, testés : `PosterSettings`, `DEFAULT_POSTER`, `POSTER_FORMATS`, `posterSize`, `isValidPoster`, `withPosterDefaults` ; `posterContent`, `posterFigure`, `availableFigures`, `posterStats`, `totalStats`, `trackLine`, `POSTER_LIST_MAX` ; `posterLayout` (boîtes), `fitText`, `fitLines`, `fitTrackList`, `wrapText`, `truncate` ; `drawPoster`, `coverCrop`, `POSTER_THEMES`, `POSTER_FONTS` ; `framingPath`, `planFlatMap` (`view.ts`) ; non purs : `renderFlatMap` (`view.ts`), `currentPosterContent`, `startPoster`, `usePosterPreview`, `previewKey` (`export.ts`), `PosterPanel` |
-| `src/flyover/race.ts` | course fantôme | `RACE_SYNC_MODES`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers` ; `useRace`, `RaceMarkers` |
-| `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | météo dans la scène | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction` ; `WeatherEffect` |
-| `src/osm/paths.ts` + `src/route/graph.ts` + `src/route/planner.ts` + `src/terrain/heightAt.ts` + `src/osm/geocode.ts` + `src/ui/RoutePanel.tsx` | reconnaissance (itinéraire futur) | `pathsQuery` (voies `highway` d'une boîte calée sur une grille de 0,02°, sans autoroutes ni voies privées), `parsePaths`, `fetchPaths` (client Overpass, file et cache communs) ; `buildGraph` (nœuds = points partagés des voies, coût = longueur × facteur du type : sentiers 1, routes principales 3), `nearestNode`, `shortestPath` (A*), `routeThrough` (`RouteError`, point à plus de `MAX_SNAP_M` = 500 m d'un chemin) ; `computeRouteTrack` (chemins à 2 km autour des points, itinéraire densifié à 20 m, altitudes `fetchHeights` au zoom 13, trace `gpx` sans heures, points posés en waypoints « Départ » / « Étape n » / « Arrivée »), `useRouteStore` (brouillon hors réglages : ni préréglages ni annulation ; épingles `setLabelSource('route', …)`), `planAreaAround`, `isRouteTrack` ; `findPlace` / `parseCoordinates` (Nominatim, à la validation seulement, 1 requête/s) ; `planArea` / `setPlanArea` du store : relief sans trace (la scène se monte dès que `bounds` existe ; survol, trace, eau et export seulement avec une trace) ; entrée « Point de passage ici » de `TrackMenu` |
-| `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | eau réfléchissante | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater` ; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH` ; `WaterLayer`, `WATER_LIFT_M` ; `useWaterStore` (`osm/store.ts`) |
-| `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | nuages volumétriques | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `cloudCoversAt`, `sceneCloudsFrom`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor` ; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
-| `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | étalonnage | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms` ; `GradingEffect` ; `useGradingEffect`, `GradingComposer` |
-| `src/project/*` | document de projet, historique, préréglages | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
-| `src/platform/*` | site / bureau (voir « Application de bureau ») | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint` ; purs, testés : `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf` ; `tileCache.ts` : `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache` ; `projectLibrary.ts` : `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry` ; `folder.ts` : `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath` |
-| `src/offline/*` | packs de tuiles hors ligne (voir « Packs hors ligne ») | purs, testés : `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`) ; `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`) ; `startPackDownload`, `createDailyQuota` (`download.ts`) ; `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefix` (`packs.ts`) ; non purs : `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
-| `src/state/store.ts` | état zustand | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
-| `src/ui/*` + `src/App.tsx` | interface | `App` (coque) ; `shell.ts` (pur, testé : `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`) ; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`) ; `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `loadSample`, `chainLoadedTracks`) ; `importFlow.ts` (orchestration d'import sans React, testée) |
+| `src/core/types.ts` | shared contracts | (frozen) |
+| `src/core/math.ts` | small numeric helpers | `clamp(value, min, max)`, `lastIndexAtOrBelow(sorted, value)`, `firstIndexAtOrAbove(sorted, value)` (binary searches on ascending arrays) |
+| `src/core/errors.ts` | error message shown to the user | `errorMessage(error)`: message of an `Error`, a rejected string (Tauri command), otherwise "erreur inconnue" |
+| `src/geo/ellipsoid.ts` | WGS84 ↔ ECEF, local frame | `WGS84`, `lonLatToEcef(lon,lat,h,target?)`, `ecefToLonLat(v)`, `createLocalFrame(lon,lat): LocalFrame`; `lonLat.ts` (no three.js, imported by the rest of the app): `haversineM(a: LonLat, b: LonLat)`, `centroid(bounds)`, `expandBounds(bounds, marginM, minSizeM?)` (re-exported by `ellipsoid.ts`) |
+| `src/geo/geoid.ts` | EGM96 geoid | `geoidUndulation(lon,lat)` (m, 1° bilinear grid, `egm96Grid.ts` generated by `scripts/gen-geoid.mjs` from the NGA 15' grid redistributed by PROJ-data, public domain; 170 KB; 0.45 m RMS against the 15' grid, up to ~14 m on volcanic islands), `mslToEllipsoidHeight`, `ellipsoidToMslHeight`, `mslLocalToEcef(frame, target?)` |
+| `src/geo/mercator.ts` | tile maths | `lonLatToTileFrac(lon,lat,z)`, `tileBounds(key): LonLatBounds`, `tileCenter(key)`, `tilesForBounds(bounds,z): TileKey[]`, `tileCountForBounds(bounds,z)`, `zoomForTileBudget(bounds, maxTiles, minZoom, maxZoom)`, `tileGroundSizeM(key)`, `childrenOf(key)`, `parentOf(key)`, `tileKeyString(key)`, `parseTileKey(s)` (throws on an invalid key), `tileContains(key, lon, lat)`, `lonLatToTileUV(key, lon, lat): {u,v}` (u,v ∈ [0,1], v=0 at the north), `tileUVToLonLat(key,u,v)`, `boundsIntersect(a,b)` |
+| `src/import/gpx.ts` | GPX parsing | `parseGpx(text: string, fileName: string): Track[]` |
+| `src/import/fit.ts` | FIT parsing | `parseFit(buffer: ArrayBuffer, fileName: string): Promise<Track[]>` |
+| `src/import/stats.ts` | stats & bounds, assembly | `computeStats(segments): TrackStats`, `computeBounds(segments): LonLatBounds`, `densify(points, maxStepM): TrackPoint[]`, `buildTrack(init): Track`, `stripExtension(fileName)` (shared by both parsers) |
+| `src/import/chain.ts` | track chaining (see "Track chaining") | `chainTracks(tracks): Track`, `chainOrder`, `chainName`, `replaceByChain`, `followEachOther`, `CHAIN_OFFER_MAX_GAP_MS` |
+| `src/import/index.ts` | entry point | `importFile(file: File, colorIndex?): Promise<Track[]>`, `importText(text, fileName, colorIndex?)`, `TRACK_COLORS`, `assignColors` |
+| `src/terrain/sources.ts` | source catalog | `TERRAIN_SOURCES: TerrainSource[]`, `IMAGERY_SOURCES: ImagerySource[]`, `buildTileUrl(source, key): string`, `getTerrainSource(id)`, `getImagerySource(id)`, `sourceCovers(source, bounds \| point)` |
+| `src/terrain/fetch.ts` | fetch + bitmap cache | `createTileFetcher(opts?: {concurrency?, maxEntries?, retryDelayMs?, storedTiles?}): TileFetcher`, `TileFetchError` (`status`, `url`), `isAbortError(e)`, `downloadTile(url, signal?, retryDelayMs?)` (same retry policy), `setStoredTileReader(reader)` + `StoredTileReader` (`covers`, `get`: offline packs read before the network) |
+| `src/terrain/dem.ts` | elevation decoding | `decodeDem(bitmap, encoding): HeightGrid`, `sampleGrid(grid, u, v): number` (bilinear, NaN-safe) |
+| `src/terrain/heightField.ts` | multi-level height field | `class HeightField { set(key, grid); delete(key); has(key); sampleHeight(lon, lat): number \| undefined }` (deepest tile containing the point) |
+| `src/terrain/imagery.ts` | composed texture | `loadImageryTexture: LoadImageryTexture` |
+| `src/terrain/mesh.ts` | tile geometry | `buildTileGeometry(key, grid, frame, opts: BuildTileGeometryOptions): TileGeometryResult` |
+| `src/terrain/quadtree.ts` + `engine.ts` | LOD, loading, Three group | `createTerrainEngine(options: TerrainEngineOptions, deps?: Partial<EngineDeps>, tuning?: Partial<EngineTuning>): TerrainEngine` (deps injectable for tests) |
+| `src/scene/*.tsx` | R3F components | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `TrackPicker` (+ `TrackMenu`, DOM), `CameraRig`, `FlyoverRig`, `useDebouncedCallback` |
+| `src/scene/marker*.ts` + `trackLineStyle.ts` | track and marker (see "Track and marker") | pure: `TrackStyle`, `DEFAULT_TRACK_STYLE`, `MarkerSettings`, `DEFAULT_MARKER`, `isValidTrackStyle`, `isValidMarker`, `withTrackStyleDefaults`, `withMarkerDefaults` (`markerSettings.ts`); `MARKER_FIGURE_PATHS`, `circlePath` (`markerFigures.ts`); `drawBadge`, `readableInk`, `squareCrop`, `fileToAvatarDataUrl`, `loadMarkerImage` (`markerBadge.ts`, 2D canvas); `markerBadge`, `badgeTexture`, `headsLeft`, `placeMarker`, `useMarkerImage`, `MARKER_SCREEN_FACTOR` (`markerSprite.ts`); `createGlowMaterial`, `applyDash`, `quantizedPixelSize`, `cumulativeDistances`, `cutAt`, `cutLine` (`trackLineStyle.ts`); `TrackMarkerSection` (`src/ui`) |
+| `src/flyover/path.ts` | flyover path | `buildTrackPath(track): TrackPath` (concatenated segments, cumulative distances, `time` in ms or NaN), `trackPathOf(track)` (same path, cached per track), `samplePath(path, distanceM): PathSample` (`ele` and `time` interpolated only if both neighbors have them), `recordedTimeAt(path, distanceM)` (fills points without a time), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)`, `pickProjectedPath(screen, distM, px, py, maxPx)` (point of the projected track closest to the pointer) |
+| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad? })`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
+| `src/flyover/cameraSettings.ts` | camera styles and presets | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
+| `src/flyover/climbs.ts` | detected climbs | `detectClimbs`, `climbsOf(track)` (cached per track), exported thresholds, `CATEGORY_THRESHOLDS` |
+| `src/scene/labelModel.ts` + `labelSources.ts` | 3D labels | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`…; `setLabelSource(id, labels)` (prefixed, unique ids), `useLabelSources` |
+| `src/flyover/pacing.ts` | flyover pacing | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance`; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses given by the film); `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
+| `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`; `autoStops`, `stopCandidates`, `materializeStops`, `assembleFilm`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
+| `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `blendViews`, `shotBlend`, `stopOrbitRad`, `filmViewMovesWithTime` |
+| `src/flyover/sun.ts` | sun date, sunrise / sunset | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
+| `src/flyover/trackColor.ts` | track colored by a metric | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (label, unit, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
+| `src/scene/exposure.ts` | exposure under the atmosphere | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
+| `src/weather/*` | historical weather of the outing | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION`; `weatherAt(series, timeMs, lon, lat)`, `weatherAtTimes(series, timesMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel`; `useWeatherStore`, `syncWeather` |
+| `src/osm/*` | OpenStreetMap landmarks | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures`; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `DEFAULT_LANDMARK_SETTINGS`, `LANDMARK_DISTANCE_RANGE`; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
+| `src/overlay/*` | film overlay | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `withOverrides`, `resolveOverlayTheme`, `leaderboardRows`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (bridge to the export), `OverlayCanvas` |
+| `src/export/*` | video export | `buildFrameSchedule`, `VIDEO_ASPECTS`, `VIDEO_RESOLUTIONS`, `videoSize`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `nativeEncoder.ts` (desktop ffmpeg): `exportCodec`, `createExportEncoder`, `createNativeVideoEncoder`, `wavFile`, `settle`, `renderSettledFrame`, `composeFrame`, `composeOverlayFrame`, `fillSky` (export sky, reused by the poster), `useExportStore`, `videoFileName`, `overlayBaseName`, `ALPHA_CANDIDATES`, `chooseVideoDestination`, `warnsInMemory`, `filmRate`, `ExportController`; `batch.ts` (batch rendering): pure, tested: `buildBatchJobs`, `formatKey`, `batchBaseName`, `estimateBatch`, `runBatch`, `batchProgressLabel`, `batchSummary`; `exportJob`, `useBatchStore` |
+| `src/poster/*` | poster (see "Poster") | pure, tested: `PosterSettings`, `DEFAULT_POSTER`, `POSTER_FORMATS`, `posterSize`, `isValidPoster`, `withPosterDefaults`; `posterContent`, `posterFigure`, `availableFigures`, `posterStats`, `totalStats`, `trackLine`, `POSTER_LIST_MAX`; `posterLayout` (boxes), `fitText`, `fitLines`, `fitTrackList`, `wrapText`, `truncate`; `drawPoster`, `coverCrop`, `POSTER_THEMES`, `POSTER_FONTS`; `framingPath`, `planFlatMap` (`view.ts`); not pure: `renderFlatMap` (`view.ts`), `currentPosterContent`, `startPoster`, `usePosterPreview`, `previewKey` (`export.ts`), `PosterPanel` |
+| `src/flyover/race.ts` | ghost race | `RACE_SYNC_MODES`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers`; `useRace`, `RaceMarkers` |
+| `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | weather in the scene | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction`; `WeatherEffect` |
+| `src/osm/paths.ts` + `src/route/graph.ts` + `src/route/planner.ts` + `src/terrain/heightAt.ts` + `src/osm/geocode.ts` + `src/ui/RoutePanel.tsx` | scouting (future route) | `pathsQuery` (`highway` ways in a box aligned on a 0.02° grid, without motorways or private ways), `parsePaths`, `fetchPaths` (Overpass client, shared queue and cache); `buildGraph` (nodes = points shared by ways, cost = length × way-type factor: trails 1, main roads 3), `nearestNode`, `shortestPath` (A*), `routeThrough` (`RouteError`, point more than `MAX_SNAP_M` = 500 m from a path); `computeRouteTrack` (paths within 2 km of the points, route densified to 20 m, `fetchHeights` elevations at zoom 13, `gpx` track without times, points stored as waypoints "Départ" (start) / "Étape n" (stage n) / "Arrivée" (finish)), `useRouteStore` (draft outside the settings: no presets, no undo; pins `setLabelSource('route', …)`), `planAreaAround`, `isRouteTrack`; `findPlace` / `parseCoordinates` (Nominatim, on submit only, 1 request/s); store `planArea` / `setPlanArea`: terrain without a track (the scene mounts as soon as `bounds` exists; flyover, track, water and export only with a track); "Point de passage ici" (waypoint here) entry in `TrackMenu` |
+| `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | reflective water | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater`; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH`; `WaterLayer`, `WATER_LIFT_M`; `useWaterStore` (`osm/store.ts`) |
+| `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | volumetric clouds | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `cloudCoversAt`, `sceneCloudsFrom`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor`; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
+| `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | color grading | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms`; `GradingEffect`; `useGradingEffect`, `GradingComposer` |
+| `src/project/*` | project document, history, presets | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
+| `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath` |
+| `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefix` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
+| `src/state/store.ts` | zustand state | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
+| `src/ui/*` + `src/App.tsx` | interface | `App` (shell); `shell.ts` (pure, tested: `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`); `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`); `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `loadSample`, `chainLoadedTracks`); `importFlow.ts` (import orchestration without React, tested) |
 
-### Règles de développement
+### Development rules
 
-- Importer les types depuis `src/core/types.ts` avec `import type`.
-- Pas de dépendance React dans `geo/`, `import/`, `terrain/`.
-- Choisir un fichier, enregistrer un fichier, lire un dépôt, garder une préférence : passer par `getPlatform()`
-  (`src/platform`), jamais par un `<input type="file">`, un lien de téléchargement neuf ou `localStorage`, ni par Tauri
-  directement.
-- Node n'est pas dans le PATH global. Préfixer chaque commande :
-  - PowerShell : `$env:Path = "C:\Users\MadCreator\AppData\Roaming\fnm\node-versions\v24.21.0\installation;" + $env:Path; npm test`
-  - Bash : `export PATH="/c/Users/MadCreator/AppData/Roaming/fnm/node-versions/v24.21.0/installation:$PATH"; npm test`
-- Scripts : `npm run dev` (port 5173), `npm run build`, `npm test` (vitest run), `npm run typecheck` (tsc --noEmit).
+- Import types from `src/core/types.ts` with `import type`.
+- No React dependency in `geo/`, `import/`, `terrain/`.
+- Picking a file, saving a file, reading a drop, keeping a preference: go through `getPlatform()`
+  (`src/platform`), never through an `<input type="file">`, a fresh download link or `localStorage`, nor through Tauri
+  directly.
+- Node is not in the global PATH. Prefix each command:
+  - PowerShell: `$env:Path = "C:\Users\MadCreator\AppData\Roaming\fnm\node-versions\v24.21.0\installation;" + $env:Path; npm test`
+  - Bash: `export PATH="/c/Users/MadCreator/AppData/Roaming/fnm/node-versions/v24.21.0/installation:$PATH"; npm test`
+- Scripts: `npm run dev` (port 5173), `npm run build`, `npm test` (vitest run), `npm run typecheck` (tsc --noEmit).
 
-## Chargement (découpage du bundle)
+## Loading (bundle splitting)
 
-Le premier écran (coque, panneaux, carte d'accueil) ne charge que l'app et React : ~510 kB, ~170 kB gzip, au lieu d'un
-seul fichier de 3,1 MB (930 kB gzip). Le reste arrive par `import()` dynamiques, chacun dans son fichier :
+The first screen (shell, panels, welcome card) loads only the app and React: ~510 kB, ~170 kB gzip, instead of a
+single 3.1 MB file (930 kB gzip). The rest arrives through dynamic `import()` calls, each in its own file:
 
-- juste après le premier affichage : la scène 3D (`FlyoverCanvas`, three.js + fiber, `React.lazy` dans `Stage`), le tiroir
-  d'export (vidéo, lot, affiche : `ExportPanel`) et le panneau « Hors ligne » (`React.lazy` dans `App`). Ils restent montés ;
-- avec la première trace : l'atmosphère (Takram, nuages, post-traitement, grille du géoïde : `AtmosphereLayer`, `React.lazy`
-  dans `FlyoverCanvas`, sa propre `Suspense` pour que le relief s'affiche pendant ce temps) ;
-- à la demande : le décodeur FIT (`@garmin/fitsdk`, au premier .fit, `import/index.ts`), mediabunny (lecture d'une vidéo,
-  export, test des codecs du tiroir : `film/video.ts`, `export/encoder.ts`).
+- right after the first paint: the 3D scene (`FlyoverCanvas`, three.js + fiber, `React.lazy` in `Stage`), the export
+  drawer (video, batch, poster: `ExportPanel`) and the "Hors ligne" (offline) panel (`React.lazy` in `App`). They stay mounted;
+- with the first track: the atmosphere (Takram, clouds, post-processing, geoid grid: `AtmosphereLayer`, `React.lazy`
+  in `FlyoverCanvas`, with its own `Suspense` so the terrain shows in the meantime);
+- on demand: the FIT decoder (`@garmin/fitsdk`, on the first .fit, `import/index.ts`), mediabunny (reading a video,
+  export, codec test in the drawer: `film/video.ts`, `export/encoder.ts`).
 
-Pour garder three.js hors du premier écran, l'app importe les distances et boîtes lon/lat de `geo/lonLat.ts`, pas de
-`geo/ellipsoid.ts`. React a son propre fichier (`codeSplitting.groups` dans `vite.config.ts`), gardé en cache d'une version à
-l'autre. Les fichiers paresseux de plus de 500 kB (three + fiber, Takram, mediabunny) sont attendus : seuil d'alerte à 800 kB.
+To keep three.js out of the first screen, the app imports lon/lat distances and boxes from `geo/lonLat.ts`, not from
+`geo/ellipsoid.ts`. React has its own file (`codeSplitting.groups` in `vite.config.ts`), kept in cache from one version to
+the next. Lazy files over 500 kB (three + fiber, Takram, mediabunny) are expected: the warning threshold is 800 kB.
 
-## Rendu à la demande
+## On-demand rendering
 
-La scène est dessinée seulement quand quelque chose change (`frameloop="demand"`, `src/scene/renderOnDemand.ts`) : à
-l'arrêt, plus aucune image. Une image est demandée à chaque image tant que le film joue, que des tuiles se chargent
-(`engine.stats.pendingTiles`) ou qu'un recadrage s'anime (`CameraRig`) ; puis `WAKE_FRAMES` = 30 images après tout
-changement des stores lus par la scène (application hors `terrainStats` et `loading`, météo, étiquettes, export), après
-un drapé (trace, eau, étiquettes), le chargement de la police des étiquettes ou de l'image du marqueur, et pour chaque
-texture des chargeurs de three (ciel, nuages) : le temps que le suréchantillonnage temporel des nuages converge
-(~16 images). OrbitControls (drei) demande lui-même ses images, amortissement compris. Le pas de temps d'une image est
-borné à `MAX_FRAME_DELTA_S` = 0,25 s (`frameDelta`), et `wakeScene` remet l'horloge à zéro quand la scène dormait
-(`clock.getDelta()`) : la lecture et le recadrage ne sautent pas après une pause.
-L'export garde `frameloop 'never'` et dessine lui-même ses images. Mesuré en rendu logiciel : plus aucune demande d'image
-une fois la marge écoulée (~30 s là-bas, une image par seconde ; ~0,5 s sur une vraie carte graphique). Les délais du
-moteur comptés en images (nouvel essai d'une tuile en échec, déchargement) attendent la prochaine image.
+The scene is drawn only when something changes (`frameloop="demand"`, `src/scene/renderOnDemand.ts`): when
+idle, no more frames. A frame is requested on every frame while the film plays, while tiles load
+(`engine.stats.pendingTiles`) or while a reframing animates (`CameraRig`); then `WAKE_FRAMES` = 30 frames after any
+change in the stores read by the scene (application except `terrainStats` and `loading`, weather, labels, export), after
+a drape (track, water, labels), the loading of the label font or the marker image, and for each
+texture from the three loaders (sky, clouds): the time for the temporal upsampling of the clouds to converge
+(~16 frames). OrbitControls (drei) requests its own frames, damping included. The time step of a frame is
+capped at `MAX_FRAME_DELTA_S` = 0.25 s (`frameDelta`), and `wakeScene` resets the clock when the scene was asleep
+(`clock.getDelta()`): playback and reframing do not jump after a pause.
+The export keeps `frameloop 'never'` and draws its own frames. Measured with software rendering: no more frame requests
+once the margin has elapsed (~30 s there, one frame per second; ~0.5 s on a real graphics card). Engine delays
+counted in frames (retry of a failed tile, unloading) wait for the next frame.
 
-Aperçu des nuages : préréglage « bas » allégé (`PREVIEW_MARCH` : 120 pas d'au moins 150 m, 15 pour les ombres, au lieu de
-200, 100 m et 25), à moitié de la résolution et suréchantillonné dans le temps ; l'export revient à la qualité choisie.
+Cloud preview: lightened "bas" (low) preset (`PREVIEW_MARCH`: 120 steps of at least 150 m, 15 for shadows, instead of
+200, 100 m and 25), at half resolution and temporally upsampled; the export goes back to the chosen quality.
 
-## Moteur de terrain — conception
+## Terrain engine — design
 
-1. **Sources** (`sources.ts`) : élévation Mapterhorn `https://tiles.mapterhorn.com/{z}/{x}/{y}.webp` (Terrarium, webp),
+1. **Sources** (`sources.ts`): Mapterhorn elevation `https://tiles.mapterhorn.com/{z}/{x}/{y}.webp` (Terrarium, webp),
    AWS Terrain Tiles `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` (Terrarium, z ≤ 15).
-   Imagerie : IGN BD ORTHO (Géoplateforme WMTS, PM), EOX Sentinel-2 cloudless, ArcGIS World Imagery, swisstopo SWISSIMAGE.
-   Le catalogue contient aussi des fonds non photographiques et datés, jamais choisis automatiquement (`AUTO_IMAGERY_IDS` =
-   `ign-ortho`, `swisstopo`) : cartes topographiques `ign-plan` (Plan IGN, France, z19), `swisstopo-carte` (carte nationale
-   suisse, z19 ; blanche hors Suisse au-delà de z15) et `opentopomap` (mondial, z17, CC BY-SA, serveur bénévole : packs hors
-   ligne permis en usage personnel seulement, plafonnés à 2 000 tuiles par jour, voir « Packs hors ligne ») ; orthophotos IGN datées :
-   `ign-ortho-1950-1965` (France complète, niveaux de gris), `ign-ortho-1965-1980` (partiel, style `BDORTHOHISTORIQUE`, z3–18)
-   et `ign-ortho-2000-2005` (z6–18), sur la boîte `FRANCE_BOX` (sur-approximation). Sources écartées (clé requise : Stadia,
-   Thunderforest, SCAN 25) : `docs/sources.md`.
-   Les URL exactes, zooms max, encodage et support CORS sont vérifiés empiriquement (`docs/sources.md`) ; `sources.ts` est la seule vérité.
-   Une source sans CORS passe par le proxy Vite (`/tiles/<id>/...`, cf. `vite.config.ts`).
-2. **Fetch** (`fetch.ts`) : `fetch()` + `createImageBitmap`, file de priorité, concurrence ~12, dédoublonnage des requêtes en vol,
-   LRU ~600 bitmaps, support `AbortSignal`, 3 réessais (250 ms, 1 s, 4 s, hors cache HTTP) sur erreur réseau, 5xx, 429
-   et 400 (la Géoplateforme IGN a renvoyé en rafales « Layer … unknown » en 400 pour des tuiles valides, avec un
-   `max-age` de 21 jours) : une sous-tuile d'imagerie en échec reste grise tant que sa tuile de relief vit. Avant le
-   réseau, la copie d'un pack hors ligne quand un pack contient la source de l'URL (voir « Packs hors ligne »).
-3. **DEM** (`dem.ts`) : Terrarium `h = (R*256 + G + B/256) - 32768` ; Mapbox `h = -10000 + (R*65536 + G*256 + B) * 0.1`.
-   Décodage via `OffscreenCanvas` (fallback `HTMLCanvasElement`). Échantillonnage bilinéaire.
-4. **Imagerie** (`imagery.ts`) : pour la tuile terrain (z,x,y) et `zoomOffset = k`, récupérer les `2^k × 2^k` sous-tuiles
-   à z+k et les dessiner dans un canvas `tileSize·2^k` → `CanvasTexture` (sRGB, mipmaps, anisotropie max).
-   Si z+k > maxZoom de la source : prendre la tuile disponible la plus profonde et la recadrer (crop).
-   Si une sous-tuile échoue : laisser la zone grise, ne pas rejeter.
-5. **Maillage** (`mesh.ts`) : grille `(segments+1)²` ; pour chaque sommet, position Mercator fractionnaire → lon/lat →
-   hauteur bilinéaire (grille DEM, hauteur × exaggeration) → ECEF → local via `frame.toLocal`. UV (0,0) = coin NW... attention :
-   en Three.js `uv.y = 1` est le haut de l'image ; la ligne 0 de la tuile image est le nord → `uv.y = 1 - v`.
-   Normales calculées depuis la grille (avant d'ajouter les jupes). Jupes : copie du contour abaissé de `skirtDepthM`.
-6. **Quadtree / LOD** (`quadtree.ts`, `engine.ts`) :
-   - Racines : toutes les tuiles du zoom racine couvrant `area` (zoom racine choisi pour ≤ 16 tuiles, ≥ terrain.minZoom).
-   - Erreur géométrique d'une tuile ≈ `tileGroundSizeM / segments`.
-     Erreur écran `sse = geometricError * viewportH / (2 * distance * tan(fov/2))`, distance = caméra → sphère englobante.
-   - Raffinement par **remplacement** : le parent reste affiché tant que ses 4 enfants ne sont pas prêts (pas de trous).
-     Enfant hors frustum = considéré prêt pour le remplacement (mais chargé en basse priorité).
-   - Priorité de chargement : sse décroissante. Une tuile est "prête" quand DEM + texture sont chargés (texture en échec → matériau gris).
-   - DEM en échec transitoire (réseau, 5xx, tuile corrompue) : 3 tentatives espacées de ~5 s, compté dans `failedTiles`.
-     DEM en **4xx ou hors couverture = feuille « sans donnée »** (Mapterhorn s'arrête à z12 hors zones haute résolution) :
-     jamais réessayé, pas compté en erreur, le parent reste affiché à sa résolution.
-   - Déchargement : nœuds non visités depuis > 2 s et pas ancêtres d'un nœud visible → dispose geometry/texture ; le `HeightField`
-     garde ~400 grilles équivalent 256 px (LRU, soit ~100 Mo ; une grille 512 px compte pour quatre).
-   - Sphère englobante : depuis la géométrie si chargée, sinon depuis les bornes de la tuile avec hauteurs [-500, 9000] m.
-   - Matériau : `MeshStandardMaterial({ map, roughness: 1, metalness: 0 })`, `side: FrontSide`. Option `wireframe`.
-   - `onChange` déclenché (coalescé par frame) quand une tuile devient prête ou est retirée → la trace se replaque.
-7. **Scène** (`scene/`) :
-   - `FlyoverCanvas` : `<Canvas gl={{ antialias: true, logarithmicDepthBuffer: true, alpha: true }} camera={{ fov: 50, near: 1, far: 5e6 }} flat>`
-     (pas de tone mapping : les orthophotos sont déjà des images affichables), `HemisphereLight` 1.2 + `DirectionalLight` 2.0 (soleil fixe SE ;
-     avec l'ombrage 1/π de three un sol plat rend ~0.88 de l'albédo), fond ciel glacier `#A9CCD9` → papier `#F5F2EA` en dégradé CSS derrière le canvas transparent.
-   - `TerrainLayer` : crée le moteur dans un `useEffect` et le dispose dans le cleanup (StrictMode-safe ; jamais dans un useMemo), le recrée
-     uniquement si le repère change ou si les traces sortent de l'`area` courante (area = `expandBounds(bounds, 25 km, min 40 km)`, collante),
-     ajoute `engine.group` à la scène via `<primitive dispose={null}>`, `useFrame` → `engine.update(camera, size.height)`,
-     pousse une copie de `stats` dans le store à ~4 Hz (seulement si changé), `setOptions` avec les seules clés modifiées quand les réglages changent.
-     Expose `{ engine, frame }` par contexte à `TrackLines` et `CameraRig` (qui doivent être rendus dedans).
-   - `TrackLines` : pour chaque trace, `Line2` (three/addons/lines) largeur 4 px, couleur `track.color`, points densifiés (pas ≤ 10 m),
-     hauteur = `(engine.sampleHeight(lon,lat) ?? pt.ele ?? 0) * exaggeration + 3`. Re-plaquage sur `engine.onChange` (debounce 150 ms).
-     Deuxième passe `depthTest: false`, opacité 0.25 pour laisser deviner les portions cachées par le relief.
-     Sphères de départ (mousse `#3F6B4A`) et d'arrivée (encre `#1C2A33`).
-   - `CameraRig` : `OrbitControls` (drei) avec amortissement, `maxPolarAngle = 85°`, `minDistance = 30`, `maxDistance = 400 km` ;
-     `computeFitView(bounds, frame, groundHeightM)` (`scene/CameraRig.tsx`) : cible = centre, caméra au sud-est, pitch 40°, distance = 1.4 × diagonale de la boîte (min 2 km).
-8. **État** (`store.ts`) : `tracks: Track[]`, `addTracks`, `removeTrack`, `clearTracks`, `settings { terrainSourceId, imagerySourceId,
-   imageryZoomOffset, exaggeration, wireframe }`, `setSetting`, `terrainStats`, `bounds` (union des traces) et `frameOrigin` (centroïde du
-   premier lot arrondi à 0,01°, fixe tant qu'il reste une trace) ; l'`area` du moteur est dérivée dans la scène (`TerrainLayer`).
-   `fitRequest` (compteur incrémenté pour demander un recadrage), `loading` (les échecs d'import passent par les messages, voir « Interface »). À l'import, l'imagerie bascule automatiquement sur
-   IGN puis swisstopo si la trace est entièrement dans leur emprise, sauf si l'utilisateur a déjà choisi une source à la main.
-9. **UI** (`ui/`) : voir « Interface » (coque, onglets, barre du haut, tiroir d'export, bande d'état). Libellés en
-   français. Charte : `src/ui/theme.css`.
+   Imagery: IGN BD ORTHO (Géoplateforme WMTS, PM), EOX Sentinel-2 cloudless, ArcGIS World Imagery, swisstopo SWISSIMAGE.
+   The catalog also holds non-photographic and dated base maps, never picked automatically (`AUTO_IMAGERY_IDS` =
+   `ign-ortho`, `swisstopo`): topographic maps `ign-plan` (Plan IGN, France, z19), `swisstopo-carte` (Swiss national
+   map, z19; blank outside Switzerland beyond z15) and `opentopomap` (worldwide, z17, CC BY-SA, volunteer server: offline
+   packs allowed for personal use only, capped at 2,000 tiles per day, see "Offline packs"); dated IGN orthophotos:
+   `ign-ortho-1950-1965` (all of France, grayscale), `ign-ortho-1965-1980` (partial, `BDORTHOHISTORIQUE` style, z3–18)
+   and `ign-ortho-2000-2005` (z6–18), on the `FRANCE_BOX` box (over-approximation). Rejected sources (key required: Stadia,
+   Thunderforest, SCAN 25): `docs/sources.md`.
+   Exact URLs, max zooms, encoding and CORS support are checked empirically (`docs/sources.md`); `sources.ts` is the single source of truth.
+   A source without CORS goes through the Vite proxy (`/tiles/<id>/...`, see `vite.config.ts`).
+2. **Fetch** (`fetch.ts`): `fetch()` + `createImageBitmap`, priority queue, concurrency ~12, deduplication of in-flight requests,
+   LRU ~600 bitmaps, `AbortSignal` support, 3 retries (250 ms, 1 s, 4 s, bypassing the HTTP cache) on network error, 5xx, 429
+   and 400 (the IGN Géoplateforme returned bursts of "Layer … unknown" as 400 for valid tiles, with a
+   `max-age` of 21 days): a failed imagery sub-tile stays gray as long as its terrain tile lives. Before the
+   network, the copy from an offline pack when a pack contains the URL's source (see "Offline packs").
+3. **DEM** (`dem.ts`): Terrarium `h = (R*256 + G + B/256) - 32768`; Mapbox `h = -10000 + (R*65536 + G*256 + B) * 0.1`.
+   Decoding through `OffscreenCanvas` (fallback `HTMLCanvasElement`). Bilinear sampling.
+4. **Imagery** (`imagery.ts`): for the terrain tile (z,x,y) and `zoomOffset = k`, fetch the `2^k × 2^k` sub-tiles
+   at z+k and draw them into a `tileSize·2^k` canvas → `CanvasTexture` (sRGB, mipmaps, max anisotropy).
+   If z+k > the source's maxZoom: take the deepest available tile and crop it.
+   If a sub-tile fails: leave the area gray, do not reject.
+5. **Mesh** (`mesh.ts`): `(segments+1)²` grid; for each vertex, fractional Mercator position → lon/lat →
+   bilinear height (DEM grid, height × exaggeration) → ECEF → local through `frame.toLocal`. UV (0,0) = NW corner... careful:
+   in Three.js `uv.y = 1` is the top of the image; row 0 of the image tile is the north → `uv.y = 1 - v`.
+   Normals computed from the grid (before adding the skirts). Skirts: a copy of the outline lowered by `skirtDepthM`.
+6. **Quadtree / LOD** (`quadtree.ts`, `engine.ts`):
+   - Roots: all tiles of the root zoom covering `area` (root zoom chosen for ≤ 16 tiles, ≥ terrain.minZoom).
+   - Geometric error of a tile ≈ `tileGroundSizeM / segments`.
+     Screen error `sse = geometricError * viewportH / (2 * distance * tan(fov/2))`, distance = camera → bounding sphere.
+   - Refinement by **replacement**: the parent stays displayed until its 4 children are ready (no holes).
+     A child outside the frustum counts as ready for replacement (but is loaded at low priority).
+   - Loading priority: decreasing sse. A tile is "ready" when DEM + texture are loaded (failed texture → gray material).
+   - Transient DEM failure (network, 5xx, corrupt tile): 3 attempts ~5 s apart, counted in `failedTiles`.
+     DEM **4xx or outside coverage = "no data" leaf** (Mapterhorn stops at z12 outside high-resolution areas):
+     never retried, not counted as an error, the parent stays displayed at its resolution.
+   - Unloading: nodes not visited for > 2 s and not ancestors of a visible node → dispose geometry/texture; the `HeightField`
+     keeps ~400 grids at 256 px equivalent (LRU, i.e. ~100 MB; a 512 px grid counts as four).
+   - Bounding sphere: from the geometry if loaded, otherwise from the tile bounds with heights [-500, 9000] m.
+   - Material: `MeshStandardMaterial({ map, roughness: 1, metalness: 0 })`, `side: FrontSide`. `wireframe` option.
+   - `onChange` fired (coalesced per frame) when a tile becomes ready or is removed → the track re-drapes.
+7. **Scene** (`scene/`):
+   - `FlyoverCanvas`: `<Canvas gl={{ antialias: true, logarithmicDepthBuffer: true, alpha: true }} camera={{ fov: 50, near: 1, far: 5e6 }} flat>`
+     (no tone mapping: orthophotos are already displayable images), `HemisphereLight` 1.2 + `DirectionalLight` 2.0 (fixed SE sun;
+     with three's 1/π shading a flat ground renders ~0.88 of the albedo), glacier sky `#A9CCD9` → paper `#F5F2EA` background as a CSS gradient behind the transparent canvas.
+   - `TerrainLayer`: creates the engine in a `useEffect` and disposes it in the cleanup (StrictMode-safe; never in a useMemo), recreates it
+     only if the frame changes or if the tracks leave the current `area` (area = `expandBounds(bounds, 25 km, min 40 km)`, sticky),
+     adds `engine.group` to the scene through `<primitive dispose={null}>`, `useFrame` → `engine.update(camera, size.height)`,
+     pushes a copy of `stats` to the store at ~4 Hz (only if changed), `setOptions` with only the changed keys when the settings change.
+     Exposes `{ engine, frame }` through a context to `TrackLines` and `CameraRig` (which must be rendered inside it).
+   - `TrackLines`: for each track, `Line2` (three/addons/lines) 4 px wide, color `track.color`, densified points (step ≤ 10 m),
+     height = `(engine.sampleHeight(lon,lat) ?? pt.ele ?? 0) * exaggeration + 3`. Re-draped on `engine.onChange` (150 ms debounce).
+     Second pass with `depthTest: false`, opacity 0.25, to hint at the parts hidden by the terrain.
+     Start (moss `#3F6B4A`) and finish (ink `#1C2A33`) spheres.
+   - `CameraRig`: `OrbitControls` (drei) with damping, `maxPolarAngle = 85°`, `minDistance = 30`, `maxDistance = 400 km`;
+     `computeFitView(bounds, frame, groundHeightM)` (`scene/CameraRig.tsx`): target = center, camera to the south-east, pitch 40°, distance = 1.4 × box diagonal (min 2 km).
+8. **State** (`store.ts`): `tracks: Track[]`, `addTracks`, `removeTrack`, `clearTracks`, `settings { terrainSourceId, imagerySourceId,
+   imageryZoomOffset, exaggeration, wireframe }`, `setSetting`, `terrainStats`, `bounds` (union of the tracks) and `frameOrigin` (centroid of the
+   first batch rounded to 0.01°, fixed as long as a track remains); the engine `area` is derived in the scene (`TerrainLayer`).
+   `fitRequest` (counter incremented to request a reframing), `loading` (import failures go through the messages, see "Interface"). On import, the imagery switches automatically to
+   IGN then swisstopo if the track lies entirely within their footprint, unless the user has already picked a source by hand.
+9. **UI** (`ui/`): see "Interface" (shell, tabs, top bar, export drawer, status bar). Labels in
+   French. Design system: `src/ui/theme.css`.
 
-## Charte graphique « Carte alpine » (variables CSS, `src/ui/theme.css`)
+## "Carte alpine" (alpine map) design system (CSS variables, `src/ui/theme.css`)
 
-Papier de carte topographique, encre, rouge de balisage des sentiers, glacier.
+Topographic map paper, ink, trail-marking red, glacier.
 
-| Rôle | Variable | Valeur |
+| Role | Variable | Value |
 |---|---|---|
-| Fond du panneau | `--color-paper` | `#F5F2EA` |
-| Cartes, groupes | `--color-card` | `#EAE4D6` |
-| Texte, surfaces sombres | `--color-ink` | `#1C2A33` |
-| Texte secondaire | `--color-ink-soft` | `#55626B` |
-| Bordures | `--color-line` | `#D6CDBB` |
-| Action principale (rouge balise) | `--color-accent` / `--color-accent-strong` (survol) | `#C23B22` / `#A3301A` |
-| Accent sur fond encre | `--color-accent-light` | `#FF8A5C` |
-| Ciel, éléments secondaires | `--color-glacier` | `#A9CCD9` |
-| Départ | `--color-moss` | `#3F6B4A` |
+| Panel background | `--color-paper` | `#F5F2EA` |
+| Cards, groups | `--color-card` | `#EAE4D6` |
+| Text, dark surfaces | `--color-ink` | `#1C2A33` |
+| Secondary text | `--color-ink-soft` | `#55626B` |
+| Borders | `--color-line` | `#D6CDBB` |
+| Primary action (trail-marker red) | `--color-accent` / `--color-accent-strong` (hover) | `#C23B22` / `#A3301A` |
+| Accent on ink background | `--color-accent-light` | `#FF8A5C` |
+| Sky, secondary elements | `--color-glacier` | `#A9CCD9` |
+| Start | `--color-moss` | `#3F6B4A` |
 
-Titres : Fraunces ; corps et boutons : IBM Plex Sans ; style d'habillage « diffusion » : IBM Plex Sans Condensed. Polices
-**embarquées** (aucun accès réseau) : WOFF2 dans `public/fonts/` (Fraunces variable opsz + wght, IBM Plex Sans variable wght,
-IBM Plex Sans Condensed 500/600/700), sous-ensembles `latin` et `latin-ext` déclarés par `unicode-range` dans
-`src/ui/fonts.css` (importé par `src/main.tsx`) ; le navigateur ne télécharge un sous-ensemble que si un caractère l'exige.
-Sources, versions et licences : `public/fonts/README.md`. `src/ui/fonts.test.ts` vérifie que chaque fichier référencé existe et
-que chaque police dessinée (UI, habillage, étiquettes 3D) a sa face. Contraste texte ≥ 4.5:1.
-Les couleurs de trace (`TRACK_COLORS`) sont choisies pour la lisibilité sur orthophoto, pas dans la charte.
+Headings: Fraunces; body and buttons: IBM Plex Sans; "diffusion" (broadcast) overlay style: IBM Plex Sans Condensed. Fonts
+**bundled** (no network access): WOFF2 in `public/fonts/` (Fraunces variable opsz + wght, IBM Plex Sans variable wght,
+IBM Plex Sans Condensed 500/600/700), `latin` and `latin-ext` subsets declared through `unicode-range` in
+`src/ui/fonts.css` (imported by `src/main.tsx`); the browser downloads a subset only if a character requires it.
+Sources, versions and licenses: `public/fonts/README.md`. `src/ui/fonts.test.ts` checks that every referenced file exists and
+that every drawn font (UI, overlay, 3D labels) has its face. Text contrast ≥ 4.5:1.
+Track colors (`TRACK_COLORS`) are chosen for legibility over orthophotos, not from the design system.
 
 ## Interface
 
-Coque sombre (encre) autour de panneaux clairs (papier), dans les jetons « Carte alpine ». Mise en page : `src/ui/shell.css`
-(composants des panneaux : `app.css`). Jetons ajoutés à `theme.css` : surfaces sémantiques (`--surface-chrome`,
-`--surface-panel`, `--surface-card`, `--text-1`, `--text-2`, `--line`, simples alias des couleurs actuelles : une variante
-sombre ne serait qu'un remappage), gabarits (`--topbar-h` 48, `--rail-w` 56, `--panel-w` 320, `--dock-w` 300,
-`--statusbar-h` 24, `--control-h` 32, `--space-6`), `--shadow-pop`, `--focus-ring-on-dark` (orange clair, 6,3:1 sur l'encre).
+Dark shell (ink) around light panels (paper), in the "Carte alpine" tokens. Layout: `src/ui/shell.css`
+(panel components: `app.css`). Tokens added to `theme.css`: semantic surfaces (`--surface-chrome`,
+`--surface-panel`, `--surface-card`, `--text-1`, `--text-2`, `--line`, plain aliases of the current colors: a dark
+variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--panel-w` 320, `--dock-w` 300,
+`--statusbar-h` 24, `--control-h` 32, `--space-6`), `--shadow-pop`, `--focus-ring-on-dark` (light orange, 6.3:1 on ink).
 
-- **Barre du haut** (`TopBar.tsx`) : logo, nom du projet modifiable sur place (`projectName` du store, vide = nom de la
-  première trace, `effectiveProjectName`) et état « Modifié / Enregistré » (`savedProject` : réglages, traces et nom au
-  dernier enregistrement ou à la dernière ouverture, comparés par référence, `isProjectDirty` ; pas d'enregistrement
-  automatique), annuler / rétablir, « Ouvrir » (un seul sélecteur : `.json` → projet, le reste → import de traces,
-  `routeOpenedFiles` ; ouvrir un projet vide l'historique), « Enregistrer » ; au centre le **format de sortie** (Libre,
-  16:9, 9:16, 1:1, 4:5, 21:9) ; à droite « ? » (raccourcis) et « Exporter », seul bouton principal de la coque, qui ouvre
-  le tiroir d'export et devient « 42 % · Annuler » pendant un export.
-- **Format de sortie** : un format écrit `settings.video.aspect` (enregistré, annulable) ; « Libre » est un drapeau
-  d'aperçu (`freeFraming` du store, ni enregistré ni annulable). Hors « Libre », `Stage.tsx` cadre la vue 3D au format
-  (`frameRect`, bandes encre) : `.view__stage`, qui porte le canvas 3D, l'habillage et la légende, prend le rectangle
-  cadré ; l'habillage suit donc l'aire exportée sans changement de `src/overlay`. L'export rend dans ce canvas visible.
-  Sans trace, pas de cadrage : la carte d'accueil (`EmptyState.tsx`) occupe le centre de la vue (« Choisir un fichier »,
-  « Essayer avec l'exemple (Tour du Mont-Blanc) », « Ouvrir un projet… », un seul sélecteur dont `accept` change).
-- **Rail et panneau** : rail vertical d'icônes (`tablist`, focus itinérant, flèches / Origine / Fin, infobulles) et un
-  panneau de 320 px, un onglet à la fois : **Trace** (liste des traces avec « + Ajouter », message d'attente sans trace,
-  Montées et Météo repliables), **Carte** (réglages de la scène, repères OSM), **Survol** (caméra, rythme),
-  **Habillage**, **Projet** (préréglages). Tous les onglets restent montés (`hidden`) : météo, repères et export ont des
-  effets de bord. Sections à plat séparées d'un filet, en-tête de section collant (titre + « modifié / Par défaut »). Un clic
-  sur l'onglet ouvert, le bouton du bas du rail ou `[` replient le panneau. Onglet et repli mémorisés par le navigateur
-  (`getPlatform().storage` `openflyover.shell.v1`, `parseShellPrefs`), pas par le projet.
-- **Dock droit** (300 px) : tiroir d'export non modal (`ExportPanel` : formats en tuiles, résolution, estimation, « Exporter
-  la vidéo », « Image fixe », « Plus de réglages » : images par seconde, qualité, type d'image ; résumé durée · images · codec ·
-  taille sur une ligne ; modes « Vidéo », « Plusieurs formats » : pastilles de résolution par format, image fixe, affiche,
-  estimation du lot, « Tout exporter », avancement « 2 / 4 · 16:9 1080p · 42 % », liste des fichiers, et « Affiche ») ;
-  sinon l'**inspecteur** du bloc
-  sélectionné sur la timeline (`FilmInspector`, deux `<aside class="dock">` dont un seul visible : le tiroir passe devant,
-  l'inspecteur revient à sa fermeture si le bloc est encore sélectionné). Sous 1360 px de large, un seul côté ouvert à la
-  fois : ce qui remplit le dock (tiroir ou inspecteur) replie le panneau, qui revient quand le dock se vide ; déplier le
-  panneau vide le dock et désélectionne le bloc (`shellReducer` : `inspecting`, événement `inspect`, que `App` envoie quand
-  `filmSelection` change, après le relâcher d'un appui : la timeline ne change pas d'échelle sous un glisser).
-- **Pendant un export** : onglets, repli du panneau, format, « Ouvrir », « Recadrer », annuler / rétablir (boutons) et
-  fermeture du tiroir sont désactivés (redimensionner la scène redimensionnerait le canvas).
-- **Vue** : bouton flottant « Recadrer la vue » (F) ; clic sur la trace et menu du clic droit (`TrackPicker`, voir « Film et
-  timeline »).
-- **Zones de sécurité** (`src/ui/SafeZones.tsx`, géométrie pure et testée dans `src/ui/safeZones.ts`) : bouton flottant sous
-  « Recadrer » (hors « Libre ») ou G ; état d'aperçu (petit store `useSafeZonesStore`, ni enregistré ni annulable, éteint au
-  démarrage). Calque DOM dans `.view__stage` cadré, au-dessus de l'habillage, `pointer-events: none` : l'export (canvas)
-  ne le voit jamais. 16:9, 1:1, 21:9 : marges d'action 93 % et de titres 90 % (EBU R 95), en pointillés. 9:16 et 4:5 :
-  parties cachées par l'interface des fils verticaux (union Instagram Reels / TikTok / YouTube Shorts relevée sur un écran
-  1080 × 1920, arrondie au plus prudent : barre du haut 220 px, boutons à droite 160 × 720 px, légende en bas 440 px), en
-  hachuré ; un 4:5 est placé pleine largeur au milieu de cet écran et seules les parties qui le recouvrent restent
+- **Top bar** (`TopBar.tsx`): logo, project name editable in place (`projectName` in the store, empty = name of the
+  first track, `effectiveProjectName`) and "Modifié / Enregistré" (modified / saved) status (`savedProject`: settings, tracks and name at the
+  last save or the last open, compared by reference, `isProjectDirty`; no automatic
+  save), undo / redo, "Ouvrir" (open; a single picker: `.json` → project, anything else → track import,
+  `routeOpenedFiles`; opening a project clears the history), "Enregistrer" (save); in the center the **output format** ("Libre" (free),
+  16:9, 9:16, 1:1, 4:5, 21:9); on the right "?" (shortcuts) and "Exporter" (export), the only primary button of the shell, which opens
+  the export drawer and becomes "42 % · Annuler" (cancel) during an export.
+- **Output format**: a format writes `settings.video.aspect` (saved, undoable); "Libre" is a preview
+  flag (`freeFraming` in the store, neither saved nor undoable). Outside "Libre", `Stage.tsx` frames the 3D view to the format
+  (`frameRect`, ink bars): `.view__stage`, which holds the 3D canvas, the overlay and the legend, takes the framed
+  rectangle; the overlay therefore follows the exported area with no change to `src/overlay`. The export renders into this visible canvas.
+  Without a track, no framing: the welcome card (`EmptyState.tsx`) fills the center of the view ("Choisir un fichier" (choose a file),
+  "Essayer avec l'exemple (Tour du Mont-Blanc)" (try the sample), "Ouvrir un projet…" (open a project), a single picker whose `accept` changes).
+- **Rail and panel**: vertical icon rail (`tablist`, roving focus, arrows / Home / End, tooltips) and a
+  320 px panel, one tab at a time: **Trace** (track; track list with "+ Ajouter" (add), waiting message without a track,
+  collapsible Climbs and Weather), **Carte** (map; scene settings, OSM landmarks), **Survol** (flyover; camera, pacing),
+  **Habillage** (overlay), **Projet** (project; presets). All tabs stay mounted (`hidden`): weather, landmarks and export have
+  side effects. Flat sections separated by a rule, sticky section header (title + "modifié / Par défaut" (modified / default)). A click
+  on the open tab, the button at the bottom of the rail or `[` collapses the panel. Tab and collapsed state are remembered by the browser
+  (`getPlatform().storage` `openflyover.shell.v1`, `parseShellPrefs`), not by the project.
+- **Right dock** (300 px): non-modal export drawer (`ExportPanel`: formats as tiles, resolution, estimate, "Exporter
+  la vidéo" (export the video), "Image fixe" (still image), "Plus de réglages" (more settings): frames per second, quality, image type; summary duration · frames · codec ·
+  size on one line; modes "Vidéo" (video), "Plusieurs formats" (several formats): resolution chips per format, still image, poster,
+  batch estimate, "Tout exporter" (export all), progress "2 / 4 · 16:9 1080p · 42 %", file list, and "Affiche" (poster));
+  otherwise the **inspector** of the block
+  selected on the timeline (`FilmInspector`, two `<aside class="dock">` of which only one is visible: the drawer takes precedence,
+  the inspector comes back when it closes if the block is still selected). Below 1360 px wide, only one side is open at a
+  time: whatever fills the dock (drawer or inspector) collapses the panel, which comes back when the dock empties; expanding the
+  panel empties the dock and deselects the block (`shellReducer`: `inspecting`, `inspect` event, which `App` sends when
+  `filmSelection` changes, after a press is released: the timeline does not change scale during a drag).
+- **During an export**: tabs, panel collapse, format, "Ouvrir", "Recadrer" (reframe), undo / redo (buttons) and
+  closing the drawer are disabled (resizing the scene would resize the canvas).
+- **View**: floating "Recadrer la vue" (reframe the view) button (F); click on the track and right-click menu (`TrackPicker`, see "Film and
+  timeline").
+- **Safe zones** (`src/ui/SafeZones.tsx`, pure and tested geometry in `src/ui/safeZones.ts`): floating button below
+  "Recadrer" (outside "Libre") or G; preview state (small `useSafeZonesStore` store, neither saved nor undoable, off at
+  startup). DOM layer in the framed `.view__stage`, above the overlay, `pointer-events: none`: the export (canvas)
+  never sees it. 16:9, 1:1, 21:9: action safe 93% and title safe 90% (EBU R 95), dotted. 9:16 and 4:5:
+  areas hidden by the interface of vertical feeds (union of Instagram Reels / TikTok / YouTube Shorts measured on a
+  1080 × 1920 screen, rounded to the safest value: top bar 220 px, buttons on the right 160 × 720 px, caption at the bottom 440 px),
+  hatched; a 4:5 is placed full width in the middle of this screen and only the parts that cover it remain
   (`phoneInterfaceOver`).
-- **Messages** (`toast.ts`, `Toaster.tsx`) : petit store zustand (`showToast`, `dismissToast`, `pushToast` pur : le même
-  message remplace l'ancien, 4 au plus, l'erreur la plus ancienne part en dernier), affichés en bas au centre de la vue,
-  au-dessus de la timeline, dans une seule région `aria-live` toujours montée. Succès et info disparaissent après
-  `toastDuration` (5 s, jusqu'à 12 s pour un long texte), minuterie suspendue au survol ou au focus ; erreurs en
-  `role="alert"`, jusqu'à fermeture ; bouton d'action facultatif. Sources : import (`importFiles` de `importFlow.ts`, lié
-  au store par `projectActions.ts` : « Trace « … » importée », échecs), projet ouvert / enregistré / avertissements du
-  fichier, préréglages (enregistré, « Préréglage appliqué : … »), export (« Vidéo prête · Télécharger à nouveau », « Image
-  prête », échec, « Export annulé »), « Réglages remis par
-  défaut · Annuler » (`resetSettings` renvoie une annulation gardée : elle n'agit que si les réglages sont encore ceux du
-  retour, donc jamais sur une étape postérieure ni antérieure ; le message disparaît au changement suivant des réglages).
-  Aussi les photos ajoutées sur la timeline (« Placer sur le parcours » en action).
-- **Dépôt partout** : `dragover` / `drop` sur `window` (dans `App`) : fichiers `.gpx` / `.fit` importés, `.json` ouvert
-  comme projet (`openFiles`, routage `routeOpenedFiles`), voile plein écran « Déposez vos traces GPX ou FIT »
-  (`pointer-events: none`) pendant le glissement (`isFileDrag`). Un dépôt déjà traité (`defaultPrevented` : la timeline
-  prend les photos) est laissé tel quel, et le voile s'efface au-dessus de la timeline ; rien n'est accepté pendant un export.
-- **Bande d'état** (24 px, sous la timeline) : « Chargement de la carte · N tuiles » / « Carte chargée · N tuiles »
-  (rien avant la première tuile, atténué, erreurs en orange), import en cours, attributions sur une ligne (`overlayCredits`,
-  mêmes chaînes que dans le film) et ⓘ qui ouvre « Sources et licences » (`<dialog>`).
-- **Raccourcis** (`src/ui/shortcuts.ts`) : registre `SHORTCUTS` (id, touches, libellé, groupe Lecture / Montage / Projet /
-  Vue) affiché par la boîte « Raccourcis clavier » (`HelpDialog.tsx`, `<dialog>` natif, « ? » ou le bouton de la barre)
-  et repris dans les infobulles (`withShortcut`). `matchShortcut(touche, keyFocus(cible))`, pur : Ctrl/Cmd+S enregistrer,
-  Ctrl/Cmd+O ouvrir, Ctrl/Cmd+E tiroir d'export, F recadrer, G zones de sécurité, S arrêt au marqueur, T texte à la tête de lecture, `[` replier
-  et `?` aide (AltGr / Maj acceptés), Échap, ← / →
-  (Maj : 5 s, `seekTime`), Début / Fin ; rien dans un champ texte ou une liste (`isTextEntry`), ni flèches ni Début / Fin
-  sur un contrôle qui s'en sert (curseur, radio, onglet, règle de la timeline). Pas de raccourci à chiffre (AZERTY). `App`
-  écoute en phase de capture (aucun raccourci tant qu'une boîte modale est ouverte) ; Échap ferme dans l'ordre la boîte
-  (native), le tiroir d'export, puis la sélection de la timeline (dans un champ de l'inspecteur aussi) ; un menu ouvert
-  (« Options » de la timeline, clic droit sur la trace : `data-local-escape`) se ferme d'abord lui-même. Le déplacement de
-  la tête de lecture et S / T vivent dans `SeekShortcuts` (composant sans rendu, horloge du film, phase de bulle : un bloc
-  sélectionné garde ses flèches).
-  `installHistoryShortcuts` (Ctrl/Cmd+Z, Ctrl/Cmd+Maj+Z, Ctrl+Y) et Espace (timeline) restent à leur place.
-- **Infobulles** : `data-tip` en CSS (`shell.css`), après 450 ms, au survol et au focus clavier, sur chaque bouton à icône
-  seule ; `data-tip-side` (`top`, `left`, `right`) et `data-tip-align` (`start`, `end`) près des bords de la fenêtre ou
-  d'une colonne qui défile. Les blocs de la timeline gardent leur `title` (libellé complet, un pseudo-élément serait coupé
-  par le bloc).
-- **Largeurs** : à 1280 px panneau et dock passent à 280 px et « Ouvrir / Enregistrer » à l'icône seule ; sous 1024 px le
-  panneau devient un tiroir au-dessus de la vue ; sous 700 px les onglets passent dans une barre en bas, panneau et tiroir
-  d'export en feuilles au-dessus, sans sélecteur de format dans la barre (les tuiles du tiroir restent).
-- **Sections des onglets Carte et Survol** (`PanelSection.tsx`) : `PanelSection` = section repliable à plat (classes `fold`,
-  en-tête collant : titre, « modifié / Par défaut » de ses clés, chevron), ouverte au départ. Carte : « Fond de carte »
-  (imagerie), « Relief et trace » (exagération, couleur de la trace), « Lumière », « Atmosphère et météo » (atmosphère,
-  ombres, météo dans la scène), « Couleurs » (étalonnage), puis « Repères (OpenStreetMap) » (`LandmarkPanel`, absente sans trace) et « Points d'intérêt » (`PoiPanel`, de même). Survol : « Caméra » (préréglage, style en tuiles à icônes, nord en haut),
-  « Durée et rythme » (durée, durée du film, ralentis oui / non). Les réglages rares sont dans `MoreSettings` (« Plus de
-  réglages », `<details>` fermé) : détail imagerie, source du relief, filaire, exposition, intensité de la météo, distance /
-  inclinaison / visée / lissage, temps forts et paramètres du rythme. Son résumé porte « modifié » quand un réglage caché
-  s'écarte du défaut (`modifiedPaths(settings, paths)` de `project/apply.ts`, chemins `'clé'` ou `'clé.champ'`). Clés des
-  réglages et comportement inchangés. `InfoTip` (ⓘ, infobulle `data-tip` d'une phrase, focusable, `aria-label`) seulement
-  sur le jargon : exagération, filaire, exposition, temps forts. Styles : bloc délimité en fin de `app.css`.
-- **Lumière** : bascule « Suivre la trace » (= `sunFromTrack`, désactivée avec une explication sans horodatage) / « Heure
-  fixe ». En heure fixe : curseur de l'heure solaire au-dessus d'une barre nuit / aube / jour / crépuscule avec les repères
-  du lever et du coucher (`solarDay` au point d'origine du repère local et au jour UTC du début de la première trace, comme la
-  scène ; journée type 6 h – 18 h sans trace) ; le texte sous la barre donne lever et coucher à l'heure locale quand la
-  première trace connaît son décalage UTC (`Track.utcOffsetMin`, `clockHourOfSolar`), l'heure solaire dans le ⓘ,
-  sinon en « heure solaire » seulement (pas de base de fuseaux horaires), et six raccourcis « Lever » (premier quart d'heure après le lever), « Matin »
-  (mi-chemin vers midi), « Midi », « Heure dorée » (1 h avant le coucher), « Coucher » (dernier quart d'heure avant),
-  « Nuit » (minuit solaire), grisés quand le moment n'existe pas (jour ou nuit polaire). Chaque raccourci est une étape
-  d'annulation (`transaction`) ; un glissé du curseur en est une (voir « Historique »).
-- **Clarté des panneaux** (bloc « Clarté » en fin de `app.css`) : interrupteur (`checkbox checkbox--switch`, case native
-  dessinée) pour allumer une fonction entière (habillage et chacun de ses éléments, atmosphère, météo, repères, course
-  fantôme, ralentis, crédits) ; pastilles à cocher (`chips` / `chip`, case native cachée, coche et fond encre une fois
-  choisie, pointillés si indisponible) pour les choix multiples (types de repères, compteurs) ; texte des options en 500,
-  libellés en 600. Sans trace, Carte, Survol et Habillage commencent par une ligne « Ajoutez une trace… » (`tab-hint`,
-  `NO_TRACK_HINT_TABS` dans `App`). Trace : météo en deux lignes (sortie ; instant du marqueur), tableaux repliés sous
-  « Détails » ; Synchronisation et classement de la course fantôme seulement une fois activée. Habillage (`OverlayPanel`)
-  en `PanelSection` : « Habillage » (interrupteur, style, « Couleurs et polices » repliée ; seul « modifié / Par défaut »,
-  pour tout `overlay`), « Titres », « Compteurs » (et « Classement (course fantôme) » dès deux traces), « Profil et mini-carte », « Météo, logo et texte » (absentes quand l'habillage est éteint), « Crédits des
-  sources » (toujours). `PanelSection` accepte des sections sans `keys` (pas de marqueur). Projet : sans préréglage, une
-  ligne au lieu d'une liste vide. Lumière : lever / coucher sur une ligne (heure locale si la trace donne son décalage,
-  sinon heure solaire), l'heure solaire correspondante dans le ⓘ d'« Heure solaire ». ⓘ aussi sur les réglages fins de la
-  caméra et la durée du survol. Clés des réglages et comportement inchangés.
-- **Icônes** : tracés Lucide (ISC, mention dans l'en-tête de `src/ui/icons.tsx`), SVG en ligne, seulement celles utilisées ;
-  cadres des formats dessinés d'après le ratio (`AspectIcon`).
+- **Messages** (`toast.ts`, `Toaster.tsx`): small zustand store (`showToast`, `dismissToast`, pure `pushToast`: the same
+  message replaces the old one, 4 at most, the oldest error leaves last), shown at the bottom center of the view,
+  above the timeline, in a single always-mounted `aria-live` region. Success and info disappear after
+  `toastDuration` (5 s, up to 12 s for a long text), timer paused on hover or focus; errors as
+  `role="alert"`, until closed; optional action button. Sources: import (`importFiles` from `importFlow.ts`, bound
+  to the store by `projectActions.ts`: "Trace « … » importée", failures), project opened / saved / file
+  warnings, presets (saved, "Préréglage appliqué : …"), export ("Vidéo prête · Télécharger à nouveau", "Image
+  prête", failure, "Export annulé"), "Réglages remis par
+  défaut · Annuler" (`resetSettings` returns a guarded undo: it only acts if the settings are still those it
+  returned, so never on a later or earlier step; the message disappears on the next settings change).
+  Also photos added to the timeline ("Placer sur le parcours" (place on the route) as the action).
+- **Drop anywhere**: `dragover` / `drop` on `window` (in `App`): `.gpx` / `.fit` files imported, `.json` opened
+  as a project (`openFiles`, routing `routeOpenedFiles`), full-screen veil "Déposez vos traces GPX ou FIT" (drop your GPX or FIT tracks)
+  (`pointer-events: none`) during the drag (`isFileDrag`). A drop already handled (`defaultPrevented`: the timeline
+  takes photos) is left as is, and the veil fades out over the timeline; nothing is accepted during an export.
+- **Status bar** (24 px, below the timeline): "Chargement de la carte · N tuiles" (loading map · N tiles) / "Carte chargée · N tuiles" (map loaded · N tiles)
+  (nothing before the first tile, dimmed, errors in orange), import in progress, attributions on one line (`overlayCredits`,
+  same strings as in the film) and ⓘ, which opens "Sources et licences" (sources and licenses) (`<dialog>`).
+- **Shortcuts** (`src/ui/shortcuts.ts`): `SHORTCUTS` registry (id, keys, label, group Lecture / Montage / Projet /
+  Vue (playback / editing / project / view)) shown by the "Raccourcis clavier" (keyboard shortcuts) box (`HelpDialog.tsx`, native `<dialog>`, "?" or the bar button)
+  and reused in tooltips (`withShortcut`). `matchShortcut(key, keyFocus(target))`, pure: Ctrl/Cmd+S save,
+  Ctrl/Cmd+O open, Ctrl/Cmd+E export drawer, F reframe, G safe zones, S stop at the marker, T text at the playhead, `[` collapse
+  and `?` help (AltGr / Shift accepted), Esc, ← / →
+  (Shift: 5 s, `seekTime`), Home / End; nothing in a text field or a list (`isTextEntry`), and no arrows or Home / End
+  on a control that uses them (slider, radio, tab, timeline ruler). No digit shortcut (AZERTY). `App`
+  listens in the capture phase (no shortcut while a modal box is open); Esc closes, in order, the (native)
+  box, the export drawer, then the timeline selection (also from an inspector field); an open menu
+  (timeline "Options", right-click on the track: `data-local-escape`) closes itself first. Moving
+  the playhead and S / T live in `SeekShortcuts` (component with no render output, film clock, bubble phase: a selected
+  block keeps its arrows).
+  `installHistoryShortcuts` (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y) and Space (timeline) stay where they are.
+- **Tooltips**: `data-tip` in CSS (`shell.css`), after 450 ms, on hover and keyboard focus, on every icon-only
+  button; `data-tip-side` (`top`, `left`, `right`) and `data-tip-align` (`start`, `end`) near the edges of the window or
+  of a scrolling column. Timeline blocks keep their `title` (full label; a pseudo-element would be clipped
+  by the block).
+- **Widths**: at 1280 px the panel and dock shrink to 280 px and "Ouvrir / Enregistrer" become icon-only; below 1024 px the
+  panel becomes a drawer above the view; below 700 px the tabs move to a bottom bar, panel and export
+  drawer become sheets above, with no format picker in the bar (the drawer tiles remain).
+- **Sections of the Carte and Survol tabs** (`PanelSection.tsx`): `PanelSection` = flat collapsible section (`fold` classes,
+  sticky header: title, "modifié / Par défaut" of its keys, chevron), open initially. Carte: "Fond de carte" (base map)
+  (imagery), "Relief et trace" (terrain and track; exaggeration, track color), "Lumière" (light), "Atmosphère et météo" (atmosphere and weather; atmosphere,
+  shadows, weather in the scene), "Couleurs" (colors; color grading), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset, style as icon tiles, north up),
+  "Durée et rythme" (duration and pacing; duration, film duration, slow-downs on / off). Rare settings are in `MoreSettings` ("Plus de
+  réglages", closed `<details>`): imagery detail, terrain source, wireframe, exposure, weather intensity, distance /
+  tilt / aim / smoothing, highlights and pacing parameters. Its summary shows "modifié" when a hidden setting
+  departs from the default (`modifiedPaths(settings, paths)` from `project/apply.ts`, paths `'key'` or `'key.field'`). Setting
+  keys and behavior unchanged. `InfoTip` (ⓘ, one-sentence `data-tip` tooltip, focusable, `aria-label`) only
+  on jargon: exaggeration, wireframe, exposure, highlights. Styles: delimited block at the end of `app.css`.
+- **Lumière**: toggle "Suivre la trace" (follow the track; = `sunFromTrack`, disabled with an explanation without timestamps) / "Heure
+  fixe" (fixed time). In fixed time: solar-hour slider above a night / dawn / day / dusk bar with the
+  sunrise and sunset marks (`solarDay` at the origin of the local frame and on the UTC day of the start of the first track, like the
+  scene; standard 6 am – 6 pm day without a track); the text under the bar gives sunrise and sunset in local time when the
+  first track knows its UTC offset (`Track.utcOffsetMin`, `clockHourOfSolar`), with the solar hour in the ⓘ,
+  otherwise in "heure solaire" (solar time) only (no time zone database), and six shortcuts "Lever" (sunrise; first quarter hour after sunrise), "Matin" (morning)
+  (halfway to noon), "Midi" (noon), "Heure dorée" (golden hour; 1 h before sunset), "Coucher" (sunset; last quarter hour before),
+  "Nuit" (night; solar midnight), grayed out when the moment does not exist (polar day or night). Each shortcut is one undo
+  step (`transaction`); a slider drag is one too (see "History").
+- **Panel clarity** ("Clarté" block at the end of `app.css`): switch (`checkbox checkbox--switch`, styled native
+  checkbox) to turn on a whole feature (overlay and each of its elements, atmosphere, weather, landmarks, ghost
+  race, slow-downs, credits); checkable chips (`chips` / `chip`, hidden native checkbox, check mark and ink background once
+  selected, dotted if unavailable) for multiple choices (landmark types, counters); option text at weight 500,
+  labels at 600. Without a track, Carte, Survol and Habillage start with a line "Ajoutez une trace…" (add a track; `tab-hint`,
+  `NO_TRACK_HINT_TABS` in `App`). Trace: weather on two lines (outing; marker instant), tables collapsed under
+  "Détails" (details); ghost race synchronization and ranking only once it is enabled. Habillage (`OverlayPanel`)
+  in `PanelSection`: "Habillage" (switch, style, "Couleurs et polices" (colors and fonts) collapsed; the only "modifié / Par défaut",
+  for all of `overlay`), "Titres" (titles), "Compteurs" (counters; and "Classement (course fantôme)" (ghost race ranking) from two tracks), "Profil et mini-carte" (profile and mini-map), "Météo, logo et texte" (weather, logo and text; absent when the overlay is off), "Crédits des
+  sources" (source credits; always). `PanelSection` accepts sections without `keys` (no marker). Projet: without presets, one
+  line instead of an empty list. Lumière: sunrise / sunset on one line (local time if the track gives its offset,
+  otherwise solar time), the matching solar time in the ⓘ of "Heure solaire". ⓘ also on the fine camera
+  settings and the flyover duration. Setting keys and behavior unchanged.
+- **Icons**: Lucide paths (ISC, notice in the header of `src/ui/icons.tsx`), inline SVG, only the ones used;
+  format frames drawn from the ratio (`AspectIcon`).
 
-## Survol (phase 2)
+## Flyover (phase 2)
 
-- **Lecture** (`store.playback { playing, progress, timeS, speed }`) : `progress` ∈ [0, 1] le long de la **première** trace, à vitesse
-  au sol constante ; durée `settings.flyoverDurationS` à ×1 (60 s par défaut) quelle que soit la longueur. `timeS` = temps du
-  film (s à ×1, rythme compris) quand la lecture ou l'export le fixent, `null` après un déplacement de l'extérieur (curseur,
-  montées, repères : il se déduit alors de la progression par le rythme). Atteindre 1 sans temps du film met en pause, relancer
-  depuis la fin rembobine ; `requestFit` met en pause, retirer une trace remet à 0.
-- **`FlyoverRig`** (dans `TerrainLayer`) : avance `progress` dans `useFrame`, place le marqueur (sphère blanche non éclairée,
-  `depthTest: false`, taille écran constante) et pilote la caméra pendant la lecture ou quand `progress` change en pause
-  (scrub) ; sinon l'orbite reste libre autour du marqueur.
-- **Caméra** (`src/flyover/camera.ts`, `computeCameraView`) : fonction pure de (progression, temps du film, réglages,
-  échantillonneur de relief), sans état d'une image à l'autre, pour que l'export vidéo rende n'importe quelle image isolément.
-  Orbite et cinéma (`movesWithTime`) suivent le temps du film (`timeS`, à défaut progression × durée) et continuent donc de
-  tourner pendant les pauses du rythme ; les autres styles ne dépendent que de la progression. Cap = corde
-  [d − w, d + w] (w = 2 % de la trace, 150 m–1,5 km, × lissage), distance automatique 4 % de la trace (600 m–4 km, × distance).
-  Styles (`settings.camera.style`) : `chase` (derrière le marqueur), `sway` (balancement vers l'extérieur des virages :
-  50° · tanh(0,8 · T / 50°), T = somme des angles de virage pondérée par une tente sur ±2w, continue et calme), `orbit` (6°/s
-  autour du marqueur depuis le cap de départ), `top` (≥ 70°, distance × 2,5, nord ou cap en haut), `cinematic` (distance × 1,6,
-  tangage / 2, balayage latéral ±35° de période 40 s). Tous gardent 80 m au-dessus du sol et une ligne de visée dégagée
-  (13 échantillons) ; les tests vérifient la continuité en progression.
-- **Réglages caméra** : `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp }` et préréglages
-  nommés (`CAMERA_PRESETS` : Poursuite, Hélicoptère, Drone haut, Vue du dessus, Orbite, Cinéma) dans
-  `src/flyover/cameraSettings.ts` ; `settings.flyoverDurationS` (15–600 s, 60 par défaut) = durée à ×1, la vitesse de la
-  timeline s'y ajoute. Onglet « Survol » (`src/ui/CameraPanel.tsx`, sections « Caméra » et « Durée et rythme »). En pause, un changement de réglage caméra replace la caméra.
-  « Cadrer la caméra pendant cet élément » (inspecteur d'un texte ou d'un média) : `addItemCamera` pose un cadrage là où
-  est le marqueur au début de l'élément (sélectionné, à régler) et, si le marqueur avance pendant l'élément, un second à
-  sa fin qui garde le cadrage qui y était : les cadrages voisins gardent leurs valeurs (entre la fin de l'élément et le
-  cadrage suivant, la transition est recalculée sur le nouvel intervalle).
-  « Garder ce cadrage ici » (section « Caméra ») pose un cadrage du film au marqueur (`addCameraKey`, avec le cadrage vu
-  là : `keyedCamera` ; un cadrage déjà à ce mètre le reprend), un pas d'annulation, sélectionné pour l'inspecteur (voir
-  « Film et timeline », « Caméra »).
-- **Rythme** (`src/flyover/pacing.ts`, pur ; `settings.pacing`, section « Caméra ») : la progression reste la fraction de
-  distance, seul le lien temps du film → progression change. Temps forts : sommets des montées (`climbsOf`) et, parmi les repères
-  OSM passés en argument, cols franchis (≤ 150 m) et sommets à ≤ 300 m. Vitesse relative
-  r(x) = 1 − (1 − slowFactor)·max c(|x − h| / windowM), c = cosinus surélevé (creux le plus profond en cas de chevauchement).
-  Temps de déplacement tabulé (vitesse constante par pas : inverse exact par dichotomie). Pauses : temps forts à moins de
-  windowM regroupés, une pause par groupe, chacune ajoute exactement `pauseS` avec entrée et sortie en cosinus surélevé
-  (≤ 1,5 s). `keepDuration` (défaut) relève la vitesse de base pour garder `flyoverDurationS` (pauses ≤ 50 % de la durée), sinon
-  le film s'allonge. Désactivé ou sans temps fort : identique à `advanceProgress`. `FlyoverRig` avance le temps du film
-  (`playback.timeS`, en pause du rythme la progression ne bouge pas) et repart de `pacing.positionAt` après un déplacement du
-  curseur ou un changement de rythme ; la lecture ne s'arrête qu'à `pacing.totalTime()`, pause finale comprise (progression 1
-  tenue avec un temps du film, puis 1 sans temps). `timeAtProgress(1)` = fin du film. Les pauses sont désormais les arrêts
-  du film (`flightPacing`, voir « Film et timeline ») ; `pacingFromHighlights` les dérive comme avant. `usePacing`
-  (`src/scene/usePacing.ts`) partage le calcul avec le panneau. L'export appelle `pacing.progressAtTime(t)` sur
+- **Playback** (`store.playback { playing, progress, timeS, speed }`): `progress` ∈ [0, 1] along the **first** track, at constant ground
+  speed; duration `settings.flyoverDurationS` at ×1 (60 s by default) whatever the length. `timeS` = film
+  time (s at ×1, pacing included) when playback or the export sets it, `null` after a move from outside (slider,
+  climbs, landmarks: it is then derived from the progress through the pacing). Reaching 1 without a film time pauses, restarting
+  from the end rewinds; `requestFit` pauses, removing a track resets to 0.
+- **`FlyoverRig`** (in `TerrainLayer`): advances `progress` in `useFrame`, places the marker (unlit white sphere,
+  `depthTest: false`, constant screen size) and drives the camera during playback or when `progress` changes while paused
+  (scrub); otherwise the orbit stays free around the marker.
+- **Camera** (`src/flyover/camera.ts`, `computeCameraView`): pure function of (progress, film time, settings,
+  terrain sampler), with no state from one frame to the next, so the video export can render any frame in isolation.
+  Orbit and cinematic (`movesWithTime`) follow the film time (`timeS`, or progress × duration when missing) and therefore keep
+  turning during pacing pauses; the other styles depend only on progress. Heading = chord
+  [d − w, d + w] (w = 2% of the track, 150 m–1.5 km, × smoothing), automatic distance 4% of the track (600 m–4 km, × distance).
+  Styles (`settings.camera.style`): `chase` (behind the marker), `sway` (swing toward the outside of bends:
+  50° · tanh(0.8 · T / 50°), T = sum of turn angles weighted by a tent over ±2w, continuous and calm), `orbit` (6°/s
+  around the marker from the start heading), `top` (≥ 70°, distance × 2.5, north or heading up), `cinematic` (distance × 1.6,
+  pitch / 2, lateral sweep ±35° with a 40 s period). All keep 80 m above the ground and a clear line of sight
+  (13 samples); the tests check continuity in progress.
+- **Camera settings**: `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp }` and named
+  presets (`CAMERA_PRESETS`: Poursuite (chase), Hélicoptère (helicopter), Drone haut (high drone), Vue du dessus (top view), Orbite (orbit), Cinéma (cinema)) in
+  `src/flyover/cameraSettings.ts`; `settings.flyoverDurationS` (15–600 s, 60 by default) = duration at ×1, the timeline
+  speed applies on top. "Survol" tab (`src/ui/CameraPanel.tsx`, "Caméra" and "Durée et rythme" sections). While paused, a camera setting change repositions the camera.
+  "Cadrer la caméra pendant cet élément" (frame the camera during this item; inspector of a text or a media item): `addItemCamera` places a framing where
+  the marker is at the start of the item (selected, to be adjusted) and, if the marker moves during the item, a second one at
+  its end that keeps the framing that was there: neighboring framings keep their values (between the end of the item and the
+  next framing, the transition is recomputed over the new interval).
+  "Garder ce cadrage ici" (keep this framing here; "Caméra" section) places a film framing at the marker (`addCameraKey`, with the framing seen
+  there: `keyedCamera`; a framing already at that meter takes it over), one undo step, selected for the inspector (see
+  "Film and timeline", "Camera").
+- **Pacing** (`src/flyover/pacing.ts`, pure; `settings.pacing`, "Caméra" section): progress remains the distance
+  fraction; only the film time → progress mapping changes. Highlights: climb summits (`climbsOf`) and, among the OSM
+  landmarks passed as an argument, passes crossed (≤ 150 m) and summits within ≤ 300 m. Relative speed
+  r(x) = 1 − (1 − slowFactor)·max c(|x − h| / windowM), c = raised cosine (deepest dip when they overlap).
+  Tabulated travel time (constant speed per step: exact inverse by bisection). Pauses: highlights less than
+  windowM apart are grouped, one pause per group, each adds exactly `pauseS` with raised-cosine entry and exit
+  (≤ 1.5 s). `keepDuration` (default) raises the base speed to keep `flyoverDurationS` (pauses ≤ 50% of the duration), otherwise
+  the film gets longer. Disabled or without highlights: identical to `advanceProgress`. `FlyoverRig` advances the film time
+  (`playback.timeS`; during a pacing pause the progress does not move) and restarts from `pacing.positionAt` after a slider
+  move or a pacing change; playback stops only at `pacing.totalTime()`, final pause included (progress 1
+  held with a film time, then 1 without a time). `timeAtProgress(1)` = end of the film. Pauses are now the film
+  stops (`flightPacing`, see "Film and timeline"); `pacingFromHighlights` derives them as before. `usePacing`
+  (`src/scene/usePacing.ts`) shares the computation with the panel. The export calls `pacing.progressAtTime(t)` over
   `pacing.totalTime()`.
-- **`Timeline`** (`src/ui/Timeline.tsx`) : timeline du film sous la vue, en temps du film (voir « Film et timeline ») —
-  lecture / pause, distance parcourue, altitude et heure enregistrée au marqueur, vitesse ×0,5 à ×4.
-- **Profil altimétrique** (bloc du survol de la piste « Plans ») : altitudes **enregistrées** de la trace rééchantillonnées à
-  400 pas de distance constants (`elevationProfile`), placées en temps du film (`timeAtProgress` : plat pendant les arrêts),
-  aire SVG, partie jouée en rouge clair. Amplitude verticale d'au moins 100 m pour ne pas grossir le bruit GPS ; profil masqué
-  si la trace n'a aucune altitude.
+- **`Timeline`** (`src/ui/Timeline.tsx`): film timeline below the view, in film time (see "Film and timeline") —
+  play / pause, distance covered, elevation and recorded time at the marker, speed ×0.5 to ×4.
+- **Elevation profile** (flyover block of the "Plans" (shots) lane): **recorded** elevations of the track resampled at
+  400 constant distance steps (`elevationProfile`), placed in film time (`timeAtProgress`: flat during stops),
+  SVG area, played part in light red. Vertical range of at least 100 m so GPS noise is not magnified; profile hidden
+  if the track has no elevation.
 
-## Atmosphère (phase 3)
+## Atmosphere (phase 3)
 
-- **`AtmosphereLayer`** (`src/scene/AtmosphereLayer.tsx`, dans `TerrainLayer`) : modèle de diffusion précalculé de Takram
-  (`@takram/three-atmosphere`). `worldToECEFMatrix` = `mslLocalToEcef(frame)` (repère local remonté de l'ondulation du
-  géoïde : +51 m à Chamonix, voir « Conventions de coordonnées »). Éclairage **par sources** (`SunLight` +
-  `SkyLight` placées à l'origine, 1000 m) : le terrain garde son `MeshStandardMaterial`. Post-process (`EffectComposer`) :
-  perspective aérienne (brume selon la distance réelle), tone mapping **Khronos Neutral** (garde les teintes des
-  orthophotos), SMAA, étalonnage (voir « Étalonnage »). Exposition 5.
-- **Textures précalculées** : fichiers EXR du paquet (~9,5 Mo), servis à `/atmosphere/` en dev et copiés dans le build par un
-  plugin de `vite.config.ts` — rien n'est téléchargé chez un tiers ni versionné ici. Ne pas les générer au démarrage : la
-  génération tourne dans des `requestIdleCallback` qui ne se déclenchent jamais tant que la scène occupe le fil principal,
-  et les lumières restent noires.
-- **Profondeur logarithmique** : `postprocessing` la signale par `LOG_DEPTH`, le shader Takram attend
-  `USE_LOGARITHMIC_DEPTH_BUFFER` ; le define est ajouté à l'effet, sinon toute la scène est vue comme infiniment loin.
-- **Trace** : matériaux non éclairés, leur couleur est divisée par `renderer.toneMappingExposure` (`applyExposure`).
-- **Soleil à l'heure de la sortie** (`settings.sunFromTrack`, actif par défaut) : quand la première trace est horodatée, la date
-  d'éclairage est l'heure **enregistrée** du point sous le marqueur (`sunDateAt`), mise à jour à chaque image par
-  `atmosphereRef.current.updateByDate(date)` dans `useFrame` (pas la prop `date` : les deux ne se combinent pas). Les points sans
-  heure sont comblés par interpolation en distance (`recordedTimeAt`) ; une pause ou un saut entre segments est franchi
-  instantanément. Sans horodatage ou option décochée : heure solaire fixe. La timeline affiche l'heure enregistrée au marqueur
-  (fuseau du navigateur).
-- **Exposition** (`src/scene/exposure.ts`) : `DAYLIGHT_EXPOSURE` (5) × 2^(automatique + `settings.exposureEv`). L'automatique
-  s'ouvre quand le soleil descend : 0 IL au-dessus de 10°, +3 IL au crépuscule civil (−6°), +6 IL la nuit (−18°). Une faible
-  lumière de ciel nocturne (`nightFillIntensity`) garde le relief lisible : l'atmosphère ne modélise que la lumière du soleil.
-- **Réglages** : `settings.atmosphere` (désactivable : retour à l'éclairage fixe sans tone mapping) et `settings.sunHour`
-  (heure **solaire** locale, 0 h–24 h, indépendante des fuseaux ; la nuit : étoiles et lune), le jour étant celui du début de la première trace
-  (aujourd'hui à défaut).
-- **Lever et coucher** (`sunTimes`, pur et testé) : équations solaires de la NOAA évaluées vers le midi local du jour UTC
-  (déclinaison, équation du temps ; zénith 90,833° : réfraction et demi-disque), environ une minute d'écart hors des pôles ;
-  jour ou nuit polaire signalés (`polar`, lever et coucher `null`). Converti en heure solaire par `solarHourOf` (inverse de
-  `solarHourToDate`) pour l'interface « Lumière ».
-- **Ombres portées du relief** (`src/scene/terrainShadow.ts`, `settings.shadows`, case « Ombres du relief » visible avec
-  l'atmosphère) : le `SunLight` Takram reçoit une `TerrainShadow` (une carte d'ombre 4096², PCF via `shadows="percentage"`).
-  Ses bornes orthographiques sont recalculées dans `updateMatrices(light, viewCamera)`, que three appelle juste avant de
-  dessiner la carte : zone = frustum de vue coupé à max(30 km, 5 × hauteur de la caméra au-dessus du relief le plus bas),
-  intersecté avec la boîte des tuiles visibles (`fitShadowFrustum`, pure et testée) ; plan proche repoussé vers le soleil
-  jusqu'au sommet de cette boîte ; bornes arrondies par pas de 2^(1/8) et calées sur des texels entiers (pas de scintillement) ;
-  biais selon le texel (normalBias 1,5 texel, profondeur 2 m). Texel ≈ 8–9 m en poursuite, 15–25 m en vue d'ensemble.
-- **Projecteurs hors champ** (`engine.ts`) : toutes les tuiles projettent et reçoivent ; `frustumCulled` actif. Après la
-  sélection LOD, les tuiles prêtes visitées mais hors frustum et non couvertes par une tuile dessinée restent `visible` : une
-  crête derrière la caméra atteint la carte d'ombre, three les écarte de la passe principale. `stats.visibleTiles` ne compte que
-  les tuiles dessinées.
-- **Pourquoi des ombres** : sans occultation, un soleil rasant (~1° au coucher) éclaire le versant ensoleillé de chaque bosse des
-  vallées censées être à l'ombre des crêtes — c'était l'origine des stries orange (N·L > 0 sur des facettes minces).
-- Limites : rien hors de l'emprise chargée (trace + 25 km) ne projette ; ombres coupées net au-delà de la distance d'ombre (la
-  brume le masque) ; une seule carte (pas de cascades) ; carte redessinée à chaque image.
+- **`AtmosphereLayer`** (`src/scene/AtmosphereLayer.tsx`, in `TerrainLayer`): Takram's precomputed scattering model
+  (`@takram/three-atmosphere`). `worldToECEFMatrix` = `mslLocalToEcef(frame)` (local frame raised by the geoid
+  undulation: +51 m at Chamonix, see "Coordinate conventions"). Lighting **by sources** (`SunLight` +
+  `SkyLight` placed at the origin, 1000 m): the terrain keeps its `MeshStandardMaterial`. Post-process (`EffectComposer`):
+  aerial perspective (haze according to the real distance), **Khronos Neutral** tone mapping (keeps the hues of the
+  orthophotos), SMAA, color grading (see "Color grading"). Exposure 5.
+- **Precomputed textures**: EXR files from the package (~9.5 MB), served at `/atmosphere/` in dev and copied into the build by a
+  `vite.config.ts` plugin — nothing is downloaded from a third party or versioned here. Do not generate them at startup: the
+  generation runs in `requestIdleCallback` calls that never fire while the scene keeps the main thread busy,
+  and the lights stay black.
+- **Logarithmic depth**: `postprocessing` signals it with `LOG_DEPTH`, the Takram shader expects
+  `USE_LOGARITHMIC_DEPTH_BUFFER`; the define is added to the effect, otherwise the whole scene is seen as infinitely far.
+- **Track**: unlit materials; their color is divided by `renderer.toneMappingExposure` (`applyExposure`).
+- **Sun at the time of the outing** (`settings.sunFromTrack`, on by default): when the first track is timestamped, the lighting
+  date is the **recorded** time of the point under the marker (`sunDateAt`), updated every frame by
+  `atmosphereRef.current.updateByDate(date)` in `useFrame` (not the `date` prop: the two do not combine). Points without
+  a time are filled by interpolation over distance (`recordedTimeAt`); a pause or a jump between segments is crossed
+  instantly. Without timestamps or with the option unchecked: fixed solar time. The timeline shows the recorded time at the marker
+  (browser time zone).
+- **Exposure** (`src/scene/exposure.ts`): `DAYLIGHT_EXPOSURE` (5) × 2^(automatic + `settings.exposureEv`). The automatic part
+  opens up as the sun goes down: 0 EV above 10°, +3 EV at civil twilight (−6°), +6 EV at night (−18°). A faint
+  night-sky light (`nightFillIntensity`) keeps the terrain readable: the atmosphere only models sunlight.
+- **Settings**: `settings.atmosphere` (can be turned off: back to fixed lighting without tone mapping) and `settings.sunHour`
+  (local **solar** time, 0 h–24 h, independent of time zones; at night: stars and moon), the day being `settings.sunDate`
+  (`YYYY-MM-DD`, "Jour" (day) field in fixed time, `isSunDate`) or, if empty, the day the first track starts (today
+  otherwise): `sunDayMs`.
+- **Sunrise and sunset** (`sunTimes`, pure and tested): NOAA solar equations evaluated around local noon of the UTC day
+  (declination, equation of time; zenith 90.833°: refraction and half disk), about one minute of error away from the poles;
+  polar day or night flagged (`polar`, sunrise and sunset `null`). Converted to solar time by `solarHourOf` (inverse of
+  `solarHourToDate`) for the "Lumière" interface.
+- **Terrain cast shadows** (`src/scene/terrainShadow.ts`, `settings.shadows`, "Ombres du relief" (terrain shadows) checkbox visible with
+  the atmosphere): the Takram `SunLight` receives a `TerrainShadow` (one 4096² shadow map, PCF through `shadows="percentage"`).
+  Its orthographic bounds are recomputed in `updateMatrices(light, viewCamera)`, which three calls just before
+  drawing the map: area = view frustum cut at max(30 km, 5 × camera height above the lowest terrain),
+  intersected with the box of the visible tiles (`fitShadowFrustum`, pure and tested); near plane pushed toward the sun
+  up to the top of that box; bounds rounded in steps of 2^(1/8) and snapped to whole texels (no shimmering);
+  texel-based bias (normalBias 1.5 texel, depth 2 m). Texel ≈ 8–9 m in chase, 15–25 m in overview.
+- **Off-screen casters** (`engine.ts`): all tiles cast and receive; `frustumCulled` on. After the
+  LOD selection, ready tiles that were visited but are outside the frustum and not covered by a drawn tile stay `visible`: a
+  ridge behind the camera reaches the shadow map, and three drops them from the main pass. `stats.visibleTiles` only counts
+  the drawn tiles.
+- **Why shadows**: without occlusion, a grazing sun (~1° at sunset) lights the sunny side of every bump in
+  valleys that should be in the shadow of the ridges — this was the cause of the orange streaks (N·L > 0 on thin facets).
+- Limits: nothing outside the loaded footprint (track + 25 km) casts; shadows cut sharply beyond the shadow distance (the
+  haze hides it); a single map (no cascades); map redrawn every frame.
 
-## Étalonnage (« Couleurs »)
+## Color grading ("Couleurs")
 
-- **Réglage** `settings.grading` (`src/scene/grading.ts`, pur et testé) : `contrast`, `saturation`, `warmth` (−1..1),
-  `vignette` (0..1), et `preset` (`naturel`, `lumineux`, `doux`, `contraste`, `chaud-du-soir`, `froid-altitude`,
-  `noir-et-blanc`, ou `personnalise`). Le préréglage suit toujours les valeurs (`withGradingValue` → `matchingPreset` : un
-  curseur ramené sur les valeurs d'un préréglage le resélectionne). Validé à l'ouverture d'un projet (`isValidGrading`).
-- **Effet** (`src/scene/gradingEffect.ts`) : un seul `Effect` de `postprocessing`, par pixel, sans texture ni profondeur :
-  balance des blancs (gains R / B, luminance conservée) → saturation (mélange avec la luminance Rec. 709) → courbe en S
-  autour du gris moyen en sRGB (0 et 1 fixes, rien n'écrête ; pente 2^contraste) → vignettage (jusqu'à −60 % dans les
-  coins, distance en unités du cadre : même rendu à toute résolution). Un curseur ne change que des uniformes (pas de
-  recompilation). L'habillage (canvas 2D au-dessus, composé après la scène à l'export) n'est pas étalonné :
-  textes et logos gardent les couleurs de leur style.
-- **Place dans la chaîne** : avec l'atmosphère, dernier effet du composer d'`AtmosphereLayer`, **après** le tone mapping et
-  le SMAA (le SMAA lit l'entrée de sa passe : un effet placé avant lui dans la même passe serait ignoré sur les bords).
-  Sans l'atmosphère, il n'y a pas de composer : `GradingComposer` (`src/scene/GradingComposer.tsx`, chargé à la demande
-  par `FlyoverCanvas`) en monte un minimal (rendu, SMAA, étalonnage). Le canvas étant alors transparent sur le dégradé CSS du
-  ciel, l'effet pose d'abord l'image (prémultipliée) sur le **même dégradé** (`SKY_TOP_COLOR` → `SKY_HORIZON_COLOR`,
-  interpolé en sRGB comme le CSS) : le ciel est étalonné aussi et la sortie est opaque ; l'export, qui peint ce dégradé sous
-  le canvas (`fillSky`), obtient la même image. Choix plutôt qu'un étalonnage dans le compositeur 2D de l'export : un seul
-  code pour l'aperçu et l'export.
-- **Coût** : « Naturel » (valeurs nulles, `isIdentityGrading`) ne monte **rien** (ni effet, ni passe ; sans atmosphère ni
-  composer, ni chargement de `postprocessing`). Sinon quelques dizaines d'opérations par pixel, fusionnées dans la passe
-  existante. Sans atmosphère, passer de « Naturel » à un préréglage remplace le MSAA natif du canvas par le SMAA.
-- **Interface** : section « Couleurs » de l'onglet Carte (`src/ui/GradingPanel.tsx`) : pastilles des préréglages (une
-  étape d'annulation chacune), les quatre curseurs sous « Plus de réglages ».
+- **Setting** `settings.grading` (`src/scene/grading.ts`, pure and tested): `contrast`, `saturation`, `warmth` (−1..1),
+  `vignette` (0..1), and `preset` (`naturel`, `lumineux`, `doux`, `contraste`, `chaud-du-soir`, `froid-altitude`,
+  `noir-et-blanc`, or `personnalise`). The preset always follows the values (`withGradingValue` → `matchingPreset`: a
+  slider brought back to a preset's values selects it again). Validated when a project is opened (`isValidGrading`).
+- **Effect** (`src/scene/gradingEffect.ts`): a single `postprocessing` `Effect`, per pixel, with no texture or depth:
+  white balance (R / B gains, luminance preserved) → saturation (mix with the Rec. 709 luminance) → S-curve
+  around middle gray in sRGB (0 and 1 fixed, nothing clips; slope 2^contrast) → vignetting (down to −60% in the
+  corners, distance in frame units: same rendering at any resolution). A slider only changes uniforms (no
+  recompilation). The overlay (2D canvas on top, composited after the scene in the export) is not graded:
+  texts and logos keep the colors of their style.
+- **Place in the chain**: with the atmosphere, last effect of the `AtmosphereLayer` composer, **after** tone mapping and
+  SMAA (SMAA reads the input of its pass: an effect placed before it in the same pass would be ignored on the edges).
+  Without the atmosphere, there is no composer: `GradingComposer` (`src/scene/GradingComposer.tsx`, loaded on demand
+  by `FlyoverCanvas`) mounts a minimal one (render, SMAA, grading). Since the canvas is then transparent over the CSS sky
+  gradient, the effect first lays the (premultiplied) image over the **same gradient** (`SKY_TOP_COLOR` → `SKY_HORIZON_COLOR`,
+  interpolated in sRGB like the CSS): the sky is graded too and the output is opaque; the export, which paints this gradient under
+  the canvas (`fillSky`), gets the same image. Chosen over grading in the export's 2D compositor: a single
+  code path for the preview and the export.
+- **Cost**: "Naturel" (natural; zero values, `isIdentityGrading`) mounts **nothing** (no effect, no pass; without atmosphere, no
+  composer and no loading of `postprocessing`). Otherwise a few dozen operations per pixel, merged into the existing
+  pass. Without atmosphere, switching from "Naturel" to a preset replaces the canvas's native MSAA with SMAA.
+- **Interface**: "Couleurs" section of the Carte tab (`src/ui/GradingPanel.tsx`): preset chips (one
+  undo step each), the four sliders under "Plus de réglages".
 
-## Couleur de la trace
+## Track color
 
-- **Réglage** `settings.trackColorBy` : `'none'` (couleur propre de chaque trace, défaut), `speed`, `slope`, `elevation`,
-  `heartRate`, `cadence`, `power`, `temperature`. Les grandeurs absentes de la première trace sont désactivées.
-- **Valeurs** (`src/flyover/trackColor.ts`, pur), sur les points enregistrés : vitesse en km/h sur une fenêtre centrée d'au moins
-  ±25 m **et** ±15 s (plafonnée à ±300 s) contre le bruit GPS ; pente en % sur ±50 m (inconnue sous 20 m) ; altitude ; capteurs
-  moyennés sur ±5 s.
-- **Plage** commune à toutes les traces : 2ᵉ–98ᵉ centile. **Palettes** séquentielles perceptuellement uniformes : viridis par
-  défaut, magma (à partir de 0,2) pour FC, puissance et température. **Valeurs manquantes** : gris `#55626b`, jamais interpolées.
-- **TrackLines** : couleurs par sommet (`LineGeometry.setColors`, `vertexColors` sur les matériaux plein et fantôme) ; les points
-  insérés par `densify` sont interpolés (`resampleValues`). Changer de mode ne réécrit que le tampon de couleurs. Avec les
-  couleurs par sommet, la couleur du matériau est le blanc divisé par l'exposition (`applyExposure`).
-- **Légende** `TrackLegend` (en bas à gauche de la vue 3D, seulement si `trackColorBy !== 'none'`) : dégradé, bornes avec unités,
-  pastille « Sans donnée » s'il manque des valeurs.
+- **Setting** `settings.trackColorBy`: `'none'` (each track's own color, default), `speed`, `slope`, `elevation`,
+  `heartRate`, `cadence`, `power`, `temperature`. Metrics missing from the first track are disabled.
+- **Values** (`src/flyover/trackColor.ts`, pure), on the recorded points: speed in km/h over a centered window of at least
+  ±25 m **and** ±15 s (capped at ±300 s) against GPS noise; slope in % over ±50 m (unknown below 20 m); elevation; sensors
+  averaged over ±5 s.
+- **Range** shared by all tracks: 2nd–98th percentile. Perceptually uniform sequential **palettes**: viridis by
+  default, magma (from 0.2) for HR, power and temperature. **Missing values**: gray `#55626b`, never interpolated.
+- **TrackLines**: per-vertex colors (`LineGeometry.setColors`, `vertexColors` on the solid and ghost materials); points
+  inserted by `densify` are interpolated (`resampleValues`). Changing the mode only rewrites the color buffer. With
+  per-vertex colors, the material color is white divided by the exposure (`applyExposure`).
+- **Legend** `TrackLegend` (bottom left of the 3D view, only if `trackColorBy !== 'none'`): gradient, bounds with units,
+  "Sans donnée" (no data) chip if values are missing.
 
-## Trace et marqueur
+## Track and marker
 
-- **Réglages** `settings.trackStyle { width, dash: 'plein' | 'tirets' | 'points', glow, drawOn }` et `settings.marker { kind:
-  'boule' | 'figurine' | 'image', figure, image, size }` (`src/scene/markerSettings.ts`, pur). Défauts = l'aspect d'avant
-  (4 px, plein, boule blanche). Vérifiés par `SETTING_CHECKS`, complétés par `SETTING_UPGRADES` (clés ajoutées plus tard).
-  `image` : PNG carré de 128 px en data URL (`fileToAvatarDataUrl`, sélecteur de la plateforme), 300 000 caractères au plus.
-  Section « Trace et marqueur » de l'onglet Survol (`src/ui/TrackMarkerSection.tsx`).
-- **Largeur** : pixels d'une image de 1080 px, fois `renderScale` à l'export (comme avant). **Halo** : troisième `Line2` sur la
-  même géométrie, 3,5 fois plus large, matériau `LineMaterial` dont le fragment est remplacé (`onBeforeCompile`, clé de
-  programme propre) : couleur de la trace × fondu radial (`vUv`), mélange **MAX** — pas de perles aux jointures des
-  morceaux qui se recouvrent, la trace garde sa teinte ; le halo éclaire surtout les fonds sombres. Suit l'exposition et les
-  couleurs par sommet comme les deux autres passes.
-- **Tirets / points** : tirets de `LineMaterial` mesurés en unités du monde (`computeLineDistances`, refait à chaque
-  drapage). Échelle = taille d'un pixel à la distance caméra → cible des contrôles, **arrondie à une puissance de deux**
-  (`quantizedPixelSize`) : les tirets restent fixes au sol pendant le vol et ne changent de longueur que quand le zoom
-  double. Motifs en largeurs de trait : tirets 3 / 2, points 1 / 1,5.
-- **Trace qui se dessine** : chaque segment garde la distance de chaque point depuis le départ de sa trace (comme
-  `buildTrackPath`, sans compter les sauts entre segments). `cutLine` limite `geometry.instanceCount` aux morceaux parcourus
-  et déplace la fin du dernier morceau exactement sur le marqueur (restaurée au découpage suivant ; un drapage la réécrit).
-  Distance : progression × longueur pour la première trace, `racer.distanceM` pour les autres pendant une course fantôme,
-  trace entière sinon. Appliqué par un abonnement au store (la progression posée par `FlyoverRig` est prise dans la même
-  image, bien que `TrackLines` passe avant lui) et à chaque image (après un drapage) ; sans effet quand rien ne change.
-  Fonction de la progression seule : aperçu = export. La partie à venir est masquée (pas de fantôme).
-- **Marqueurs** (`markerSprite.ts`) : un `Sprite` par marqueur (tête : `FlyoverRig`, nom `flyover-marker` ; course :
-  `RaceMarkers`), texture de badge dessinée sur canvas (`markerBadge.ts`) et mise en cache par clé (48 au plus). Boule :
-  disque blanc (tête) ou couleur de la trace dans un halo encre ×1,35 (course) — même aspect qu'avant. Figurine : pictogramme
-  24 × 24 au trait (style Lucide ; vélo et voiture repris de Lucide) sur disque encre bordé de blanc (tête) ou couleur de la
-  trace bordée d'encre (course), trait encre ou blanc selon la luminance. Image : photo en rond, bord blanc ; les coureurs
-  gardent leur boule. Diamètre des badges : 2,2 fois la boule. Taille écran constante : rayon = max(1, distance × 0,007)
-  × `size`. Couleurs divisées par l'exposition, comme les lignes.
-- **Sens** : la figurine est retournée quand la trace va de droite à gauche à l'écran, d'après les points de la trace à
-  ±60 m du marqueur projetés avec la caméra de l'image (`headsLeft`, sans état : même image à l'aperçu et à l'export).
+- **Settings** `settings.trackStyle { width, dash: 'plein' | 'tirets' | 'points', glow, drawOn }` and `settings.marker { kind:
+  'boule' | 'figurine' | 'image', figure, image, size }` (`src/scene/markerSettings.ts`, pure). Defaults = the previous look
+  (4 px, solid, white ball). Checked by `SETTING_CHECKS`, completed by `SETTING_UPGRADES` (keys added later).
+  `image`: 128 px square PNG as a data URL (`fileToAvatarDataUrl`, platform picker), 300,000 characters at most.
+  "Trace et marqueur" (track and marker) section of the Survol tab (`src/ui/TrackMarkerSection.tsx`).
+- **Width**: pixels of a 1080 px image, times `renderScale` in the export (as before). **Glow**: a third `Line2` on the
+  same geometry, 3.5 times wider, `LineMaterial` material whose fragment shader is replaced (`onBeforeCompile`, own
+  program key): track color × radial fade (`vUv`), **MAX** blending — no beads at the joints of
+  overlapping pieces, the track keeps its hue; the glow mostly lights up dark backgrounds. Follows the exposure and the
+  per-vertex colors like the other two passes.
+- **Dashes / dots**: `LineMaterial` dashes measured in world units (`computeLineDistances`, redone on each
+  drape). Scale = size of a pixel at the camera → controls target distance, **rounded to a power of two**
+  (`quantizedPixelSize`): dashes stay fixed on the ground during the flight and only change length when the zoom
+  doubles. Patterns in line widths: dashes 3 / 2, dots 1 / 1.5.
+- **Track that draws itself**: each segment keeps the distance of each point from the start of its track (like
+  `buildTrackPath`, without counting the jumps between segments). `cutLine` limits `geometry.instanceCount` to the pieces covered
+  and moves the end of the last piece exactly onto the marker (restored at the next cut; a drape rewrites it).
+  Distance: progress × length for the first track, `racer.distanceM` for the others during a ghost race,
+  whole track otherwise. Applied through a store subscription (the progress set by `FlyoverRig` is picked up in the same
+  frame, although `TrackLines` runs before it) and on every frame (after a drape); no effect when nothing changes.
+  A function of progress alone: preview = export. The part still to come is hidden (no ghost).
+- **Markers** (`markerSprite.ts`): one `Sprite` per marker (head: `FlyoverRig`, name `flyover-marker`; race:
+  `RaceMarkers`), badge texture drawn on a canvas (`markerBadge.ts`) and cached by key (48 at most). Ball:
+  white disk (head) or track color in an ink halo ×1.35 (race) — same look as before. Figurine: 24 × 24 line
+  pictogram (Lucide style; bike and car taken from Lucide) on an ink disk edged in white (head) or track color
+  edged in ink (race), ink or white stroke depending on luminance. Image: round photo, white edge; racers
+  keep their ball. Badge diameter: 2.2 times the ball. Constant screen size: radius = max(1, distance × 0.007)
+  × `size`. Colors divided by the exposure, like the lines.
+- **Direction**: the figurine is flipped when the track runs from right to left on screen, based on the track points within
+  ±60 m of the marker projected with the frame's camera (`headsLeft`, stateless: same image in preview and export).
 
-## Film et timeline (phase 4, incréments 1 à 4 sur 4 : modèle, moteur, timeline, textes, photos et vidéos ; musique et son des vidéos, phase 7)
+## Film and timeline (phase 4, increments 1 to 4 of 4: model, engine, timeline, texts, photos and videos; music and video sound, phase 7)
 
-- **Principe** : comme un logiciel de montage, « la base, c'est le GPX » : le survol continu de la première trace porte le
-  film ; des éléments posés sur des pistes séparées s'y ajoutent. Incréments : 1 modèle pur et moteur (fait) ; 2 timeline sous
-  la vue (pistes, glisser pour déplacer / étirer, inspecteur ; fait) ; 3 piste des textes dessinée dans l'habillage (fait) ;
-  4 piste des médias (photos et vidéos faites, avec leur son : voir « Son des vidéos »).
-- **Modèle** (`src/film/model.ts`, `settings.film` : enregistré dans le document de projet, annulable, validé par
-  `isValidFilm` dans `SETTING_CHECKS`, aucune migration : un ancien projet reçoit `DEFAULT_FILM`) :
-  `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut' | 'situation' | 'balayage', durationS }` (1–30 s ; défaut descente 6 s / 5 s) ;
-  `autoStops` (arrêts générés) et `autoMode` : `'temps-forts'` (défaut des nouveaux projets) ou `'rythme'` (projets
-  antérieurs) ;
-  `stops[]` `{ id, atM, durationS (0,5–60 s), camera: 'film' | 'orbite' | 'large' | 'fixe', label?, source?: { kind, ref? } }`
-  (`STOP_CAMERA_LABELS` : « Comme le film », « Tour lent », « Vue large », « Fixe ») ;
-  `cameraKeys[]` `{ id, atM, distance, pitchDeg, headingOffsetDeg }` (cadrages de la caméra de vol le long de la première
-  trace, mêmes plages que `CAMERA_RANGES`, `isValidCameraKey` ; vide par défaut, un film enregistré avant reçoit `[]`) ;
-  `speeds[]` `{ id, fromM, toM, factor (×0,25–×4) }` (portions de la première trace, en mètres, jamais chevauchantes,
-  elles peuvent se toucher ; `isValidSpeed`, vide par défaut, un film enregistré avant reçoit `[]` par `withFilmDefaults`) ;
-  `texts[]` `{ id, startS, durationS, text, subtitle?, anchor, size }` (placement du widget texte de l'habillage) et
+- **Principle**: as in video editing software, "the GPX is the base": the continuous flyover of the first track carries the
+  film; items placed on separate lanes are added to it. Increments: 1 pure model and engine (done); 2 timeline below
+  the view (lanes, drag to move / stretch, inspector; done); 3 text lane drawn in the overlay (done);
+  4 media lane (photos and videos done, with their sound: see "Video sound").
+- **Model** (`src/film/model.ts`, `settings.film`: saved in the project document, undoable, validated by
+  `isValidFilm` in `SETTING_CHECKS`, no migration: an old project receives `DEFAULT_FILM`):
+  `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut' | 'situation' | 'balayage', durationS }` (1–30 s; default descente 6 s / 5 s);
+  `autoStops` (generated stops) and `autoMode`: `'temps-forts'` (default for new projects) or `'rythme'` (earlier
+  projects);
+  `stops[]` `{ id, atM, durationS (0.5–60 s), camera: 'film' | 'orbite' | 'large' | 'fixe', label?, source?: { kind, ref? } }`
+  (`STOP_CAMERA_LABELS`: "Comme le film" (like the film), "Tour lent" (slow orbit), "Vue large" (wide view), "Fixe" (fixed));
+  `cameraKeys[]` `{ id, atM, distance, pitchDeg, headingOffsetDeg }` (flight camera framings along the first
+  track, same ranges as `CAMERA_RANGES`, `isValidCameraKey`; empty by default, a film saved earlier receives `[]`);
+  `speeds[]` `{ id, fromM, toM, factor (×0.25–×4) }` (sections of the first track, in meters, never overlapping,
+  they may touch; `isValidSpeed`, empty by default, a film saved earlier receives `[]` through `withFilmDefaults`);
+  `texts[]` `{ id, startS, durationS, text, subtitle?, anchor, size, color?, font? }` (placement of the overlay text widget;
+  own color and font, otherwise those of the overlay) and
   `media[]` `{ id, startS, durationS, kind: 'image' | 'video', src, layout: 'plein-ecran' | 'carte', anchor, size, kenBurns,
-  caption?, inS?, outS?, muted?, sync? }` (`src` = id de l'image ou de la vidéo dans la table des médias du document, voir
-  « Photos » et « Vidéos » ; vidéo : `inS` / `outS` = début et fin du morceau dans le fichier, défaut son début et sa fin,
-  `clipTimeS` ; `muted` et `volume` (0–1, défaut 1) : son de la vidéo, voir « Son des vidéos » ; `sync` `{ startMs, offsetS, follow }` : vidéo
-  calée sur la trace, voir « Vidéo calée sur le parcours » ; `MEDIA_DEFAULTS` : plein
-  écran, Ken Burns, légende en bas à gauche, taille 1, aussi pour un média enregistré sans ces champs par
-  `withFilmDefaults`), et `audio[]` `{ id, src, startS, durationS (0,5 s–1 h), inS, volume (0–1), fadeInS, fadeOutS (0–30 s) }`
-  (musiques, voir « Musique » ; `src` = id du fichier son dans la table des médias ; `AUDIO_DEFAULTS` : volume 1, fondus
-  0,5 s / 2 s ; `isValidAudio` ; un film enregistré avant reçoit `[]`), ancrés en temps du film, et `duckMusic` (« Baisser la
-  musique sous les vidéos », faux par défaut et pour un film enregistré avant) ; `pois[]` `{ id, lon, lat, name }` (points
-  d'intérêt placés à la main, voir « Points d'intérêt » ; un film enregistré avant reçoit `[]`) ; `landmarkTitles` (« Ralentir
-  et titrer aux repères », vrai par défaut, faux pour un film enregistré avant : son vol ne change pas) ; ids uniques dans le film
+  caption?, inS?, outS?, muted?, sync? }` (`src` = id of the image or video in the document's media table, see
+  "Photos" and "Videos"; video: `inS` / `outS` = start and end of the clip in the file, default its start and end,
+  `clipTimeS`; `muted` and `volume` (0–1, default 1): video sound, see "Video sound"; `sync` `{ startMs, offsetS, follow }`: video
+  synced to the track, see "Video synced to the route"; `MEDIA_DEFAULTS`: full
+  screen, Ken Burns, caption at the bottom left, size 1, also applied by `withFilmDefaults` to a media item saved without these
+  fields), and `audio[]` `{ id, src, startS, durationS (0.5 s–1 h), inS, volume (0–1), fadeInS, fadeOutS (0–30 s) }`
+  (music tracks, see "Music"; `src` = id of the sound file in the media table; `AUDIO_DEFAULTS`: volume 1, fades
+  0.5 s / 2 s; `isValidAudio`; a film saved earlier receives `[]`), anchored in film time, and `duckMusic` ("Baisser la
+  musique sous les vidéos" (lower the music under the videos), false by default and for a film saved earlier); `pois[]` `{ id, lon, lat, name }` (points
+  of interest placed by hand, see "Points of interest"; a film saved earlier receives `[]`); `landmarkTitles` ("Ralentir
+  et titrer aux repères" (slow down and add titles at landmarks), true by default, false for a film saved earlier: its flight does not change); ids unique within the film
   (`stop-3`, `text-1`, `media-2`, `music-1`, `poi-2`, `nextFilmId`).
-- **Assemblage automatique** (`src/film/assemble.ts`) : tant que `autoStops` est vrai, les arrêts sont générés à chaque calcul
-  (`autoStops`) aux temps forts (`stopCandidates` : sommets des montées, cols franchis, sommets proches, selon les cases
-  `climbs` / `landmarks` du rythme ; un par groupe de `windowM`, comme les pauses qu'ils remplacent), id `auto-<mètres>`,
-  libellé (« Montée 1 · cat. 3 · 1 653 m », nom OSM) et source ; ils suivent les repères OSM chargés après coup.
-  `'temps-forts'` : un arrêt par temps fort **même rythme désactivé**, `AUTO_STOP_S` (4 s), caméra `orbite` (ce sont tous
-  des sommets ou des cols). `'rythme'` : les pauses du rythme d'avant la timeline (rien si le rythme est désactivé,
-  `pauseS`, caméra `film`, comme ces pauses avant). `materializeStops` écrit les arrêts générés dans le film (`autoStops: false`) à la première
-  retouche d'un arrêt ; `assembleFilm` = film par défaut ainsi écrit.
-- **Ralentis et titres aux repères** (`landmarkTitles`, même module) : `pickLandmarkTitles` choisit, parmi les repères de la
-  première trace, les cols et sommets à 150 m au plus (`TITLE_NEAR_M`) et les refuges à 100 m au plus, par priorité
-  décroissante (égalité : position, puis id : déterministe), jamais deux à moins de 10 s de film (`TITLE_GAP_S`), un par
-  3 km de trace (au moins un, au plus 6). Chacun reçoit une carte de texte (`texts`, id `auto-text-<id OSM>`, nom, altitude
-  en sous-titre si connue, en haut au centre, 4 s dès 1 s avant le passage du marqueur) et une portion ×0,5 sur 400 m
-  centrée sur lui (`speeds`, id `auto-speed-<id OSM>`), sauf si elle couvrirait un arrêt du film ou un temps fort ralenti
-  par le rythme actif, ou chevaucherait une autre portion : le titre seul alors (au début de la tenue d'un arrêt).
-  Contrairement aux arrêts, ces éléments sont **écrits dans le film** (le temps des textes dépend de l'horloge) :
-  `withLandmarkTitles` retire les éléments `auto-speed-` / `auto-text-` et les refait, sans toucher ceux de l'utilisateur ;
-  les titres sont placés avec l'horloge du film ralenti (`PassingTimes`). **Quand** : `setLandmarkTitles`
-  (`scene/usePacing.ts`) à la case du panneau des repères (cochée : refaits, décochée : retirés) et, case cochée, à chaque
-  publication des repères de la première trace (chargement Overpass, types ou distance changés ; effet de `LandmarkPanel`),
-  un pas d'annulation, aucun quand rien ne change (repères republiés à l'identique, projet rouvert tel qu'enregistré).
-  Pas à une retouche du film ni de la durée : comme tous les textes, les titres restent à leur temps jusqu'à la
-  publication suivante, qui les replace ; un titre annulé le reste jusque-là. Retoucher ou supprimer un de ces éléments (`editFilm`, gestes et flèches de la
-  timeline) décoche la case (`freezeLandmarkTitles`), comme une retouche d'arrêt fige les arrêts générés.
-- **Anciens projets** : un film enregistré sans `autoMode` est complété par `withFilmDefaults` (`SETTING_UPGRADES`, aussi pour
-  les préréglages) avec `'rythme'` ; un projet v1 sans film reçoit `{ autoMode: 'rythme' }` par la migration v1 → v2
-  (`MIGRATIONS[1]`), complété de même : leurs arrêts restent ceux de leur rythme.
-- **Préréglages** : seuls les plans d'ouverture et de clôture du film sont enregistrés ; `stops`, `speeds`, `texts`, `media`,
-  `audio` (et `autoStops`) appartiennent à la trace et restent ceux du projet courant à l'application (`presetSettings`, y compris pour
-  un préréglage enregistré avec tout le film).
-- **Horloge du film** (`src/film/clock.ts`, `buildFilmClock` / `filmClockFor`, hook `useFilmClock` dans
-  `src/scene/usePacing.ts`, alias `usePacing` pour les panneaux ; au même endroit `getFilmSource` hors React et
-  `editFilm(edit, { stops, step })` : retouche du film des stores en un pas d'annulation, arrêts générés écrits d'abord
-  pour un arrêt, sélection du bloc rendu par la retouche) : temps du film (s à ×1 depuis la première image) →
+- **Automatic assembly** (`src/film/assemble.ts`): as long as `autoStops` is true, stops are generated on every computation
+  (`autoStops`) at the highlights (`stopCandidates`: climb summits, passes crossed, nearby summits, according to the pacing's
+  `climbs` / `landmarks` checkboxes; one per `windowM` group, like the pauses they replace), id `auto-<meters>`,
+  label ("Montée 1 · cat. 3 · 1 653 m", OSM name) and source; they follow OSM landmarks loaded afterwards.
+  `'temps-forts'`: one stop per highlight **even with pacing disabled**, `AUTO_STOP_S` (4 s), `orbite` camera (they are all
+  summits or passes). `'rythme'`: the pacing pauses from before the timeline (nothing if pacing is disabled,
+  `pauseS`, `film` camera, like those pauses before). `materializeStops` writes the generated stops into the film (`autoStops: false`) on the first
+  edit of a stop; `assembleFilm` = default film written this way.
+- **Slow-downs and titles at landmarks** (`landmarkTitles`, same module): `pickLandmarkTitles` picks, among the landmarks of the
+  first track, passes and summits within 150 m (`TITLE_NEAR_M`) and huts within 100 m, by decreasing
+  priority (tie: position, then id: deterministic), never two less than 10 s of film apart (`TITLE_GAP_S`), one per
+  3 km of track (at least one, at most 6). Each one receives a text card (`texts`, id `auto-text-<OSM id>`, name, elevation
+  as subtitle if known, top center, 4 s starting 1 s before the marker passes) and a ×0.5 section over 400 m
+  centered on it (`speeds`, id `auto-speed-<OSM id>`), unless it would cover a film stop or a highlight slowed down
+  by the active pacing, or overlap another section: then the title alone (at the start of a stop's hold).
+  Unlike stops, these items are **written into the film** (the timing of texts depends on the clock):
+  `withLandmarkTitles` removes the `auto-speed-` / `auto-text-` items and rebuilds them, without touching the user's;
+  titles are placed with the clock of the slowed-down film (`PassingTimes`). **When**: `setLandmarkTitles`
+  (`scene/usePacing.ts`) on the landmark panel checkbox (checked: rebuilt, unchecked: removed) and, with the box checked, on each
+  publication of the first track's landmarks (Overpass load, types or distance changed; `LandmarkPanel` effect),
+  one undo step, none when nothing changes (landmarks republished identically, project reopened as saved).
+  Not on a film or duration edit: like all texts, the titles stay at their time until the next
+  publication, which repositions them; an undone title stays undone until then. Editing or deleting one of these items (`editFilm`, timeline gestures and
+  arrows) unchecks the box (`freezeLandmarkTitles`), just as editing a stop freezes the generated stops.
+- **Old projects**: a film saved without `autoMode` is completed by `withFilmDefaults` (`SETTING_UPGRADES`, also for
+  presets) with `'rythme'`; a v1 project without a film receives `{ autoMode: 'rythme' }` through the v1 → v2 migration
+  (`MIGRATIONS[1]`), completed the same way: their stops remain those of their pacing.
+- **Presets**: only the film's opening and closing shots are saved; `stops`, `speeds`, `texts`, `media`,
+  `audio` (and `autoStops`) belong to the track and remain those of the current project when applied (`presetSettings`, including for
+  a preset saved with the whole film).
+- **Film clock** (`src/film/clock.ts`, `buildFilmClock` / `filmClockFor`, `useFilmClock` hook in
+  `src/scene/usePacing.ts`, alias `usePacing` for the panels; in the same place `getFilmSource` outside React and
+  `editFilm(edit, { stops, step })`: edit of the stores' film in one undo step, generated stops written first
+  for a stop, selection of the block returned by the edit): film time (s at ×1 from the first frame) →
   `stateAt(t)` = `{ phase: 'opening' | 'flight' | 'stop' | 'closing', progress, flightTimeS, stop, localS, lengthS }`.
-  [0, O) ouverture (progression 0), [O, O + F) vol, [O + F, total] clôture (progression 1). Le vol est `flightPacing` :
-  ralentis du rythme aux temps forts, portions de vitesse du film, arrêts du film insérés avec entrée et sortie en cosinus
-  surélevé (≤ 1,5 s), chacun sa durée ; `keepDuration` garde F = `flyoverDurationS` (arrêts ≤ 50 %, raccourcis en
-  proportion ; une portion accélérée ralentit d'autant le reste). **Portions de vitesse** (`flightPacing(…, speeds)`) : la
-  vitesse locale (ralentis compris) est multipliée par m(x) = factor^w(x) sur [fromM, toM], w montant de 0 à 1 en cosinus
-  surélevé sur `SPEED_EASE_S` (1,5 s) à la vitesse de base, à l'intérieur de la portion (au plus sa moitié), et
-  redescendant de même à sa fin : jamais de saut de vitesse ; 32 pas de grille par transition, inverse toujours exact.
-  Appliquées que le rythme soit actif ou non, combinées aux arrêts (un arrêt dans une portion reste un arrêt). L'horloge
-  les place en temps du film (`clock.speeds` : `startS` / `endS` = passage du marqueur aux bords). La fenêtre d'un arrêt
-  (entrée, tenue, sortie) est la phase `stop`. `timeAtProgress(0)` = début du vol (après l'ouverture), `timeAtProgress(1)` =
-  fin du film ; lancer la lecture depuis le début ou la fin sans temps du film part de la première image (`setPlaying` fixe
-  `timeS = 0`), ouverture comprise. Sans ouverture ni clôture et sans retouche, l'horloge rejoue exactement l'ancien rythme
-  (tests d'équivalence).
-- **Caméra** (`src/flyover/filmCamera.ts`, pur) : vue d'ensemble = centre de la boîte de la trace dans le repère local au sol,
-  distance 1,6 × diagonale (relief compris, × hauteur / largeur pour un cadre plus haut que large : le 9:16 garde toute la
-  trace), 40° au-dessus de l'horizon, du côté d'où regarde la caméra de vol au raccord (pas de virage pendant la transition).
-  Transition : cible interpolée, direction normalisée (nlerp), distance géométrique, smootherstep, 80 m au-dessus du sol ;
-  `descente` sur toute la durée du plan, `saut` tient la vue d'ensemble puis bouge en 0,6 s. `balayage` : la vue
-  d'ensemble tourne de `SWEEP_DEG` = 75° autour de sa cible (`turnedView`, `sweepRad`) pendant les premiers 60 % du plan
-  d'ouverture et finit du côté du vol, puis glisse comme `descente` (clôture : l'inverse). `situation` (« Depuis la
-  région », plan de situation) : comme `descente`, mais depuis (ou, en clôture, jusqu'à) la vue de la région
-  (`regionView`) : même cible et même côté que la vue d'ensemble, 65° au-dessus de l'horizon, distance
-  `regionDistanceM` = 5 × diagonale (× hauteur / largeur en portrait), bornée pour que le coin le plus lointain du cadre
-  (`groundReach`, sol plat, champ vertical de 50°) reste dans la zone du relief (boîte de la trace + 25 km de marge,
-  40 km au moins, comme `TerrainLayer`) ou pas plus loin que ce que montre déjà la vue d'ensemble, jamais plus près que
-  celle-ci. Un seul mouvement (distance géométrique, smootherstep), qui passe la distance de la vue d'ensemble en route
-  sans s'y arrêter : pas d'à-coup, jamais de recul. Le plan lointain de la caméra (5 000 km) ne limite rien ; vue de haut,
-  le moteur choisit des tuiles grossières (chargement à temps : `docs/tests-gpu.md`). Caméra d'un arrêt : `film`, la
-  caméra de vol continue (le marqueur tient, la caméra aussi, sauf les styles orbite et cinéma qui gardent leur mouvement) ;
-  `orbite`, rotation autour du marqueur de 6°/s × durée (≤ 120°) aller et retour ; `large`, distance × 2,5 et tangage + 20°
-  au milieu de la fenêtre, aller et retour (`widenedCamera`) ; les deux suivent la bosse (1 − cos 2πx) / 2 de la fenêtre
-  (`stopBump`), nulle et immobile à ses bords ; `fixe`, le cadrage tient, y compris le mouvement des styles orbite et
-  cinéma : leur temps glisse vers le milieu de la fenêtre pendant l'entrée, y reste pendant la tenue, en revient pendant
-  la sortie (`heldMotionTimeS`, smootherstep, jamais en arrière, sans saut). Les styles orbite et cinéma suivent le temps du
-  vol (`flightTimeS`), ils démarrent donc là où l'ouverture les rend.
-  **Cadrages** (`keyedCamera`, pur) : distance, tangage et visée de la caméra de vol à la distance d du marqueur, à partir des
-  réglages du film et des `cameraKeys` (triées par position dans l'horloge, `clock.cameraKeys` avec leur temps du film) :
-  entre deux cadrages, de l'un à l'autre en smootherstep sur la distance (dérivées première et seconde nulles à chaque
-  cadrage : pas d'à-coup) ; avant le premier, depuis les réglages du film sur `cameraKeyEaseM` (3 s de vol à la vitesse
-  de base, `CAMERA_KEY_EASE_S`), après le dernier, retour de même ; ailleurs les réglages du film. Linéaire en distance et
-  en tangage, visée par le plus court chemin. Le style et le lissage restent ceux du film. Fonction de la progression
-  seule : immobile pendant un arrêt, `filmViewMovesWithTime` inchangé.
-  Le marqueur reste sur la trace (`view.marker`), la cible ne l'est que pendant le vol.
-- **Aperçu et export** : `FlyoverRig` et `ExportController` appellent le même `computeFilmView` avec la même horloge (le
-  rapport largeur / hauteur vient de la taille du rendu, celle de la vidéo pendant l'export). La caméra est replacée en pause
-  et une image d'export est recalculée quand la progression change **ou** quand le temps change alors que la vue en dépend
-  (`filmViewMovesWithTime` : plans d'ouverture et de clôture, arrêts en orbite ou en vue large, styles orbite et cinéma, à l'image courante
-  ou précédente). Le panneau d'export lit la durée et `progressAtTime` de la même horloge (`usePacing`).
-- **Temps du film conservé** : quand l'horloge change (retouche du film, durée, rythme), `FlyoverRig` garde `playback.timeS`
-  et en déduit la progression : une retouche en pause ne fait pas sauter la tête de lecture.
-- **Timeline** (`src/ui/Timeline.tsx`, logique pure dans `src/film/timeline.ts`, inspecteur `src/ui/FilmInspector.tsx`) :
-  bandeau sous la vue 3D (`.view__stage` au-dessus, la vue rétrécit d'autant ; ~150 px, pistes repliables). Barre, un seul
-  style de contrôle (boutons à icône Lucide, infobulle `data-tip` avec le raccourci du registre, libellé court masqué à
-  1280 px) : lecture, ■ (pause et retour à la première image), temps `m:ss,d / m:ss`, distance / altitude / heure au
-  marqueur, « Arrêt » (S : à la position du marqueur, au mètre, source `manual`, 4 s, orbite), « Arrêt à un temps fort… »
-  (temps forts sans arrêt), « Texte » (T : à la tête de lecture, 4 s, en bas au centre), « Média » (voir « Photos » et
-  « Vidéos »), haut-parleur (coupe ou remet le son de l'aperçu, musique et vidéos, `useMusicPreview`, montré quand le film a une
-  musique ou une vidéo avec du son ; ni enregistré ni annulable, l'export garde le son), vitesse,
-  zoom (− / curseur logarithmique / + / « Ajuster » = tout le film), menu « Options » (« Ajouter une musique… », voir
-  « Musique » ; case « Arrêts automatiques » :
-  cochée, `autoStops` + `'temps-forts'`, arrêts propres effacés ; décochée, arrêts générés écrits ; pastille « modifié » /
-  « Par défaut » du film, `ModifiedMarker keys={['film']}` ; un point sur le bouton quand le film s'écarte du défaut ; se
-  ferme par Échap, un clic dehors ou Tab), replier.
-  Règle (`rulerTicks`, pas de 1 s à 1 h selon le zoom, ≥ 56 px) : cliquer-glisser pour se placer **ouverture et clôture
-  comprises** (`setProgress(clock.progressAtTime(t), t)`, fin du film = progression 1 sans temps) ; c'est aussi un curseur
-  clavier (flèches ±1 s, Maj ±5 s, Page ±10 s, Début / Fin). Pistes « Plans » (ouverture, survol avec profil, clôture ;
-  « aucune » = amorce pointillée sélectionnable ; les arrêts y sont aussi marqués sur la barre du survol, fenêtre teintée
-  et bord haut à l'accent, blanc pour l'arrêt sélectionné ; les cadrages y sont de petits losanges au passage du marqueur,
-  sélectionnables, focalisables et glissables), « Arrêts » (fenêtre de chaque arrêt, entrée et sortie
-  comprises ; pointillés tant qu'ils sont générés), « Textes », « Médias » (photos et vidéos, avec leur vignette ; une
-  vidéo porte en plus une petite icône de caméra). Piste « Vitesse » sous « Plans » : un bloc par portion, de son entrée à
-  sa sortie en temps du film, libellé « ×2 » (cadre plein si accélérée, pointillé si ralentie) ; « Vitesse » de la barre
-  (`addSpeed` : ×2 sur 1 km à partir du marqueur, raccourcie ou avancée pour rester sur la trace et hors des autres
-  portions ; message si le marqueur est déjà dans une portion ou s'il n'y a pas 50 m libres). Piste « Musique » sous
-  « Médias » : un bloc par musique, nom du fichier, icône de note et forme d'onde (`waveformPath`, la partie du fichier
-  jouée, en bande symétrique, à l'échelle du passage le plus fort) ; vide, elle dit où déposer un fichier.
-- **Gestes** (`dragFilm`, pur) : glisser un arrêt le déplace le long de la trace — son début de tenue suit le pointeur,
-  position trouvée par dichotomie sur l'horloge (`stopPositionAt`, 32 pas) ; son bord droit l'allonge (en proportion du
-  plafond `keepDuration`) ; un texte ou une photo se déplace ou s'étire par ses deux bords ; le bord intérieur de l'ouverture / de la
-  clôture change sa durée ; le bord gauche d'une vidéo déplace aussi son début dans le fichier (`inS`, jamais avant le
-  début du fichier : les images restent en place) ; une musique se déplace, son bord droit ne dépasse jamais la fin du
-  fichier (`DragContext.audioFileS`), son bord gauche déplace son début dans le fichier comme une vidéo ; une portion de vitesse se déplace (longueur en mètres gardée) ou
-  s'étire par ses deux bords, le bord tenu suit le pointeur en temps du film, position trouvée en mètres par dichotomie
-  sur l'horloge de la portion modifiée (`DragContext.clockOfSpeeds`, comme un arrêt), jamais sur ses voisines, 50 m au
-  moins (`MIN_SPEED_SPAN_M`), au mètre ; un cadrage se déplace : sa place est celle du marqueur au temps visé
-  (`clock.progressAtTime`, au mètre). Aimantation à 8 px (`snapTargets` : début et fin du film, bords des plans, des arrêts, des
-  textes et des photos, temps forts, tête de lecture ; un arrêt déplacé s'aimante aux temps forts en mètres) ; Alt la désactive. Valeurs
-  bornées aux plages du modèle, arrondies au centième de seconde (arrêt déplacé : au mètre). Un appui sans déplacement de
-  3 px ne fait que sélectionner. Le geste est montré sur la timeline seule (brouillon local) et validé au relâcher en **un
-  pas d'annulation** (`history.transaction`) ; l'échelle reste celle du film validé pendant le geste. Clavier sur un bloc :
-  flèches ±1 s (Maj ±0,1 s, pas fusionnés comme un curseur), Suppr / Retour arrière supprime (un plan passe à « aucune »),
-  Échap désélectionne ; Espace lance / arrête la lecture hors des champs et boutons. Ctrl+molette zoome autour du pointeur
-  (`zoomAt`, ×1 à ×50), boutons − / + et curseur autour de la tête de lecture, « Ajuster » revient à ×1 ; défilement
-  horizontal natif.
-- **Sélection** : `filmSelection` du store (ajouté en fin d'état, ni enregistré ni annulable), posée par un appui ou le
-  focus sur un bloc et par les ajouts (`editFilm` sélectionne le nouveau bloc), effacée par Échap, la fermeture de
-  l'inspecteur, une suppression, ou quand le bloc n'existe plus (annulation, autre trace, arrêts générés déplacés :
-  `hasFilmItem`, effet de `Timeline`).
-- **Inspecteur** (`FilmInspector`, sans props, dans le dock droit, en-tête collant et ✕ comme le tiroir d'export) : plan
-  (style, durée), arrêt (libellé, durée, « Caméra pendant l'arrêt » en liste avec une phrase d'aide, position et fenêtre),
-  cadrage (distance, inclinaison, visée, « À (km) », `updateCameraKey` : plages de la caméra, visée ramenée dans ±180°), vitesse (pastilles ×0,25 ×0,5 ×1,5
-  ×2 ×3 ×4, « Réglage fin » en puissances de 2, de / à en km bornés par `updateSpeed`, effet sur la durée), texte (texte, sous-titre, position,
-  taille, début, durée), photo (vignette, affichage plein écran / carte, Ken Burns, légende, position, taille, début, durée),
-  vidéo (les mêmes sans Ken Burns, plus « Début dans la vidéo », longueur du fichier, bloc « Son » : case « Son de la
-  vidéo » et volume en %, grisés en suivant la vitesse du survol, et « Calage sur le parcours » quand l'heure du tournage
-  est connue), musique (nom du fichier, volume en %, fondus d'entrée et de sortie 0–10 s, début, durée, « Début dans le
-  fichier », bornés par `updateMusic` à la longueur du fichier, case « Baisser la musique sous les vidéos » du film,
-  « Caler la durée du film sur la musique »).
-  Position : grille 3 × 3 (`radiogroup` de 9 `role="radio"`, focus itinérant, flèches qui déplacent et choisissent,
-  `nextGridIndex`, libellé de la position à côté). Les modifications passent par `editFilm(…, { step: false })` (frappes
-  fusionnées en un pas) ; retoucher un arrêt généré écrit d'abord tous les arrêts.
-- **Sur la trace** (`src/scene/TrackPicker.tsx`, monté dans `FlyoverCanvas`) : un clic sur la première trace place la tête
-  de lecture au point visé (`setProgress(p, clock.timeAtProgress(p))`) ; un clic droit ouvre « Ajouter un arrêt ici » /
-  « Ajouter un texte ici » / « Accélérer / ralentir ici » (portion ×2 à partir du point ; dans une portion, la
-  sélectionne) (`TrackMenu`, DOM au-dessus du canvas, `role="menu"`, flèches, Échap, clic dehors ; chaque ajout
-  par `editFilm` : un pas d'annulation, bloc sélectionné) ; curseur main au survol de la trace. Clic = appui et relâcher du
-  même bouton à moins de 4 px (un glisser d'OrbitControls n'est pas un clic ; le menu s'ouvre au relâcher, pas sur
-  `contextmenu`, qui part à l'appui sous Linux et macOS). Sélection en espace écran (`pickProjectedPath`, pur) : 1 500
-  points répartis le long de la trace, plaqués comme la ligne (relief chargé, sinon altitude enregistrée, × exagération +
-  3 m ; recalculés au plus une fois par seconde), projetés par la caméra, segment le plus proche à 12 px au plus,
-  distance interpolée. Rien pendant un export. Limite : une portion cachée par le relief se sélectionne aussi (la ligne
-  la montre en transparence). Le clic droit sur le relief, sur la trace ou ailleurs, ajoute « Point d'intérêt ici » (seul
-  choix hors de la trace) : rayon de la caméra sur les tuiles dessinées (`Raycaster` sur les maillages visibles du groupe
-  du moteur, seulement au clic droit), point de la trace visé si aucune tuile n'est encore là.
-- **Textes dans le film** (incrément 3) : dessinés par l'habillage (voir « Habillage du film », temps du film et textes de
-  la timeline), dans l'aperçu comme à l'export.
-- **Photos** (incrément 4) : « Média » (sélecteur, plusieurs fichiers, photos et vidéos) ou fichiers déposés sur la
-  timeline ; les fichiers sont lus un à un (`readMedia` : `readPhoto` ou `readVideo`), ajoutés à la table des médias
-  (`useMediaStore.add`, ids `photo-<n>` / `video-<n>`) puis au film à la tête de lecture, à la suite (`addMedia` : 5 s par
-  photo), en un pas d'annulation ; les autres fichiers sont ignorés avec un message. `readPhoto` lit l'EXIF des 128 premiers Ko (`parseExif`, analyseur pur :
-  position GPS, heure d'origine et son décalage, sinon heure GPS en UTC, sinon heure locale lue dans le fuseau du
-  navigateur, `photoTimeMs`), décode l'image redressée (`createImageBitmap`, `imageOrientation: 'from-image'`), la
-  réduit à 2 560 px au plus en JPEG 0,85 et en fait une vignette de 160 px (JPEG 0,7). Placement proposé
-  (`photoFilmTime`, pur) : point de la trace le plus proche de la position (à 2 km au plus ; sur un aller-retour, le
-  passage enregistré le plus près de l'heure, `nearestOnPath`), sinon point enregistré à l'heure de la photo (trace
-  horodatée, 15 min de tolérance aux extrémités, `distanceAtTime`) ; temps du film = `clock.timeAtProgress(distance /
-  longueur)`. Le message (toast) propose « Placer sur le parcours » (un pas d'annulation de plus).
-- **Vidéos** (`src/film/video.ts`) : MP4, WebM ou QuickTime (`isMediaFile` : type `video/*`, ou extension `.mp4`,
-  `.m4v`, `.mov`, `.webm` sans type), de `MAX_VIDEO_BYTES` (50 Mo) au plus, message clair au-delà : le fichier est gardé
-  tel quel (pas de réduction possible à bon compte dans la page) pour que le projet reste un seul fichier, web comme
-  bureau. `readVideo` ouvre le fichier avec mediabunny, refuse une vidéo sans image ou que le navigateur ne décode pas
-  (`canDecode`, WebCodecs : le même décodeur que l'export), lit sa taille d'affichage et sa longueur, fait la vignette
-  de sa première image (160 px, JPEG 0,7). Ajoutée à sa longueur, 30 s au plus (`NEW_VIDEO_MAX_S`), sans Ken Burns ; au
-  delà de la fin du fichier (bloc étiré), la dernière image reste affichée, sans son. Aperçu (`getPreviewVideos`, dans
-  `OverlayCanvas`) : un `HTMLVideoElement` par média, muet sauf en lecture à ×1 (voir « Son des vidéos ») (URL d'objet du
-  fichier ; un MOV est passé comme MP4), lu en même temps que la lecture (vitesse de lecture reprise, recalé au-delà
-  de 0,3 s d'écart), en pause et recalé sur le temps du film quand on se déplace (la dernière image recalée, copiée sur
-  un canvas de 1 920 px au plus, reste affichée pendant le recalage suivant) ; les vidéos non dessinées par une image
-  sont mises en pause, celles qui quittent le film libérées ; rien pendant un export. Export : voir « Export vidéo ».
-- **Vidéo calée sur le parcours** (phase 7, « vidéo embarquée synchronisée ») : heure de début du tournage lue à l'ajout
-  (`readVideo`, rangée dans la table des médias : `recordedMs`, `recordedApprox`) : date avec fuseau des appareils Apple
-  (`com.apple.quicktime.creationdate` des métadonnées de mediabunny, `quickTimeDateMs`), sinon heure de création de l'en-tête
-  du film (`moov` › `mvhd`, secondes depuis 1904 en UTC, `mp4CreationTimeMs` : analyseur pur qui ne lit que les en-têtes de
-  boîtes, `moov` au début ou à la fin ; lue comme secondes depuis 1970 quand un encodeur s'est trompé d'origine ; horloge
-  non réglée, avant 2000, ignorée), sinon, marquée approximative, date de dernière modification du fichier moins sa
-  longueur (une caméra écrit le fichier jusqu'à l'arrêt) ; WebM : date du fichier seulement. Décalage de l'horloge
-  `offsetS` (± 1 jour, positif : la vidéo a été filmée plus tard que ne le dit le fichier). `clipSyncOffsetS` : 0 quand la
-  vidéo chevauche la sortie enregistrée, sinon le nombre d'heures entières le plus proche de 0 (jusqu'à 14) qui la fait
-  chevaucher (caméra réglée à l'heure locale qui l'écrit comme de l'UTC, cas des GoPro), sinon rien. Placement
-  (`syncClipPlacement`, pur) : début = passage du marqueur au point enregistré au début de la vidéo
-  (`distanceAtTime` → `clock.timeAtProgress`) ; une vidéo commencée avant la sortie débute au début du vol, `inS` saute la
-  partie d'avant ; durée : en suivant le survol, jusqu'au passage au point enregistré à sa fin (ou fin de la sortie), sinon
-  sa longueur dans le fichier depuis là, au plus sa durée actuelle ; rien hors de la sortie ou sans heures. Proposé par le
-  toast de l'ajout (« Caler sur le parcours », ou « Placer sur le parcours » quand il y a aussi des photos : un seul pas
-  d'annulation, horloge du moment) et par l'inspecteur (bloc « Calage sur le parcours » : heure de tournage, mention
-  approximative, bouton « Caler » / « Recaler », « Décalage de l'horloge (s) » et case « Suivre la vitesse du survol » qui
-  recalent aussitôt, `syncClip` ; hors de la sortie, seul `sync` est gardé et un message le dit). Le placement n'est pas
-  refait seul quand le film change (durée, arrêts) : « Recaler ». **Suivre la vitesse du survol** (`sync.follow`) : temps
-  dans le fichier = instant enregistré sous le marqueur − (début du tournage + décalage) (`clipTimeS(média, t,
-  recordedMs)`, borné à `inS` / `outS`), fonction pure de la progression : ralentis, portions de vitesse et ouverture /
-  clôture suivis ; pendant un arrêt la progression ne bouge pas, **l'image reste figée** (choix : l'image montre toujours
-  l'endroit du marqueur) ; une pause enregistrée sur la trace (temps qui passe sans distance) est sautée. `recordedMs`
-  vient de `recordedAtProgress(path, progress)` (`overlay/data.ts`, à la distance d'`overlayFrameAt`), le même nombre pour le
-  dessin (`drawOverlay`, depuis l'image) et pour le décodage de l'export (`loadFrameMedia(temps, progression)`, chemin de la
-  première trace gardé par trace) : export déterministe. Aperçu : `clipRateAt` (secondes du fichier par seconde de film,
-  différence sur 0,25 s de film) × vitesse de lecture → `playbackRate` (arrondi au centième, au plus ×16) ; recalage
-  au-delà de `FOLLOW_DRIFT_S` (0,2 s) ; sous ×0,0625 (arrêt), l'élément est mis en pause sur l'image. Sans heures sur la
-  trace, une vidéo qui suit est jouée comme une autre.
-- **Musique** (`src/film/audio.ts`) : « Options » › « Ajouter une musique… » (sélecteur de la couche plateforme, plusieurs
-  fichiers) ou fichiers son déposés sur la timeline (`isAudioFile` : type `audio/*` connu, sinon extension `.mp3`, `.m4a`,
-  `.aac`, `.ogg`, `.oga`, `.opus`, `.wav`, `.flac` ; un dépôt mêlant sons, photos et vidéos les répartit). `readAudio` refuse
-  au-delà de `MAX_AUDIO_BYTES` (30 Mo, message qui conseille un MP3 ou un M4A), décode le fichier une fois
-  (`OfflineAudioContext.decodeAudioData` à 22 050 Hz : vérifie que le navigateur le lit, donne sa longueur) et en tire la
-  forme d'onde (`computePeaks` : niveau maximal de 10 tranches par seconde, 4 000 au plus, au centième) ; le fichier est
-  gardé tel quel (`data:audio/mpeg|mp4|aac|ogg|wav|flac|webm`). Ajoutée en entier (`addMusic`) à la fin des musiques déjà
-  là (au début du film sans musique), en un pas d'annulation, bloc sélectionné ; le toast propose « Caler la durée du
-  film ». Volume (`musicEnvelope`, pur) : 0 → volume pendant le fondu d'entrée, volume, → 0 pendant le fondu de sortie,
-  linéaires, raccourcis en proportion quand ils se chevauchent, sur la durée jouée (`musicLengthS` : jamais après la fin
-  du fichier) ; mêmes points pour l'aperçu (`musicGainAt`) et l'export (automatisation du gain). Plusieurs musiques
-  peuvent se chevaucher : elles sont mixées. Aperçu (`startMusicPreview`, lancé par `Timeline`, `createMusicPreview` testé
-  sur de faux éléments) : un `HTMLAudioElement` par musique (URL d'objet du fichier, créé dès qu'elle est dans le film pour
-  qu'il charge), joué pendant la lecture au temps du fichier, à la vitesse de lecture, au volume du moment, recalé
-  au-delà de `MUSIC_DRIFT_S` (0,25 s) d'écart quand il a assez de données ; en pause hors lecture, hors de son bloc et
-  pendant un export (la lecture y est arrêtée) ; libéré quand la musique quitte le film. « Caler la durée du film sur la
-  musique » (`fitFilmToMusic`) : durée du survol (dans 15 s – 10 min, au centième) pour que le film finisse à la fin de la
-  dernière musique, trouvée par la méthode de la sécante sur l'horloge du film (`durationForFilmEnd` : arrêts, portions
-  de vitesse et plans compris) ; un pas d'annulation, toast avec la nouvelle durée ou les bornes atteintes.
-  **Rythme** (`src/film/beats.ts`, pur et testé sur des pistes de clics à 90 / 120 / 150 BPM avec bruit, silence et
-  bruit seul) : `detectBeats` sur le son déjà décodé par `readAudio` (22 050 Hz, canaux mêlés), une fois par fichier,
-  gardé dans son entrée de la table des médias (`beats` : `bpm`, `confidence`, `times` en s du fichier au millième,
-  `downbeat` ; validé par `isValidBeats`) ; un fichier lu avant est analysé à la demande (décodé à nouveau, entrée
-  complétée, enregistrée avec le projet). Attaques : hausses (seules) de l'intensité log de la bande basse (passe-bas
-  d'ordre 1 à 200 Hz) et du reste, par trames d'environ 10 ms ; tempo de 60 à 180 BPM par autocorrélation de cette
-  enveloppe, pondérée vers 120 BPM (une octave d'écart type : départage un tempo de sa moitié ou de son double),
-  interpolée entre deux trames ; confiance = autocorrélation normalisée au tempo, en dessous de
-  `MIN_TEMPO_CONFIDENCE` (0,15) aucun temps (bruit seul ≈ 0,05, clics ≥ 0,45) ; temps par programmation dynamique
-  (D. Ellis, 2007 : chaîne d'attaques la plus forte, écart à la période pénalisé par 100 × log², une chaîne ne
-  commence que quand rien ne vaut d'être relié avant : pas de temps inventés dans une intro muette), libre de dériver
-  un peu avec la musique ; début de mesure tous les 4 temps, à partir du temps dont la série a les attaques les plus
-  fortes (heuristique : peut tomber sur le 2ᵉ ou le 3ᵉ temps). Les marques des temps (plus longues en début de mesure)
-  sont dessinées en haut du bloc (`beatTicksPath`). « Caler sur le rythme » (inspecteur de la musique,
-  `snapFilmToMusic`) : temps de toutes les musiques ramenés au temps du film (`filmBeats` : seulement là où chaque bloc
-  joue son fichier) ; chaque titre (début, temps du film) puis chaque arrêt (début de sa tenue, placé en mètres :
-  position trouvée sur l'horloge par `stopPositionAt`, au dixième de mètre) va sur le début de mesure le plus proche à
-  moins de `BEAT_SNAP_S` (0,4 s), sinon sur le temps le plus proche (`beatNear`) ; déjà à moins de `ON_BEAT_S` (20 ms) :
-  laissé. Jamais de chevauchement créé : un titre qui chevaucherait un autre titre reste, un arrêt qui passerait ou
-  tomberait sur un autre arrêt reste, un arrêt dont la tenue ne peut pas tomber sur le temps (dans un autre arrêt, au
-  bout de la trace) reste. Puis chaque portion de vitesse (`snapSpeeds`, avec `clockOfSpeeds`) : son début (temps du
-  film où elle commence, horloge recalculée avec la portion déplacée) va sur le temps, sa longueur gardée, au mètre
-  près, entre ses voisines ; elle reste si son début tombe à plus de `BEAT_SNAP_S` / 4 du temps visé. Un pas
-  d'annulation (`editFilm`) ; les arrêts générés sont écrits (comme toute retouche
-  d'arrêt), un titre de repère déplacé fige les titres de repères. Recaler ne déplace rien. Toast « N éléments calés
-  sur le rythme (≈ 112 BPM) » ; tempo incertain : message, rien n'est fait.
-- **Son des vidéos** (`clipHasSound`, `clipSounds`, `duckEnvelope` dans `src/film/audio.ts`, purs et testés) : une vidéo
-  ajoutée a son son (`VIDEO_SOUND_DEFAULTS` : `muted: false`, `volume: 1`) ; une vidéo enregistrée sans `muted` (projets
-  d'avant) reçoit `muted: true` de `withFilmDefaults` : son film ne change pas. Entendue quand elle n'est pas coupée, à un
-  volume > 0 et **ne suit pas la vitesse du survol** (son temps dans le fichier change alors de rythme : un son
-  rééchantillonné serait laid, elle reste muette dans l'aperçu comme à l'export). Elle joue son fichier de `inS` tant
-  qu'elle le montre : au-delà de `outS` ou de la fin du fichier (dernière image tenue), silence. Fondus de 20 ms à ses
-  bords (`CLIP_EDGE_FADE_S`, via `musicEnvelope`) contre les clics. « Baisser la musique sous les vidéos »
-  (`film.duckMusic`) : toutes les musiques baissent de 10 dB (`DUCK_DB`, gain ≈ 0,316) pendant chaque vidéo avec du son,
-  descente sur les 0,3 s d'avant (`DUCK_RAMP_S`, ses premiers mots ne sont pas couverts), remontée sur les 0,3 s d'après ;
-  vidéos à moins de deux rampes l'une de l'autre fusionnées (pas de rebond) ; une vidéo au tout début trouve la musique
-  déjà basse. Aperçu : l'élément vidéo est démuté à son volume seulement en lecture à ×1 (muet pendant un déplacement, à
-  toute autre vitesse, en suivant le survol, ou quand le haut-parleur de la timeline coupe le son de l'aperçu, qui coupe
-  aussi les vidéos et s'affiche dès qu'une vidéo a du son) ; la musique de l'aperçu suit la même baisse (`duckGainAt`),
-  à toutes les vitesses, comme dans le film exporté. Export : voir « Export vidéo », « Son ». Une vidéo sans piste son
-  reste muette, mais la musique baisse quand même sous elle (règle tirée du modèle seul, identique dans l'aperçu et
-  l'export) : couper son son pour l'éviter.
-- **Table des médias** (`src/film/media.ts`) : les octets ne sont pas dans les réglages (historique et préréglages
-  légers) mais dans une table du document `{ id: { data, thumb, width, height, name?, durationS? } }` (data URL JPEG ;
-  vidéo : data URL du fichier `video/mp4 | webm | quicktime` et sa longueur `durationS`, avec l'heure de début du tournage `recordedMs` / `recordedApprox` quand elle est connue ; son : data URL `audio/…`,
-  `durationS` et forme d'onde `peaks`, sans vignette ni taille, ids `audio-<n>`). Une image
-  reste dans la table quand sa photo quitte le film (l'annulation la retrouve) ; l'enregistrement n'écrit que les images
-  utilisées, par les médias et les musiques (`usedMedia`). Accès aux fichiers derrière `readMedia(blob)` (un `File` du sélecteur ou du dépôt sur le web,
-  un `Blob` lu sur disque pour Tauri, plus tard un chemin de fichier au lieu des octets pour les grosses vidéos). Images décodées à la demande (`getMediaBitmaps` : `ImageBitmap` par id, au plus 6
-  gardées, les moins récentes libérées, libérées aussi quand le film ne les utilise plus, redécodées si la table change
-  à l'ouverture d'un projet, une image illisible n'est pas réessayée).
-- Limites : vidéos entendues seulement à ×1 dans l'aperçu (pas de fondu aux bords dans l'aperçu), 50 Mo au plus, sans position GPS
-  lue (placées à la tête de lecture, ou calées sur l'heure de la trace) ; l'heure d'une vidéo ajoutée avant ce calage n'est
-  pas relue ; flux GPS des GoPro (GPMF) non lu ; refusées là où WebCodecs manque (application de bureau sous Linux) ; l'EXIF n'est lu que dans les JPEG (pas HEIC, que la
-  plupart des navigateurs ne décodent pas, ni PNG / WebP) ; une photo plein écran est recadrée pour couvrir l'image (une
-  photo en hauteur perd le haut et le bas) ; une photo n'est pas liée à un arrêt (elle ne le suit pas quand il bouge).
-  Autres limites : l'aperçu 3D ne
-  suit un geste qu'au relâcher ; pas de défilement automatique quand on glisse au bord ; en mode `'temps-forts'`, le curseur
-  « pause » du rythme ne règle pas la durée des arrêts générés (4 s, à retoucher par arrêt).
+  [0, O) opening (progress 0), [O, O + F) flight, [O + F, total] closing (progress 1). The flight is `flightPacing`:
+  pacing slow-downs at highlights, film speed sections, film stops inserted with raised-cosine entry and
+  exit (≤ 1.5 s), each with its own duration; `keepDuration` keeps F = `flyoverDurationS` (stops ≤ 50%, shortened
+  proportionally; a sped-up section slows the rest down by as much). **Speed sections** (`flightPacing(…, speeds)`): the
+  local speed (slow-downs included) is multiplied by m(x) = factor^w(x) over [fromM, toM], w rising from 0 to 1 as a raised
+  cosine over `SPEED_EASE_S` (1.5 s) at base speed, inside the section (at most half of it), and
+  falling back the same way at its end: never a speed jump; 32 grid steps per transition, inverse always exact.
+  Applied whether pacing is active or not, combined with stops (a stop inside a section remains a stop). The clock
+  places them in film time (`clock.speeds`: `startS` / `endS` = marker passing the edges). A stop's window
+  (entry, hold, exit) is the `stop` phase. `timeAtProgress(0)` = start of the flight (after the opening), `timeAtProgress(1)` =
+  end of the film; starting playback from the beginning or the end without a film time starts from the first frame (`setPlaying` sets
+  `timeS = 0`), opening included. Without opening or closing and without edits, the clock replays the old pacing exactly
+  (equivalence tests).
+- **Camera** (`src/flyover/filmCamera.ts`, pure): overview = center of the track's box in the local frame at ground level,
+  distance 1.6 × diagonal (terrain included, × height / width for a frame taller than wide: 9:16 keeps the whole
+  track), 40° above the horizon, on the side the flight camera looks from at the cut (no turn during the transition).
+  Transition: interpolated target, normalized direction (nlerp), geometric distance, smootherstep, 80 m above the ground;
+  `descente` over the whole shot duration, `saut` holds the overview then moves in 0.6 s. `balayage`: the
+  overview turns by `SWEEP_DEG` = 75° around its target (`turnedView`, `sweepRad`) during the first 60% of the opening
+  shot and ends on the flight side, then glides like `descente` (closing: the reverse). `situation` ("Depuis la
+  région" (from the region), establishing shot): like `descente`, but from (or, when closing, to) the region view
+  (`regionView`): same target and same side as the overview, 65° above the horizon, distance
+  `regionDistanceM` = 5 × diagonal (× height / width in portrait), bounded so that the farthest corner of the frame
+  (`groundReach`, flat ground, 50° vertical field of view) stays within the terrain area (track box + 25 km margin,
+  40 km at least, like `TerrainLayer`) or no farther than what the overview already shows, never closer than
+  the overview. A single move (geometric distance, smootherstep), which passes the overview distance on the way
+  without stopping there: no jerk, never backing up. The camera far plane (5,000 km) limits nothing; seen from above,
+  the engine picks coarse tiles (loading in time: `docs/tests-gpu.md`). Stop camera: `film`, the
+  flight camera continues (the marker holds, so does the camera, except the orbit and cinematic styles, which keep their motion);
+  `orbite`, rotation around the marker of 6°/s × duration (≤ 120°) out and back; `large`, distance × 2.5 and pitch + 20°
+  in the middle of the window, out and back (`widenedCamera`); both follow the bump (1 − cos 2πx) / 2 of the window
+  (`stopBump`), zero and still at its edges; `fixe`, the framing holds, including the motion of the orbit and
+  cinematic styles: their time glides toward the middle of the window during the entry, stays there during the hold, comes back during
+  the exit (`heldMotionTimeS`, smootherstep, never backward, no jump). The orbit and cinematic styles follow the
+  flight time (`flightTimeS`), so they start where the opening hands them over.
+  **Framings** (`keyedCamera`, pure): distance, pitch and aim of the flight camera at marker distance d, from the
+  film settings and the `cameraKeys` (sorted by position in the clock, `clock.cameraKeys` with their film time):
+  between two framings, from one to the other in smootherstep over distance (first and second derivatives zero at each
+  framing: no jerk); before the first, from the film settings over `cameraKeyEaseM` (3 s of flight at base
+  speed, `CAMERA_KEY_EASE_S`), after the last, back the same way; elsewhere the film settings. Linear in distance and
+  in pitch, aim along the shortest path. Style and smoothing remain those of the film. A function of progress
+  alone: still during a stop, `filmViewMovesWithTime` unchanged.
+  The marker stays on the track (`view.marker`); the target does only during the flight.
+- **Preview and export**: `FlyoverRig` and `ExportController` call the same `computeFilmView` with the same clock (the
+  width / height ratio comes from the render size, the video size during the export). The camera is repositioned while paused
+  and an export frame is recomputed when the progress changes **or** when the time changes while the view depends on it
+  (`filmViewMovesWithTime`: opening and closing shots, orbit or wide-view stops, orbit and cinematic styles, at the current
+  or previous frame). The export panel reads the duration and `progressAtTime` from the same clock (`usePacing`).
+- **Film time preserved**: when the clock changes (film edit, duration, pacing), `FlyoverRig` keeps `playback.timeS`
+  and derives the progress from it: an edit while paused does not make the playhead jump.
+- **Timeline** (`src/ui/Timeline.tsx`, pure logic in `src/film/timeline.ts`, inspector `src/ui/FilmInspector.tsx`):
+  strip below the 3D view (`.view__stage` above, the view shrinks accordingly; ~150 px, collapsible lanes). Bar, a single
+  control style (Lucide icon buttons, `data-tip` tooltip with the shortcut from the registry, short label hidden at
+  1280 px): play, ■ (pause and back to the first frame), time `m:ss,d / m:ss`, distance / elevation / time at the
+  marker, "Arrêt" (stop; S: at the marker position, to the meter, source `manual`, 4 s, orbit), "Arrêt à un temps fort…" (stop at a highlight)
+  (highlights without a stop), "Texte" (text; T: at the playhead, 4 s, bottom center), "Média" (media; see "Photos" and
+  "Videos"), speaker (mutes or unmutes the preview sound, music and videos, `useMusicPreview`, shown when the film has
+  music or a video with sound; neither saved nor undoable, the export keeps the sound), speed,
+  zoom (− / logarithmic slider / + / "Ajuster" (fit) = the whole film), "Options" menu ("Ajouter une musique…" (add music), see
+  "Music"; "Arrêts automatiques" (automatic stops) checkbox:
+  checked, `autoStops` + `'temps-forts'`, own stops cleared; unchecked, generated stops written; "modifié" /
+  "Par défaut" chip for the film, `ModifiedMarker keys={['film']}`; a dot on the button when the film departs from the default; it
+  closes with Esc, a click outside or Tab), collapse.
+  Ruler (`rulerTicks`, step from 1 s to 1 h depending on the zoom, ≥ 56 px): click-drag to seek, **opening and closing
+  included** (`setProgress(clock.progressAtTime(t), t)`, end of film = progress 1 without a time); it is also a keyboard
+  slider (arrows ±1 s, Shift ±5 s, Page ±10 s, Home / End). Lanes "Plans" (shots; opening, flyover with profile, closing;
+  "aucune" (none) = selectable dotted stub; stops are also marked on the flyover bar, tinted window
+  and top edge in the accent color, white for the selected stop; framings are small diamonds where the marker passes,
+  selectable, focusable and draggable), "Arrêts" (stops; window of each stop, entry and exit
+  included; dotted while they are generated), "Textes" (texts), "Médias" (media; photos and videos, with their thumbnail; a
+  video also carries a small camera icon). "Vitesse" (speed) lane under "Plans": one block per section, from its entry to
+  its exit in film time, label "×2" (solid frame if sped up, dotted if slowed down); "Vitesse" in the bar
+  (`addSpeed`: ×2 over 1 km from the marker, shortened or moved forward to stay on the track and outside the other
+  sections; message if the marker is already in a section or if there are not 50 m free). "Musique" (music) lane under
+  "Médias": one block per music track, file name, note icon and waveform (`waveformPath`, the part of the file
+  played, as a symmetric band, scaled to the loudest passage); when empty, it says where to drop a file.
+- **Gestures** (`dragFilm`, pure): dragging a stop moves it along the track — the start of its hold follows the pointer,
+  position found by bisection on the clock (`stopPositionAt`, 32 steps); its right edge lengthens it (proportionally to the
+  `keepDuration` cap); a text or a photo moves or stretches by either edge; the inner edge of the opening / the
+  closing changes its duration; the left edge of a video also moves its start in the file (`inS`, never before the
+  start of the file: the frames stay in place); a music track moves, its right edge never goes past the end of the
+  file (`DragContext.audioFileS`), its left edge moves its start in the file like a video; a speed section moves (length in meters kept) or
+  stretches by either edge, the held edge follows the pointer in film time, position found in meters by bisection
+  on the clock of the edited section (`DragContext.clockOfSpeeds`, like a stop), never on its neighbors, 50 m at
+  least (`MIN_SPEED_SPAN_M`), to the meter; a framing moves: its place is that of the marker at the target time
+  (`clock.progressAtTime`, to the meter). Snapping at 8 px (`snapTargets`: start and end of the film, edges of shots, stops,
+  texts and photos, highlights, playhead; a moved stop snaps to highlights in meters); Alt disables it. Values
+  bounded to the model ranges, rounded to the hundredth of a second (moved stop: to the meter). A press without moving
+  3 px only selects. The gesture is shown on the timeline only (local draft) and committed on release in **one
+  undo step** (`history.transaction`); the scale stays that of the committed film during the gesture. Keyboard on a block:
+  arrows ±1 s (Shift ±0.1 s, steps merged like a slider), Delete / Backspace deletes (a shot becomes 'aucune'),
+  Esc deselects; Space starts / stops playback outside fields and buttons. Ctrl+wheel zooms around the pointer
+  (`zoomAt`, ×1 to ×50), − / + buttons and slider around the playhead, "Ajuster" goes back to ×1; native horizontal
+  scrolling.
+- **Selection**: `filmSelection` in the store (added at the end of the state, neither saved nor undoable), set by a press or
+  focus on a block and by additions (`editFilm` selects the new block), cleared by Esc, closing
+  the inspector, a deletion, or when the block no longer exists (undo, other track, generated stops moved:
+  `hasFilmItem`, `Timeline` effect).
+- **Inspector** (`FilmInspector`, no props, in the right dock, sticky header and ✕ like the export drawer): shot
+  (style, duration), stop (label, duration, "Caméra pendant l'arrêt" (camera during the stop) as a list with a help sentence, position and window),
+  framing (distance, tilt, aim, "À (km)" (at, km), `updateCameraKey`: camera ranges, aim brought back within ±180°), speed (chips ×0.25 ×0.5 ×1.5
+  ×2 ×3 ×4, "Réglage fin" (fine adjustment) in powers of 2, from / to in km bounded by `updateSpeed`, effect on the duration), text (text, subtitle, position,
+  size, start, duration), photo (thumbnail, full-screen / card display, Ken Burns, caption, position, size, start, duration),
+  video (the same without Ken Burns, plus "Début dans la vidéo" (start in the video), file length, "Son" (sound) block: "Son de la
+  vidéo" (video sound) checkbox and volume in %, grayed out according to the flyover speed, and "Calage sur le parcours" (sync to the route) when the filming time
+  is known), music (file name, volume in %, fade-in and fade-out 0–10 s, start, duration, "Début dans le
+  fichier" (start in the file), bounded by `updateMusic` to the file length, the film's "Baisser la musique sous les vidéos" checkbox,
+  "Caler la durée du film sur la musique" (fit the film duration to the music)).
+  Position: 3 × 3 grid (`radiogroup` of 9 `role="radio"`, roving focus, arrows that move and select,
+  `nextGridIndex`, position label alongside). Changes go through `editFilm(…, { step: false })` (keystrokes
+  merged into one step); editing a generated stop first writes all the stops.
+- **On the track** (`src/scene/TrackPicker.tsx`, mounted in `FlyoverCanvas`): a click on the first track places the
+  playhead at the target point (`setProgress(p, clock.timeAtProgress(p))`); a right-click opens "Ajouter un arrêt ici" (add a stop here) /
+  "Ajouter un texte ici" (add a text here) / "Accélérer / ralentir ici" (speed up / slow down here; ×2 section from the point; inside a section, it
+  selects it) (`TrackMenu`, DOM above the canvas, `role="menu"`, arrows, Esc, click outside; each addition
+  through `editFilm`: one undo step, block selected); hand cursor when hovering the track. Click = press and release of the
+  same button within 4 px (an OrbitControls drag is not a click; the menu opens on release, not on
+  `contextmenu`, which fires on press under Linux and macOS). Picking in screen space (`pickProjectedPath`, pure): 1,500
+  points spread along the track, draped like the line (loaded terrain, otherwise recorded elevation, × exaggeration +
+  3 m; recomputed at most once per second), projected by the camera, closest segment within 12 px,
+  interpolated distance. Nothing during an export. Limit: a section hidden by the terrain can also be picked (the line
+  shows it through the terrain). Right-clicking on the terrain, on the track or elsewhere adds "Point d'intérêt ici" (point of interest here; the only
+  choice off the track): camera ray against the drawn tiles (`Raycaster` on the visible meshes of the engine
+  group, only on right-click), target point on the track if no tile is there yet.
+- **Texts in the film** (increment 3): drawn by the overlay (see "Film overlay", film time and timeline
+  texts), in the preview as in the export.
+- **Photos** (increment 4): "Média" (picker, several files, photos and videos) or files dropped on the
+  timeline; the files are read one by one (`readMedia`: `readPhoto` or `readVideo`), added to the media table
+  (`useMediaStore.add`, ids `photo-<n>` / `video-<n>`) then to the film at the playhead, one after another (`addMedia`: 5 s per
+  photo), in one undo step; other files are ignored with a message. `readPhoto` reads the EXIF from the first 128 KB (`parseExif`, pure parser:
+  GPS position, original time and its offset, otherwise GPS time in UTC, otherwise local time read in the
+  browser's time zone, `photoTimeMs`), decodes the upright image (`createImageBitmap`, `imageOrientation: 'from-image'`),
+  scales it down to 2,560 px at most as JPEG 0.85 and makes a 160 px thumbnail (JPEG 0.7). Suggested placement
+  (`photoFilmTime`, pure): track point closest to the position (within 2 km; on an out-and-back, the
+  recorded pass closest to the time, `nearestOnPath`), otherwise the point recorded at the photo's time (timestamped
+  track, 15 min tolerance at the ends, `distanceAtTime`); film time = `clock.timeAtProgress(distance /
+  length)`. The message (toast) offers "Placer sur le parcours" (one more undo step).
+- **Videos** (`src/film/video.ts`): MP4, WebM or QuickTime (`isMediaFile`: type `video/*`, or extension `.mp4`,
+  `.m4v`, `.mov`, `.webm` without a type), of at most `MAX_VIDEO_BYTES` (50 MB), with a clear message beyond that: the file is kept
+  as is (no cheap way to shrink it in the page) so the project stays a single file, on the web as on the
+  desktop. `readVideo` opens the file with mediabunny, rejects a video without frames or that the browser cannot decode
+  (`canDecode`, WebCodecs: the same decoder as the export), reads its display size and its length, makes the thumbnail
+  of its first frame (160 px, JPEG 0.7). Added at its full length, 30 s at most (`NEW_VIDEO_MAX_S`), without Ken Burns; past
+  the end of the file (stretched block), the last frame stays displayed, without sound. Preview (`getPreviewVideos`, in
+  `OverlayCanvas`): one `HTMLVideoElement` per media item, muted except during playback at ×1 (see "Video sound") (object URL of the
+  file; a MOV is passed as MP4), played along with playback (playback speed carried over, resynced beyond
+  0.3 s of drift), paused and resynced to the film time when seeking (the last resynced frame, copied onto
+  a canvas of at most 1,920 px, stays displayed during the next resync); videos not drawn by a frame
+  are paused, those that leave the film are released; nothing during an export. Export: see "Video export".
+- **Video synced to the route** (phase 7, "vidéo embarquée synchronisée" (synced onboard video)): start time of the filming read when added
+  (`readVideo`, stored in the media table: `recordedMs`, `recordedApprox`): date with time zone from Apple devices
+  (`com.apple.quicktime.creationdate` in the mediabunny metadata, `quickTimeDateMs`), otherwise creation time from the movie
+  header (`moov` › `mvhd`, seconds since 1904 in UTC, `mp4CreationTimeMs`: pure parser that only reads box
+  headers, `moov` at the start or at the end; read as seconds since 1970 when an encoder got the epoch wrong; unset
+  clock, before 2000, ignored), otherwise, flagged as approximate, the file's last-modified date minus its
+  length (a camera writes the file until it stops); WebM: file date only. Clock offset
+  `offsetS` (± 1 day, positive: the video was filmed later than the file says). `clipSyncOffsetS`: 0 when the
+  video overlaps the recorded outing, otherwise the whole number of hours closest to 0 (up to 14) that makes it
+  overlap (camera set to local time that writes it as UTC, the GoPro case), otherwise nothing. Placement
+  (`syncClipPlacement`, pure): start = marker passing the point recorded at the start of the video
+  (`distanceAtTime` → `clock.timeAtProgress`); a video started before the outing begins at the start of the flight, `inS` skips the
+  earlier part; duration: when following the flyover, until passing the point recorded at its end (or the end of the outing), otherwise
+  its length in the file from there, at most its current duration; nothing outside the outing or without times. Offered by the
+  toast on addition ("Caler sur le parcours" (sync to the route), or "Placer sur le parcours" when there are photos as well: a single undo
+  step, clock at that moment) and by the inspector ("Calage sur le parcours" block: filming time, approximate
+  flag, "Caler" (sync) / "Recaler" (resync) button, "Décalage de l'horloge (s)" (clock offset) and "Suivre la vitesse du survol" (follow the flyover speed) checkbox, which
+  resync immediately, `syncClip`; outside the outing, only `sync` is kept and a message says so). The placement is not
+  redone automatically when the film changes (duration, stops): "Recaler". **Follow the flyover speed** (`sync.follow`): time
+  in the file = instant recorded under the marker − (filming start + offset) (`clipTimeS(media, t,
+  recordedMs)`, bounded to `inS` / `outS`), a pure function of progress: slow-downs, speed sections and opening /
+  closing are followed; during a stop the progress does not move, **the frame stays frozen** (by choice: the frame always shows
+  the marker's location); a pause recorded on the track (time passing without distance) is skipped. `recordedMs`
+  comes from `recordedAtProgress(path, progress)` (`overlay/data.ts`, at the distance of `overlayFrameAt`), the same number for
+  drawing (`drawOverlay`, from the frame) and for decoding in the export (`loadFrameMedia(time, progress)`, path of the
+  first track kept per track): deterministic export. Preview: `clipRateAt` (file seconds per film second,
+  difference over 0.25 s of film) × playback speed → `playbackRate` (rounded to the hundredth, at most ×16); resync
+  beyond `FOLLOW_DRIFT_S` (0.2 s); below ×0.0625 (stop), the element is paused on the frame. Without times on the
+  track, a following video plays like any other.
+- **Music** (`src/film/audio.ts`): "Options" › "Ajouter une musique…" (platform layer picker, several
+  files) or sound files dropped on the timeline (`isAudioFile`: known `audio/*` type, otherwise extension `.mp3`, `.m4a`,
+  `.aac`, `.ogg`, `.oga`, `.opus`, `.wav`, `.flac`; a drop mixing sounds, photos and videos dispatches them). `readAudio` rejects
+  files over `MAX_AUDIO_BYTES` (30 MB, with a message suggesting an MP3 or an M4A), decodes the file once
+  (`OfflineAudioContext.decodeAudioData` at 22,050 Hz: checks that the browser can read it, gives its length) and derives the
+  waveform from it (`computePeaks`: peak level of 10 slices per second, 4,000 at most, to the hundredth); the file is
+  kept as is (`data:audio/mpeg|mp4|aac|ogg|wav|flac|webm`). Added in full (`addMusic`) after the end of the music tracks already
+  there (at the start of the film when there is no music), in one undo step, block selected; the toast offers "Caler la durée du
+  film" (fit the film duration). Volume (`musicEnvelope`, pure): 0 → volume during the fade-in, volume, → 0 during the fade-out,
+  linear, shortened proportionally when they overlap, over the played duration (`musicLengthS`: never past the end
+  of the file); same points for the preview (`musicGainAt`) and the export (gain automation). Several music tracks
+  can overlap: they are mixed. Preview (`startMusicPreview`, started by `Timeline`, `createMusicPreview` tested
+  on fake elements): one `HTMLAudioElement` per music track (object URL of the file, created as soon as it is in the film so
+  that it loads), played during playback at the file time, at the playback speed, at the current volume, resynced
+  beyond `MUSIC_DRIFT_S` (0.25 s) of drift when it has enough data; paused outside playback, outside its block and
+  during an export (playback is stopped then); released when the music leaves the film. "Caler la durée du film sur la
+  musique" (`fitFilmToMusic`): flyover duration (within 15 s – 10 min, to the hundredth) so that the film ends at the end of the
+  last music track, found by the secant method on the film clock (`durationForFilmEnd`: stops, speed
+  sections and shots included); one undo step, toast with the new duration or the bounds reached.
+  **Beats** (`src/film/beats.ts`, pure and tested on click tracks at 90 / 120 / 150 BPM with noise, silence and
+  noise alone): `detectBeats` on the sound already decoded by `readAudio` (22,050 Hz, channels mixed), once per file,
+  kept in its media table entry (`beats`: `bpm`, `confidence`, `times` in file seconds to the millisecond,
+  `downbeat`; validated by `isValidBeats`); a file read earlier is analyzed on demand (decoded again, entry
+  completed, saved with the project). Onsets: rises (only) in the log intensity of the low band (first-order
+  low-pass at 200 Hz) and of the rest, in frames of about 10 ms; tempo from 60 to 180 BPM by autocorrelation of this
+  envelope, weighted toward 120 BPM (one octave of standard deviation: separates a tempo from its half or its double),
+  interpolated between two frames; confidence = autocorrelation normalized at the tempo, below
+  `MIN_TEMPO_CONFIDENCE` (0.15) no beats (noise alone ≈ 0.05, clicks ≥ 0.45); beats by dynamic programming
+  (D. Ellis, 2007: strongest chain of onsets, deviation from the period penalized by 100 × log², a chain only
+  starts when nothing before is worth linking: no invented beats in a silent intro), free to drift
+  slightly with the music; downbeat every 4 beats, starting from the beat whose series has the strongest
+  onsets (heuristic: may land on the 2nd or 3rd beat). Beat marks (longer on downbeats)
+  are drawn at the top of the block (`beatTicksPath`). "Caler sur le rythme" (snap to the beat; music inspector,
+  `snapFilmToMusic`): beats of all music tracks mapped to film time (`filmBeats`: only where each block
+  plays its file); each title (start, film time) then each stop (start of its hold, placed in meters:
+  position found on the clock by `stopPositionAt`, to the tenth of a meter) goes to the closest downbeat within
+  `BEAT_SNAP_S` (0.4 s), otherwise to the closest beat (`beatNear`); already within `ON_BEAT_S` (20 ms):
+  left alone. No overlap is ever created: a title that would overlap another title stays, a stop that would pass or
+  land on another stop stays, a stop whose hold cannot land on the beat (inside another stop, at the
+  end of the track) stays. Then each speed section (`snapSpeeds`, with `clockOfSpeeds`): its start (film
+  time where it begins, clock recomputed with the moved section) goes to the beat, its length kept, to the meter,
+  between its neighbors; it stays if its start lands more than `BEAT_SNAP_S` / 4 from the target beat. One undo
+  step (`editFilm`); the generated stops are written (like any stop
+  edit), a moved landmark title freezes the landmark titles. Resyncing moves nothing. Toast "N éléments calés
+  sur le rythme (≈ 112 BPM)"; uncertain tempo: message, nothing is done.
+- **Video sound** (`clipHasSound`, `clipSounds`, `duckEnvelope` in `src/film/audio.ts`, pure and tested): an added video
+  has its sound (`VIDEO_SOUND_DEFAULTS`: `muted: false`, `volume: 1`); a video saved without `muted` (earlier
+  projects) receives `muted: true` from `withFilmDefaults`: its film does not change. Heard when it is not muted, at a
+  volume > 0 and **does not follow the flyover speed** (its time in the file then changes pace: resampled sound
+  would be ugly, so it stays silent in the preview as in the export). It plays its file from `inS` as long as
+  it shows it: past `outS` or the end of the file (last frame held), silence. 20 ms fades at its
+  edges (`CLIP_EDGE_FADE_S`, through `musicEnvelope`) against clicks. "Baisser la musique sous les vidéos"
+  (`film.duckMusic`): all music tracks drop by 10 dB (`DUCK_DB`, gain ≈ 0.316) during each video with sound,
+  ramping down over the 0.3 s before (`DUCK_RAMP_S`, so its first words are not covered), back up over the 0.3 s after;
+  videos less than two ramps apart are merged (no bounce); a video at the very start finds the music
+  already low. Preview: the video element is unmuted to its volume only during playback at ×1 (muted while seeking, at
+  any other speed, when following the flyover, or when the timeline speaker mutes the preview sound, which also mutes
+  the videos and shows as soon as a video has sound); the preview music follows the same ducking (`duckGainAt`),
+  at all speeds, as in the exported film. Export: see "Video export", "Sound". A video without a sound track
+  stays silent, but the music still ducks under it (rule derived from the model alone, identical in the preview and
+  the export): mute its sound to avoid that.
+- **Media table** (`src/film/media.ts`): the bytes are not in the settings (lightweight history and
+  presets) but in a document table `{ id: { data, thumb, width, height, name?, durationS? } }` (JPEG data URL;
+  video: data URL of the `video/mp4 | webm | quicktime` file and its length `durationS`, with the filming start time `recordedMs` / `recordedApprox` when known; sound: `audio/…` data URL,
+  `durationS` and waveform `peaks`, without thumbnail or size, ids `audio-<n>`). An image
+  stays in the table when its photo leaves the film (undo finds it again); saving writes only the images
+  used, by media items and music tracks (`usedMedia`). File access behind `readMedia(blob)` (a `File` from the picker or the drop on the web,
+  a `Blob` read from disk for Tauri, later a file path instead of the bytes for large videos). Images decoded on demand (`getMediaBitmaps`: `ImageBitmap` per id, at most 6
+  kept, least recent released, also released when the film no longer uses them, decoded again if the table changes
+  when a project is opened; an unreadable image is not retried).
+- Limits: videos heard only at ×1 in the preview (no edge fade in the preview), 50 MB at most, no GPS position
+  read (placed at the playhead, or synced to the track time); the time of a video added before this sync feature is
+  not read again; GoPro GPS stream (GPMF) not read; rejected where WebCodecs is missing (desktop application on Linux); EXIF is only read in JPEGs (not HEIC, which
+  most browsers do not decode, nor PNG / WebP); a full-screen photo is cropped to cover the frame (a
+  portrait photo loses its top and bottom); a photo is not linked to a stop (it does not follow it when it moves).
+  Other limits: the 3D preview only
+  follows a gesture on release; no auto-scroll when dragging at the edge; in `'temps-forts'` mode, the pacing's
+  "pause" slider does not set the duration of the generated stops (4 s, to adjust per stop).
 
-## Projet (phase 4)
+## Project (phase 4)
 
-- Un projet est un seul fichier JSON `<nom>.openflyover.json` (`format: "openflyover-project"`, `version`, `name`, `settings`,
-  `playback.speed`, `tracks`, et `media` quand le film a des photos : table des images par id, une ligne par image après
-  les traces, voir « Film et timeline », « Table des médias » ; champ facultatif, pas de changement de version). À
-  l'ouverture, les images invalides sont écartées et les photos du film sans image retirées avec un avertissement (les
-  musiques sans fichier aussi) ;
-  `applyProject` remplace la table avant les réglages. Les traces sont **embarquées** (fichier autonome) en colonnes par segment (`lon`, `lat`, puis
-  `ele` / `time` / `hr` / `cad` / `power` / `temp` seulement si présents, `null` pour un point sans valeur), arrondies à 1e-7° et
-  0,01 (ms entières pour le temps) ; stats et emprise recalculées au chargement par `buildTrack`, ids et couleurs conservés.
-- Réglages traités **génériquement sur les clés de `DEFAULT_SETTINGS`** : chaque valeur est vérifiée contre le type de sa valeur
-  par défaut (objets imbriqués compris), sinon retour au défaut pour cette clé ; clés inconnues ignorées. **Un nouveau réglage
-  ne demande aucun code ici** ; ajouter une entrée à `SETTING_CHECKS` seulement si une valeur du bon type peut être invalide
-  (énumération, id de catalogue, plage). Tout changement de format incrémente `PROJECT_VERSION` et ajoute `MIGRATIONS[n]`
-  (version 2 : film des projets v1, voir « Film et timeline »).
-- **Historique** des réglages hors du store : abonné à `useAppStore`, chaque pas ne garde que les clés modifiées ; changements des
-  mêmes clés à moins de 400 ms fusionnés (clavier), un glissé de curseur au pointeur = un pas de l'appui au relâcher quelle
-  que soit sa lenteur (`beginGesture`, branché sur tout `input[type=range]` par `installSliderGestures`), un préréglage = un pas, un geste de la timeline = un pas ; l'imagerie régionale choisie à l'import
-  n'est pas enregistrée ; rien n'est enregistré pendant « Un film par trace » (`suspend`) ; ouvrir un projet vide l'historique. Raccourcis Ctrl/Cmd+Z, Ctrl/Cmd+Maj+Z, Ctrl+Y (ignorés dans les
-  champs texte), installés une fois par `App`. Enregistrer, ouvrir et le nom du projet sont dans la barre du haut ; le
-  panneau « Projet » garde « Mes projets » et les préréglages.
-- **Pastille « modifié » + bouton « Par défaut »** (`ui/ModifiedMarker.tsx`) en haut à droite de chaque panneau de réglages : liste
-  des clés de `Settings` du panneau, comparées en profondeur aux valeurs de `DEFAULT_SETTINGS` (`modifiedSettings` /
-  `sameValue`, `project/apply.ts`) ; « Par défaut » remet ces clés par défaut en un seul pas d'historique (`resetSettings`,
-  `project/history.ts`). La source d'imagerie n'est pas suivie (choisie par région à l'import). Un nouveau réglage d'un
-  panneau : ajouter sa clé à la liste `keys` du marqueur.
-- **Mes projets** (`platform/projectLibrary.ts`, `ui/library.ts`, onglet « Projet ») : `getPlatform().projectLibrary`
-  (null sur le site sans Cache Storage). Deux fichiers texte par projet, nommés par un id vérifié (`[a-z0-9-]`, jamais un
-  chemin venu d'ailleurs) : le document `<id>.openflyover.json` (celui d'« Enregistrer », médias compris) puis l'entrée
-  `<id>.entry.json` (`ProjectEntry { id, name, updatedAt, summary, sizeBytes }`, la seule lue pour la liste ; une entrée
-  illisible est écartée). Bureau : `<app data>/projects/` (plugin-fs, `readFile` / `writeFile` en UTF-8, mêmes droits que
-  les packs). Site : cache `openflyover-projects-v1` (clés `/openflyover-projects/<fichier>`, `persist()` demandé une
-  fois). Pas de vignette : aucune capture de la vue 3D courante n'existe hors affiche. `useLibraryStore { entries,
-  currentId }` : « Garder dans Mes projets » crée l'entrée du projet ouvert ; ensuite **enregistrement automatique**
-  (`installLibraryAutosave`, installé par `App`) 3 s après le dernier changement des réglages, des traces ou du nom
-  (`createAutosave` : relancé à chaque changement, réessayé plus tard pendant un export ou un rendu en lot, jamais deux
-  écritures à la fois, un seul toast par série d'échecs) ; chaque écriture marque le projet enregistré (« Enregistré »
-  dans la barre). Ouvrir une entrée passe par `openProject(file, entry)` (mêmes validations et avertissements, le nom de
-  l'entrée l'emporte) ; `openProject` écrit d'abord un changement en attente (`flushAutosave`), et un projet ouvert depuis
-  un fichier n'a pas d'entrée. Renommer change l'entrée (et le nom du projet ouvert, son document suit au prochain
-  enregistrement) ; supprimer demande une confirmation dans la ligne, le projet ouvert reste ouvert sans entrée.
-- **Préréglages** dans `getPlatform().storage` (`openflyover.presets.v1`, repli en mémoire) ; une clé absente d'un préréglage garde sa
-  valeur courante. `save` répond false quand le stockage refuse (plein ou bloqué) : le préréglage reste utilisable pour la
-  session et le panneau affiche « Préréglage non enregistré : stockage du navigateur plein » ; le cache météo, lui, reste
-  silencieux (il ne perd que sa persistance).
+- A project is a single JSON file `<name>.openflyover.json` (`format: "openflyover-project"`, `version`, `name`, `settings`,
+  `playback.speed`, `tracks`, and `media` when the film has photos: table of images by id, one line per image after
+  the tracks, see "Film and timeline", "Media table"; optional field, no version change). On
+  open, invalid images are discarded and film photos without an image are removed with a warning (music
+  tracks without a file too);
+  `applyProject` replaces the table before the settings. Tracks are **embedded** (self-contained file) as columns per segment (`lon`, `lat`, then
+  `ele` / `time` / `hr` / `cad` / `power` / `temp` only if present, `null` for a point without a value), rounded to 1e-7° and
+  0.01 (whole ms for time); stats and footprint recomputed on load by `buildTrack`, ids and colors kept.
+- Settings handled **generically on the keys of `DEFAULT_SETTINGS`**: each value is checked against the type of its default
+  value (nested objects included), otherwise it falls back to the default for that key; unknown keys are ignored. **A new setting
+  needs no code here**; add an entry to `SETTING_CHECKS` only if a value of the right type can be invalid
+  (enumeration, catalog id, range). Any format change increments `PROJECT_VERSION` and adds `MIGRATIONS[n]`
+  (version 2: film of v1 projects, see "Film and timeline").
+- Settings **history** outside the store: subscribed to `useAppStore`, each step keeps only the changed keys; changes to the
+  same keys less than 400 ms apart are merged (keyboard), a pointer slider drag = one step from press to release however
+  slow it is (`beginGesture`, wired to every `input[type=range]` by `installSliderGestures`), a preset = one step, a timeline gesture = one step; the regional imagery picked on import
+  is not recorded; nothing is recorded during "Un film par trace" (one film per track; `suspend`); opening a project clears the history. Shortcuts Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y (ignored in
+  text fields), installed once by `App`. Save, open and the project name are in the top bar; the
+  "Projet" panel keeps "Mes projets" (my projects) and the presets.
+- **"modifié" chip + "Par défaut" button** (`ui/ModifiedMarker.tsx`) at the top right of each settings panel: list
+  of the panel's `Settings` keys, deep-compared with the values of `DEFAULT_SETTINGS` (`modifiedSettings` /
+  `sameValue`, `project/apply.ts`); "Par défaut" resets these keys to default in a single history step (`resetSettings`,
+  `project/history.ts`). The imagery source is not tracked (picked by region on import). A new setting in a
+  panel: add its key to the marker's `keys` list.
+- **Mes projets** (`platform/projectLibrary.ts`, `ui/library.ts`, "Projet" tab): `getPlatform().projectLibrary`
+  (null on the website without Cache Storage). Two text files per project, named by a checked id (`[a-z0-9-]`, never a
+  path coming from elsewhere): the document `<id>.openflyover.json` (the one from "Enregistrer", media included) then the entry
+  `<id>.entry.json` (`ProjectEntry { id, name, updatedAt, summary, sizeBytes }`, the only one read for the list; an unreadable
+  entry is discarded). Desktop: `<app data>/projects/` (plugin-fs, `readFile` / `writeFile` in UTF-8, same permissions as
+  the packs). Website: cache `openflyover-projects-v1` (keys `/openflyover-projects/<file>`, `persist()` requested
+  once). No thumbnail: no capture of the current 3D view exists outside the poster. `useLibraryStore { entries,
+  currentId }`: "Garder dans Mes projets" (keep in my projects) creates the entry of the open project; then **automatic save**
+  (`installLibraryAutosave`, installed by `App`) 3 s after the last change to the settings, the tracks or the name
+  (`createAutosave`: restarted on each change, retried later during an export or a batch render, never two
+  writes at once, a single toast per series of failures); each write marks the project as saved ("Enregistré"
+  in the bar). Opening an entry goes through `openProject(file, entry)` (same validations and warnings, the entry's
+  name wins); `openProject` first writes a pending change (`flushAutosave`), and a project opened from
+  a file has no entry. Renaming changes the entry (and the name of the open project; its document follows at the next
+  save); deleting asks for an inline confirmation, and the open project stays open without an entry.
+- **Presets** in `getPlatform().storage` (`openflyover.presets.v1`, in-memory fallback); a key missing from a preset keeps its
+  current value. `save` returns false when the storage refuses (full or blocked): the preset remains usable for the
+  session and the panel shows "Préréglage non enregistré : stockage du navigateur plein"; the weather cache, on the other hand, stays
+  silent (it only loses its persistence).
 
-## Météo historique (phase 7)
+## Historical weather (phase 7)
 
-- **Source** : archive Open-Meteo (`archive-api.open-meteo.com/v1/archive`, sans clé, CC BY 4.0, gratuit en usage non
-  commercial ; vérifications dans `docs/sources.md`). Attribution « Données météo : Open-Meteo.com (CC BY 4.0) » dans le panneau
-  et la barre d'état dès que des données sont affichées.
-- **Requête** (`src/weather/openMeteo.ts`) : 2 à 12 lieux le long de la première trace (un tous les ~10 km, départ et arrivée,
-  arrondis à 0,01°, dédoublonnés par maille 0,05°), à l'**altitude enregistrée** (le paramètre `elevation` ramène la température
-  à l'altitude de la trace : ~10 °C d'écart en montagne), sur les jours UTC de la sortie (±1 h) en une seule requête
-  (`timezone=GMT`, `timeformat=unixtime`). Refusé sans requête : trace non horodatée, date future ou antérieure à 1940, sortie de
-  plus de 31 jours. `visibility` est toujours nulle dans l'archive et n'est pas demandée.
-- **Cache** : par lieu arrondi et jour UTC, en mémoire puis `getPlatform().storage` (`openflyover.weather.v1`, ≤ 300 jours-lieux, LRU,
-  tout accès sous try/catch) ; les jours de moins de 7 jours ne sont pas persistés car l'archive les révise.
-- **Série** (`src/weather/series.ts`, pur) : 13 variables horaires par lieu (NaN si manquante). `weatherAt` interpole
-  linéairement en temps et par inverse de la distance au carré entre lieux (code WMO du lieu le plus proche, direction du vent
-  en vecteur) ; les cumuls horaires valent pour l'heure qui se termine. `weatherWidgetData(series, path, progress)` donne les
-  conditions sous le marqueur (heure enregistrée via `recordedTimeAt`), `summarizeOuting` le bilan pondéré par le temps réel.
-  Codes WMO → libellé français + id d'icône.
-- **État** (`src/weather/store.ts`) : `status` idle / loading / ready / unavailable / error, `message`, `series`, `trackId` ;
-  `syncWeather` est appelé par le panneau à chaque changement de première trace ou de `settings.weather.enabled` (vrai par
-  défaut), annule la requête précédente et explique l'absence de données.
-- **À venir** : particules de pluie et de neige (scène pilotée : « Météo dans la scène » et « Nuages volumétriques »).
+- **Source**: Open-Meteo archive (`archive-api.open-meteo.com/v1/archive`, no key, CC BY 4.0, free for non-commercial
+  use; checks in `docs/sources.md`). Attribution "Données météo : Open-Meteo.com (CC BY 4.0)" in the panel
+  and the status bar as soon as data is displayed.
+- **Request** (`src/weather/openMeteo.ts`): 2 to 12 locations along the first track (one every ~10 km, start and finish,
+  rounded to 0.01°, deduplicated by 0.05° cell), at the **recorded elevation** (the `elevation` parameter brings the temperature
+  to the track's elevation: ~10 °C of difference in the mountains), over the UTC days of the outing (±1 h) in a single request
+  (`timezone=GMT`, `timeformat=unixtime`). Refused without a request: track without timestamps, date in the future or before 1940, outing
+  longer than 31 days. `visibility` is always null in the archive and is not requested.
+- **Cache**: per rounded location and UTC day, in memory then `getPlatform().storage` (`openflyover.weather.v1`, ≤ 300 location-days, LRU,
+  every access inside try/catch); days less than 7 days old are not persisted because the archive revises them.
+- **Series** (`src/weather/series.ts`, pure): 13 hourly variables per location (NaN if missing). `weatherAt` interpolates
+  linearly in time and by inverse squared distance between locations (WMO code of the closest location, wind direction
+  as a vector); hourly totals apply to the hour that ends. `weatherWidgetData(series, path, progress)` gives the
+  conditions under the marker (recorded time via `recordedTimeAt`), `summarizeOuting` the summary weighted by real time.
+  WMO codes → French label + icon id.
+- **State** (`src/weather/store.ts`): `status` idle / loading / ready / unavailable / error, `message`, `series`, `trackId`;
+  `syncWeather` is called by the panel on each change of the first track or of `settings.weather.enabled` (true by
+  default), cancels the previous request and explains the lack of data.
+- **Coming next**: rain and snow particles (driven scene: "Weather in the scene" and "Volumetric clouds").
 
-## Montées et étiquettes
+## Climbs and labels
 
-- **Montées** (`src/flyover/climbs.ts`) sur les altitudes **enregistrées** de la première trace : rééchantillonnage tous les 20 m,
-  moyenne glissante de 100 m, points hauts et bas confirmés par une hystérésis de 10 m, fusion de deux montées séparées par un
-  creux ≤ 40 m (et ≤ 25 % du gain, sur ≤ 1,5 km) quand la seconde finit plus haut, extrémités plates rognées (< 2 % sur 200 m),
-  seuils minimaux 500 m, 50 m de D+, 3 % de moyenne ; pente maximale sur 100 m. Catégorie selon le score longueur (m) × pente
-  moyenne (%) : cat. 4 ≥ 8 000, 3 ≥ 16 000, 2 ≥ 32 000, 1 ≥ 64 000, HC ≥ 80 000 (non classée en dessous).
-- **Waypoints** : `Track.waypoints?` (ajout optionnel au contrat) contient les `<wpt>` du GPX, rattachés à la première trace du
-  fichier ; le document de projet les enregistre.
-- **Décalage UTC** : `Track.utcOffsetMin?` (ajout optionnel au contrat, minutes d'avance de l'horloge locale sur UTC) vient
-  du `localTimestamp` du message `activity` d'un FIT (au quart d'heure, `readUtcOffset`) ou du premier `<time>` d'un GPX
-  écrit avec un décalage (`gpxUtcOffset` ; « Z » et « +00:00 » ne disent rien) ; le document de projet l'enregistre.
-- **`Labels`** (dans `TerrainLayer`) : sprites WebGL à texture canvas (taille constante à l'écran, panneau encre, texte blanc,
-  trait d'accent par type) pour le sommet de chaque montée, les waypoints, les points d'intérêt (`poiLabels`, épingle orange
-  clair à la place du trait, priorité 200 : au-dessus de tout) et toute source externe enregistrée par
-  `setLabelSource(id, LandmarkLabel[])` (ex. `'osm'`). Hauteur = terrain (ou altitude enregistrée) × exagération, replaquée sur
-  `engine.onChange` (même debounce que la trace). Fondu quand la ligne de visée passe sous le relief (24 échantillons, ±20 m) et
-  entre 35 et 70 km ; en cas de chevauchement, la priorité la plus haute l'emporte. Opacité fonction de la vue seule (pas de
-  lissage temporel) : chaque image d'export est rendue isolément. Habillage actif : opacité multipliée par
-  1 − `cardOpacityAt(progression, settings.overlay)` (`labelOpacity`), les étiquettes s'effacent derrière les cartes d'ouverture
-  et de clôture. Réglage `settings.labels { climbs, waypoints }`, section
-  « Montées » (`ClimbList`, un clic place le survol au pied de la montée).
+- **Climbs** (`src/flyover/climbs.ts`) on the **recorded** elevations of the first track: resampling every 20 m,
+  100 m moving average, high and low points confirmed by a 10 m hysteresis, merging of two climbs separated by a
+  dip ≤ 40 m (and ≤ 25% of the gain, over ≤ 1.5 km) when the second ends higher, flat ends trimmed (< 2% over 200 m),
+  minimum thresholds 500 m, 50 m of elevation gain, 3% average; maximum gradient over 100 m. Category based on the score length (m) × average
+  gradient (%): cat. 4 ≥ 8,000, 3 ≥ 16,000, 2 ≥ 32,000, 1 ≥ 64,000, HC ≥ 80,000 (uncategorized below).
+- **Waypoints**: `Track.waypoints?` (optional addition to the contract) holds the GPX `<wpt>` elements, attached to the first track of the
+  file; the project document saves them.
+- **UTC offset**: `Track.utcOffsetMin?` (optional addition to the contract, minutes by which the local clock is ahead of UTC) comes
+  from the `localTimestamp` of a FIT `activity` message (to the quarter hour, `readUtcOffset`) or from the first `<time>` of a GPX
+  written with an offset (`gpxUtcOffset`; "Z" and "+00:00" say nothing); the project document saves it.
+- **`Labels`** (in `TerrainLayer`): WebGL sprites with a canvas texture (constant screen size, ink panel, white text,
+  accent stroke per type) for the summit of each climb, the waypoints, the kilometer markers (`kmLabels`, one every
+  `labels.kmStep` km of the first track, counter distances, priority 20: below everything else), the points
+  of interest (`poiLabels`, light orange pictogram instead of the stroke, `FilmPoi.icon` among 9 Lucide paths in
+  `Labels.tsx`, priority 200: above everything) and any external source registered through
+  `setLabelSource(id, LandmarkLabel[])` (e.g. `'osm'`). Height = terrain (or recorded elevation) × exaggeration, re-draped on
+  `engine.onChange` (same debounce as the track). Fades when the line of sight goes below the terrain (24 samples, ±20 m) and
+  between half the range and the range (`labels.rangeKm`, 70 km by default: `distanceFade`); shared size
+  `labels.size` (×0.6 to ×1.6); on overlap, the highest priority wins. Opacity is a function of the view alone (no
+  temporal smoothing): each export frame is rendered in isolation. With the overlay active: opacity multiplied by
+  1 − `cardOpacityAt(progress, settings.overlay)` (`labelOpacity`); labels fade out behind the opening
+  and closing cards. Setting `settings.labels { climbs, waypoints, kmStep, size, rangeKm }` (old projects completed by
+  `withLabelDefaults`, values checked by `isValidLabelSettings`), section
+  "Montées" (climbs; `ClimbList`, a click places the flyover at the foot of the climb).
 
-## Repères OpenStreetMap (phase 7)
+## OpenStreetMap landmarks (phase 7)
 
-- **Source** : OpenStreetMap par l'API Overpass publique (`overpass-api.de`, repli VK Maps), sans clé, données ODbL (attribution
-  « © contributeurs OpenStreetMap (ODbL) » dans le panneau et la barre d'état). Vérifications et conditions d'usage :
-  `docs/sources.md`. La requête doit rester « simple » (POST `application/x-www-form-urlencoded`) : la pré-vérification CORS
-  répond 406.
-- **Une requête par trace** (`src/osm/overpass.ts`) : boîte englobante de la trace élargie de 3 km (plusieurs boîtes consécutives
-  au-delà de 40 km d'emprise), 8 instructions taguées et nommées (sommets / selles, cols, refuges, lacs, cascades, villages et
-  hameaux, points de vue, glaciers), `out center` pour ramener chemins et relations à un point. La forme `around:` sur une
-  polyligne dépasse le délai du serveur public ; la distance à la trace est calculée localement, donc changer les types ou la
-  distance ne refait jamais de requête. File d'attente (une requête à la fois), cache mémoire + `getPlatform().storage` 30 jours par
-  empreinte de requête, un réessai sur 429 / 504 (`Retry-After`, sinon 15 s) puis l'autre instance ; une réponse 200 portant un
-  `remark` d'erreur (délai dépassé) est une erreur.
-- **Post-traitement pur** (`src/osm/landmarks.ts`) : projection sur le chemin → distance et abscisse, filtre par type et distance
-  (`settings.landmarks`, défaut sommets + cols + refuges + lacs à 1,5 km), altitude depuis `ele` (formats libres), priorité dans
-  [0, 50) sous les waypoints et les montées (col franchi > sommet haut et proche > col voisin > refuge > lac > cascade / vue /
-  glacier > lieu), dédoublonnage par nom à moins d'1 km, plafond de 40 repères, libellé « Nom · 1 653 m » pour sommets et cols.
-- **État** (`src/osm/store.ts`) : `useLandmarkStore` piloté par `syncLandmarks` depuis `LandmarkPanel` ; les repères de toutes les
-  traces sont publiés aux étiquettes 3D par `setLabelSource('osm', …)` (liste vide à la désactivation). La liste du panneau suit
-  la première trace (clic = `setProgress`). Le même effet refait les ralentis et titres du film à chaque publication
-  (voir « Ralentis et titres aux repères »).
+- **Source**: OpenStreetMap through the public Overpass API (`overpass-api.de`, VK Maps fallback), no key, ODbL data (attribution
+  "© contributeurs OpenStreetMap (ODbL)" in the panel and the status bar). Checks and terms of use:
+  `docs/sources.md`. The request must stay "simple" (POST `application/x-www-form-urlencoded`): the CORS preflight
+  returns 406.
+- **One request per track** (`src/osm/overpass.ts`): track bounding box widened by 3 km (several consecutive boxes
+  beyond a 40 km footprint), 8 tagged and named statements (summits / saddles, passes, huts, lakes, waterfalls, villages and
+  hamlets, viewpoints, glaciers), `out center` to bring ways and relations down to a point. The `around:` form on a
+  polyline exceeds the public server's timeout; the distance to the track is computed locally, so changing the types or the
+  distance never triggers a new request. Queue (one request at a time), memory cache + `getPlatform().storage` for 30 days per
+  request fingerprint, one retry on 429 / 504 (`Retry-After`, otherwise 15 s) then the other instance; a 200 response carrying an
+  error `remark` (timeout exceeded) is an error.
+- **Pure post-processing** (`src/osm/landmarks.ts`): projection onto the path → distance and offset, filter by type and distance
+  (`settings.landmarks`, default summits + passes + huts + lakes within 1.5 km), elevation from `ele` (free formats), priority in
+  [0, 50) below waypoints and climbs (pass crossed > high and nearby summit > neighboring pass > hut > lake > waterfall / viewpoint /
+  glacier > place), deduplication by name within 1 km, cap of 40 landmarks, label "Nom · 1 653 m" for summits and passes.
+- **State** (`src/osm/store.ts`): `useLandmarkStore` driven by `syncLandmarks` from `LandmarkPanel`; the landmarks of all
+  tracks are published to the 3D labels through `setLabelSource('osm', …)` (empty list when disabled). The panel list follows
+  the first track (click = `setProgress`). The same effect rebuilds the film's slow-downs and titles on each publication
+  (see "Slow-downs and titles at landmarks").
 
-## Points d'intérêt
+## Points of interest
 
-- **Usage** : nommer un lieu qu'OpenStreetMap ne connaît pas ou qui compte pour soi (« Pique-nique », « Le chalet de
-  Paul »), affiché comme les repères dans la vue 3D et dans le film.
-- **Modèle** : `settings.film.pois` (`FilmPoi { id, lon, lat, name }`, ids `poi-<n>`), comme les arrêts : enregistré dans le
-  projet, annulable, validé par `isValidFilm` (coordonnées dans les bornes, ids uniques dans tout le film), gardé par les
-  préréglages comme le reste du film (il appartient à la trace). Dans le film plutôt qu'à part : les arrêts, qui sont aussi
-  des lieux de la sortie, y sont, et un ancien projet reçoit `[]` de `withFilmDefaults` sans migration. Les repères OSM, eux,
-  ne sont pas enregistrés (relus d'Overpass), seuls leurs réglages le sont.
-- **Ajout** : clic droit sur le relief › « Point d'intérêt ici » › nom tapé dans le menu (vide : « Point d'intérêt 3 »,
-  `defaultPoiName`), ou « Ajouter au marqueur » de la section « Points d'intérêt » de l'onglet Carte (`PoiPanel`, champ du
-  nom aussitôt sélectionné). Chaque ajout, retrait et renommage (frappes fusionnées) passe par `editFilm` : un pas
-  d'annulation, sans sélection sur la timeline.
-- **Liste** : nom modifiable sur place (un nom vide n'a pas d'étiquette), « Arrêt » = arrêt de 4 s au point enregistré de
-  la première trace le plus proche (`poiStopAtM`, `nearestOnPath`), au nom du point, sélectionné dans l'inspecteur ; ✕
-  supprime.
-- **Rendu** : étiquettes de `Labels` (épingle, priorité au-dessus des montées), donc fondu sous le relief et au loin,
-  dédoublonnage, effacement sous les cartes d'ouverture et de clôture et export identiques aux autres étiquettes.
+- **Use**: name a place that OpenStreetMap does not know or that matters to you ("Pique-nique" (picnic), "Le chalet de
+  Paul" (Paul's chalet)), shown like landmarks in the 3D view and in the film.
+- **Model**: `settings.film.pois` (`FilmPoi { id, lon, lat, name, icon? }`, ids `poi-<n>`, `icon` missing = pin,
+  `setPoiIcon`), like stops: saved in the
+  project, undoable, validated by `isValidFilm` (coordinates within bounds, ids unique across the whole film), kept by
+  presets like the rest of the film (it belongs to the track). In the film rather than separate: stops, which are also
+  places of the outing, are there, and an old project receives `[]` from `withFilmDefaults` without migration. OSM landmarks, on the other hand,
+  are not saved (re-read from Overpass); only their settings are.
+- **Adding**: right-click on the terrain › "Point d'intérêt ici" › name typed in the menu (empty: "Point d'intérêt 3",
+  `defaultPoiName`), or "Ajouter au marqueur" (add at the marker) in the "Points d'intérêt" section of the Carte tab (`PoiPanel`, name
+  field selected immediately). Each addition, removal and rename (keystrokes merged) goes through `editFilm`: one
+  undo step, without selection on the timeline.
+- **List**: name editable in place (an empty name has no label), "Arrêt" = 4 s stop at the recorded point of
+  the first track closest to it (`poiStopAtM`, `nearestOnPath`), named after the point, selected in the inspector; ✕
+  deletes.
+- **Rendering**: `Labels` labels (pin, priority above climbs), so fading under the terrain and in the distance,
+  deduplication, fading out under the opening and closing cards, and export are identical to the other labels.
 
-## Habillage du film (phase 4)
+## Film overlay (phase 4)
 
-- **Principe** : l'habillage n'est pas du DOM. Une fonction pure et synchrone, `drawOverlay(ctx, frame, settings, size, assets)`
-  (`src/overlay/draw.ts`), le dessine sur un contexte 2D, à l'écran ou hors écran. L'aperçu (`OverlayCanvas`, canvas 2D au-dessus
-  du canvas 3D, sans événements souris) et l'export vidéo (`exportOverlay.ts` → `ExportController`) appellent
-  la même fonction : le film montre exactement l'aperçu.
-- **Unités** : 1 u = 1 % du plus petit côté de l'image ; marges de sécurité de 5 % de chaque côté ; flous d'ombre corrigés de la
-  transformation du contexte (devicePixelRatio). Les widgets qui partagent l'une des 9 ancres s'empilent.
-- **Données** (`data.ts`) : `prepareOverlayTrack(track, weather?)` une fois par trace : chemin, D+ cumulé (même lissage et même
-  hystérésis de 3 m que `computeStats`, donc la dernière valeur vaut `stats.ascentM`), vitesse et fréquence cardiaque lissées,
-  profil, statistiques de clôture, résumé météo, contour de la mini-carte (`miniMapOutline` : projection équirectangulaire
-  locale, x est / y sud, plus grand côté = 1, proportions conservées, au plus 1 500 points). `overlayFrameAt(data, progress)` est
-  une fonction pure de la progression (dont `mapPoint`, la position du marqueur sur la mini-carte).
-- **Réglages** : `settings.overlay` (`src/overlay/settings.ts`, désactivé par défaut) : style (`editorial`, `broadcast`, `app`) et
-  widgets — carte d'ouverture, carte de clôture, compteurs, profil, mini-carte (flèche du nord en option), logo, texte libre,
-  météo, classement — chacun avec `enabled`, `anchor`, `size`. Les widgets ajoutés après le premier format (`minimap`,
-  `credits`, `leaderboard`) sont complétés par
-  leur défaut avant validation (`withOverlayDefaults`, via `SETTING_UPGRADES` dans `src/project/document.ts`) : anciens projets
-  et préréglages se chargent toujours (`minimap` et `leaderboard` désactivés, `credits` activés). Les widgets en direct s'effacent pendant les
-  cartes.
-  Logo en data URL PNG d'au plus 512 px (projets autonomes). Validation : `isValidOverlay` (`SETTING_CHECKS`).
-- **Couleurs et polices** (`settings.overlay.overrides`, facultatif, absent par défaut : anciens projets et aspect par
-  défaut inchangés) : accent, texte, fond des encarts (couleur, opacité) en `#rrggbb`, police des titres et des chiffres
-  parmi une courte liste (`OVERLAY_FONT_IDS` : Fraunces, IBM Plex Sans et Sans Condensed embarquées, Georgia, police
-  du système, chasse fixe du système ; rien n'est téléchargé). Clé hors de `DEFAULT_OVERLAY` : la forme n'est pas
-  vérifiée par le document, `isValidOverrides` contrôle tout (objet, champs connus, valeurs). `withOverrides` applique
-  un changement et retire la clé quand plus rien n'est changé (« Revenir au style »). Le thème dessiné vient d'une seule
-  fonction pure, `resolveOverlayTheme(style, overrides)` (`themes.ts`), appelée par `drawOverlay` : aperçu et export
-  identiques. L'accent recolore aussi ce que le style dessinait dans son accent (profil, mini-carte), le texte donne le
-  texte secondaire (même couleur à 80 %), le fond recolore aussi le passe-partout des photos ; un style sans encart
-  (Éditorial) garde son voile. Par élément (`STYLED_WIDGETS` : titre, clôture, compteurs, profil, météo, mini-carte,
-  classement, texte) : `overrides` facultatif sur l'élément, mêmes champs, par-dessus ceux de l'habillage
-  (`widgetOverrides`, `withWidgetOverrides`) ; `drawOverlay` dessine cet élément avec son propre thème ; validés par
-  `isValidOverlay` (un élément invalide rejette l'habillage, comme le reste). « Couleurs et polices » au bas de chaque
-  élément de l'onglet Habillage, « Comme le reste de l'habillage » retire ses changements.
-- **Classement de la course fantôme** (`settings.overlay.leaderboard`, éteint par défaut, ancrable, proposé dès deux
-  traces, dessiné seulement course fantôme activée) : `leaderboardRows(raceAt(course, progression), traces)` (`data.ts`,
-  pur) range les coureurs par `rankRacers` et donne rang (ex æquo au même point et au même écart : 1, 1, 3), nom, couleur
-  et écart au premier (différence des écarts de `raceAt` à la trace suivie : en temps si la course en a, sinon en
-  distance ; « Tête », puis « Arrivée », pour le premier). Calculé à chaque image depuis la progression par
-  `overlayExtras(temps, progression)` (`extras.leaderboard`), pour l'aperçu comme pour l'export. Widget en direct
-  (s'efface sous les cartes), rangée « Classement » puis une ligne par trace ; la colonne des écarts garde sa largeur.
-- **Temps du film** : `drawOverlay(ctx, frame, settings, size, assets, extras)` ; `extras.time` (`OverlayTime` : temps du film
-  de l'image, durées de l'ouverture, du vol et du film, par `overlayTime(clock, progress, timeS)` = `timeS ??
-  clock.timeAtProgress(progress)`, comme `FlyoverRig`) ; sans horloge, `progressTime(progress)` (vol d'une seconde, temps =
-  progression : les tests et l'ancien comportement). Les cartes sont calées sur le temps du film : la carte d'ouverture
-  apparaît à la première image (plan d'ouverture compris) et s'efface à `ouverture + title.end × vol` ; la carte de clôture
-  apparaît à `ouverture + end.start × vol` et reste jusqu'à la dernière image (plan de clôture compris) ; fondus de 1 % et
-  2,5 % du vol. Les étiquettes 3D (`Labels`) lisent la même opacité (`cardOpacityAt(time, …)`).
-- **Textes de la timeline** (`extras.texts` = `settings.film.texts`) : visibles dans `[startS, startS + durationS)` du temps
-  du film, fondus de 0,4 s (au plus un quart de la durée, `filmTextOpacity`), même style que le « Texte libre » (corps, panneau
-  du style, taille × `size`, marges de sécurité), texte sur deux lignes au plus (la seconde coupée par « … »), sous-titre en
-  dessous au style des libellés. Ils s'ajoutent après les widgets de leur ancre (empilés) ; un texte seul sur sa rangée
-  (haut, milieu, bas) peut prendre toute la largeur sûre, à côté d'un texte d'une autre ancre de la rangée un tiers
-  (`filmTextMaxWidths`) : pas de chevauchement entre textes. Ils ne s'effacent pas sous les cartes.
-- **Photos et vidéos de la timeline** (`extras.media` = `settings.film.media`, images décodées par `assets.photo(src)`,
-  image d'une vidéo par `assets.video(média, temps dans le fichier)` (`clipTimeS`) ; dessinées même habillage
-  désactivé, l'aperçu monte `OverlayCanvas` dès que le film a des médias) : visibles dans leur fenêtre avec les fondus
-  des textes, seulement une fois l'image décodée. Une vidéo se place comme une photo (plein écran ou carte), sans
-  Ken Burns. Plein écran : sous tout le reste, recadrée pour couvrir l'image
-  (`kenBurnsCrop`, pur) avec, si `kenBurns`, un zoom lent de 1 à 1,1 (ou l'inverse) et un glissement diagonal de 4 % au
-  plus, à vitesse constante sur la fenêtre, sens tiré de l'id (le même à chaque image) ; les widgets en direct
-  s'effacent dessous comme sous les cartes ; la légende est dessinée comme un texte de la timeline à l'ancre de la
-  photo. Carte : widget à son ancre (après les widgets, avant les textes), image de 26 u × taille de haut (40 u de large
-  au plus, dans la zone sûre), passe-partout du style (`theme.photo` : tirage blanc ombré en Éditorial, verre sombre et
-  barre d'accent en Diffusion, carte papier arrondie en Application), légende d'une ligne dessous (« … » si trop
-  longue). Les crédits restent au-dessus de tout.
-- **Crédits des sources** (`settings.overlay.credits { enabled, position }`, activés par défaut, quatre coins) : petite ligne
-  le long du bord, hors des marges de sécurité, sur un fond discret propre à chaque style (`theme.credits` : encre translucide
-  et texte blanc pour Éditorial et Diffusion, papier et encre pour Application, lisible sur neige comme sur forêt), repliée
-  sur la largeur sûre si elle est longue. Contenu : `overlayCredits` (`data.ts`), les mêmes chaînes que la barre d'état
-  (relief et imagerie en cours, Open-Meteo quand la météo est chargée, OpenStreetMap quand des repères le sont), lu des
-  stores par `overlayExtras` (`exportOverlay.ts`) pour l'aperçu comme pour l'export. Dessinés même habillage désactivé
-  (l'aperçu monte `OverlayCanvas` dès que l'un des deux est actif). Crédits désactivés, le crédit Open-Meteo reste dessiné
-  seul quand la météo est affichée (comme avant) ; activés, il rejoint la ligne. Les désactiver revient à citer les sources
-  ailleurs (texte du panneau Habillage).
-- **Polices** : un canvas ne déclenche pas seul le téléchargement des polices web ; `loadOverlayFonts()` les demande avant la
-  première image, l'export doit l'attendre aussi. Polices embarquées (`src/ui/fonts.css`, `public/fonts/`) :
-  Fraunces 300–700, IBM Plex Sans et Sans Condensed disponibles hors ligne.
-- **Météo** : widget et ligne de la carte de clôture (`weatherWidgetData`, `summarizeOuting`), avec le crédit Open-Meteo dessiné
-  dès qu'ils sont visibles (dans la ligne des crédits, ou seul en bas à droite si elle est désactivée).
+- **Principle**: the overlay is not DOM. A pure, synchronous function, `drawOverlay(ctx, frame, settings, size, assets)`
+  (`src/overlay/draw.ts`), draws it on a 2D context, on screen or off screen. The preview (`OverlayCanvas`, a 2D canvas above
+  the 3D canvas, without mouse events) and the video export (`exportOverlay.ts` → `ExportController`) call
+  the same function: the film shows exactly the preview.
+- **Units**: 1 u = 1% of the shorter side of the image; safety margins of 5% on each side; shadow blurs corrected for the
+  context transform (devicePixelRatio). Widgets that share one of the 9 anchors stack.
+- **Data** (`data.ts`): `prepareOverlayTrack(track, weather?)` once per track: path, cumulative elevation gain (same smoothing and same
+  3 m hysteresis as `computeStats`, so the last value equals `stats.ascentM`), smoothed speed and heart rate,
+  profile, closing statistics, weather summary, mini-map outline (`miniMapOutline`: local equirectangular
+  projection, x east / y south, longest side = 1, proportions kept, at most 1,500 points). `overlayFrameAt(data, progress)` is
+  a pure function of progress (including `mapPoint`, the marker position on the mini-map).
+- **Settings**: `settings.overlay` (`src/overlay/settings.ts`, disabled by default): style (`editorial`, `broadcast`, `app`) and
+  widgets — opening card, closing card, counters, profile, mini-map (optional north arrow), logo, free text,
+  weather, ranking — each with `enabled`, `anchor`, `size`. Widgets added after the first format (`minimap`,
+  `credits`, `leaderboard`) are completed with
+  their default before validation (`withOverlayDefaults`, via `SETTING_UPGRADES` in `src/project/document.ts`): old projects
+  and presets always load (`minimap` and `leaderboard` disabled, `credits` enabled). Live widgets fade out during the
+  cards.
+  Logo as a PNG data URL of at most 512 px (self-contained projects). Validation: `isValidOverlay` (`SETTING_CHECKS`).
+- **Colors and fonts** (`settings.overlay.overrides`, optional, absent by default: old projects and default
+  look unchanged): accent, text, panel background (color, opacity) as `#rrggbb`, font for titles and figures
+  from a short list (`OVERLAY_FONT_IDS`: bundled Fraunces, IBM Plex Sans and Sans Condensed, Georgia, system
+  font, system monospace; nothing is downloaded). Key outside `DEFAULT_OVERLAY`: its shape is not
+  checked by the document, `isValidOverrides` checks everything (object, known fields, values). `withOverrides` applies
+  a change and removes the key when nothing is changed any more ("Revenir au style" (back to the style)). The drawn theme comes from a single
+  pure function, `resolveOverlayTheme(style, overrides)` (`themes.ts`), called by `drawOverlay`: preview and export
+  identical. The accent also recolors what the style drew in its accent (profile, mini-map), the text gives the
+  secondary text (same color at 80%), the background also recolors the photo mat; a style without panels
+  ("Éditorial" (editorial)) keeps its veil. Per element (`STYLED_WIDGETS`: title, closing, counters, profile, weather, mini-map,
+  ranking, text): optional `overrides` on the element, same fields, on top of the overlay's
+  (`widgetOverrides`, `withWidgetOverrides`); `drawOverlay` draws this element with its own theme; validated by
+  `isValidOverlay` (an invalid element rejects the overlay, like the rest). "Couleurs et polices" at the bottom of each
+  element of the Habillage tab; "Comme le reste de l'habillage" (like the rest of the overlay) removes its changes.
+- **Ghost race ranking** (`settings.overlay.leaderboard`, off by default, anchorable, offered from two
+  tracks, drawn only when the ghost race is on): `leaderboardRows(raceAt(race, progress), tracks)` (`data.ts`,
+  pure) sorts the racers with `rankRacers` and gives rank (ties at the same point and the same gap: 1, 1, 3), name, color
+  and gap to the leader (difference between the `raceAt` gaps to the followed track: in time if the race has it, otherwise in
+  distance; "Tête" (lead), then "Arrivée" (finish), for the leader). Computed on every frame from the progress by
+  `overlayExtras(time, progress)` (`extras.leaderboard`), for the preview as for the export. Live widget
+  (fades out under the cards), "Classement" (ranking) row then one line per track; the gap column keeps its width.
+- **Film time**: `drawOverlay(ctx, frame, settings, size, assets, extras)`; `extras.time` (`OverlayTime`: film time
+  of the frame, durations of the opening, the flight and the film, from `overlayTime(clock, progress, timeS)` = `timeS ??
+  clock.timeAtProgress(progress)`, like `FlyoverRig`); without a clock, `progressTime(progress)` (one-second flight, time =
+  progress: the tests and the old behavior). The cards are timed on the film time: the opening card
+  appears on the first frame (opening shot included) and fades out at `opening + title.end × flight`; the closing card
+  appears at `opening + end.start × flight` and stays until the last frame (closing shot included); fades of 1% and
+  2.5% of the flight. The 3D labels (`Labels`) read the same opacity (`cardOpacityAt(time, …)`).
+- **Timeline texts** (`extras.texts` = `settings.film.texts`): visible within `[startS, startS + durationS)` of film
+  time, 0.4 s fades (at most a quarter of the duration, `filmTextOpacity`), same style as the "Texte libre" (free text; body, style
+  panel, size × `size`, safety margins), text on two lines at most (the second cut with "…"), subtitle
+  below in the label style. They are added after the widgets of their anchor (stacked); a text alone on its row
+  (top, middle, bottom) can take the whole safe width, next to a text from another anchor in the row a third
+  (`filmTextMaxWidths`): no overlap between texts. They do not fade out under the cards.
+- **Timeline photos and videos** (`extras.media` = `settings.film.media`, images decoded by `assets.photo(src)`,
+  video frame by `assets.video(media, time in the file)` (`clipTimeS`); drawn even with the overlay
+  disabled, the preview mounts `OverlayCanvas` as soon as the film has media): visible within their window with the text
+  fades, only once the image is decoded. A video is placed like a photo (full screen or card), without
+  Ken Burns. Full screen: below everything else, cropped to cover the frame
+  (`kenBurnsCrop`, pure) with, if `kenBurns`, a slow zoom from 1 to 1.1 (or the reverse) and a diagonal glide of at most
+  4%, at constant speed over the window, direction derived from the id (the same on every frame); live widgets
+  fade out underneath as under the cards; the caption is drawn like a timeline text at the photo's
+  anchor. Card: widget at its anchor (after the widgets, before the texts), image 26 u × size high (40 u wide
+  at most, within the safe area), style mat (`theme.photo`: white shadowed print in "Éditorial", dark glass and
+  accent bar in "Diffusion" (broadcast), rounded paper card in "Application" (app)), one-line caption below ("…" if too
+  long). Credits stay above everything.
+- **Source credits** (`settings.overlay.credits { enabled, position }`, enabled by default, four corners): small line
+  along the edge, outside the safety margins, on a discreet background specific to each style (`theme.credits`: translucent ink
+  and white text for "Éditorial" and "Diffusion", paper and ink for "Application", readable on snow as on forest), wrapped
+  to the safe width if it is long. Content: `overlayCredits` (`data.ts`), the same strings as the status bar
+  (current terrain and imagery, Open-Meteo when the weather is loaded, OpenStreetMap when landmarks are), read from the
+  stores by `overlayExtras` (`exportOverlay.ts`) for the preview as for the export. Drawn even with the overlay disabled
+  (the preview mounts `OverlayCanvas` as soon as either one is active). With credits disabled, the Open-Meteo credit is still drawn
+  alone when the weather is shown (as before); enabled, it joins the line. Disabling them means citing the sources
+  elsewhere (text in the Habillage panel).
+- **Fonts**: a canvas does not trigger the download of web fonts on its own; `loadOverlayFonts()` requests them before the
+  first frame, and the export must wait for it too. Bundled fonts (`src/ui/fonts.css`, `public/fonts/`):
+  Fraunces 300–700, IBM Plex Sans and Sans Condensed available offline.
+- **Weather**: widget and line on the closing card (`weatherWidgetData`, `summarizeOuting`), with the Open-Meteo credit drawn
+  as soon as they are visible (in the credits line, or alone at the bottom right if it is disabled).
 
-## Export vidéo (phase 5)
+## Video export (phase 5)
 
-- Le survol étant une fonction pure de `playback.progress` et du temps du film, un film est une liste de temps du film
-  (`buildFrameTimes` : rampe 0 → durée sur `durée × fps` images, plus 1 s tenue au début et 2 s à la fin) et des progressions
-  correspondantes (`buildFrameSchedule`) ; chaque image fixe les deux (`setProgress(progression, temps)`). `ExportController` (dans `TerrainLayer`) exécute la
-  demande déposée dans le store d'export (`src/export/store.ts`, distinct du store de l'application) : lecture en pause,
-  `frameloop 'never'`, rendu et caméra à la taille de la vidéo avec un ratio de pixels de 1 (réappliqués avant chaque rendu ;
-  canvas affiché en letterbox pendant l'export), pointeur désactivé.
-- Le calendrier suit l'horloge du film (voir « Film et timeline ») : la rampe dure `clock.totalTime()` (ouverture et clôture
-  comprises) et l'image k montre `clock.progressAtTime(k / (n − 1) × durée)` à ce temps du film (ralentis et arrêts comme dans
-  l'aperçu ; les images tenues réutilisent l'image déjà composée, sauf quand la vue bouge avec le temps : plans d'ouverture
-  et de clôture, arrêts en orbite, styles orbite et cinéma, ou quand l'habillage minuté change (`overlayTimedState` :
-  opacités des cartes, des textes, des photos et des vidéos de la timeline, plus le temps du film pendant qu'une photo
-  plein écran bouge ou qu'une vidéo est visible ; un texte qui apparaît pendant un arrêt fixe est donc rendu, une vidéo
-  pendant un arrêt aussi) ; les images des photos et des vidéos visibles sont décodées avant le rendu de l'image
-  (`loadFrameMedia`, la composition devant suivre le rendu dans la même tâche ; `releaseFrameMedia` en fin d'export).
-  Vidéos : image exacte et reproductible, jamais de lecture en temps réel ; `createExportVideos` ouvre chaque vidéo
-  visible avec mediabunny (`CanvasSink`, rotation appliquée, 3 canvas tournants) et `createClipReader` donne la dernière
-  image qui commence au plus tard au temps voulu dans le fichier, en lisant en avant (chaque image décodée une fois) ;
-  retour en arrière ou saut de plus de 2 s : réouverture à l'image-clé ; une vidéo illisible arrête l'export avec un
-  message ; les images tenues du début et de la fin restent figées sur les
-  temps 0 et durée).
-- Pour chaque progression (`renderSettledFrame`, `src/export/capture.ts`), `advance` jusqu'à ce que la vue n'attende plus
-  aucune tuile réellement dessinée (`stats.pendingVisibleTiles`, limite 5 s par image, comptée « incomplète »), puis les
-  replaquages en attente de la trace et des étiquettes sont exécutés tout de suite (`flushDrapes`, au lieu de leur délai) et
-  l'image est rendue une fois de plus. La caméra n'est replacée (progression décalée de 1e-9) que si le relief final la déplace
-  de plus d'1 m, jamais après un dépassement de délai. Toutes les 5 images rendues, les tuiles des images +5 à +40 sont
-  demandées à l'avance (`engine.prefetch`).
-- L'image WebGL est composée dans la même tâche que le rendu sur un `OffscreenCanvas` (dégradé de ciel, image, puis habillage
-  `DrawOverlay(ctx, { progress, time }, w, h)` après chargement de ses polices, `time` = `overlayTime(horloge, progression,
-  temps de l'image)` ; image fixe : temps de lecture courant), puis encodée par mediabunny (WebCodecs) : MP4 H.264,
-  sinon MP4 HEVC, WebM VP9, WebM VP8, le premier accepté par `VideoEncoder.isConfigSupported` ; débit = pixels × fps × 0,06 /
-  0,10 / 0,16 bit selon la qualité, corrigé par codec, borné à 1–80 Mbit/s ; image-clé toutes les 2 s.
-- **Écriture directe sur le disque** quand `capabilities.canStreamToDisk` (bureau, ou navigateur avec `showSaveFilePicker` :
-  Chrome, Edge) : le clic « Exporter la vidéo » demande d'abord où enregistrer (`chooseVideoDestination`, appelé avant tout
-  `await` car le sélecteur du navigateur exige le geste de l'utilisateur ; fenêtre fermée = pas d'export ; échec du
-  sélecteur = repli en mémoire) et la demande d'export porte le `WritableFile` obtenu (`request.destination`). L'encodeur
-  écrit alors par `StreamTarget` de mediabunny, par morceaux de 4 Mio écrits à leur position (`STREAM_CHUNK_BYTES`) ; MP4
-  sans « fast start » (`fastStart: false` : `moov` après les images, taille de `mdat` corrigée à la fin), lu par tous les
-  lecteurs et logiciels de montage, alors que le MP4 fragmenté l'est moins ; WebM tel quel. Le codec suit l'extension du
-  nom choisi (`candidatesFor` : « .webm » tapé → VP9 / VP8). Annulation, erreur ou échec d'écriture : mediabunny ferme son
-  flux même à l'annulation, donc le flux intermédiaire de l'encodeur appelle `discard` (et non `close`) quand la session
-  est annulée ; `cancel` appelle encore `discard` après coup (cas d'un flux en erreur) et `ExportController` aussi quand
-  l'export échoue avant l'encodeur ; une demande annulée avant d'être prise ou refusée (export déjà en cours) supprime son
-  fichier dans le store. Résultat : `url: null`, le toast dit « Vidéo enregistrée dans <nom> » et le tiroir
-  « Enregistrée dans <nom> », sans nouveau téléchargement. Le tiroir affiche « Enregistrement direct sur le disque » ;
-  sinon, au-dessus d'une estimation de 1,5 Go (`MEMORY_WARN_BYTES`, `warnsInMemory`), il prévient que le film gardé en
-  mémoire peut saturer l'onglet.
-- Sinon fichier en mémoire (MP4 avec son index au début), téléchargé à la fin.
-- **Son** (musique et son des vidéos) : avant la première image, `mixFilmAudio(film, …)` (`src/film/audio.ts`) mixe le
-  son du film dans un `OfflineAudioContext` (48 kHz, stéréo) sur la longueur exacte de la vidéo (`nombre d'images / fps`,
-  images tenues comprises), chaque musique placée au temps du film + les images tenues du début (`round(1 s × fps) / fps` :
-  elle commence avec le film, pas pendant l'image fixe d'attente), lue de `inS` sur sa durée jouée, gain automatisé par
-  les points de `musicEnvelope` (`musicMixPlan`, pur), puis un bus commun dont le gain suit la baisse sous les vidéos
-  (`filmMixPlan`, pur : `music`, `clips`, `duck`). Le son de chaque vidéo entendue (voir « Son des vidéos ») est décodé
-  une fois par mediabunny (`decodeClipSound` dans `film/video.ts` : `AudioBufferSink` sur WebCodecs, morceaux posés à leur
-  position d'échantillon par `joinSoundChunks`, pur et testé, un seul `AudioBuffer` de `inS` sur sa durée jouée) et placé
-  au même temps du film + images tenues, directement sur la sortie (jamais baissé), fondus de 20 ms aux bords. Rendu
-  identique d'un export à l'autre, jamais en temps réel ; un fichier illisible arrête l'export avec un message (pour une
-  vidéo : « coupez-le dans l'inspecteur »), une vidéo sans piste son reste muette ; rien à entendre : pas de piste son. L'encodeur (`createVideoEncoder(…, { audio })`) choisit AAC en MP4,
-  sinon Opus (`AUDIO_CANDIDATES`, `canEncodeAudio`, 192 kbit/s ; Opus seul en WebM), ajoute la piste son
-  (`AudioSampleSource`) et lui passe les échantillons au fil des images, 1 s d'avance (`AUDIO_LEAD_S`, morceaux d'au plus
-  1 s, plans séparés `f32-planar`) pour que les deux pistes s'entrelacent, le reste à la fin ; même chemin en mémoire et
-  sur le disque. Aucun codec son : film muet, `audioCodec` null et note « sans le son : ce navigateur ne sait pas
-  l'encoder » à côté du résultat (`ExportResult.note`, « avec le son (AAC) » sinon). Écart entre image et son :
-  au plus une image et demie à la fin du film (la rampe a `round(durée × fps)` images). Mémoire : environ 23 Mo par minute
-  de film pour le mixage, plus le son décodé des vidéos entendues (environ 23 Mo par minute de vidéo en stéréo 48 kHz).
-- Tout est restauré en fin d'export, en cas d'erreur ou d'annulation (taille, ratio de pixels, frameloop, pointeur,
-  progression). Réglage `settings.video { aspect, resolution, fps, quality }` dans le document de projet (anciens `video.format`
-  convertis par `withVideoDefaults`) : formats 16:9, 9:16, 1:1, 4:5, 21:9 × petit côté 720p, 1080p, 1440p, 4K
-  (`videoSize`) ; 24 / 30 / 60 i/s.
-- Échelle de rendu `exportRenderScale` = petit côté / 1080 (1 hors export) : largeur de la trace et taille des étiquettes, en
-  pixels, sont multipliées pour qu'un film 4K ressemble au 1080p. Les marqueurs n'en ont pas besoin (taille proportionnelle à la
-  distance caméra, donc fraction d'écran constante).
-- Image fixe (bouton « Image fixe » du tiroir d'export, PNG ou JPEG) : même demande avec `still { progress, type }`, la progression
-  de lecture courante, à la taille format × résolution de la vidéo. Même chemin que le film (taille, ratio de pixels 1,
-  échelle de rendu, `renderSettledFrame`, `composeFrame` avec l'habillage s'il est affiché), une seule image rendue à la
-  progression décalée de 1e-9 pour que la caméra soit placée par le style courant (et non la vue orbitée à la main), puis
-  `OffscreenCanvas.convertToBlob` (JPEG qualité 0,92 ; extension d'après le type obtenu). Nom : `<trace> <progression> %`.
-  Restauration identique au film.
-- Image fixe d'ensemble (affiche) : `still.overview` et `still.compose` (voir « Affiche »).
-- **Habillage seul** (case « Habillage seul (fond transparent) » du tiroir, état du tiroir, non enregistré) : pour poser
-  l'habillage sur ses propres images dans un logiciel de montage. Demande `overlayOnly` : mêmes `buildFrameSchedule` /
-  `buildFrameTimes` que le film, donc mêmes images, aux mêmes instants, image pour image ; `runOverlayOnly`
-  (`ExportController`) ne touche pas à la scène (ni taille, ni `frameloop`, ni tuiles attendues, ni image WebGL) et ne
-  mixe pas le son. Chaque image est redessinée (`composeOverlayFrame` : canvas effacé, transparent, puis `DrawOverlay`
-  avec `loadFrameMedia` avant), puis encodée en WebM / VP9 avec transparence (`createVideoEncoder(…, { transparent })`,
-  seul candidat `ALPHA_CANDIDATES`) : mediabunny (`alpha: 'keep'`) sépare couleur et alpha dans un worker et encode
-  l'alpha par un second encodeur VP9, rangé à côté de chaque image (`BlockAdditional`, en-tête `AlphaMode`). Le
-  navigateur n'a donc besoin que d'un encodeur VP9 ordinaire, vérifié par `isConfigSupported` (`pickCodec`) ; sans VP9,
-  le tiroir le dit et désactive le bouton (pas de repli en suite d'images PNG : des milliers d'images en mémoire, et
-  peu utile). Même destination que le film (disque ou mémoire, bureau compris), même annulation (`abandon` : fichier
-  supprimé). Nom : `<trace> habillage.webm`. Pas d'estimation de taille (images presque vides, bien sous le débit
-  visé) ; temps non comptés dans `secondsPerMegapixel`.
-- **Rendu en lot** (`src/export/batch.ts`, mode « Plusieurs formats » du tiroir) : `buildBatchJobs(sélection, format de
-  l'image fixe)` donne les films cochés (format × résolution, dans l'ordre de `VIDEO_ASPECTS` puis `VIDEO_RESOLUTIONS`,
-  clés `16:9@1080p`), puis l'image fixe (position de lecture, PNG, au format du mode « Vidéo ») et l'affiche (ses
-  réglages, `startPoster`). Images par seconde et qualité : celles de `settings.video`. Noms : `batchBaseName` →
-  « <projet> – 16x9-1080p », « <projet> – image 16x9-1080p », « <projet> – affiche » (`effectiveProjectName`).
-  `runBatch` exécute les tâches une à une (un échec n'arrête pas les suivantes ; une tâche annulée, ou une annulation
-  demandée entre deux, annule toutes celles qui restent), chacune par `exportJob` : la même demande et le même
-  `ExportController` qu'un export seul (vue restaurée après chacune, cache de tuiles partagé), attente de la fin par
-  `settledExport` (abonnement au store), puis `takeResult` (le store rend le résultat sans révoquer son URL : le lot
-  garde chaque fichier). « Annuler » de la barre du haut annule la tâche en cours, donc tout le lot ; « Tout annuler »
-  aussi (`useBatchStore.cancel`). Le tiroir « Vidéo » ne télécharge ni n'annonce rien pendant un lot : le lot le fait.
-- Destination du lot : avec l'écriture directe et un sélecteur de dossier (`canPickFolder` : bureau, ou
-  `showDirectoryPicker` de Chrome / Edge), un dossier est demandé au clic « Tout exporter » (avant tout `await`) ;
-  chaque film y est écrit au fil de l'encodage (`WritableFolder.createFile` → `WritableFile`, extension d'après
-  `pickCodec`), images et affiche copiées à la fin (un fichier du même nom est remplacé). Dossier refusé = pas d'export ;
-  échec du sélecteur ou sans sélecteur = chaque fichier gardé en mémoire et enregistré dès qu'il est prêt (téléchargement,
-  `saveUrl` sur le bureau), son URL gardée pour « Enregistrer à nouveau » jusqu'au lot suivant.
-- **Un film par trace** (source « Un film par trace » du mode « Plusieurs formats », seulement avec un sélecteur de
-  dossier et l'écriture directe) : « Choisir le dossier des traces… » lit un dossier (`pickReadableFolder` :
-  `showDirectoryPicker` en lecture, ou le dialogue de dossier du bureau, qui ajoute le dossier et ses fichiers à la portée
-  fs, permissions `read-dir` / `read-file` déjà accordées) ; `trackFiles` garde les GPX / FIT, triés par nom (« Sortie 2 »
-  avant « Sortie 10 »). « Tout exporter » demande le dossier de sortie, puis `useBatchStore.runTracks` → `runTrackFilms` :
-  pour chaque fichier, `show` l'importe seul (`importFile`) et l'affiche à la place des traces (`clearTracks` +
-  `addTracks`, comme l'ouverture d'un projet) avec le film automatique (`trackFilm` : plans, options et musique du film
-  de l'utilisateur ; arrêts générés ; vitesses, cadrages, textes, médias et points d'intérêt retirés), lance repères et
-  météo de la trace et les attend (`TRACK_DATA_WAIT_MS`, 30 s au plus), refait les titres des repères ; puis les tâches
-  cochées passent par `runBatch` / `exportJob`, demande tirée de l'horloge de cette trace (`shownFilm`), noms
-  « <fichier sans extension> – 16x9-1080p.mp4 » (`trackFilmName`). Fichier illisible ou film en échec : trace marquée,
-  on passe à la suivante ; trace non horodatée : film sans météo ni heure, comme chargée à la main. Progression
-  « 3 / 12 · Sortie 3.gpx · 42 % » (`trackProgressLabel`), « Tout annuler » comme le lot. À la fin, quoi qu'il arrive,
-  `restore` remet les mêmes objets (traces, réglages, origine du repère, lecture) : « Enregistré » reste, et l'historique
-  d'annulation, suspendu pendant tout le passage (`History.suspend`), ne garde aucun pas du lot.
-- Estimation du lot (`estimateBatch`) : fichiers, images à rendre (chaque film compté), taille des films dont le codec est
-  connu, et durée de rendu = images × mégapixels × `secondsPerMegapixel`, la vitesse du dernier film exporté dans la
-  session (`filmRate`, mesurée par le store à la fin d'un film ; rien avant le premier).
-- La console affiche en fin d'export le temps de rendu, d'attente des tuiles et d'encodage, et le nombre de délais dépassés.
-  « Encodage » inclut la copie de l'image WebGL, qui attend la fin du rendu GPU.
-- Limites : sans écriture directe (Firefox, Safari), fichier gardé en mémoire (~2× sa taille) ; onglet à garder ouvert, vitesse liée au GPU (mesure à faire sur une
-  machine avec GPU, voir `docs/reprise.md`).
-- **En ligne de commande** (bureau, `src-tauri/src/cli.rs` + `src/export/cliRender.ts`) : `openflyover --rendu <dossier>
-  [--sortie <dossier>] [--prereglage <nom>] [--formats 16:9@1080p,…]`. Rust lit les arguments au démarrage (`parse_cli`,
-  testé ; option inconnue, valeur manquante, options sans `--rendu` : message et code 2), rend les chemins absolus
-  (`prepare` : dossier des traces existant, sortie créée), ajoute ces deux dossiers, et eux seuls, à la portée fs, et
-  garde la demande. L'application la demande une fois au démarrage (`cli_render`, qui la consomme : un rechargement ne
-  relance rien), applique le préréglage nommé (`presetSettings`), vérifie les formats (`cliFormats` ; défaut : celui de
-  « Vidéo »), lit les traces du dossier (`readableFolderAt`), lance le même `runTracks` que le tiroir avec
-  `writableFolderAt(sortie)`, écrit `rendu-en-lot.txt` (`cliReport` : une ligne par trace) et quitte par `cli_exit`
-  (0 : tous les films faits ; 1 : un échec ; 2 : demande impossible). La fenêtre s'ouvre (WebGL en a besoin).
+- Since the flyover is a pure function of `playback.progress` and the film time, a film is a list of film times
+  (`buildFrameTimes`: ramp 0 → duration over `duration × fps` frames, plus 1 s held at the start and 2 s at the end) and the matching
+  progress values (`buildFrameSchedule`); each frame sets both (`setProgress(progress, time)`). `ExportController` (in `TerrainLayer`) runs the
+  request placed in the export store (`src/export/store.ts`, separate from the application store): playback paused,
+  `frameloop 'never'`, renderer and camera at the video size with a pixel ratio of 1 (reapplied before each render;
+  canvas shown letterboxed during the export), pointer disabled.
+- The schedule follows the film clock (see "Film and timeline"): the ramp lasts `clock.totalTime()` (opening and closing
+  included) and frame k shows `clock.progressAtTime(k / (n − 1) × duration)` at that film time (slow-downs and stops as in
+  the preview; held frames reuse the already composited image, except when the view moves with time: opening
+  and closing shots, orbit stops, orbit and cinematic styles, or when the timed overlay changes (`overlayTimedState`:
+  opacities of the cards, the texts, the photos and the videos of the timeline, plus the film time while a full-screen
+  photo moves or a video is visible; a text that appears during a fixed stop is therefore rendered, and so is a video
+  during a stop); the images of the visible photos and videos are decoded before the frame is rendered
+  (`loadFrameMedia`, since composition must follow rendering in the same task; `releaseFrameMedia` at the end of the export).
+  Videos: exact and reproducible frame, never real-time playback; `createExportVideos` opens each visible
+  video with mediabunny (`CanvasSink`, rotation applied, 3 rotating canvases) and `createClipReader` gives the last
+  frame that starts no later than the requested time in the file, reading forward (each frame decoded once);
+  going back or jumping more than 2 s: reopened at the keyframe; an unreadable video stops the export with a
+  message; the frames held at the start and the end stay frozen at
+  times 0 and duration).
+- For each progress value (`renderSettledFrame`, `src/export/capture.ts`), `advance` until the view no longer waits for
+  any tile that is actually drawn (`stats.pendingVisibleTiles`, limit 5 s per frame, counted as "incomplète" (incomplete)), then the
+  pending re-drapes of the track and labels run right away (`flushDrapes`, instead of their delay) and
+  the frame is rendered once more. The camera is repositioned (progress shifted by 1e-9) only if the final terrain moves it
+  by more than 1 m, never after a timeout. Every 5 rendered frames, the tiles for frames +5 to +40 are
+  requested ahead of time (`engine.prefetch`).
+- The WebGL image is composited in the same task as the render onto an `OffscreenCanvas` (sky gradient, image, then overlay
+  `DrawOverlay(ctx, { progress, time }, w, h)` after loading its fonts, `time` = `overlayTime(clock, progress,
+  frame time)`; still image: current playback time), then encoded by mediabunny (WebCodecs): MP4 H.264,
+  otherwise MP4 HEVC, WebM VP9, WebM VP8, the first one accepted by `VideoEncoder.isConfigSupported`; bitrate = pixels × fps × 0.06 /
+  0.10 / 0.16 bit depending on quality, corrected per codec, bounded to 1–80 Mbit/s; keyframe every 2 s.
+- **Direct write to disk** when `capabilities.canStreamToDisk` (desktop, or a browser with `showSaveFilePicker`:
+  Chrome, Edge): the "Exporter la vidéo" click first asks where to save (`chooseVideoDestination`, called before any
+  `await` because the browser picker requires a user gesture; dialog closed = no export; picker
+  failure = in-memory fallback) and the export request carries the resulting `WritableFile` (`request.destination`). The encoder
+  then writes through mediabunny's `StreamTarget`, in 4 MiB chunks written at their position (`STREAM_CHUNK_BYTES`); MP4
+  without "fast start" (`fastStart: false`: `moov` after the frames, `mdat` size patched at the end), read by all
+  players and editing software, whereas fragmented MP4 is less widely supported; WebM as is. The codec follows the extension of the
+  chosen name (`candidatesFor`: ".webm" typed → VP9 / VP8). Cancel, error or write failure: mediabunny closes its
+  stream even on cancel, so the encoder's intermediate stream calls `discard` (not `close`) when the session
+  is canceled; `cancel` still calls `discard` afterwards (case of a stream in error) and so does `ExportController` when
+  the export fails before the encoder; a request canceled before being picked up, or refused (export already running), deletes its
+  file in the store. Result: `url: null`, the toast says "Vidéo enregistrée dans <nom>" and the drawer
+  "Enregistrée dans <nom>", without a new download. The drawer shows "Enregistrement direct sur le disque";
+  otherwise, above an estimate of 1.5 GB (`MEMORY_WARN_BYTES`, `warnsInMemory`), it warns that the film kept in
+  memory may saturate the tab.
+- Otherwise an in-memory file (MP4 with its index at the start), downloaded at the end.
+- **Sound** (music and video sound): before the first frame, `mixFilmAudio(film, …)` (`src/film/audio.ts`) mixes the
+  film's sound in an `OfflineAudioContext` (48 kHz, stereo) over the exact length of the video (`frame count / fps`,
+  held frames included), each music track placed at its film time + the frames held at the start (`round(1 s × fps) / fps`:
+  it starts with the film, not during the still waiting frame), read from `inS` over its played duration, gain automated by
+  the `musicEnvelope` points (`musicMixPlan`, pure), then a shared bus whose gain follows the ducking under the videos
+  (`filmMixPlan`, pure: `music`, `clips`, `duck`). The sound of each heard video (see "Video sound") is decoded
+  once by mediabunny (`decodeClipSound` in `film/video.ts`: `AudioBufferSink` on WebCodecs, chunks placed at their
+  sample position by `joinSoundChunks`, pure and tested, a single `AudioBuffer` from `inS` over its played duration) and placed
+  at the same film time + held frames, directly on the output (never ducked), 20 ms fades at the edges. Rendering
+  identical from one export to the next, never in real time; an unreadable file stops the export with a message (for a
+  video: "coupez-le dans l'inspecteur"), a video without a sound track stays silent; nothing to hear: no sound track. The encoder (`createVideoEncoder(…, { audio })`) picks AAC in MP4,
+  otherwise Opus (`AUDIO_CANDIDATES`, `canEncodeAudio`, 192 kbit/s; Opus only in WebM), adds the sound track
+  (`AudioSampleSource`) and feeds it samples as the frames go, 1 s ahead (`AUDIO_LEAD_S`, chunks of at most
+  1 s, separate `f32-planar` planes) so the two tracks interleave, the rest at the end; same path in memory and
+  on disk. No audio codec: silent film, `audioCodec` null and note "sans le son : ce navigateur ne sait pas
+  l'encoder" next to the result (`ExportResult.note`, "avec le son (AAC)" otherwise). Drift between picture and sound:
+  at most one and a half frames at the end of the film (the ramp has `round(duration × fps)` frames). Memory: about 23 MB per minute
+  of film for the mix, plus the decoded sound of the heard videos (about 23 MB per minute of video in 48 kHz stereo).
+- Everything is restored at the end of the export, on error or on cancel (size, pixel ratio, frameloop, pointer,
+  progress). Setting `settings.video { aspect, resolution, fps, quality }` in the project document (old `video.format`
+  converted by `withVideoDefaults`): formats 16:9, 9:16, 1:1, 4:5, 21:9 × short side 720p, 1080p, 1440p, 4K
+  (`videoSize`); 24 / 30 / 60 fps.
+- Render scale `exportRenderScale` = short side / 1080 (1 outside export): track width and label size, in
+  pixels, are multiplied so that a 4K film looks like the 1080p one. Markers do not need it (size proportional to the
+  camera distance, hence a constant screen fraction).
+- Still image ("Image fixe" button in the export drawer, PNG or JPEG): same request with `still { progress, type }`, the current playback
+  progress, at the video's format × resolution size. Same path as the film (size, pixel ratio 1,
+  render scale, `renderSettledFrame`, `composeFrame` with the overlay if it is shown), a single frame rendered at the
+  progress shifted by 1e-9 so that the camera is placed by the current style (and not the hand-orbited view), then
+  `OffscreenCanvas.convertToBlob` (JPEG quality 0.92; extension based on the type obtained). Name: `<trace> <progression> %`.
+  Restoration identical to the film.
+- Overview still image (poster): `still.overview` and `still.compose` (see "Poster").
+- **Overlay only** ("Habillage seul (fond transparent)" (overlay only, transparent background) checkbox in the drawer, drawer state, not saved): to lay
+  the overlay over your own footage in editing software. `overlayOnly` request: same `buildFrameSchedule` /
+  `buildFrameTimes` as the film, hence the same frames, at the same instants, frame for frame; `runOverlayOnly`
+  (`ExportController`) does not touch the scene (no size, no `frameloop`, no waiting for tiles, no WebGL image) and does not
+  mix the sound. Each frame is redrawn (`composeOverlayFrame`: canvas cleared, transparent, then `DrawOverlay`
+  with `loadFrameMedia` before), then encoded as WebM / VP9 with transparency (`createVideoEncoder(…, { transparent })`,
+  sole candidate `ALPHA_CANDIDATES`): mediabunny (`alpha: 'keep'`) splits color and alpha in a worker and encodes
+  the alpha with a second VP9 encoder, stored next to each frame (`BlockAdditional`, `AlphaMode` header). The
+  browser therefore only needs an ordinary VP9 encoder, checked by `isConfigSupported` (`pickCodec`); without VP9,
+  the drawer says so and disables the button (no fallback to a PNG image sequence: thousands of images in memory, and
+  of little use). Same destination as the film (disk or memory, desktop included), same cancel (`abandon`: file
+  deleted). Name: `<trace> habillage.webm`. No size estimate (nearly empty frames, well below the target
+  bitrate); times not counted in `secondsPerMegapixel`.
+- **Batch rendering** (`src/export/batch.ts`, "Plusieurs formats" mode of the drawer): `buildBatchJobs(selection, still
+  image format)` gives the checked films (format × resolution, in the order of `VIDEO_ASPECTS` then `VIDEO_RESOLUTIONS`,
+  keys `16:9@1080p`), then the still image (playback position, PNG, in the "Vidéo" mode format) and the poster (its
+  settings, `startPoster`). Frames per second and quality: those of `settings.video`. Names: `batchBaseName` →
+  "<projet> – 16x9-1080p", "<projet> – image 16x9-1080p", "<projet> – affiche" (`effectiveProjectName`).
+  `runBatch` runs the jobs one by one (a failure does not stop the next ones; a canceled job, or a cancel
+  requested between two jobs, cancels all the remaining ones), each through `exportJob`: the same request and the same
+  `ExportController` as a single export (view restored after each one, shared tile cache), waiting for the end through
+  `settledExport` (store subscription), then `takeResult` (the store returns the result without revoking its URL: the batch
+  keeps each file). "Annuler" in the top bar cancels the current job, hence the whole batch; "Tout annuler" (cancel all)
+  does too (`useBatchStore.cancel`). The "Vidéo" drawer neither downloads nor announces anything during a batch: the batch does it.
+- Batch destination: with direct writing and a folder picker (`canPickFolder`: desktop, or
+  `showDirectoryPicker` in Chrome / Edge), a folder is requested on the "Tout exporter" click (before any `await`);
+  each film is written there as it is encoded (`WritableFolder.createFile` → `WritableFile`, extension based on
+  `pickCodec`), still images and poster copied at the end (a file with the same name is replaced). Folder refused = no export;
+  picker failure or no picker = each file kept in memory and saved as soon as it is ready (download,
+  `saveUrl` on the desktop), its URL kept for "Enregistrer à nouveau" (save again) until the next batch.
+- **One film per track** ("Un film par trace" source of the "Plusieurs formats" mode, only with a folder picker
+  and direct writing): "Choisir le dossier des traces…" (choose the tracks folder) reads a folder (`pickReadableFolder`:
+  `showDirectoryPicker` in read mode, or the desktop folder dialog, which adds the folder and its files to the fs
+  scope, `read-dir` / `read-file` permissions already granted); `trackFiles` keeps the GPX / FIT files, sorted by name ("Sortie 2"
+  before "Sortie 10"). "Tout exporter" asks for the output folder, then `useBatchStore.runTracks` → `runTrackFilms`:
+  for each file, `show` imports it alone (`importFile`) and displays it in place of the tracks (`clearTracks` +
+  `addTracks`, like opening a project) with the automatic film (`trackFilm`: shots, options and music from the user's
+  film; generated stops; speeds, framings, texts, media and points of interest removed), starts the track's landmarks and
+  weather and waits for them (`TRACK_DATA_WAIT_MS`, 30 s at most), rebuilds the landmark titles; then the checked
+  jobs go through `runBatch` / `exportJob`, request derived from this track's clock (`shownFilm`), names
+  "<fichier sans extension> – 16x9-1080p.mp4" (`trackFilmName`). Unreadable file or failed film: track flagged,
+  move on to the next one; track without timestamps: film without weather or time, as if loaded by hand. Progress
+  "3 / 12 · Sortie 3.gpx · 42 %" (`trackProgressLabel`), "Tout annuler" as for the batch. At the end, whatever happens,
+  `restore` puts back the same objects (tracks, settings, frame origin, playback): "Enregistré" remains, and the undo
+  history, suspended for the whole run (`History.suspend`), keeps no step from the batch.
+- Batch estimate (`estimateBatch`): files, frames to render (each film counted), size of the films whose codec is
+  known, and render time = frames × megapixels × `secondsPerMegapixel`, the speed of the last film exported in the
+  session (`filmRate`, measured by the store at the end of a film; nothing before the first).
+- At the end of an export, the console shows the render time, the tile waiting time and the encoding time, and the number of timeouts.
+  "Encoding" includes copying the WebGL image, which waits for the GPU render to finish.
+- Limits: without direct writing (Firefox, Safari), file kept in memory (~2× its size); the tab must stay open, speed depends on the GPU (to be measured on a
+  machine with a GPU, see `docs/handover.md`).
+- **Command line** (desktop, `src-tauri/src/cli.rs` + `src/export/cliRender.ts`): `openflyover --rendu <dossier>
+  [--sortie <dossier>] [--prereglage <nom>] [--formats 16:9@1080p,…]`. Rust reads the arguments at startup (`parse_cli`,
+  tested; unknown option, missing value, options without `--rendu`: message and exit code 2), makes the paths absolute
+  (`prepare`: existing tracks folder, output folder created), adds these two folders, and only these, to the fs scope, and
+  keeps the request. The application asks for it once at startup (`cli_render`, which consumes it: a reload does not
+  restart anything), applies the named preset (`presetSettings`), checks the formats (`cliFormats`; default: the one from
+  "Vidéo"), reads the tracks in the folder (`readableFolderAt`), runs the same `runTracks` as the drawer with
+  `writableFolderAt(output)`, writes `rendu-en-lot.txt` (`cliReport`: one line per track) and quits through `cli_exit`
+  (0: all films done; 1: a failure; 2: impossible request). The window opens (WebGL needs it).
 
-## Affiche (phase 7)
+## Poster (phase 7)
 
-- **Principe** : une affiche PNG de la sortie, en un clic depuis le tiroir d'export (mode « Affiche », à côté de « Vidéo »).
-  La vue 3D est rendue par le chemin de l'image fixe (`ExportController`) à la taille de la boîte de vue de la mise en page,
-  puis dessinée avec le texte sur un `OffscreenCanvas` de la taille de l'affiche par `drawPoster`.
-- **Réglages** : `settings.poster` (`src/poster/settings.ts`) : `format` (A4 2 480 × 3 508, A3 3 508 × 4 960, portrait ou
-  paysage, à 300 dpi ; carré 2 160 × 2 160), `style` (`editorial`, `broadcast`, `app`, libellés de l'habillage), `title`
-  (vide = nom du projet, `effectiveProjectName`), `subtitle` (suivi de la date de la trace), `figures` (distance, D+, durée,
-  altitude max., nombre de montées), `weather`, `flat` (« Carte à plat », absent d'un ancien projet : `false` par
-  `withPosterDefaults`, `SETTING_UPGRADES`). Validation `isValidPoster` (`SETTING_CHECKS`). Un préréglage n'en garde que
-  le style (`presetSettings`, comme le film réduit à ses plans) : le titre appartient au projet.
-- **Contenu** (`content.ts`, pur) : titre, ligne « sous-titre · date » (`formatDateFr`), chiffres que la trace enregistre
-  (un chiffre absent n'est pas dessiné, la puce est grisée), profil de 400 points (`elevationProfile`), ligne météo
-  (`weatherSummaryLine`, seulement si la météo de la première trace est chargée), crédits (`overlayCredits`, les mêmes
-  chaînes que la barre d'état), lus des stores par `currentPosterContent` (`export.ts`). Plusieurs traces : une série de
-  sorties est additionnée (`totalStats` : distances, D+, durées et montées ajoutées, altitude max. la plus haute ; une
-  somme qu'une sortie n'enregistre pas est omise), « 3 sorties » et les dates de la première à la dernière dans le
-  sous-titre, sans météo d'un seul jour ; une course fantôme (`race.enabled`) garde les chiffres et la météo de la
-  première trace (le même parcours), « 3 traces ». Dans les deux cas, pas de profil : jusqu'à `POSTER_LIST_MAX` (6)
-  traces, une liste (pastille de couleur, nom, distance, D+, date courte « 12/07/2026 », `trackLine`) en prend la
-  place ; au-delà, seulement le nombre et les sommes.
-- **Mise en page** (`layout.ts`, pur) : 1 u = 1 % du petit côté. Les boîtes ne dépendent que de la taille, du style et des
-  rangées présentes, jamais d'un texte mesuré : la taille de la vue à rendre est connue avant toute mesure, et un texte ne
-  peut pas déborder sur sa voisine. Portrait et carré : texte sous la vue (une rangée de chiffres) ; paysage (rapport
-  > 1,15) : colonne de 40 u à droite (deux chiffres par rangée, crédits en pied de colonne). Carré : rangées à 70 %. Styles :
-  Éditorial (page papier, vue en retrait de 6 u), Diffusion (vue à fond perdu, bandeau ou colonne encre avec barre rouge
-  balise), Application (vue sur toute l'affiche, carte papier arrondie et ombrée par-dessus). Le texte est ajusté au dessin
-  (`fitText` : taille réduite jusqu'à un plancher, puis « … » ; `fitLines` : crédits sur deux lignes au plus, taille fixe de
-  1,15 u avant réduction). Liste des traces : rangées de 3 u, une colonne (deux sur le carré, remplies colonne après
-  colonne) ; une seule taille pour toutes les rangées (`fitTrackList` : chiffres en colonnes alignées à droite aussi
-  larges que leur plus long texte, réduite jusqu'à laisser 40 % de la rangée au nom, coupé par « … »). Tests : toutes les boîtes dans la page et ses marges, dans le panneau, sans chevauchement entre
-  elles ni avec la vue (sauf la carte flottante), vue ≥ 38 % de l'affiche, pour chaque format × style × jeux de rangées.
-- **Dessin** (`draw.ts`) : thèmes `POSTER_THEMES` dans la charte « Carte alpine » (papier, encre, rouge balise, glacier),
-  polices des styles d'habillage du même nom (Fraunces, IBM Plex Sans, Plex Sans Condensed), toutes dans `OVERLAY_FONTS`
-  (embarquées et chargées par `loadOverlayFonts`, testé). Vue recadrée pour couvrir sa boîte (`coverCrop`).
-- **Rendu de la vue** : `startPoster` charge les polices, calcule la mise en page et dépose une demande d'image fixe
-  `still { overview: true, framing, compose }` de la taille de la boîte de vue (PNG) ; `framing` (`framingPath` : toutes
-  les traces en un chemin) fait cadrer la vue d'ensemble sur toutes les traces, chacune dessinée dans sa couleur par la
-  scène. Dans `ExportController`, `overview` ne change
-  pas la progression (le `FlyoverRig` ne bouge donc pas la caméra) : la caméra est placée avant chaque rendu sur
-  `overviewView` (cadrage des plans d'ensemble, au rapport de la boîte) vu du sud, nord en haut, la cible des contrôles
-  suit ; le marqueur de progression (`flyover-marker`) passe sur un calque qu'aucune caméra ne rend ; caméra, cible et
-  calque sont remis à la fin. `compose` remplace l'habillage du film : il reçoit l'image composée (ciel + vue) et rend
-  l'affiche, encodée en PNG comme une image fixe ; échelle de rendu des étiquettes et de la trace = petit côté de la vue
-  / 1 080, comme un film. Le résultat suit le chemin des autres exports (tiroir « Vidéo » toujours monté : téléchargement,
-  `saveUrl` sur le bureau, toast) ; nom « <projet> – affiche.png ».
-- **Carte à plat** (`view.ts`) : `still.drawView` remplace le rendu 3D (`runDrawnStill` dans `ExportController` : ni
-  scène ni caméra touchées, annulation par `AbortSignal`). Carte dessinée en 2D, plus simple et plus sûre qu'une
-  caméra orthographique (moteur de tuiles, perspective aérienne et brume pensés pour une caméra en perspective) :
-  tuiles de l'imagerie en cours (`settings.imagerySourceId`, Web Mercator, nord en haut) cadrées sur la boîte de toutes
-  les traces avec 8 % de marge (`planFlatMap` : jamais plus zoomé que les tuiles les plus fines, zoom arrondi pour des
-  tuiles entre × 0,7 et × 1,4, un niveau de moins tant qu'il en faut plus de 300, hors couverture omises), chargées par
-  un `createTileFetcher` à 6 requêtes (cache HTTP et packs hors ligne d'abord), gris où une tuile manque (échec si
-  aucune), puis chaque trace dans sa couleur sur un liseré de la couleur de la page du style, largeur de la trace 3D
-  (`trackStyle.width` pour 1 080 px).
-- **Aperçu** : vignette 2D (≤ 260 × 220 px CSS) dessinée par le même `drawPoster` sous une transformation, sans rendu 3D :
-  la dernière vue rendue pour ces traces et ce mode (3D ou à plat, `previewKey`, gardée réduite à 480 px,
-  `usePosterPreview`), sinon un ciel avec le plan de la première trace (`miniMapOutline`).
-- **Limites** : marqueurs de la course fantôme dessinés à la progression courante ; une vue A3
-  en style Application fait 17 Mpx en WebGL (limite de taille du GPU non vérifiée). Carte à plat : sans relief ombré,
-  ni étiquettes, ni départ / arrivée ; tuiles à d'autres zooms que celles de la vue 3D, donc en partie téléchargées.
+- **Principle**: a PNG poster of the outing, in one click from the export drawer ("Affiche" mode, next to "Vidéo").
+  The 3D view is rendered through the still-image path (`ExportController`) at the size of the layout's view box,
+  then drawn with the text onto an `OffscreenCanvas` the size of the poster by `drawPoster`.
+- **Settings**: `settings.poster` (`src/poster/settings.ts`): `format` (A4 2,480 × 3,508, A3 3,508 × 4,960, portrait or
+  landscape, at 300 dpi; square 2,160 × 2,160), `style` (`editorial`, `broadcast`, `app`, the overlay's labels), `title`
+  (empty = project name, `effectiveProjectName`), `subtitle` (followed by the track date), `figures` (distance, elevation gain, duration,
+  max. elevation, number of climbs), `weather`, `flat` ("Carte à plat" (flat map), missing from an old project: `false` through
+  `withPosterDefaults`, `SETTING_UPGRADES`). Validation `isValidPoster` (`SETTING_CHECKS`). A preset keeps only
+  its style (`presetSettings`, like the film reduced to its shots): the title belongs to the project.
+- **Content** (`content.ts`, pure): title, "sous-titre · date" (subtitle · date) line (`formatDateFr`), figures that the track records
+  (a missing figure is not drawn, its chip is grayed out), 400-point profile (`elevationProfile`), weather line
+  (`weatherSummaryLine`, only if the weather of the first track is loaded), credits (`overlayCredits`, the same
+  strings as the status bar), read from the stores by `currentPosterContent` (`export.ts`). Several tracks: a series of
+  outings is summed (`totalStats`: distances, elevation gains, durations and climbs added, highest max. elevation; a
+  sum that one outing does not record is omitted), "3 sorties" (3 outings) and the dates from the first to the last in the
+  subtitle, without a single day's weather; a ghost race (`race.enabled`) keeps the figures and the weather of the
+  first track (the same route), "3 traces" (3 tracks). In both cases, no profile: up to `POSTER_LIST_MAX` (6)
+  tracks, a list (color chip, name, distance, elevation gain, short date "12/07/2026", `trackLine`) takes its
+  place; beyond that, only the count and the totals.
+- **Layout** (`layout.ts`, pure): 1 u = 1% of the short side. The boxes depend only on the size, the style and the
+  rows present, never on a measured text: the size of the view to render is known before any measurement, and a text cannot
+  spill over onto its neighbor. Portrait and square: text below the view (one row of figures); landscape (ratio
+  > 1.15): 40 u column on the right (two figures per row, credits at the foot of the column). Square: rows at 70%. Styles:
+  "Éditorial" (paper page, view inset by 6 u), "Diffusion" (full-bleed view, ink band or column with a trail-marker red
+  bar), "Application" (view across the whole poster, rounded and shadowed paper card on top). The text is fitted to the drawing
+  (`fitText`: size reduced down to a floor, then "…"; `fitLines`: credits on two lines at most, fixed size of
+  1.15 u before reduction). Track list: 3 u rows, one column (two on the square, filled column after
+  column); a single size for all rows (`fitTrackList`: figures in right-aligned columns as
+  wide as their longest text, reduced until 40% of the row is left for the name, cut with "…"). Tests: all boxes within the page and its margins, within the panel, with no overlap between
+  them or with the view (except the floating card), view ≥ 38% of the poster, for each format × style × set of rows.
+- **Drawing** (`draw.ts`): `POSTER_THEMES` themes in the "Carte alpine" design system (paper, ink, trail-marker red, glacier),
+  fonts of the overlay styles of the same name (Fraunces, IBM Plex Sans, Plex Sans Condensed), all in `OVERLAY_FONTS`
+  (bundled and loaded by `loadOverlayFonts`, tested). View cropped to cover its box (`coverCrop`).
+- **View rendering**: `startPoster` loads the fonts, computes the layout and places a still-image request
+  `still { overview: true, framing, compose }` the size of the view box (PNG); `framing` (`framingPath`: all
+  the tracks as one path) makes the overview frame all the tracks, each drawn in its color by the
+  scene. In `ExportController`, `overview` does not change
+  the progress (so `FlyoverRig` does not move the camera): before each render the camera is placed on
+  `overviewView` (framing of the overview shots, at the box ratio) seen from the south, north up, and the controls target
+  follows; the progress marker (`flyover-marker`) moves to a layer that no camera renders; camera, target and
+  layer are restored at the end. `compose` replaces the film overlay: it receives the composited image (sky + view) and renders
+  the poster, encoded as PNG like a still image; render scale of labels and track = short side of the view
+  / 1,080, like a film. The result follows the path of the other exports ("Vidéo" drawer always mounted: download,
+  `saveUrl` on the desktop, toast); name "<projet> – affiche.png".
+- **Flat map** (`view.ts`): `still.drawView` replaces the 3D render (`runDrawnStill` in `ExportController`: neither
+  scene nor camera touched, canceled through `AbortSignal`). Map drawn in 2D, simpler and safer than an
+  orthographic camera (tile engine, aerial perspective and haze designed for a perspective camera):
+  tiles of the current imagery (`settings.imagerySourceId`, Web Mercator, north up) framed on the box of all
+  the tracks with an 8% margin (`planFlatMap`: never zoomed in further than the finest tiles, zoom rounded for
+  tiles between × 0.7 and × 1.4, one level less as long as more than 300 are needed, tiles outside coverage omitted), loaded by
+  a `createTileFetcher` with 6 requests (HTTP cache and offline packs first), gray where a tile is missing (failure if
+  none), then each track in its color on an edging in the style's page color, width of the 3D track
+  (`trackStyle.width` for 1,080 px).
+- **Preview**: 2D thumbnail (≤ 260 × 220 CSS px) drawn by the same `drawPoster` under a transform, without 3D rendering:
+  the last view rendered for these tracks and this mode (3D or flat, `previewKey`, kept scaled down to 480 px,
+  `usePosterPreview`), otherwise a sky with the outline of the first track (`miniMapOutline`).
+- **Limits**: ghost race markers drawn at the current progress; an A3 view
+  in the "Application" style is 17 Mpx in WebGL (GPU size limit not checked). Flat map: no shaded relief,
+  no labels, no start / finish; tiles at other zooms than those of the 3D view, so partly downloaded.
 
-## Météo dans la scène (phase 7)
+## Weather in the scene (phase 7)
 
-- `src/weather/sceneWeather.ts` (pur ; `settings.weatherScene { enabled, strength }`, case « Météo dans la scène » visible avec
-  l'atmosphère et une météo chargée) : à chaque image, la météo sous le marqueur à la date du soleil (`sceneConditionsAt` :
-  nébulosités interpolées, cumuls horaires et brouillard WMO 45/48 recentrés au milieu de leur heure puis interpolés) donne
+- `src/weather/sceneWeather.ts` (pure; `settings.weatherScene { enabled, strength }`, "Météo dans la scène" (weather in the scene) checkbox visible with
+  the atmosphere and loaded weather): on every frame, the weather under the marker at the sun date (`sceneConditionsAt`:
+  interpolated cloud covers, hourly totals and WMO 45/48 fog re-centered on the middle of their hour then interpolated) gives
   `sunScale`, `skyScale`, `hazeScale`, `hazeHeightM`, `shadowStrength`, `exposureCompensationEv`, `desaturation`, `skyVeil`
-  (formules en tête de `sceneWeatherFrom`, bornées, identité par ciel clair, sans données ou réglage coupé ; `strength` mélange
-  vers l'identité). Fonction pure de la progression : l'export reste déterministe.
-- Application (`AtmosphereLayer`) : intensités du `SunLight` et du `SkyLight`, `shadow.intensity`, compensation ajoutée à
-  l'exposition ; sous le voile, les coefficients SH de la lumière du ciel tendent vers leur luminance.
-- `WeatherEffect` (`src/scene/weatherEffect.ts`, après la perspective aérienne, même `EffectPass`) : l'effet Takram n'a pas de
-  réglage de densité, d'où une brume en hauteur exponentielle (β0 = 3,912·(hazeScale − 1)/60 km au sol sous le marqueur,
-  intégrale analytique le long du rayon), ciel voilé, lointain ramené au gris sous le voile, désaturation ; profondeur
-  logarithmique lue comme dans l'effet Takram ; uniformes préfixés `weather*`.
-- Limites : météo d'un seul point appliquée à toute la scène.
+  (formulas at the top of `sceneWeatherFrom`, bounded, identity for a clear sky, without data or with the setting off; `strength` blends
+  toward identity). A pure function of progress: the export stays deterministic.
+- Application (`AtmosphereLayer`): intensities of the `SunLight` and the `SkyLight`, `shadow.intensity`, compensation added to
+  the exposure; under the veil, the SH coefficients of the sky light tend toward their luminance.
+- `WeatherEffect` (`src/scene/weatherEffect.ts`, after the aerial perspective, same `EffectPass`): the Takram effect has no
+  density setting, hence an exponential height fog (β0 = 3.912·(hazeScale − 1)/60 km at ground level under the marker,
+  analytic integral along the ray), veiled sky, distance pulled toward gray under the veil, desaturation; logarithmic
+  depth read as in the Takram effect; uniforms prefixed `weather*`.
+- Limits: weather from a single point applied to the whole scene.
 
-## Nuages volumétriques (phase 3)
+## Volumetric clouds (phase 3)
 
-- `@takram/three-clouds` 0.7.6 (MIT, même famille et mêmes versions de `three-atmosphere` / `three-geospatial`).
-  `CloudsLayer` (dans l'`EffectComposer` d'`AtmosphereLayer`, avant `AerialPerspective` qui les compose) n'est monté
-  qu'avec l'atmosphère, en mode `manuel`, ou en mode `meteo` une fois la météo de la première trace chargée.
-- Réglage `settings.clouds { mode: 'meteo' | 'manuel' | 'aucun', coverage, altitudeM, quality }` (défaut `meteo`, 0,4,
-  1 200 m, `medium` ; `SETTING_CHECKS` : `isValidClouds`), bloc « Nuages » de la section « Atmosphère et météo ».
-- Pur (`sceneClouds.ts`, testé) : `cloudCoversAt` donne la couverture des trois couches (Open-Meteo bas / moyen / haut à
-  la date du soleil sous le marqueur, via `sceneConditionsAt` ; couche absente = total ; manuel : bas = `coverage`,
-  moyen 60 %, haut 40 %). `sceneCloudsFrom` : la bibliothèque n'a qu'une `coverage` ; la couche qui en demande le plus la
-  fixe (table mesurée sur les quantiles des canaux r / g / b de `local_weather.png` : fraction nuageuse → coverage), les
-  autres sont éclaircies par leur exposant `w^e` (e = ln t / ln tᵢ, t = 1 − 2,5·coverage), au-delà de 0,4 (ciel presque
-  couvert) par leur densité. Bases : bas `altitudeM` au-dessus du point le plus bas de la trace, moyen 2 km plus haut,
-  cirrus à max(7 km, sol + 5,5 km), × exagération (épaisseurs inchangées). Couche « a » (brouillard) et brume des nuages
-  coupées : la brume reste celle de `WeatherEffect`. Sous des nuages visibles, le voile du ciel de `WeatherEffect` est
-  ramené à 30 %.
-- Vent : celui de l'archive au départ de la sortie (constant pour le film, brise d'ouest 4 m/s à défaut) × 2 en altitude
-  × `CLOUD_TIMELAPSE` (20). Dérive = vent × temps du film (`playback.timeS`, sinon `clock.timeAtProgress`) : décalages de
-  la texture météo (Jacobien de l'UV cube-sphère du shader, `weatherOffsetFor`) et des textures de forme (déplacement
-  ECEF × répétition) posés directement à chaque image, vitesses de la bibliothèque à zéro : rien ne s'accumule.
-- Qualité : aperçu en préréglage `low`, demi-résolution, suréchantillonnage temporel. Export (`isExportBusy`) : préréglage
-  `settings.clouds.quality`, pleine résolution, ni suréchantillonnage ni TAA de la carte d'ombre ; `update` de l'effet
-  enveloppé : 2 / 4 / 6 rendus par image avec le compteur de trame fixé à k (tranche de bruit) et `temporalAlpha`
-  = 1/(k+1) — le premier jette l'historique, les suivants font la moyenne (caméra immobile, vitesse nulle). Une image
-  exportée ne dépend donc jamais des précédentes, quel que soit le nombre de rendus de `settle`.
-- Ressources locales : textures servies à `/clouds/` par le plugin de `vite.config.ts` (~2,8 Mo). Le bruit bleu
-  spatio-temporel (STBN) des exemples Takram n'est pas dans le paquet (téléchargé depuis GitHub, licence NVIDIA) : il est
-  remplacé par un bruit à gradient entrelacé généré au démarrage (`cloudNoise.ts`, 128 × 128 × 64), passé aussi à
-  `AerialPerspective` (sinon il le télécharge dès que les nuages fournissent leur carte d'ombre).
-- Limites : le terrain est éclairé par des sources (`SunLight`), les ombres des nuages ne l'atteignent donc pas (le
-  soleil reste atténué par la météo) ; couches à altitude fixe pour tout le film ; dans l'aperçu, traînées du
-  suréchantillonnage temporel quand la caméra bouge vite ; coût élevé sur un GPU faible (mode « Aucun »).
+- `@takram/three-clouds` 0.7.6 (MIT, same family and same versions as `three-atmosphere` / `three-geospatial`).
+  `CloudsLayer` (in the `AtmosphereLayer` `EffectComposer`, before `AerialPerspective`, which composites them) is mounted only
+  with the atmosphere, in `manuel` mode, or in `meteo` mode once the weather of the first track is loaded.
+- Setting `settings.clouds { mode: 'meteo' | 'manuel' | 'aucun', coverage, altitudeM, quality }` (default `meteo`, 0.4,
+  1,200 m, `medium`; `SETTING_CHECKS`: `isValidClouds`), "Nuages" (clouds) block of the "Atmosphère et météo" section.
+- Pure (`sceneClouds.ts`, tested): `cloudCoversAt` gives the cover of the three layers (Open-Meteo low / mid / high at
+  the sun date under the marker, via `sceneConditionsAt`; missing layer = total; manual: low = `coverage`,
+  mid 60%, high 40%). `sceneCloudsFrom`: the library has only one `coverage`; the layer that asks for the most
+  sets it (table measured on the quantiles of the r / g / b channels of `local_weather.png`: cloud fraction → coverage), the
+  others are thinned by their exponent `w^e` (e = ln t / ln tᵢ, t = 1 − 2.5·coverage), and beyond 0.4 (nearly overcast
+  sky) by their density. Bases: low at `altitudeM` above the lowest point of the track, mid 2 km higher,
+  cirrus at max(7 km, ground + 5.5 km), × exaggeration (thicknesses unchanged). Layer "a" (fog) and cloud haze
+  turned off: the haze remains that of `WeatherEffect`. Under visible clouds, the `WeatherEffect` sky veil is
+  reduced to 30%.
+- Wind: the archive's wind at the start of the outing (constant for the film, 4 m/s westerly breeze by default) × 2 at altitude
+  × `CLOUD_TIMELAPSE` (20). Drift = wind × film time (`playback.timeS`, otherwise `clock.timeAtProgress`): offsets of
+  the weather texture (Jacobian of the shader's cube-sphere UV, `weatherOffsetFor`) and of the shape textures (ECEF
+  displacement × repeat) set directly on every frame, library velocities at zero: nothing accumulates.
+- Quality: preview with the `low` preset, half resolution, temporal upsampling. Export (`isExportBusy`): preset
+  `settings.clouds.quality`, full resolution, no upsampling and no shadow map TAA; the effect's `update`
+  is wrapped: 2 / 4 / 6 renders per frame with the frame counter set to k (noise slice) and `temporalAlpha`
+  = 1/(k+1) — the first discards the history, the following ones average (still camera, zero velocity). An exported
+  frame therefore never depends on the previous ones, whatever the number of `settle` renders.
+- Local resources: textures served at `/clouds/` by the `vite.config.ts` plugin (~2.8 MB). The spatio-temporal blue
+  noise (STBN) of the Takram examples is not in the package (downloaded from GitHub, NVIDIA license): it is
+  replaced by an interleaved gradient noise generated at startup (`cloudNoise.ts`, 128 × 128 × 64), also passed to
+  `AerialPerspective` (otherwise it downloads it as soon as the clouds provide their shadow map).
+- Limits: the terrain is lit by sources (`SunLight`), so cloud shadows do not reach it (the
+  sun stays dimmed by the weather); layers at a fixed altitude for the whole film; in the preview, temporal upsampling
+  trails when the camera moves fast; high cost on a weak GPU ("Aucun" (none) mode).
 
-## Eau réfléchissante (phase 3)
+## Reflective water (phase 3)
 
-- **Données** : OpenStreetMap par Overpass (même client, file d'attente et cache 30 jours que les repères :
-  `cachedOverpassQuery`, `runOverpassQuery(…, parse)`), une requête par trace et seulement si `settings.water.enabled` :
-  `way` / multipolygones `natural=water`, `waterway=riverbank`, `water=*` dans les boîtes du couloir de la trace élargi à 8 km,
-  `out geom qt` (~600 ko, 3–4 s pour l'exemple ; `docs/sources.md`). La requête n'est pas annulée au démontage (partagée et mise en
-  cache ; StrictMode lance l'effet deux fois), sa réponse est seulement ignorée si elle est périmée. Une requête en échec n'est
-  retentée qu'au prochain changement de trace ou de réglage.
-- **Réduction pure** (`water.ts`, testée) : anneaux des relations recousus bout à bout depuis leurs chemins (sens indifférent,
-  anneau non fermé abandonné), anneaux intérieurs rattachés à l'extérieur qui contient leur premier point, chemin membre d'une
-  relation renvoyée ignoré, Douglas–Peucker 4 m, polygones < 2 000 m² écartés, 300 plus grands gardés, coordonnées à 1e-6° ;
-  `lake` (surface plane) ou `river` (`waterway=riverbank`, `water=river|stream|canal…`). Seul ce résultat compact est mis en cache.
-- **Maillage pur** (`waterMesh.ts`, testé) : polygone découpé par une grille de cellules carrées (60 m, au plus 40 par côté,
-  Sutherland–Hodgman de chaque anneau contre chaque cellule), chaque morceau triangulé avec ses trous (`ShapeUtils`, earcut). La
-  grille met des sommets dans l'eau : une rivière suit sa vallée et l'opacité s'efface vers la rive (`fade` = distance au bord
-  la plus proche / 40 m, bornée à 1).
-- **Plaquage** (`WaterLayer`, dans `TerrainLayer`) : comme la trace, `engine.sampleHeight` × exagération + 2 m, re-plaqué
-  (anti-rebond, vidé par l'export via `registerDrapeFlush`) à chaque `engine.onChange`. Un lac est plan au 25ᵉ centile des
-  hauteurs de ses sommets (les berges du MNT ne le soulèvent pas) ; un polygone dont aucune hauteur n'est connue attend ses tuiles.
-  Une seule géométrie fusionnée (un appel de dessin), `raycast` neutralisé (sélecteur de trace, caméra), `depthWrite` coupé.
-- **Rendu** : `MeshStandardMaterial` (rugosité 0,08 : reflet du soleil du `SunLight`, ombres du relief) étendu dans
-  `onBeforeCompile` : normales de quatre vagues sinusoïdales (23, 9, 4,1 et 1,7 m) animées par le **temps du film**
-  (`playback.timeS`, sinon `clock.timeAtProgress`), effacées quand leur longueur d'onde couvre moins de ~8 pixels (pas de
-  scintillement au loin) ; reflet du ciel = Fresnel de Schlick (F0 0,02) × 1,5 × irradiance de la sonde de ciel Takram (`lightProbe`)
-  dans la direction réfléchie relevée au-dessus de l'horizon / π (couleur glacier fixe sans l'atmosphère) ; opacité = fondu de rive
-  × mix(0,82, 1, Fresnel) × `strength`. Fonction du temps du film seulement : l'export reste déterministe.
-- **Réglage** : `settings.water { enabled, strength }` (vrai, 1 ; `SETTING_CHECKS` : 0 ≤ strength ≤ 1), case « Lacs et rivières
-  reflétants » et curseur « Intensité de l'eau » de la section « Fond de carte ».
-- **Limites** : le reflet est celui du ciel moyen (sonde SH), ni des montagnes ni des nuages ; lacs au niveau du MNT (pas de niveau
-  OSM) ; une rivière très pentue garde des marches de 60 m ; seul le couloir de 8 km est interrogé ; les crédits « © contributeurs
-  OpenStreetMap » suivent encore les seuls repères (`useWaterStore.polygons` est prêt pour la barre d'état et l'export).
+- **Data**: OpenStreetMap through Overpass (same client, queue and 30-day cache as the landmarks:
+  `cachedOverpassQuery`, `runOverpassQuery(…, parse)`), one request per track and only if `settings.water.enabled`:
+  `way` / multipolygons `natural=water`, `waterway=riverbank`, `water=*` in the boxes of the track corridor widened to 8 km,
+  `out geom qt` (~600 kB, 3–4 s for the sample; `docs/sources.md`). The request is not canceled on unmount (shared and
+  cached; StrictMode runs the effect twice); its response is only ignored if it is stale. A failed request is only
+  retried on the next track or setting change.
+- **Pure reduction** (`water.ts`, tested): relation rings stitched end to end from their ways (direction irrelevant,
+  unclosed ring dropped), inner rings attached to the outer ring that contains their first point, member way of a
+  returned relation ignored, Douglas–Peucker 4 m, polygons < 2,000 m² discarded, the 300 largest kept, coordinates to 1e-6°;
+  `lake` (flat surface) or `river` (`waterway=riverbank`, `water=river|stream|canal…`). Only this compact result is cached.
+- **Pure mesh** (`waterMesh.ts`, tested): polygon cut by a grid of square cells (60 m, at most 40 per side,
+  Sutherland–Hodgman of each ring against each cell), each piece triangulated with its holes (`ShapeUtils`, earcut). The
+  grid puts vertices inside the water: a river follows its valley and the opacity fades toward the bank (`fade` = distance to the closest
+  edge / 40 m, capped at 1).
+- **Draping** (`WaterLayer`, in `TerrainLayer`): like the track, `engine.sampleHeight` × exaggeration + 2 m, re-draped
+  (debounced, flushed by the export via `registerDrapeFlush`) on each `engine.onChange`. A lake is flat at the 25th percentile of the
+  heights of its vertices (the DEM banks do not lift it); a polygon with no known height waits for its tiles.
+  A single merged geometry (one draw call), `raycast` neutralized (track picker, camera), `depthWrite` off.
+- **Rendering**: `MeshStandardMaterial` (roughness 0.08: sun glint from the `SunLight`, terrain shadows) extended in
+  `onBeforeCompile`: normals from four sine waves (23, 9, 4.1 and 1.7 m) animated by the **film time**
+  (`playback.timeS`, otherwise `clock.timeAtProgress`), faded out when their wavelength covers fewer than ~8 pixels (no
+  shimmering in the distance); sky reflection = Schlick Fresnel (F0 0.02) × 1.5 × irradiance of the Takram sky probe (`lightProbe`)
+  in the reflected direction raised above the horizon / π (fixed glacier color without the atmosphere); opacity = bank fade
+  × mix(0.82, 1, Fresnel) × `strength`. A function of the film time only: the export stays deterministic.
+- **Setting**: `settings.water { enabled, strength }` (true, 1; `SETTING_CHECKS`: 0 ≤ strength ≤ 1), "Lacs et rivières
+  reflétants" (reflective lakes and rivers) checkbox and "Intensité de l'eau" (water intensity) slider in the "Fond de carte" section.
+- **Limits**: the reflection is that of the average sky (SH probe), neither of mountains nor of clouds; lakes at DEM level (no OSM
+  level); a very steep river keeps 60 m steps; only the 8 km corridor is queried; the "© contributeurs
+  OpenStreetMap" credits still follow only the landmarks (`useWaterStore.polygons` is ready for the status bar and the export).
 
-## Course fantôme (phase 7)
+## Ghost race (phase 7)
 
-- La progression reste la fraction de distance de la première trace (suivie par la caméra) ; chaque autre trace reçoit un
-  marqueur placé par `raceAt(race, progression)`, fonction pure. Réglage `settings.race { enabled, sync }`, bloc « Course
-  fantôme » de la liste des traces (à partir de deux traces).
-- Synchronisation : `elapsed` (même temps écoulé depuis chaque départ), `clock` (même heure enregistrée ; attente au départ,
-  arrêt à l'arrivée), `distance` (même fraction de chaque trace). Les deux premiers exigent des horodatages sur toutes les
-  traces, sinon repli sur `distance`.
-- Tables temps ↔ distance par trace (points sans heure comblés, horloge rendue monotone), requêtes par dichotomie. Écarts du
-  classement comparés à fraction égale (exacts sur un même parcours) ; affichage « +1 min 20 », « −350 m ».
-- `RaceMarkers` (après `FlyoverRig` dans `TerrainLayer`) : même genre de marqueur que la tête (`settings.marker`, voir « Trace
-  et marqueur ») à la couleur de la trace avec bord encre, même taille écran que le marqueur principal. Limite : les arrêts de la trace de tête sont franchis instantanément (la lecture avance en distance).
+- Progress remains the distance fraction of the first track (followed by the camera); each other track receives a
+  marker placed by `raceAt(race, progress)`, a pure function. Setting `settings.race { enabled, sync }`, "Course
+  fantôme" (ghost race) block in the track list (from two tracks).
+- Synchronization: `elapsed` (same time elapsed since each start), `clock` (same recorded time; waiting at the start,
+  stopped at the finish), `distance` (same fraction of each track). The first two require timestamps on all the
+  tracks, otherwise fall back to `distance`.
+- Time ↔ distance tables per track (points without a time filled, clock made monotonic), lookups by bisection. Ranking
+  gaps compared at equal fraction (exact on the same route); displayed as "+1 min 20", "−350 m".
+- `RaceMarkers` (after `FlyoverRig` in `TerrainLayer`): same kind of marker as the head (`settings.marker`, see "Track
+  and marker") in the track color with an ink edge, same screen size as the main marker. Limit: the stops of the lead track are crossed instantly (playback advances by distance).
 
-## Enchaînement de traces
+## Track chaining
 
-- « Enchaîner en un seul parcours » (liste des traces, dès deux traces) : `chainTracks` (pur, `src/import/chain.ts`)
-  réunit les traces en une seule, ordonnée par heure de départ si toutes sont horodatées, sinon dans l'ordre de la liste
-  (la liste ne se réordonne pas). Chaque trace garde ses segments : le saut entre la fin du jour 1 et le départ du jour 2
-  n'est ni dessiné (`TrackLines`, une ligne par segment) ni compté (`computeStats`, `buildTrackPath`), le marqueur le
-  franchit d'un coup. Deux enregistrements qui se chevauchent sont refusés (une sortie en groupe : course fantôme).
-- Nouvel id, stats et bornes recalculées (`buildTrack`), couleur, source, activité et décalage horaire de la première,
-  waypoints de toutes ; nom = mots communs (« Tour du Mont-Blanc » pour « … J1 », « … J2 ») sinon « première → dernière ».
-  La durée compte les nuits entre les jours.
-- Store : `replaceTracks(liste)` (même origine du repère, lecture au début). Les traces ne sont pas dans l'historique
-  (comme la suppression) : le message « Traces enchaînées » porte « Annuler », qui remet les traces séparées ; il
-  disparaît au prochain changement des traces (`chainLoadedTracks`, `projectActions.ts`).
-- Import : quand un même import donne des traces horodatées qui se suivent (sans chevauchement, moins de 24 h d'écart,
-  `followEachOther`), un message « Enchaîner ces N traces ? » propose l'action sur ces traces seulement.
-- Limite : arrêts, plans clés et repères calés en mètres sur l'ancienne première trace ne sont pas recalés.
+- "Enchaîner en un seul parcours" (chain into a single route; track list, from two tracks): `chainTracks` (pure, `src/import/chain.ts`)
+  merges the tracks into one, ordered by start time if all are timestamped, otherwise in list order
+  (the list is not reordered). Each track keeps its segments: the jump between the end of day 1 and the start of day 2
+  is neither drawn (`TrackLines`, one line per segment) nor counted (`computeStats`, `buildTrackPath`); the marker
+  crosses it in one go. Two overlapping recordings are refused (a group outing: ghost race).
+- New id, stats and bounds recomputed (`buildTrack`), color, source, activity and time offset of the first one,
+  waypoints of all; name = common words ("Tour du Mont-Blanc" for "… J1", "… J2") otherwise "première → dernière" (first → last).
+  The duration counts the nights between the days.
+- Store: `replaceTracks(list)` (same frame origin, playback at the start); `setTrackColor(id, color)` (list chip, playback not interrupted); `flyTrack(id)` (the track moves to the top: it is the one flown over). Tracks are not in the history
+  (like deletion): the "Traces enchaînées" message carries "Annuler", which restores the separate tracks; it
+  disappears on the next change to the tracks (`chainLoadedTracks`, `projectActions.ts`).
+- Import: when a single import yields timestamped tracks that follow each other (no overlap, less than 24 h apart,
+  `followEachOther`), an "Enchaîner ces N traces ?" message offers the action on these tracks only.
+- Limit: stops, key framings and landmarks anchored in meters on the old first track are not re-anchored.
 
-## Application de bureau (phase 6, premier incrément)
+## Desktop application (phase 6, first increment)
 
-Deux cibles, un seul code : le site statique et l'application Tauri 2 (`src-tauri/`) qui charge le même `dist/`. Ce qui
-diffère passe par `src/platform/`.
+Two targets, one codebase: the static website and the Tauri 2 application (`src-tauri/`), which loads the same `dist/`. What
+differs goes through `src/platform/`.
 
-- **Contrat** (`platform.ts`) : `Platform` = `capabilities { isDesktop, videoEncoder, canStreamToDisk }`, `storage` (clé / valeur
-  synchrone : `get`, `set` → false quand le stockage refuse (plein, bloqué ; la valeur reste alors en mémoire pour la
-  session et `get` la rend), `remove`, `keys(préfixe)` qui liste les clés stockées ou gardées en mémoire), `openFiles({ filters, multiple })` → `File[]` (vide si la fenêtre est fermée),
-  `saveFile(blob, { fileName, filters? })` et `saveUrl(objectUrl, …)` → `{ saved: true, fileName } | { saved: false }`,
-  `createWritableFile({ fileName, filters? })` → `WritableFile { fileName, path?, write(data, position), close, discard }` ou null
-  (fenêtre fermée ; `discard` arrête et supprime le fichier partiel, sans effet après `close`, appelable plusieurs fois),
-  `droppedFiles(dataTransfer)`. Les filtres sont ceux des fenêtres natives (`{ name, extensions }` sans point) ; le site en
-  tire l'attribut `accept`.
-- **Choix** (`index.ts`) : `getPlatform()` (singleton) appelle `selectPlatform(globalThis)` : bureau si Tauri a posé
-  `isTauri` / `__TAURI_INTERNALS__` sur la fenêtre, site sinon. `videoEncoder` : `'webcodecs'` si `VideoEncoder` existe, sinon `'native'` sur le bureau (ffmpeg, voir
-  « Export vidéo sans WebCodecs (Linux) »), sinon null.
-- **Site** (`web.ts`) : le comportement d'avant. `<input type="file">` créé à la volée (synchrone jusqu'au clic, pour garder
-  le geste de l'utilisateur ; `cancel` le retire), téléchargement par lien et URL d'objet, `localStorage`.
-  `createWritableFile` : `showSaveFilePicker` (types tirés des filtres, `pickerTypes`) puis `createWritable()` (Chrome
-  écrit dans un fichier temporaire `.crswap` déplacé à la fermeture) ; `discard` = `abort()` puis `handle.remove()`
-  (Chrome 110+), car le sélecteur a déjà créé le fichier ; `AbortError` (fenêtre fermée) → null.
-- **Dossier** (`folder.ts`, rendu en lot) : `pickFolder` → `WritableFolder { name, createFile(fileName) }` ou null. Site :
-  `showDirectoryPicker({ mode: 'readwrite' })`, puis `getFileHandle(nom, { create: true })` et le même flux que
-  `createWritableFile` (`writableOf`) ; `discard` = `removeEntry`. Bureau : fenêtre `open({ directory: true, recursive:
-  false })` (le plugin dialog ouvre le dossier au scope fs, fichiers directs seulement), puis `openWritablePath(chemin)`
-  de `desktop.ts`, partagé avec `createWritableFile`.
-- **Bureau** (`desktop.ts`) : `@tauri-apps/plugin-dialog` (`open`, `save`) et `@tauri-apps/plugin-fs` (`readFile`,
-  `writeFile`), importés dynamiquement au premier appel : le site les embarque dans des morceaux séparés jamais chargés.
-  Un fichier lu devient un `File` (nom, type déduit de l'extension), donc `openFiles`, `openProject`, `readPhoto` et les
-  imports n'ont rien de spécial. `createWritableFile` : fenêtre `save` puis `open(path, { write, create, truncate })` de
-  plugin-fs ; chaque écriture `seek` seulement si sa position n'est pas celle du curseur (corrections d'en-tête), puis
-  `write` en boucle jusqu'au dernier octet (un appel IPC par morceau de 4 Mio, octets en JSON) ; `discard` ferme et
-  `remove`. Le stockage reste `localStorage`, que la vue web garde dans le dossier de l'application.
-- **Branché** : « Ouvrir » et Ctrl+O (`chooseFilesToOpen`), « Enregistrer » (`saveProject`, marqué enregistré seulement si
-  le fichier est écrit), dépôt sur la fenêtre (`droppedFiles`), résultat d'un export sur le bureau (`saveExportedFile`, un
-  appel dans `download` d'`ExportPanel` ; sur le bureau le lien « Télécharger … » devient un bouton « Enregistrer … » et
-  l'action du toast « Enregistrer… » ; un film écrit au fil de l'eau n'en a pas besoin), film écrit au fil de l'eau
-  (`createWritableFile`, voir « Export vidéo »), message « pas d'encodeur » d'`ExportPanel` (`videoEncoderMissingHint`). Tous les
-  choix de fichier passent par `openFiles` : accueil (« Choisir un fichier » → `chooseTracksToImport`, « Ouvrir un
-  projet… » → `chooseProjectToOpen`), « Ajouter » de la liste des traces, logo de l'habillage (png, jpg, webp, svg),
-  « Média » de la timeline (jpg, png, webp, mp4, m4v, mov, webm : les types que le bureau reconnaît, `mimeTypeOf` ; GIF,
-  AVIF… restent possibles par dépôt sur le site). Stockage par `getPlatform().storage`, mêmes clés qu'avant (les données
-  déjà enregistrées restent) : préférences de l'interface (`App.tsx`, `openflyover.shell.v1`), préréglages
-  (`presets.ts`, `openflyover.presets.v1`), cache météo (`openMeteo.ts`, `openflyover.weather.v1`) ; les deux derniers
-  par un adaptateur `getItem` / `setItem` vers le `KeyValueStore`, et cache Overpass (`overpass.ts`,
-  `openflyover.osm.v1.<empreinte>`) : quand `set` répond false, il supprime ses propres entrées (`keys(CACHE_PREFIX)`,
-  jamais les autres clés) et réessaie une fois ; sinon le cache mémoire évite les requêtes répétées dans la session.
-- **Tauri** (`src-tauri/`) : `lib.rs` enregistre les extensions dialog et fs, les six commandes de l'encodeur natif
-  (`video.rs`) et les deux de la ligne de commande (`cli.rs`), toutes déclarées dans `build.rs` (`AppManifest::commands`) :
-  une commande absente de cette liste ou de `capabilities/default.json` est refusée. Fenêtre `main`
-  1440 × 900 (au moins 1024 × 700). `dragDropEnabled: false` : sinon Tauri intercepte les dépôts et le HTML ne reçoit plus
-  `drop`. Droits (`capabilities/default.json`) : `dialog:allow-open`, `dialog:allow-save`, `fs:allow-read-file`,
-  `fs:allow-write-file`, `fs:allow-open`, `fs:allow-seek`, `fs:allow-write`, `fs:allow-remove` (film écrit au fil de
-  l'eau), `fs:allow-mkdir`, `fs:allow-read-dir`, `fs:allow-exists` (packs hors ligne, « Mes projets »), `allow-video-available`, `allow-video-sound`, `allow-video-open`,
-  `allow-video-frame`, `allow-video-finish`, `allow-video-cancel` (encodeur natif), `allow-cli-render`, `allow-cli-exit`
-  (ligne de commande) ; deux portées
-  fixes, `$APPDATA/tiles` et `$APPDATA/projects` avec ce qu'ils contiennent (`fs:scope`), en plus des chemins que l'extension dialog ajoute pour chaque
-  fichier choisi et des deux dossiers d'un rendu en ligne de commande : rien d'autre n'est lisible. CSP : `connect-src` /
-  `img-src` listent les hôtes de tuiles (`src/terrain/sources.ts`), Open-Meteo, les deux serveurs Overpass et Nominatim, plus `ipc:` et `blob:` ; `style-src 'unsafe-inline'` avec `dangerousDisableAssetCspModification:
-  ["style-src"]` (Tauri ajouterait sinon un nonce qui annule `unsafe-inline`). **Toute nouvelle source doit aussi entrer
-  dans la CSP de `tauri.conf.json`.**
-- **Vérifié** : `cargo check --target x86_64-pc-windows-msvc` passe (configuration, droits, icônes, `generate_context!`),
-  avec un faux compilateur de ressources (`RC_x86_64_pc_windows_msvc`) car rien n'est lié. Sous Linux, la vérification
-  demande `libwebkit2gtk-4.1-dev` et GLib ≥ 2.70 (Ubuntu 22.04 ou plus) ; la machine de développement (Ubuntu 20.04) ne les
-  a pas.
-- **Installeurs** (`.github/workflows/desktop.yml`, mode d'emploi dans `docs/installeurs.md`) : `tauri-apps/tauri-action`
-  sur Windows (NSIS + MSI), macOS (`universal-apple-darwin`) et Ubuntu 22.04 (AppImage + deb), à la main ou sur étiquette
-  `v*` (version brouillon). Signature facultative par les secrets du dépôt : Windows, PFX importé dans le magasin puis
-  empreinte écrite dans `src-tauri/tauri.windows.conf.json` (généré, jamais versionné ; horodatage et SHA-256 dans
-  `tauri.conf.json`) ; macOS, variables `APPLE_*` de Tauri exportées seulement si présentes (vides, elles feraient
-  échouer la construction), signature ad hoc (`signingIdentity: "-"`) sinon. Pas d'extension de mise à jour.
-  `.github/workflows/ci.yml` : types, lint, tests unitaires et build à chaque push.
+- **Contract** (`platform.ts`): `Platform` = `capabilities { isDesktop, videoEncoder, canStreamToDisk }`, `storage` (synchronous
+  key / value: `get`, `set` → false when the storage refuses (full, blocked; the value then stays in memory for the
+  session and `get` returns it), `remove`, `keys(prefix)`, which lists the keys stored or kept in memory), `openFiles({ filters, multiple })` → `File[]` (empty if the dialog is closed),
+  `saveFile(blob, { fileName, filters? })` and `saveUrl(objectUrl, …)` → `{ saved: true, fileName } | { saved: false }`,
+  `createWritableFile({ fileName, filters? })` → `WritableFile { fileName, path?, write(data, position), close, discard }` or null
+  (dialog closed; `discard` stops and deletes the partial file, no effect after `close`, can be called several times),
+  `droppedFiles(dataTransfer)`. Filters are those of native dialogs (`{ name, extensions }` without a dot); the website
+  derives the `accept` attribute from them.
+- **Selection** (`index.ts`): `getPlatform()` (singleton) calls `selectPlatform(globalThis)`: desktop if Tauri has set
+  `isTauri` / `__TAURI_INTERNALS__` on the window, website otherwise. `videoEncoder`: `'webcodecs'` if `VideoEncoder` exists, otherwise `'native'` on the desktop (ffmpeg, see
+  "Video export without WebCodecs (Linux)"), otherwise null.
+- **Website** (`web.ts`): the previous behavior. `<input type="file">` created on the fly (synchronous up to the click, to keep
+  the user gesture; `cancel` removes it), download through a link and an object URL, `localStorage`.
+  `createWritableFile`: `showSaveFilePicker` (types derived from the filters, `pickerTypes`) then `createWritable()` (Chrome
+  writes to a temporary `.crswap` file moved on close); `discard` = `abort()` then `handle.remove()`
+  (Chrome 110+), because the picker has already created the file; `AbortError` (dialog closed) → null.
+- **Folder** (`folder.ts`, batch rendering): `pickFolder` → `WritableFolder { name, createFile(fileName) }` or null. Website:
+  `showDirectoryPicker({ mode: 'readwrite' })`, then `getFileHandle(name, { create: true })` and the same stream as
+  `createWritableFile` (`writableOf`); `discard` = `removeEntry`. Desktop: `open({ directory: true, recursive:
+  false })` dialog (the dialog plugin adds the folder to the fs scope, direct files only), then `openWritablePath(path)`
+  from `desktop.ts`, shared with `createWritableFile`.
+- **Desktop** (`desktop.ts`): `@tauri-apps/plugin-dialog` (`open`, `save`) and `@tauri-apps/plugin-fs` (`readFile`,
+  `writeFile`), imported dynamically on first call: the website bundles them in separate chunks that are never loaded.
+  A file that is read becomes a `File` (name, type derived from the extension), so `openFiles`, `openProject`, `readPhoto` and the
+  imports need nothing special. `createWritableFile`: `save` dialog then plugin-fs `open(path, { write, create, truncate })`;
+  each write `seek`s only if its position is not that of the cursor (header patches), then
+  `write`s in a loop up to the last byte (one IPC call per 4 MiB chunk, bytes as JSON); `discard` closes and
+  `remove`s. Storage stays `localStorage`, which the webview keeps in the application folder.
+- **Wired up**: "Ouvrir" and Ctrl+O (`chooseFilesToOpen`), "Enregistrer" (`saveProject`, marked as saved only if
+  the file is written), drop on the window (`droppedFiles`), export result on the desktop (`saveExportedFile`, one
+  call in `ExportPanel`'s `download`; on the desktop the "Télécharger …" (download) link becomes an "Enregistrer …" button and
+  the toast action "Enregistrer…"; a film streamed to disk does not need it), film streamed to disk
+  (`createWritableFile`, see "Video export"), "pas d'encodeur" (no encoder) message in `ExportPanel` (`videoEncoderMissingHint`). All
+  file choices go through `openFiles`: welcome screen ("Choisir un fichier" → `chooseTracksToImport`, "Ouvrir un
+  projet…" → `chooseProjectToOpen`), "Ajouter" in the track list, overlay logo (png, jpg, webp, svg),
+  timeline "Média" (jpg, png, webp, mp4, m4v, mov, webm: the types the desktop recognizes, `mimeTypeOf`; GIF,
+  AVIF… remain possible by dropping on the website). Storage through `getPlatform().storage`, same keys as before (data
+  already saved remains): interface preferences (`App.tsx`, `openflyover.shell.v1`), presets
+  (`presets.ts`, `openflyover.presets.v1`), weather cache (`openMeteo.ts`, `openflyover.weather.v1`); the last two
+  through a `getItem` / `setItem` adapter to the `KeyValueStore`, and Overpass cache (`overpass.ts`,
+  `openflyover.osm.v1.<fingerprint>`): when `set` returns false, it deletes its own entries (`keys(CACHE_PREFIX)`,
+  never the other keys) and retries once; otherwise the memory cache avoids repeated requests within the session.
+- **Tauri** (`src-tauri/`): `lib.rs` registers the dialog and fs plugins, the six native encoder commands
+  (`video.rs`) and the two command-line commands (`cli.rs`), all declared in `build.rs` (`AppManifest::commands`):
+  a command missing from this list or from `capabilities/default.json` is refused. `main` window
+  1440 × 900 (at least 1024 × 700). `dragDropEnabled: false`: otherwise Tauri intercepts drops and the HTML no longer receives
+  `drop`. Permissions (`capabilities/default.json`): `dialog:allow-open`, `dialog:allow-save`, `fs:allow-read-file`,
+  `fs:allow-write-file`, `fs:allow-open`, `fs:allow-seek`, `fs:allow-write`, `fs:allow-remove` (film streamed
+  to disk), `fs:allow-mkdir`, `fs:allow-read-dir`, `fs:allow-exists` (offline packs, "Mes projets"), `allow-video-available`, `allow-video-sound`, `allow-video-open`,
+  `allow-video-frame`, `allow-video-finish`, `allow-video-cancel` (native encoder), `allow-cli-render`, `allow-cli-exit`
+  (command line); two fixed
+  scopes, `$APPDATA/tiles` and `$APPDATA/projects` with their contents (`fs:scope`), in addition to the paths the dialog plugin adds for each
+  chosen file and the two folders of a command-line render: nothing else is readable. CSP: `connect-src` /
+  `img-src` list the tile hosts (`src/terrain/sources.ts`), Open-Meteo, the two Overpass servers and Nominatim, plus `ipc:` and `blob:`; `style-src 'unsafe-inline'` with `dangerousDisableAssetCspModification:
+  ["style-src"]` (Tauri would otherwise add a nonce that cancels `unsafe-inline`). **Any new source must also be added
+  to the CSP in `tauri.conf.json`.**
+- **Verified**: `cargo check --target x86_64-pc-windows-msvc` passes (configuration, permissions, icons, `generate_context!`),
+  with a fake resource compiler (`RC_x86_64_pc_windows_msvc`) since nothing is linked. On Linux, the check
+  requires `libwebkit2gtk-4.1-dev` and GLib ≥ 2.70 (Ubuntu 22.04 or later); the development machine (Ubuntu 20.04) does not
+  have them.
+- **Desktop installers** (`.github/workflows/desktop.yml`, instructions in `docs/installers.md`): `tauri-apps/tauri-action`
+  on Windows (NSIS + MSI), macOS (`universal-apple-darwin`) and Ubuntu 22.04 (AppImage + deb), manually or on a
+  `v*` tag (draft release). Optional signing through the repository secrets: Windows, PFX imported into the store then
+  thumbprint written to `src-tauri/tauri.windows.conf.json` (generated, never versioned; timestamping and SHA-256 in
+  `tauri.conf.json`); macOS, Tauri's `APPLE_*` variables exported only if present (empty, they would make
+  the build fail), ad hoc signing (`signingIdentity: "-"`) otherwise. No updater plugin.
+  `.github/workflows/ci.yml`: types, lint, unit tests, build and `cargo test` on every push.
 
-### Export vidéo sans WebCodecs (Linux)
+### Video export without WebCodecs (Linux)
 
-WebKitGTK n'a pas `VideoEncoder` ; Edge (WebView2) l'a, WebKit sous macOS aussi depuis Safari 16.4. Sur le bureau sans
-WebCodecs, `capabilities.videoEncoder` vaut `'native'` : le film est encodé par le `ffmpeg` du système (`apt install
-ffmpeg`), lancé par des commandes Rust (`src-tauri/src/video.rs`) ; rien à embarquer, aucune exécution ouverte au
+WebKitGTK does not have `VideoEncoder`; Edge (WebView2) does, and so does WebKit on macOS since Safari 16.4. On the desktop without
+WebCodecs, `capabilities.videoEncoder` is `'native'`: the film is encoded by the system `ffmpeg` (`apt install
+ffmpeg`), started by Rust commands (`src-tauri/src/video.rs`); nothing to bundle, no process execution exposed to
 JavaScript.
 
-- **Commandes** (async : elles ne bloquent pas la fenêtre), une session par export, dans un `Mutex<Videos>` :
-  `video_available` (`ffmpeg -version` lancé et réussi), `video_sound` (corps binaire : le son en WAV, écrit dans le
-  dossier temporaire → id), `video_open(path, width, height, fps, quality, sound)` → id, `video_frame` (corps binaire :
-  l'image RGBA, id dans l'en-tête `x-video-session`), `video_finish(id)` → taille du fichier, `video_cancel(id)`.
-  Arguments fixés en Rust (`ffmpeg_args`, testé par `cargo test`) : `-f rawvideo -pix_fmt rgba -s WxH -r fps -i -`
-  [`-i son.wav`] `-c:v libx264 -preset medium -crf <qualité> -pix_fmt yuv420p`, couleurs converties et marquées BT.709
+- **Commands** (async: they do not block the window), one session per export, in a `Mutex<Videos>`:
+  `video_available` (`ffmpeg -version` started and successful), `video_sound` (binary body: the sound as WAV, written to the
+  temporary folder → id), `video_open(path, width, height, fps, quality, sound)` → id, `video_frame` (binary body:
+  the RGBA image, id in the `x-video-session` header), `video_finish(id)` → file size, `video_cancel(id)`.
+  Arguments fixed in Rust (`ffmpeg_args`, tested by `cargo test`): `-f rawvideo -pix_fmt rgba -s WxH -r fps -i -`
+  [`-i son.wav`] `-c:v libx264 -preset medium -crf <qualité> -pix_fmt yuv420p`, colors converted and tagged BT.709
   (`-vf scale=out_color_matrix=bt709`, `-colorspace` / `-color_primaries` / `-color_trc bt709`) [`-c:a aac -b:a 192k`]
-  `-movflags +faststart -f mp4 -y chemin`. Qualité → `crf` : standard 23, haute 20, maximale 17 (qualité constante, pas
-  de débit visé : l'estimation de taille du tiroir reste celle du H.264 de WebCodecs). Nom tapé en `.webm` (`is_webm`,
-  `nativeCodecFor` côté JavaScript) : `-c:v libvpx-vp9 -crf <qualité> -b:v 0 -deadline good -cpu-used 4 -row-mt 1`,
-  son `-c:a libopus`, `-f webm` ; `crf` standard 34, haute 31, maximale 26 (essayé avec le ffmpeg d'une Ubuntu : VP9 +
-  Opus lus par `ffprobe`, WAV 44,1 kHz rééchantillonné seul).
-- **Chemin** : celui du fichier choisi dans la fenêtre « Enregistrer » au début de l'export (`WritableFile.path`, posé
-  par `openWritablePath` ; dossier du rendu en lot compris). `video_open` refuse un chemin relatif ou hors de la portée
-  fs (où l'extension dialog ajoute chaque fichier choisi). La poignée ouverte par la fenêtre n'écrit rien ; elle est
-  fermée après `video_finish` (fichier gardé) ou supprimée par `discard` (annulation, échec). Sans chemin (repli en
-  mémoire), l'export échoue avec un message.
-- **Images** : le compositeur d'export dessine chaque image dans un canvas 2D ; `getImageData` → RGBA brut en corps
-  binaire d'`invoke` (pas de JSON ; 8,3 Mo en 1080p, négligeable devant le rendu). Contre-pression : `video_frame`
-  écrit sur l'entrée standard de ffmpeg et ne répond que quand le tube a pris l'image ; taille vérifiée.
-- **Son** : le mixage du film (`mixFilmAudio`, voir « Export vidéo ») est converti en WAV 16 bits entrelacé (`wavFile`)
-  et passé avant l'ouverture (`video_sound`), seconde entrée de ffmpeg, encodée en AAC 192 kbit/s (Opus en WebM) ; fichier temporaire
-  supprimé en fin de session (réussite, échec, annulation) ou si `video_open` échoue.
-- **Erreurs** : ffmpeg tourne avec `-loglevel error` ; s'il s'arrête (écriture refusée sur son entrée) ou finit en
-  échec, la commande renvoie « ffmpeg a échoué : » et ses trois dernières lignes d'erreur, et supprime le fichier
-  partiel. `video_cancel` tue ffmpeg et supprime le fichier ; sans effet sur une session déjà finie.
-- **Côté JavaScript** (`src/export/nativeEncoder.ts`) : `createNativeVideoEncoder` a le contrat de `VideoEncodeSession`
-  (`addFrame`, `finish`, `cancel`) ; `createExportEncoder` le choisit quand `videoEncoder` vaut `'native'`, sinon
-  WebCodecs (`ExportController`) ; `exportCodec` remplace `pickCodec` dans le tiroir et le lot : MP4 / H.264 si
-  `video_available` répond oui (demandé à chaque fois : ffmpeg installé pendant que l'application tourne est vu), null
-  sinon, et le tiroir dit « installez ffmpeg » (`videoEncoderMissingHint`). L'invocation de Tauri est importée au
-  premier appel : le site n'en charge rien.
-- **Pas encore** : l'habillage seul (WebM transparent) reste réservé à WebCodecs (le tiroir le dit) ; pas de repli
-  intégré sans ffmpeg (crate `openh264` + mise en MP4 en Rust, envisagé : H.264 « baseline », quelques Mo de plus).
-  Écartés : `ffmpeg` en sidecar (`bundle.externalBin`, 70 à 100 Mo par plateforme, licence GPL avec x264) ; `rav1e` (AV1
-  en pur Rust, trop lent en 4K, lecture moins universelle).
-- **Vérifié** : `cargo check --target x86_64-pc-windows-msvc` ; tests JavaScript avec une fausse invocation
-  (`nativeEncoder.test.ts`). À vérifier sur un bureau Linux (`cargo test`, export réel) : `docs/tests-gpu.md`, section 7.
+  `-movflags +faststart -f mp4 -y chemin`. Quality → `crf`: standard 23, high 20, maximum 17 (constant quality, no
+  target bitrate: the drawer's size estimate remains that of WebCodecs H.264). Name typed as `.webm` (`is_webm`,
+  `nativeCodecFor` on the JavaScript side): `-c:v libvpx-vp9 -crf <qualité> -b:v 0 -deadline good -cpu-used 4 -row-mt 1`,
+  sound `-c:a libopus`, `-f webm`; `crf` standard 34, high 31, maximum 26 (tried with the ffmpeg of an Ubuntu install: VP9 +
+  Opus read by `ffprobe`, 44.1 kHz WAV resampled automatically).
+- **Path**: the path of the file chosen in the "Enregistrer" dialog at the start of the export (`WritableFile.path`, set
+  by `openWritablePath`; batch render folder included). `video_open` refuses a relative path or one outside the fs
+  scope (where the dialog plugin adds each chosen file). The handle opened by the dialog writes nothing; it is
+  closed after `video_finish` (file kept) or deleted by `discard` (cancel, failure). Without a path (in-memory
+  fallback), the export fails with a message.
+- **Frames**: the export compositor draws each frame into a 2D canvas; `getImageData` → raw RGBA as the binary
+  body of `invoke` (no JSON; 8.3 MB at 1080p, negligible next to the render). Back-pressure: `video_frame`
+  writes to ffmpeg's standard input and only replies once the pipe has taken the frame; size checked.
+- **Sound**: the film mix (`mixFilmAudio`, see "Video export") is converted to interleaved 16-bit WAV (`wavFile`)
+  and passed before opening (`video_sound`), as ffmpeg's second input, encoded as AAC 192 kbit/s (Opus in WebM); temporary file
+  deleted at the end of the session (success, failure, cancel) or if `video_open` fails.
+- **Errors**: ffmpeg runs with `-loglevel error`; if it stops (write refused on its input) or ends in
+  failure, the command returns "ffmpeg a échoué :" and its last three error lines, and deletes the partial
+  file. `video_cancel` kills ffmpeg and deletes the file; no effect on a session that has already finished.
+- **JavaScript side** (`src/export/nativeEncoder.ts`): `createNativeVideoEncoder` has the `VideoEncodeSession` contract
+  (`addFrame`, `finish`, `cancel`); `createExportEncoder` picks it when `videoEncoder` is `'native'`, otherwise
+  WebCodecs (`ExportController`); `exportCodec` replaces `pickCodec` in the drawer and the batch: MP4 / H.264 if
+  `video_available` answers yes (asked every time: ffmpeg installed while the application is running is detected), null
+  otherwise, and the drawer says "installez ffmpeg" (install ffmpeg) (`videoEncoderMissingHint`). The Tauri invoke function is imported on
+  first call: the website loads none of it.
+- **Not yet**: overlay-only export (transparent WebM) remains limited to WebCodecs (the drawer says so); no built-in
+  fallback without ffmpeg (`openh264` crate + MP4 muxing in Rust, considered: H.264 "baseline", a few MB more).
+  Rejected: `ffmpeg` as a sidecar (`bundle.externalBin`, 70 to 100 MB per platform, GPL license with x264); `rav1e` (AV1
+  in pure Rust, too slow in 4K, less universal playback).
+- **Verified**: `cargo check --target x86_64-pc-windows-msvc`; JavaScript tests with a fake invoke
+  (`nativeEncoder.test.ts`). To be checked on a Linux desktop (`cargo test`, real export): `docs/tests-gpu.md`, section 7.
 
-## Packs hors ligne (phase 6)
+## Offline packs (phase 6)
 
-« Préparer hors ligne » (onglet Trace, section « Hors ligne », `src/ui/OfflinePanel.tsx`) télécharge une fois les tuiles
-d'un survol des traces chargées ; la vue et l'export les lisent ensuite sans réseau.
+"Préparer hors ligne" (prepare offline; Trace tab, "Hors ligne" section, `src/ui/OfflinePanel.tsx`) downloads once the tiles
+of a flyover of the loaded tracks; the view and the export then read them without a network.
 
-- **Plan** (`plan.ts`, pur) : les tuiles que le moteur charge pendant le survol, avec sa propre règle. Une tuile de
-  taille G est découpée quand une maille (G / 64) dépasse 3 px : caméra à moins de r = G / 64 · H / (6 · tan 25°)
-  ≈ 6 G pour H = 1080 px (×2 en 4K) ; un découpage charge les quatre enfants. La caméra de suivi reste près de la
-  trace, à h = distance automatique × réglage « distance » × sin(inclinaison) au-dessus : une tuile est découpée si
-  √(d² + h²) < r, d = distance de la trace à la tuile (points densifiés à 25 m, grille de 1 km). Parcours depuis les
-  racines du moteur (même zone : boîte des traces + 25 km, 40 km au moins, ≤ 16 racines) : les deux niveaux sous les
-  racines sur toute la zone (le paysage lointain), plus profond seulement les enfants des tuiles qui touchent le
-  couloir (2, 5 ou 10 km de large, centré sur la trace). Hors du couloir le moteur garde le niveau plus grossier du
-  pack (le remplacement attend les quatre enfants, d'où les enfants entiers). Imagerie : `planImagerySubtiles` de
-  chaque tuile de relief, même décalage de zoom que la vue (recadrage au-delà du zoom max de la source). Estimation
-  = nombre de tuiles × taille moyenne mesurée par source (`policy.ts`). Ordre de grandeur, trace droite de 20 km dans
-  les Alpes, Mapterhorn + IGN, décalage 1, h = 400 m : 2 km → 10 500 tuiles, ~450 Mo ; 5 km → 22 000, ~930 Mo ;
-  10 km → 28 000, ~1,2 Go (Mapterhorn : ~150 Ko par tuile de 512 px). Au-delà de 150 000 tuiles, refusé. Hors du
-  plan : plans d'ensemble et orbites hautes (niveaux grossiers, déjà là), export 4K (un niveau de plus dans un couloir
-  large).
-- **Politique** (`policy.ts`) : une décision par source, motifs et liens dans le README ; une source absente de la
-  table est refusée. OpenTopoMap, Esri World Imagery et swisstopo (photos et carte) sont permis en usage personnel
-  (`personalUse`, mise en garde dans le panneau) avec une limite basse. Une imagerie refusée n'empêche pas le pack : il
-  ne contient alors que le relief et l'imagerie reste en ligne. Limite par jour et par appareil : Mapterhorn 20 000,
-  IGN 50 000 (toutes couches), EOX 20 000, Esri et swisstopo 10 000, OpenTopoMap 2 000 ; AWS sans limite.
-- **Téléchargement** (`download.ts`) : 4 requêtes à la fois, réessais de `downloadTile` (ceux du fetcher), tuiles déjà
-  dans le pack sautées, 4xx = « pas de donnée ici » (Mapterhorn au-delà de z12 hors zones fines), arrêt après 20 échecs
-  réseau de suite ou si le stockage refuse une tuile, pause (les requêtes en cours finissent), reprise, annulation
-  (pack neuf supprimé). Compteur du jour par fournisseur dans `storage` (`openflyover.offline.quota.v1`).
-- **Packs** (`packs.ts`, `store.ts`) : identifiant = empreinte des URL du plan, donc mêmes traces + mêmes réglages =
-  même pack, et le relancer termine un pack incomplet. Liste dans `storage` (`openflyover.offline.v1` : nom, sources,
-  couloir, tuiles, octets, complet, débuts d'URL des sources). `installOfflineTiles()` (`main.tsx`) enregistre le
-  lecteur du fetcher : `covers(url)` compare l'URL aux débuts d'URL des packs (synchrone, sans attente quand aucun
-  pack ne contient la source : même chemin qu'avant), puis `tileCache.get`. Une copie illisible ou absente → réseau.
-- **Stockage** (`src/platform/tileCache.ts`) : site = Cache Storage, un cache par pack `openflyover-tiles-v1:<pack>`,
-  l'URL comme clé (supprimer un pack = supprimer son cache ; une tuile commune à deux packs est gardée deux fois),
-  `navigator.storage.persist()` demandé à la première tuile, `size()` = `navigator.storage.estimate()` ; absent sans
-  HTTPS (`tileCache` null, la section le dit). Bureau = un fichier par tuile, `<app data>/tiles/<pack>/<tileFileName(url)>`
-  (deux empreintes de 53 bits), plugin-fs avec `baseDir: AppData` ; index des noms lu une fois (`readDir`) : une
-  tuile absente ne coûte aucun appel au disque ; type d'image reconnu aux premiers octets.
-- **Coût du cache d'abord** : bureau, rien pour une tuile absente (index en mémoire) ; site, un `match` par pack qui
-  contient la source (non mesuré ici, faute de navigateur ; négligeable devant une requête réseau de 50 à 300 ms).
-- **Limites** : hors ligne, une tuile hors du pack échoue après les réessais (le parent reste affiché) ; l'export attend
-  ces échecs comme en ligne. Le pack suit la trace et les réglages du moment : changer de source ou de décalage de
-  zoom demande un autre pack.
+- **Plan** (`plan.ts`, pure): the tiles the engine loads during the flyover, with its own rule. A tile of
+  size G is split when a cell (G / 64) exceeds 3 px: camera closer than r = G / 64 · H / (6 · tan 25°)
+  ≈ 6 G for H = 1080 px (×2 in 4K); a split loads the four children. The follow camera stays near the
+  track, at h = automatic distance × "distance" setting × sin(tilt) above it: a tile is split if
+  √(d² + h²) < r, d = distance from the track to the tile (points densified at 25 m, 1 km grid). Traversal from the
+  engine roots (same area: track box + 25 km, 40 km at least, ≤ 16 roots): the two levels below the
+  roots over the whole area (the distant landscape), deeper only the children of the tiles that touch the
+  corridor (2, 5 or 10 km wide, centered on the track). Outside the corridor the engine keeps the pack's coarser
+  level (replacement waits for the four children, hence whole sets of children). Imagery: `planImagerySubtiles` of
+  each terrain tile, same zoom offset as the view (cropping beyond the source's max zoom). Estimate
+  = number of tiles × average size measured per source (`policy.ts`). Order of magnitude, straight 20 km track in
+  the Alps, Mapterhorn + IGN, offset 1, h = 400 m: 2 km → 10,500 tiles, ~450 MB; 5 km → 22,000, ~930 MB;
+  10 km → 28,000, ~1.2 GB (Mapterhorn: ~150 KB per 512 px tile). Beyond 150,000 tiles, refused. Not in the
+  plan: overview shots and high orbits (coarse levels, already there), 4K export (one more level in a wide
+  corridor).
+- **Policy** (`policy.ts`): one decision per source, reasons and links in the README; a source missing from the
+  table is refused. OpenTopoMap, Esri World Imagery and swisstopo (photos and map) are allowed for personal use
+  (`personalUse`, warning in the panel) with a low limit. A refused imagery source does not prevent the pack: it
+  then only contains the terrain, and the imagery stays online. Limit per day and per device: Mapterhorn 20,000,
+  IGN 50,000 (all layers), EOX 20,000, Esri and swisstopo 10,000, OpenTopoMap 2,000; AWS unlimited.
+- **Download** (`download.ts`): 4 requests at a time, `downloadTile` retries (the fetcher's), tiles already
+  in the pack skipped, 4xx = "pas de donnée ici" (no data here; Mapterhorn beyond z12 outside fine areas), stop after 20 consecutive network
+  failures or if the storage refuses a tile, pause (requests in progress finish), resume, cancel
+  (new pack deleted). Daily counter per provider in `storage` (`openflyover.offline.quota.v1`).
+- **Packs** (`packs.ts`, `store.ts`): identifier = fingerprint of the plan's URLs, so same tracks + same settings =
+  same pack, and restarting it completes an incomplete pack. List in `storage` (`openflyover.offline.v1`: name, sources,
+  corridor, tiles, bytes, complete, source URL prefixes). `installOfflineTiles()` (`main.tsx`) registers the
+  fetcher's reader: `covers(url)` compares the URL with the packs' URL prefixes (synchronous, no waiting when no
+  pack contains the source: same path as before), then `tileCache.get`. An unreadable or missing copy → network.
+- **Storage** (`src/platform/tileCache.ts`): website = Cache Storage, one cache per pack `openflyover-tiles-v1:<pack>`,
+  the URL as key (deleting a pack = deleting its cache; a tile shared by two packs is stored twice),
+  `navigator.storage.persist()` requested on the first tile, `size()` = `navigator.storage.estimate()`; unavailable without
+  HTTPS (`tileCache` null, the section says so). Desktop = one file per tile, `<app data>/tiles/<pack>/<tileFileName(url)>`
+  (two 53-bit fingerprints), plugin-fs with `baseDir: AppData`; name index read once (`readDir`): a
+  missing tile costs no disk call; image type detected from the first bytes.
+- **Cost of cache-first**: desktop, nothing for a missing tile (in-memory index); website, one `match` per pack that
+  contains the source (not measured here, for lack of a browser; negligible next to a 50 to 300 ms network request).
+- **Limits**: offline, a tile outside the pack fails after the retries (the parent stays displayed); the export waits for
+  these failures as it does online. The pack follows the track and the settings of the moment: changing the source or the zoom
+  offset requires another pack.

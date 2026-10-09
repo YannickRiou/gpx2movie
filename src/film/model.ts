@@ -24,8 +24,8 @@
  * an item across edits. Pure module (no DOM, no React, no Three, no store).
  */
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
-import { OVERLAY_ANCHORS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
-import type { OverlayAnchor } from '../overlay/settings'
+import { OVERLAY_ANCHORS, OVERLAY_FONT_IDS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN, isHexColor } from '../overlay/settings'
+import type { OverlayAnchor, OverlayFontId } from '../overlay/settings'
 
 export const SHOT_STYLES = ['aucune', 'descente', 'saut', 'situation', 'balayage'] as const
 /**
@@ -75,6 +75,9 @@ export interface FilmText {
   /** same placement as the overlay text widget: one of the nine anchors, size multiplier */
   anchor: OverlayAnchor
   size: number
+  /** its own text colour '#rrggbb' and font; absent = those of the overlay */
+  color?: string
+  font?: OverlayFontId
 }
 
 export const AUTO_STOP_MODES = ['temps-forts', 'rythme'] as const
@@ -175,11 +178,27 @@ export const FADE_RANGE = { min: 0, max: 30, step: 0.5 } as const
  * the first key and back to them after the last one (`keyedCamera`, flyover/filmCamera.ts).
  */
 /** A point of interest placed by hand: a name at a place on the ground, shown as a label in the view and the film. */
+export const POI_ICONS = ['epingle', 'refuge', 'bivouac', 'sommet', 'vue', 'photo', 'drapeau', 'eau', 'repas'] as const
+export type PoiIcon = (typeof POI_ICONS)[number]
+export const POI_ICON_LABELS: Record<PoiIcon, string> = {
+  epingle: 'Épingle',
+  refuge: 'Refuge',
+  bivouac: 'Bivouac',
+  sommet: 'Sommet',
+  vue: 'Point de vue',
+  photo: 'Photo',
+  drapeau: 'Drapeau',
+  eau: 'Eau',
+  repas: 'Repas',
+}
+
 export interface FilmPoi {
   id: string
   lon: number
   lat: number
   name: string
+  /** pictogram of its label; absent = 'epingle' */
+  icon?: PoiIcon
 }
 
 export interface FilmCameraKey {
@@ -350,7 +369,14 @@ export function isValidSpeed(speed: unknown): speed is FilmSpeed {
 }
 
 export function isValidPoi(poi: unknown): poi is FilmPoi {
-  return isRecord(poi) && isId(poi.id) && within(poi.lon, -180, 180) && within(poi.lat, -90, 90) && typeof poi.name === 'string'
+  return (
+    isRecord(poi) &&
+    isId(poi.id) &&
+    within(poi.lon, -180, 180) &&
+    within(poi.lat, -90, 90) &&
+    typeof poi.name === 'string' &&
+    (poi.icon === undefined || oneOf(POI_ICONS, poi.icon))
+  )
 }
 
 export function isValidCameraKey(key: unknown): key is FilmCameraKey {
@@ -383,7 +409,9 @@ export function isValidText(text: unknown): text is FilmText {
     typeof text.text === 'string' &&
     optionalString(text.subtitle) &&
     oneOf(OVERLAY_ANCHORS, text.anchor) &&
-    within(text.size, WIDGET_SIZE_MIN, WIDGET_SIZE_MAX)
+    within(text.size, WIDGET_SIZE_MIN, WIDGET_SIZE_MAX) &&
+    (text.color === undefined || isHexColor(text.color)) &&
+    (text.font === undefined || oneOf(OVERLAY_FONT_IDS, text.font))
   )
 }
 

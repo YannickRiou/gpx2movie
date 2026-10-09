@@ -25,6 +25,7 @@ import { MEDIA_DEFAULTS } from '../film/model'
 import type { FilmMedia, FilmText } from '../film/model'
 import { DEFAULT_OVERLAY, OVERLAY_ANCHORS, OVERLAY_STYLES } from './settings'
 import type { OverlaySettings } from './settings'
+import { OVERLAY_FONT_FAMILIES } from './themes'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import { WEATHER_VARIABLES } from '../weather/series'
 import type { WeatherSeries, WeatherVariable } from '../weather/series'
@@ -492,6 +493,12 @@ describe('timeline texts', () => {
         expect(drawn[1].text.endsWith('…')).toBe(true)
       }
     }
+  })
+
+  it('draws a text in its own font when it has one', () => {
+    const own = [{ ...FILM_TEXT, startS: 0.4, durationS: 0.4, font: 'mono' as const }]
+    expect(find(render(0.6, enabled(), { texts: own }), 'Col de Balme')?.font).toContain(OVERLAY_FONT_FAMILIES.mono)
+    expect(find(render(0.6, enabled()), 'Col de Balme')?.font).not.toContain(OVERLAY_FONT_FAMILIES.mono)
   })
 
   it('is not drawn while the overlay is off', () => {

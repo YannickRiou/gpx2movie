@@ -126,6 +126,28 @@ describe('removeTrack / clearTracks', () => {
     expect(st.bounds).toBeNull()
     expect(st.frameOrigin).toBeNull()
   })
+
+  it('setTrackColor recolours one track and keeps the playback', () => {
+    useAppStore.getState().addTracks([FR, CH])
+    useAppStore.getState().setProgress(0.5)
+    useAppStore.getState().setTrackColor('ch', '#ff0000')
+    const st = useAppStore.getState()
+    expect(st.tracks.map((t) => t.color)).toEqual(['#000000', '#ff0000'])
+    expect(st.playback.progress).toBe(0.5)
+    const before = useAppStore.getState()
+    useAppStore.getState().setTrackColor('ch', '#ff0000')
+    expect(useAppStore.getState()).toBe(before)
+  })
+
+  it('flyTrack puts the track first; no-op on the first or an unknown one', () => {
+    useAppStore.getState().addTracks([FR, CH, CA])
+    useAppStore.getState().flyTrack('ca')
+    expect(useAppStore.getState().tracks.map((t) => t.id)).toEqual(['ca', 'fr', 'ch'])
+    const before = useAppStore.getState()
+    useAppStore.getState().flyTrack('ca')
+    useAppStore.getState().flyTrack('nope')
+    expect(useAppStore.getState()).toBe(before)
+  })
 })
 
 describe('setPlanArea', () => {
@@ -169,6 +191,7 @@ describe('settings and misc', () => {
       atmosphere: true,
       shadows: true,
       sunHour: 10,
+      sunDate: '',
       sunFromTrack: true,
       exposureEv: 0,
       grading: { preset: 'naturel', contrast: 0, saturation: 0, warmth: 0, vignette: 0 },
@@ -193,7 +216,7 @@ describe('settings and misc', () => {
         landmarkTitles: true,
         pois: [],
       },
-      labels: { climbs: true, waypoints: true },
+      labels: { climbs: true, waypoints: true, kmStep: 0, size: 1, rangeKm: 70 },
       weather: { enabled: true },
       weatherScene: { enabled: true, strength: 1 },
       clouds: { mode: 'meteo', coverage: 0.4, altitudeM: 1200, quality: 'medium' },

@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { ReactNode } from 'react'
 import { modifiedPaths } from '../project/apply'
 import type { SettingPath } from '../project/apply'
@@ -53,5 +54,54 @@ export function InfoTip({ text }: { text: string }) {
     <span className="info-tip" tabIndex={0} role="img" aria-label={text} data-tip={text}>
       <Icon name="info" size={14} />
     </span>
+  )
+}
+
+/** A slider with its label and its value written out (`wide`: room for a value with a unit). */
+export function RangeField({
+  label,
+  min,
+  max,
+  step,
+  value,
+  format,
+  onChange,
+  disabled = false,
+  wide = true,
+}: {
+  label: string
+  min: number
+  max: number
+  step: number
+  value: number
+  format(value: number): string
+  onChange(value: number): void
+  disabled?: boolean
+  wide?: boolean
+}) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label className="field__label" htmlFor={id}>
+        {label}
+      </label>
+      <div className="range-row">
+        <input
+          id={id}
+          className="range"
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          disabled={disabled}
+          onChange={(e) => onChange(Number(e.currentTarget.value))}
+          aria-valuetext={format(value)}
+        />
+        <output className={wide ? 'range-row__value range-row__value--wide' : 'range-row__value'} htmlFor={id}>
+          {format(value)}
+        </output>
+      </div>
+    </div>
   )
 }

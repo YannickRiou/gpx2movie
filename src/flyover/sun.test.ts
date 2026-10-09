@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildTrack } from '../import/stats'
 import { buildTrackPath } from './path'
-import { SUN_CHIPS, clockHourOfSolar, solarDay, solarHourOf, solarHourToDate, sunChipHour, sunDateAt, sunTimes } from './sun'
+import { SUN_CHIPS, clockHourOfSolar, isSunDate, solarDay, solarHourOf, solarHourToDate, sunChipHour, sunDateAt, sunDayMs, sunTimes } from './sun'
 import type { SolarDay } from './sun'
 
 describe('solarHourToDate', () => {
@@ -145,5 +145,20 @@ describe('sunChipHour', () => {
 
   it('stays inside the slider range', () => {
     expect(sunChipHour('coucher', { sunrise: 0.1, sunset: 23.95, noon: 12, polar: null })).toBe(23.75)
+  })
+})
+
+describe('sunDayMs / isSunDate', () => {
+  it('takes the day chosen, else the track start, else today', () => {
+    expect(sunDayMs('2024-12-21', 5, 7)).toBe(Date.UTC(2024, 11, 21))
+    expect(sunDayMs('', 5, 7)).toBe(5)
+    expect(sunDayMs('', undefined, 7)).toBe(7)
+  })
+
+  it('accepts an empty day or YYYY-MM-DD only', () => {
+    expect(isSunDate('')).toBe(true)
+    expect(isSunDate('2024-06-21')).toBe(true)
+    expect(isSunDate('2024-13-40')).toBe(false)
+    expect(isSunDate('21/06/2024')).toBe(false)
   })
 })

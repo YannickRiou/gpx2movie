@@ -15,6 +15,7 @@ import { isValidFilm, withFilmDefaults } from '../film/model'
 import { FLYOVER_DURATION_RANGE, isValidCamera } from '../flyover/cameraSettings'
 import { isValidPacing } from '../flyover/pacing'
 import { isValidRace } from '../flyover/race'
+import { isSunDate } from '../flyover/sun'
 import { TRACK_COLORS } from '../import'
 import { buildTrack, isUtcOffsetMin } from '../import/stats'
 import { isValidVideoSettings, withVideoDefaults } from '../export/schedule'
@@ -22,6 +23,7 @@ import { LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { isValidOverlay, withOverlayDefaults } from '../overlay/settings'
 import { isValidPoster, withPosterDefaults } from '../poster/settings'
 import { isValidGrading } from '../scene/grading'
+import { isValidLabelSettings, withLabelDefaults } from '../scene/labelModel'
 import { TRACK_COLOR_MODES } from '../flyover/trackColor'
 import { isValidMarker, isValidTrackStyle, withMarkerDefaults, withTrackStyleDefaults } from '../scene/markerSettings'
 import { DEFAULT_PLAYBACK, DEFAULT_SETTINGS, PLAYBACK_SPEEDS } from '../state/store'
@@ -104,6 +106,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   imageryZoomOffset: (v) => v === 0 || v === 1 || v === 2,
   exaggeration: (v) => v > 0,
   sunHour: (v) => v >= 0 && v <= 24,
+  sunDate: isSunDate,
   camera: isValidCamera,
   flyoverDurationS: (v) => v >= FLYOVER_DURATION_RANGE.min && v <= FLYOVER_DURATION_RANGE.max,
   pacing: isValidPacing,
@@ -121,6 +124,7 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   race: isValidRace,
   trackStyle: isValidTrackStyle,
   marker: isValidMarker,
+  labels: isValidLabelSettings,
 }
 
 /**
@@ -134,6 +138,7 @@ export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unkno
   trackStyle: withTrackStyleDefaults,
   marker: withMarkerDefaults,
   poster: withPosterDefaults,
+  labels: withLabelDefaults,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

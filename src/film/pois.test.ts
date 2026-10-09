@@ -4,7 +4,7 @@ import { buildTrack } from '../import/stats'
 import { sanitizeSettings } from '../project/document'
 import { DEFAULT_FILM, isValidFilm, withFilmDefaults } from './model'
 import type { Film } from './model'
-import { POI_NAME_MAX, addPoi, defaultPoiName, poiStopAtM, removePoi, renamePoi } from './pois'
+import { POI_NAME_MAX, addPoi, defaultPoiName, poiStopAtM, removePoi, renamePoi, setPoiIcon } from './pois'
 
 const chalet = { lon: 6.8652345678, lat: 45.9234567891 }
 
@@ -30,6 +30,15 @@ describe('points of interest', () => {
     expect(renamePoi(film, 'poi-2', '').pois[1].name).toBe('')
     expect(removePoi(film, 'poi-1').pois.map((p) => p.id)).toEqual(['poi-2'])
     expect(removePoi(film, 'poi-9')).toEqual(film)
+  })
+
+  it('pictogram: stored unless it is the pin, validated', () => {
+    const film = addPoi(addPoi(DEFAULT_FILM, chalet, 'Refuge'), chalet, 'Lac')
+    const hut = setPoiIcon(film, 'poi-1', 'refuge')
+    expect(hut.pois.map((p) => p.icon)).toEqual(['refuge', undefined])
+    expect(isValidFilm(hut)).toBe(true)
+    expect('icon' in setPoiIcon(hut, 'poi-1', 'epingle').pois[0]).toBe(false)
+    expect(isValidFilm({ ...film, pois: [{ ...film.pois[0], icon: 'licorne' as 'eau' }] })).toBe(false)
   })
 
   it('a stop goes to the nearest recorded point of the track, at the metre', () => {
