@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from '../state/store'
 import {
   DEFAULT_MARKER,
   DEFAULT_TRACK_STYLE,
+  figureMotion,
   isValidMarker,
   isValidTrackStyle,
   MARKER_FIGURES,
@@ -40,5 +41,23 @@ describe('track style and marker settings', () => {
 
   it('has a pictogram for every figure', () => {
     for (const figure of MARKER_FIGURES) expect(MARKER_FIGURE_PATHS[figure].length).toBeGreaterThan(0)
+  })
+})
+
+describe('figureMotion', () => {
+  it('bounces twice a second and sways both ways, a function of the film time alone', () => {
+    expect(figureMotion(0)).toEqual({ lift: 0, tilt: 0 })
+    // a quarter step: top of the bounce, leaning forward
+    const top = figureMotion(0.25)
+    expect(top.lift).toBeCloseTo(0.08, 6)
+    expect(top.tilt).toBeGreaterThan(0)
+    expect(figureMotion(0.75).tilt).toBeLessThan(0)
+    expect(figureMotion(0.5).lift).toBeCloseTo(0, 6)
+    expect(figureMotion(1.25)).toEqual(figureMotion(1.25))
+  })
+
+  it('is off by default and in older projects', () => {
+    expect(DEFAULT_MARKER.animated).toBe(false)
+    expect(withMarkerDefaults({ kind: 'figurine', figure: 'coureur', image: '', size: 1 })).toMatchObject({ animated: false })
   })
 })

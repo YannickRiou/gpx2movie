@@ -197,7 +197,7 @@ describe('settings and misc', () => {
       grading: { preset: 'naturel', contrast: 0, saturation: 0, warmth: 0, vignette: 0 },
       trackColorBy: 'none',
       trackStyle: { width: 4, dash: 'plein', glow: false, drawOn: false },
-      marker: { kind: 'boule', figure: 'randonneur', image: '', size: 1 },
+      marker: { kind: 'boule', figure: 'randonneur', image: '', size: 1, animated: false },
       camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false },
       flyoverDurationS: 60,
       pacing: { enabled: false, climbs: true, landmarks: true, slowFactor: 0.35, windowM: 1000, pauseS: 2, keepDuration: true },
