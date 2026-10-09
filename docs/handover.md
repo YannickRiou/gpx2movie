@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (98 files, 1,584 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (98 files, 1,589 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -113,11 +113,18 @@ features included), `npm run build`,
   also left out of the roadbook), point smoothing (`trackStyle.smoothingM`, recorded distances kept; ghost racers follow
   their smoothed lines; labels, picking, mini-map and poster keep the recorded points), texts and media attached to a
   stop (`stopId`, `followStops`, also on landmark-title, duration and pacing changes through `setLandmarkTitles` and
-  `setFlightTiming`; resetting the "Durée et rythme" section or landmarks arriving later do not move them), timeline
-  edge scrolling (`edgeScrollSpeed`), fold state remembered per section title (`FOLDS_KEY`).
+  `setFlightTiming`, on the "Par défaut" of "Durée et rythme" and on landmarks published again; see the last bullet),
+  timeline edge scrolling (`edgeScrollSpeed`), fold state remembered per section title (`FOLDS_KEY`).
 - **FIT `hr` messages**: the in-house decoder reads them again (chest strap heart rate written in bursts, swim and
   some multisport files: `event_timestamp` and packed 12-bit `event_timestamp_12`, `filtered_bpm`); a record without
   heart rate takes the bpm of the nearest sample within 2 s, records with heart rate keep theirs.
+- **Leftovers closed** (9 October 2026, after the region highlight): a shot switched to "Depuis la région" with its
+  default duration gets 9 s (`SITUATION_DURATION_S`, `updateShot`); the video export holds the region it started with
+  (`holdRegion`: a region arriving mid-export waits for the end, none if it was still loading); attached items follow
+  their stop on the "Durée et rythme" reset (same undo step, `followFlightTiming`) and when the first track's landmarks
+  are published again (`followLandmarks`, no undo step; the first landmarks of a track move nothing, since landmarks
+  are not saved and the film was saved with the times they gave); the free camera is lifted above the terrain when
+  tiles or the exaggeration change under it while it sits still. Not seen on screen.
 - **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
   constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
   "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK); a text added with T attached to
