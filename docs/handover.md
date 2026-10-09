@@ -349,6 +349,9 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   Product: every feature present in both the website and the desktop app, French labels and tips consistent, defaults
   sensible, old projects still loading. Docs: README, user guide, ARCHITECTURE and how-it-works matching the code.
   Run the full checks and `npm run e2e`; list what only a GPU can confirm in `docs/tests-gpu.md`.
+  Maintainability (user's requirement): code easy for a human to maintain and understand, kept to the essentials;
+  remove needless complexity (indirections, options and abstractions used once, speculative code, duplicated logic),
+  split or simplify modules and functions that are too long, comments that explain the why where it is not obvious.
 - **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
   and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
   lens effects), memory (tile and DEM caches, textures, long sessions), export speed (cloud renders per frame,
