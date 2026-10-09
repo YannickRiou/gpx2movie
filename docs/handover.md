@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (98 files, 1,583 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (98 files, 1,584 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -115,6 +115,9 @@ features included), `npm run build`,
   stop (`stopId`, `followStops`, also on landmark-title, duration and pacing changes through `setLandmarkTitles` and
   `setFlightTiming`; resetting the "Durée et rythme" section or landmarks arriving later do not move them), timeline
   edge scrolling (`edgeScrollSpeed`), fold state remembered per section title (`FOLDS_KEY`).
+- **FIT `hr` messages**: the in-house decoder reads them again (chest strap heart rate written in bursts, swim and
+  some multisport files: `event_timestamp` and packed 12-bit `event_timestamp_12`, `filtered_bpm`); a record without
+  heart rate takes the bpm of the nearest sample within 2 s, records with heart rate keep theirs.
 - **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
   constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
   "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK); a text added with T attached to
@@ -295,8 +298,7 @@ The roadmap is built. What remains:
 2. Polish from real use still in progress (`docs/roadmap.md`, last section): sea of clouds in place of the manual
    haze slider, steadier flyover camera (target height and ground clearance smoothed along the track).
 3. Extensions proposed and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only
-   export on the Linux desktop, a built-in openh264 encoder; heart rate from separate FIT `hr` messages (chest strap
-   in swim files), not read by the in-house FIT decoder.
+   export on the Linux desktop, a built-in openh264 encoder.
 4. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
