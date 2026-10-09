@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '../state/store'
-import { PRESETS_STORAGE_KEY, createPresetStore, getPresetStore, presetSettings } from './presets'
+import { PRESETS_STORAGE_KEY, PRESET_SCOPE_KEYS, createPresetStore, getPresetStore, presetSettings } from './presets'
 
 function memoryStorage(initial?: string) {
   const data = new Map<string, string>()
@@ -65,6 +65,27 @@ describe('createPresetStore', () => {
     const stored = JSON.parse(localStorage.getItem(PRESETS_STORAGE_KEY) ?? '[]') as { name: string }[]
     expect(stored.map((p) => p.name)).toEqual(['Ancien', 'Nouveau'])
     localStorage.removeItem(PRESETS_STORAGE_KEY)
+  })
+})
+
+describe('preset families', () => {
+  it('keeps only the settings of its family and leaves the others as they are when applied', () => {
+    const store = createPresetStore(memoryStorage())
+    const saved = { ...DEFAULT_SETTINGS, exaggeration: 2, haze: 0.5, camera: { ...DEFAULT_SETTINGS.camera, distance: 2 } }
+    store.save('Brumeux', saved, 'carte')
+    store.save('Plan large', saved, 'prise-de-vue')
+    const [mist, wide] = store.list()
+    expect(mist.scope).toBe('carte')
+    expect(Object.keys(mist.settings).sort()).toEqual([...PRESET_SCOPE_KEYS.carte].sort())
+    const current = { ...DEFAULT_SETTINGS, flyoverDurationS: 90 }
+    const misty = presetSettings(mist, current)
+    expect(misty).toMatchObject({ exaggeration: 2, haze: 0.5, flyoverDurationS: 90, camera: DEFAULT_SETTINGS.camera })
+    expect(presetSettings(wide, current)).toMatchObject({ exaggeration: 1, camera: { distance: 2 } })
+  })
+
+  it('drops a stored preset with an unknown family', () => {
+    const storage = memoryStorage(JSON.stringify([{ name: 'X', scope: 'tout-et-rien', settings: {} }, { name: 'Y', settings: {} }]))
+    expect(createPresetStore(storage).list().map((p) => p.name)).toEqual(['Y'])
   })
 })
 

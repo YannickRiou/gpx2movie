@@ -4,8 +4,9 @@
  * Every storage access is wrapped in try/catch: without storage (private browsing, blocked site data,
  * quota) the presets still work for the session, from memory.
  *
- * A preset keeps the opening and closing shots of the film, not its stops, texts and media: they belong to the
- * track of the project it was saved from. Of the poster it keeps the style, not the format, title and figures.
+ * A preset keeps every setting or one family of them (`PRESET_SCOPES`). A full one keeps the opening and closing
+ * shots of the film, not its stops, texts and media: they belong to the track of the project it was saved from. Of
+ * the poster it keeps the style, not the format, title and figures.
  */
 import type { Film } from '../film/model'
 import { getPlatform } from '../platform'
@@ -22,10 +23,35 @@ export type PresetSettings = Omit<Partial<Settings>, 'film' | 'poster'> & {
   poster?: Pick<PosterSettings, 'style'>
 }
 
+/**
+ * What a preset keeps: every setting, or one family that can be saved and applied on its own (a map style, a
+ * track look, an overlay theme, a camera shot); applying it leaves the other settings as they are.
+ */
+export const PRESET_SCOPES = ['tout', 'carte', 'trace', 'habillage', 'prise-de-vue'] as const
+export type PresetScope = (typeof PRESET_SCOPES)[number]
+
+export const PRESET_SCOPE_LABELS: Record<PresetScope, string> = {
+  tout: 'Tous les réglages',
+  carte: 'Style de carte',
+  trace: 'Trace, marqueur et étiquettes',
+  habillage: 'Habillage',
+  'prise-de-vue': 'Prise de vue (caméra, cadrage, lumière)',
+}
+
+/** Settings of each family ('tout': every setting). */
+export const PRESET_SCOPE_KEYS: Record<Exclude<PresetScope, 'tout'>, readonly (keyof Settings)[]> = {
+  carte: ['terrainSourceId', 'imagerySourceId', 'imageryZoomOffset', 'exaggeration', 'wireframe', 'atmosphere', 'shadows', 'exposureEv', 'grading', 'weatherScene', 'haze', 'clouds', 'water'],
+  trace: ['trackColorBy', 'trackStyle', 'marker', 'labels'],
+  habillage: ['overlay'],
+  'prise-de-vue': ['camera', 'sunHour', 'sunDate', 'sunFromTrack', 'exposureEv'],
+}
+
 export interface Preset {
   name: string
   /** as saved; may miss keys added since, or hold values that are no longer valid */
   settings: PresetSettings
+  /** the family it keeps; absent = every setting (presets saved before the families) */
+  scope?: PresetScope
 }
 
 export interface PresetStore {
@@ -35,7 +61,7 @@ export interface PresetStore {
    * create or replace the preset named `name` (trimmed); throws on an empty name. False when the storage refused
    * it (full or blocked): the preset still works for this session.
    */
-  save(name: string, settings: Settings): boolean
+  save(name: string, settings: Settings, scope?: PresetScope): boolean
   remove(name: string): void
 }
 
@@ -69,7 +95,13 @@ function readPresets(storage: StorageLike | null): Preset[] {
     if (!Array.isArray(raw)) return []
     return raw.filter(
       (p): p is Preset =>
-        p !== null && typeof p === 'object' && typeof p.name === 'string' && p.name !== '' && typeof p.settings === 'object' && p.settings !== null,
+        p !== null &&
+        typeof p === 'object' &&
+        typeof p.name === 'string' &&
+        p.name !== '' &&
+        typeof p.settings === 'object' &&
+        p.settings !== null &&
+        (p.scope === undefined || (PRESET_SCOPES as readonly unknown[]).includes(p.scope)),
     )
   } catch {
     return []
@@ -88,12 +120,14 @@ export function createPresetStore(storage: StorageLike | null): PresetStore {
   }
   return {
     list: () => [...presets].sort((a, b) => a.name.localeCompare(b.name, 'fr')),
-    save(name, settings) {
+    save(name, settings, scope = 'tout') {
       const clean = normalizePresetName(name)
       if (!clean) throw new Error('Donnez un nom au préréglage.')
-      const film = { opening: settings.film.opening, closing: settings.film.closing }
-      const poster = { style: settings.poster.style }
-      presets = [...presets.filter((p) => p.name !== clean), { name: clean, settings: { ...settings, film, poster } }]
+      const preset: Preset =
+        scope === 'tout'
+          ? { name: clean, settings: { ...settings, film: { opening: settings.film.opening, closing: settings.film.closing }, poster: { style: settings.poster.style } } }
+          : { name: clean, scope, settings: Object.fromEntries(PRESET_SCOPE_KEYS[scope].map((key) => [key, settings[key]])) as PresetSettings }
+      presets = [...presets.filter((p) => p.name !== clean), preset]
       return write()
     },
     remove(name) {
