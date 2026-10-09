@@ -1,15 +1,15 @@
 # Project state and handover
 
-Updated 8 October 2026. This file is enough to resume work without the conversation history: read this file first,
+Updated 9 October 2026. This file is enough to resume work without the conversation history: read this file first,
 then run `git status` and `npm run typecheck`.
 
 ## Branches, PRs, repository
 
-- `master`: everything merged (PRs #1 to #9; #8 on 8 October 2026: small follow-ups, on-demand rendering, sweep,
+- `master`: everything merged (PRs #1 to #10; #8 on 8 October 2026: small follow-ups, on-demand rendering, sweep,
   slow-motion on the beat, per-element styles and framing, command-line rendering, reconnaissance, technical docs;
-  #9 on 8 October 2026: full project review and fixes).
-- `ai-dev/confident-darwin-83rxik` (cloud session): technical debt left by the review, then small and medium features
-  from the roadmap (see "Work in progress").
+  #9 on 8 October 2026: full project review and fixes; #10 on 9 October 2026: technical debt, small and medium
+  roadmap features, documentation in English).
+- `ai-dev/confident-darwin-83rxik` (cloud session): the rest of the roadmap (see "Work in progress").
 - Method: one branch per batch, one PR with a manual test procedure, merge (`gh pr merge N --merge`), then a new
   branch from `origin/master`.
 - **Push**: just `git push`. The `origin` remote is `git@github-yannickriou:YannickRiou/gpx2movie.git`, an SSH alias
@@ -73,24 +73,30 @@ See `git log` and PRs #1 to #7 (waves 3 and 4: overview map, points of interest,
 titles at landmarks, sync to music, multi-track poster and flat map, one film per track in a folder,
 "Mes projets" ("My projects"), native Linux encoder, installers); technical details in `ARCHITECTURE.md`, features in `README.md`.
 
-## Work in progress (branch `ai-dev/confident-darwin-83rxik`): technical debt and roadmap
+## Work in progress (branch `ai-dev/confident-darwin-83rxik`): end of the roadmap
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (92 files, 1,466 tests), `npm run build`,
-`npm run e2e` with `OPENFLYOVER_E2E_SKIP_EXPORT=1` (home screen, tabs, timeline, project; reconnaissance fails here
-for lack of elevation tiles, as on `master`). Screen checks done in Chromium without a GPU: track list,
-"Jour" ("Day") field, "Étiquettes dans la vue" ("Labels in view"), point-of-interest icons.
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (92 files, 1,477 tests), `npm run build`,
+`npm run e2e` with `OPENFLYOVER_E2E_ONLY=accueil,onglets,timeline,projet` (reconnaissance fails here for lack of
+elevation tiles, as on `master`). Screen checks done in Chromium without a GPU: rolling credits (2D overlay drawn on a
+canvas), "Contenu / Style / Visibilité" tabs of the overlay elements.
 
-- **Technical debt**: `cargo test` in CI; tests for `renderOnDemand` (`sceneChanged`); never-used LRU reserve
-  of the terrain engine removed; a single adjustable slider (`RangeField`, overlays, track, inspector).
-- **Track**: mountaineer, bikepacking, motorbike and light aircraft figures; color of each track (swatch in the list) and
-  choice of the flown track (arrow: it moves to the top, `flyTrack`).
-- **Light**: `settings.sunDate` (`YYYY-MM-DD`, empty = day of the outing) at a fixed time (`sunDayMs`).
-- **Film texts**: `FilmText.color` and `FilmText.font` (inspector › "Couleur et police" ("Color and font")).
-- **Labels**: point-of-interest icon (`FilmPoi.icon`, 9 Lucide paths in `Labels.tsx`); kilometer
-  markers (`labels.kmStep`, `kmLabels`); shared size and range (`labels.size`, `labels.rangeKm`; the range
-  replaces the end of the 70 km fade). Old projects completed by `withLabelDefaults`.
-- **Left aside**: `Fold` / `PanelSection` kept separate (different layout); exports used only by
-  tests; OpenTopoMap offline packs saved before the prefix fix: to redo.
+- **Labels**: "Départ" / "Arrivée" (one "Départ et arrivée" label for a loop, `endpointLabels`, `labels.endpoints`);
+  photos pinned where they were taken (`MediaAsset.lon` / `lat` read from EXIF GPS when a photo is added,
+  `photoLabels`, `labels.photos`; photos added before keep no position).
+- **Rendering**: "Brume" (haze) slider, `settings.haze` 0–1 added to the weather's `hazeScale` (`withManualHaze`;
+  at 1 on a clear day, visibility 3 km).
+- **Marker**: animated figurine (`marker.animated`, `figureMotion(timeS)`: bounce and sway, a function of the film
+  time only, so the export matches the preview and a paused film keeps its pose).
+- **Overlay**: rolling credits under the closing card (`end.credits`, `creditLines`, `creditsRollProgress`; the
+  card and the lines roll up to the last frame); "Contenu" / "Style" / "Visibilité" tabs in each element
+  (`WidgetGroup`: `children`, `style`, `visibility`).
+- **Pacing**: "Transitions" (`pacing.transitionS`, 0.5–4 s, default 1.5 s as before): easing into and out of
+  pauses, stops and speed sections. This is the chosen reading of "adjustable transitions between sections".
+- **Presets by family** (`PRESET_SCOPES`): "Style de carte", "Trace, marqueur et étiquettes", "Habillage", "Prise de
+  vue (caméra, cadrage, lumière)"; a family preset stores and applies only its keys (`PRESET_SCOPE_KEYS`). This
+  covers "themes savable separately" and "saved shots".
+- Older projects: `withLabelDefaults`, `withPacingDefaults`, `withMarkerDefaults` fill the new fields; `haze` and
+  `end.credits` take their defaults.
 
 ## Visual checks still to do (never seen on screen)
 
@@ -204,16 +210,15 @@ remain the source for each work item.
 
 ## Proposed next steps
 
-1. The user: tests on the machine with a GPU (`docs/tests-gpu.md`), first run of the GitHub workflows, signing
-   certificate if wanted.
-2. Merge this branch's PR after review; run command-line rendering once on a real machine.
-3. Rest of the roadmap (README, phase 4, "to do" lines; to confirm before building): "adjustable transitions
-   between sections" (meaning to clarify with the user); start and finish labels and markers;
-   haze slider; animated figures; scrolling credits; themes savable separately; Content /
-   Style / Visibility tabs; saved camera shots (large).
-   Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if
-   asked.
-4. Small follow-ups: `THREE.Clock` warning (emitted by `@react-three/fiber` itself, to review at its next version).
+The roadmap has nothing left to build. What remains is in the user's hands:
+
+1. Tests on the machine with a GPU (`docs/tests-gpu.md`), first run of the GitHub workflows, signing certificate if
+   wanted; run command-line rendering once on a real machine.
+2. Merge this branch's PR after review.
+3. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+
+To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
+version on 9 October 2026); check again at its next release.
 
 ## Limits and open points
 
