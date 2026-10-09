@@ -10,8 +10,11 @@ vi.mock('@react-three/fiber', () => ({ useFrame: vi.fn(), useThree: vi.fn() }))
 vi.mock('../terrain/engine', () => ({ createTerrainEngine: vi.fn() }))
 
 const {
+  AREA_MARGIN_M,
   boundsContain,
+  engineAreaFor,
   resolveEngineArea,
+  usesRegionView,
   statsEqual,
   engineOptionsFromSettings,
   diffEngineOptions,
@@ -33,16 +36,50 @@ describe('boundsContain', () => {
 })
 
 describe('resolveEngineArea', () => {
+  const inner = { west: 6.2, south: 45.2, east: 6.8, north: 45.8 }
   it('keeps the previous area while it still covers the desired one', () => {
-    const desired = { west: 6.2, south: 45.2, east: 6.8, north: 45.8 }
-    expect(resolveEngineArea(outer, desired)).toBe(outer)
+    const previous = { area: outer }
+    expect(resolveEngineArea(previous, { area: inner })).toBe(previous)
   })
   it('switches to the desired area when it grows outside', () => {
-    const desired = { west: 5, south: 45.2, east: 6.8, north: 45.8 }
-    expect(resolveEngineArea(outer, desired)).toBe(desired)
+    const desired = { area: { west: 5, south: 45.2, east: 6.8, north: 45.8 } }
+    expect(resolveEngineArea({ area: outer }, desired)).toBe(desired)
   })
   it('uses the desired area when there is no previous one', () => {
-    expect(resolveEngineArea(null, outer)).toBe(outer)
+    const desired = { area: outer }
+    expect(resolveEngineArea(null, desired)).toBe(desired)
+  })
+  it('switches when the region view comes or goes, and when the tracks leave the detail area', () => {
+    const wide = { area: { west: 0, south: 40, east: 13, north: 51 }, detailArea: outer }
+    expect(resolveEngineArea({ area: outer }, wide)).toBe(wide)
+    const plain = { area: inner }
+    expect(resolveEngineArea(wide, plain)).toBe(plain)
+    expect(resolveEngineArea(wide, { ...wide, detailArea: inner })).toBe(wide)
+    const moved = { ...wide, detailArea: { west: 5, south: 45, east: 6, north: 46 } }
+    expect(resolveEngineArea(wide, moved)).toBe(moved)
+  })
+})
+
+describe('engineAreaFor', () => {
+  const track = { west: 6.8, south: 45.9, east: 7.0, north: 46.0 }
+  it('the usual area without a region view, nothing coarse', () => {
+    const { area, detailArea } = engineAreaFor(track, false)
+    expect(detailArea).toBeUndefined()
+    // 25 km of margin: ~0.23° of latitude
+    expect(track.south - area.south).toBeCloseTo(AREA_MARGIN_M / 111_320, 2)
+  })
+  it('with a region view: the usual area as the detail area of a much larger one', () => {
+    const wide = engineAreaFor(track, true)
+    expect(wide.detailArea).toEqual(engineAreaFor(track, false).area)
+    // 500 km of margin
+    expect(track.south - wide.area.south).toBeCloseTo(500_000 / 111_320, 1)
+    expect(boundsContain(wide.area, wide.detailArea!)).toBe(true)
+  })
+  it('a region view in the opening or the closing', () => {
+    const shot = (style: 'descente' | 'situation') => ({ style, durationS: 6 })
+    expect(usesRegionView(DEFAULT_FILM)).toBe(false)
+    expect(usesRegionView({ opening: shot('situation'), closing: shot('descente') })).toBe(true)
+    expect(usesRegionView({ opening: shot('descente'), closing: shot('situation') })).toBe(true)
   })
 })
 
@@ -87,7 +124,7 @@ describe('engine options from settings', () => {
     poster: { format: 'a4-portrait' as const, style: 'editorial' as const, title: '', subtitle: '', figures: { distance: true, ascent: true, time: true, maxAltitude: true, climbs: true }, weather: true, flat: false },
     landmarks: {
       enabled: true,
-      kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false },
+      kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false, waterPoint: false },
       maxDistanceM: 1500,
     },
     race: { enabled: false, sync: 'elapsed' as const },

@@ -1,13 +1,27 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
+import type { FormEvent } from 'react'
 import type { Track } from '../core/types'
 import { isExportBusy, useExportStore } from '../export/store'
 import { RACE_SYNC_LABELS, RACE_SYNC_MODES, raceAt, rankRacers, syncNeedsTime } from '../flyover/race'
 import type { Race, RaceSync, Racer } from '../flyover/race'
+import {
+  PACE_RANGE,
+  PLAN_ACTIVITIES,
+  PLAN_ACTIVITY_LABELS,
+  localDayAndTime,
+  localDepartureMs,
+  localUtcOffsetMin,
+  planActivityOf,
+  withEstimatedTimes,
+  withoutTimes,
+} from '../plan/timing'
+import type { PlanActivity } from '../plan/timing'
 import { useRace } from '../scene/useRace'
 import { useAppStore } from '../state/store'
-import { formatDistance, formatDistanceGap, formatTimeGap, formatTrackSummary } from './format'
+import { formatClock, formatDistance, formatDistanceGap, formatNumber, formatTimeGap, formatTrackSummary } from './format'
 import { Icon } from './icons'
 import { chainLoadedTracks, chooseTracksToImport } from './projectActions'
+import { StravaImport } from './StravaImport'
 
 /** Progress steps the leaderboard follows: a few renders per second of its own rows, not one per frame. */
 const PROGRESS_STEPS = 1000
@@ -150,6 +164,132 @@ function ChainTracks({ tracks }: { tracks: readonly Track[] }) {
   )
 }
 
+/** Replace one track of the list by its new version (same id: estimated times written or cleared). */
+function replaceTrack(next: Track): void {
+  const { tracks, replaceTracks } = useAppStore.getState()
+  replaceTracks(tracks.map((t) => (t.id === next.id ? next : t)))
+}
+
+/** Departure shown when the form opens: the estimated one, else tomorrow at 8 h. */
+function initialDeparture(track: Track): { day: string; time: string } {
+  if (track.stats.startTime !== undefined) return localDayAndTime(track.stats.startTime)
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return { day: localDayAndTime(tomorrow.getTime()).day, time: '08:00' }
+}
+
+/**
+ * « Prévoir la sortie » (untimed or already estimated track): departure, activity and pace give estimated times on
+ * every point, so the sun, the counters and the weather forecast follow the planned outing.
+ */
+function OutingPlanForm({ track }: { track: Track }) {
+  const id = useId()
+  const [departure, setDeparture] = useState(() => initialDeparture(track))
+  const [activity, setActivity] = useState<PlanActivity>(() => planActivityOf(track.activityType))
+  const [pace, setPace] = useState(1)
+  const departureMs = localDepartureMs(departure.day, departure.time)
+  const { startTime, endTime } = track.stats
+
+  function apply(e: FormEvent) {
+    e.preventDefault()
+    if (departureMs === undefined) return
+    replaceTrack(withEstimatedTimes(track, { activity, pace, departureMs, utcOffsetMin: localUtcOffsetMin(departureMs) }))
+  }
+
+  return (
+    <details className="track__plan weather__details">
+      <summary className="weather__details-summary">
+        Prévoir la sortie
+        <Icon name="chevron-down" size={16} />
+      </summary>
+      <form className="track__plan-form" onSubmit={apply}>
+        <div className="track__plan-row">
+          <div className="field">
+            <label className="field__label" htmlFor={`${id}-day`}>
+              Date
+            </label>
+            <input
+              id={`${id}-day`}
+              className="input"
+              type="date"
+              required
+              value={departure.day}
+              onChange={(e) => setDeparture({ ...departure, day: e.currentTarget.value })}
+            />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor={`${id}-time`}>
+              Départ
+            </label>
+            <input
+              id={`${id}-time`}
+              className="input"
+              type="time"
+              required
+              value={departure.time}
+              onChange={(e) => setDeparture({ ...departure, time: e.currentTarget.value })}
+            />
+          </div>
+        </div>
+        <div className="field">
+          <label className="field__label" htmlFor={`${id}-activity`}>
+            Activité
+          </label>
+          <select
+            id={`${id}-activity`}
+            className="select"
+            value={activity}
+            onChange={(e) => setActivity(e.currentTarget.value as PlanActivity)}
+          >
+            {PLAN_ACTIVITIES.map((a) => (
+              <option key={a} value={a}>
+                {PLAN_ACTIVITY_LABELS[a]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label className="field__label" htmlFor={`${id}-pace`}>
+            Rythme
+          </label>
+          <div className="range-row">
+            <input
+              id={`${id}-pace`}
+              className="range"
+              type="range"
+              min={PACE_RANGE.min}
+              max={PACE_RANGE.max}
+              step={PACE_RANGE.step}
+              value={pace}
+              aria-describedby={`${id}-pace-hint`}
+              onChange={(e) => setPace(Number(e.currentTarget.value))}
+            />
+            <output className="range-row__value" htmlFor={`${id}-pace`}>
+              ×{formatNumber(pace, 2)}
+            </output>
+          </div>
+          <p id={`${id}-pace-hint`} className="field__hint">
+            Durée multipliée : 1,2 = 20 % plus long. Sans pauses, heure de cet appareil.
+          </p>
+        </div>
+        <button type="submit" className="btn btn--primary btn--block" disabled={departureMs === undefined}>
+          Calculer les horaires
+        </button>
+        {track.timesEstimated && startTime !== undefined && endTime !== undefined && (
+          <>
+            <p className="field__hint">
+              Départ {formatClock(startTime)} · arrivée ≈ {formatClock(endTime)}
+            </p>
+            <button type="button" className="btn btn--secondary btn--block" onClick={() => replaceTrack(withoutTimes(track))}>
+              Effacer les horaires
+            </button>
+          </>
+        )}
+      </form>
+    </details>
+  )
+}
+
 /** One card per imported track, with a delete button; chaining and the ghost race block from two tracks. */
 export function TrackList() {
   const tracks = useAppStore((s) => s.tracks)
@@ -164,7 +304,10 @@ export function TrackList() {
         <h2 id="tracks-title" className="section-title">
           Traces
         </h2>
-        <AddTracksButton />
+        <div className="section-head__actions">
+          <StravaImport />
+          <AddTracksButton />
+        </div>
       </div>
       {tracks.length === 0 ? (
         <p className="tracks__empty">Aucune trace. Glissez un fichier GPX ou FIT dans la fenêtre, ou cliquez sur « Ajouter ».</p>
@@ -203,11 +346,16 @@ export function TrackList() {
                 aria-label={`Supprimer la trace ${track.name}`}
                 data-tip="Supprimer"
                 data-tip-side="left"
+                disabled={busy}
                 onClick={() => removeTrack(track.id)}
               >
                 <Icon name="x" size={16} />
               </button>
-              <span className="track__meta">{formatTrackSummary(track.stats)}</span>
+              <span className="track__meta">
+                {formatTrackSummary(track.stats)}
+                {track.timesEstimated && <span className="track__badge">horaires estimés</span>}
+              </span>
+              {(track.timesEstimated || track.stats.startTime === undefined) && <OutingPlanForm track={track} />}
             </li>
           ))}
         </ul>

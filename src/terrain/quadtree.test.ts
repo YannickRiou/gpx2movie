@@ -14,6 +14,7 @@ import {
   screenSpaceError,
   selectTiles,
   updateCameraState,
+  zoomLimit,
   type CameraState,
   type QuadtreeContext,
 } from './quadtree'
@@ -298,6 +299,24 @@ describe('selectTiles', () => {
     const exhausted = selectTiles([root], farAbove(), { ...params, frame: 500 })
     expect(exhausted.toLoad).toEqual([])
     expect(exhausted.toRender).toEqual([root])
+  })
+
+  it('outside the detail area, stops at the outer zoom; inside or without one, at maxZoom', () => {
+    const inside = tileBounds(ROOT_KEY)
+    const elsewhere = { west: 0, south: 40, east: 0.1, north: 40.1 }
+    const node = new TileNode(ROOT_KEY, undefined, CTX)
+    const params = { errorTargetPx: 3, maxZoom: 15, frame: 1, outerMaxZoom: 10 }
+    expect(zoomLimit(node, params)).toBe(15)
+    expect(zoomLimit(node, { ...params, detailArea: inside })).toBe(15)
+    expect(zoomLimit(node, { ...params, detailArea: elsewhere })).toBe(10)
+    expect(zoomLimit(node, { ...params, detailArea: elsewhere, maxZoom: 9 })).toBe(9)
+
+    // a z10 root far from the detail area is never split, however fine the target
+    const root = new TileNode(ROOT_KEY, undefined, CTX)
+    makeReady(root)
+    const out = selectTiles([root], farAbove(), { ...params, errorTargetPx: 0.001, detailArea: elsewhere })
+    expect(out.toRender).toEqual([root])
+    expect(root.children).toBeUndefined()
   })
 
   it('reuses the output arrays it is given', () => {

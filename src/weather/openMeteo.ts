@@ -1,8 +1,9 @@
 /**
- * Historical weather of an outing from the Open-Meteo archive (https://open-meteo.com, no key, CC BY 4.0,
- * free tier non commercial; see docs/sources.md). A few places are sampled along the track, the hourly
- * values of the recorded days are fetched in one request and cached per place and UTC day, in memory and in
- * the platform storage (localStorage), so a track is fetched once.
+ * Weather of an outing from Open-Meteo (https://open-meteo.com, no key, CC BY 4.0, free tier non commercial; see
+ * docs/sources.md): the archive for a past outing, the forecast for one still to come (planned departure, up to 16
+ * days ahead). A few places are sampled along the track, the hourly values of its days are fetched in one request
+ * and cached per place and UTC day: archive days in memory and in the platform storage (localStorage), so a track
+ * is fetched once; forecast days in memory for at most 3 hours.
  *
  * No DOM beyond `fetch` and an optional `Storage`; no React, no Three.
  */
@@ -11,9 +12,10 @@ import { getPlatform } from '../platform'
 import { WEATHER_VARIABLES, type WeatherSeries, type WeatherStation, type WeatherVariable } from './series'
 
 export const OPEN_METEO_ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive'
+export const OPEN_METEO_FORECAST_URL = 'https://api.open-meteo.com/v1/forecast'
 export const OPEN_METEO_ATTRIBUTION = 'Données météo : Open-Meteo.com (CC BY 4.0)'
 
-/** Open-Meteo hourly variable of each series variable (`visibility` is always null in the archive). */
+/** Open-Meteo hourly variable of each series variable, the same in the archive and the forecast. */
 const API_VARIABLES: Record<WeatherVariable, string> = {
   temperature: 'temperature_2m',
   apparentTemperature: 'apparent_temperature',
@@ -32,6 +34,10 @@ const API_VARIABLES: Record<WeatherVariable, string> = {
 
 /** First day of the archive (ERA5); the last one is today (recent days come from forecasts, revised later). */
 export const ARCHIVE_FIRST_DAY = '1940-01-01'
+/** Days the forecast covers, today included (Open-Meteo's `forecast_days` maximum). */
+export const FORECAST_DAYS = 16
+/** Forecast days are kept this long (fixed windows): the forecast is updated several times a day. */
+export const FORECAST_CACHE_MS = 3 * 3_600_000
 /** Longer outings are not fetched (a stray timestamp would otherwise ask for decades). */
 export const MAX_SPAN_DAYS = 31
 /** About the model grid (~9 km): one place every 10 km along the track, start and end included. */
@@ -121,26 +127,41 @@ export function recordedSpan(path: TrackPath): { startMs: number; endMs: number 
   return startMs <= endMs ? { startMs, endMs } : undefined
 }
 
+export type WeatherSource = 'archive' | 'forecast'
+
 /**
- * UTC days to fetch: from the day of the start minus one hour to the day of the end plus one hour (so the
- * interpolation has an hour on each side), the end clamped to today. Throws `unavailable` with a French
- * reason when the outing is outside the archive or too long.
+ * Source and UTC days to fetch: from the day of the start minus one hour to the day of the end plus one hour (so
+ * the interpolation has an hour on each side). An outing that ends by today comes from the archive, one that ends
+ * later from the forecast, its end clamped to the last forecast day. Throws `unavailable` with a French reason
+ * when the outing starts beyond the forecast, before the archive, or is too long.
  */
-export function outingDays(startMs: number, endMs: number, nowMs: number): { startDay: string; endDay: string } {
+export function outingDays(startMs: number, endMs: number, nowMs: number): { source: WeatherSource; startDay: string; endDay: string } {
   const today = utcDay(nowMs)
+  const lastForecastDay = utcDay(nowMs + (FORECAST_DAYS - 1) * DAY_MS)
   const startDay = utcDay(startMs - HOUR_MS)
   let endDay = utcDay(endMs + HOUR_MS)
-  if (startDay > today) throw new WeatherError('unavailable', 'Sortie datée dans le futur : pas encore de météo à cette date.')
+  if (startDay > lastForecastDay) {
+    throw new WeatherError('unavailable', `Sortie dans plus de ${FORECAST_DAYS} jours : pas encore de prévision météo.`)
+  }
   if (startDay < ARCHIVE_FIRST_DAY) throw new WeatherError('unavailable', 'Pas d’archive météo avant 1940.')
-  if (endDay > today) endDay = today
+  const source: WeatherSource = endDay > today ? 'forecast' : 'archive'
+  if (endDay > lastForecastDay) endDay = lastForecastDay
   if ((dayStartMs(endDay) - dayStartMs(startDay)) / DAY_MS + 1 > MAX_SPAN_DAYS) {
     throw new WeatherError('unavailable', `Sortie de plus de ${MAX_SPAN_DAYS} jours : météo non chargée.`)
   }
-  return { startDay, endDay }
+  return { source, startDay, endDay }
 }
 
-/** Archive request for several places over whole UTC days, times as Unix seconds in UTC. */
-export function buildArchiveUrl(locations: readonly WeatherLocation[], startDay: string, endDay: string): string {
+/**
+ * Archive request (or forecast request, with `baseUrl`) for several places over whole UTC days, times as Unix
+ * seconds in UTC.
+ */
+export function buildArchiveUrl(
+  locations: readonly WeatherLocation[],
+  startDay: string,
+  endDay: string,
+  baseUrl = OPEN_METEO_ARCHIVE_URL,
+): string {
   const params = new URLSearchParams({
     latitude: locations.map((l) => l.lat.toFixed(2)).join(','),
     longitude: locations.map((l) => l.lon.toFixed(2)).join(','),
@@ -153,7 +174,7 @@ export function buildArchiveUrl(locations: readonly WeatherLocation[], startDay:
   if (locations.length > 0 && locations.every((l) => l.ele !== undefined)) {
     params.set('elevation', locations.map((l) => String(l.ele)).join(','))
   }
-  return `${OPEN_METEO_ARCHIVE_URL}?${params.toString()}`
+  return `${baseUrl}?${params.toString()}`
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +230,11 @@ export interface WeatherCache {
 /** Cache key of one place and UTC day. */
 export function weatherCacheKey(location: WeatherLocation, day: string): string {
   return `${location.lat.toFixed(2)},${location.lon.toFixed(2)},${location.ele ?? ''}@${day}`
+}
+
+/** Cache key of one place and UTC day of the forecast fetched at `nowMs`: a new key every `FORECAST_CACHE_MS`. */
+export function forecastCacheKey(location: WeatherLocation, day: string, nowMs: number): string {
+  return `forecast/${Math.floor(nowMs / FORECAST_CACHE_MS)}/${weatherCacheKey(location, day)}`
 }
 
 interface StoredEntry {
@@ -269,6 +295,8 @@ export function createWeatherCache(storage: CacheStorage | null = platformStorag
       const entry = load()[key]
       if (!entry?.day) return undefined
       memory.set(key, entry.day)
+      // last use, for the eviction (written with the next save)
+      entry.at = Date.now()
       return entry.day
     },
     set(key, day, persist) {
@@ -301,7 +329,7 @@ export interface FetchWeatherOptions {
   fetch?: typeof fetch
   cache?: WeatherCache
   signal?: AbortSignal
-  /** current time (ms), for the archive range and the persistence rule */
+  /** current time (ms), for the archive and forecast ranges, the persistence rule and the forecast cache */
   now?: number
 }
 
@@ -339,40 +367,49 @@ async function requestArchive(fetchFn: typeof fetch, url: string, signal?: Abort
 }
 
 /**
- * Hourly weather of the recorded days of `path` at a few places along it. Days already cached are not
- * requested again; the missing places are fetched in a single request. Throws `WeatherError` (French
- * message; `unavailable` for an untimed track or a date outside the archive) or an `AbortError`.
+ * Hourly weather of the days of `path` at a few places along it, archive or forecast (`outingDays`). Days already
+ * cached are not requested again; the missing places are fetched in a single request. Throws `WeatherError`
+ * (French message; `unavailable` for an untimed track or a date out of reach) or an `AbortError`.
  */
 export async function fetchOutingWeather(path: TrackPath, opts: FetchWeatherOptions = {}): Promise<WeatherSeries> {
   const span = recordedSpan(path)
   if (!span) throw new WeatherError('unavailable', 'Trace sans horodatage : impossible de dater la météo.')
   const now = opts.now ?? Date.now()
-  const { startDay, endDay } = outingDays(span.startMs, span.endMs, now)
+  const { source, startDay, endDay } = outingDays(span.startMs, span.endMs, now)
+  const forecast = source === 'forecast'
   const days = listDays(startDay, endDay)
   const locations = sampleLocations(path)
   const cache = opts.cache ?? getSharedCache()
+  const keyOf = (location: WeatherLocation, day: string) =>
+    forecast ? forecastCacheKey(location, day, now) : weatherCacheKey(location, day)
 
-  const missing = locations.filter((l) => days.some((d) => !cache.get(weatherCacheKey(l, d))))
+  const missing = locations.filter((l) => days.some((d) => !cache.get(keyOf(l, d))))
   if (missing.length > 0) {
-    const json = await requestArchive(opts.fetch ?? fetch, buildArchiveUrl(missing, startDay, endDay), opts.signal)
+    const url = buildArchiveUrl(missing, startDay, endDay, forecast ? OPEN_METEO_FORECAST_URL : OPEN_METEO_ARCHIVE_URL)
+    const json = await requestArchive(opts.fetch ?? fetch, url, opts.signal)
     const parsed = parseArchiveResponse(json, missing.length, startDay, endDay)
     const persistBefore = utcDay(now - PERSIST_AFTER_DAYS * DAY_MS)
     missing.forEach((location, i) => {
-      days.forEach((day, d) => cache.set(weatherCacheKey(location, day), parsed[i][d], day < persistBefore))
+      days.forEach((day, d) => cache.set(keyOf(location, day), parsed[i][d], !forecast && day < persistBefore))
     })
   }
 
   const time: number[] = []
   for (let h = 0; h < days.length * 24; h++) time.push(dayStartMs(startDay) + h * HOUR_MS)
-  return { time, stations: locations.map((location) => cachedStation(location, days, cache)) }
+  const stations = locations.map((location) => cachedStation(location, days, (day) => cache.get(keyOf(location, day))))
+  return forecast ? { time, stations, forecast } : { time, stations }
 }
 
 /** Hourly values of `location` over `days`, from the cache (filled just before; missing data = unreadable reply). */
-function cachedStation(location: WeatherLocation, days: readonly string[], cache: WeatherCache): WeatherStation {
+function cachedStation(
+  location: WeatherLocation,
+  days: readonly string[],
+  cachedDay: (day: string) => WeatherDay | undefined,
+): WeatherStation {
   const values = {} as Record<WeatherVariable, number[]>
   for (const v of WEATHER_VARIABLES) values[v] = []
   for (const day of days) {
-    const cached = cache.get(weatherCacheKey(location, day))
+    const cached = cachedDay(day)
     if (!cached) throw new WeatherError('error', BAD_RESPONSE)
     for (const v of WEATHER_VARIABLES) for (const x of cached[v]) values[v].push(x ?? Number.NaN)
   }

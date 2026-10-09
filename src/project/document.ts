@@ -8,6 +8,7 @@
  * validated (against the type of its default) and restored without touching this file. Add an entry
  * to `SETTING_CHECKS` only when a value of the right type can still be invalid (enum, catalogue id, range).
  */
+import { isRecord } from '../core/guards'
 import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'
 import { sanitizeMediaTable, usedMedia } from '../film/media'
 import type { MediaTable } from '../film/media'
@@ -19,7 +20,7 @@ import { isSunDate } from '../flyover/sun'
 import { TRACK_COLORS } from '../import'
 import { buildTrack, isUtcOffsetMin } from '../import/stats'
 import { isValidVideoSettings, withVideoDefaults } from '../export/schedule'
-import { LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
+import { LANDMARK_DISTANCE_RANGE, withLandmarkDefaults } from '../osm/landmarks'
 import { isValidOverlay, withOverlayDefaults } from '../overlay/settings'
 import { isValidPoster, withPosterDefaults } from '../poster/settings'
 import { isValidGrading } from '../scene/grading'
@@ -69,6 +70,8 @@ export interface ProjectTrack {
   waypoints?: Waypoint[]
   /** `Track.utcOffsetMin`, omitted when unknown */
   utcOffsetMin?: number
+  /** `Track.timesEstimated`, omitted for recorded or untimed tracks */
+  timesEstimated?: true
 }
 
 export interface ProjectDocument {
@@ -142,11 +145,9 @@ export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unkno
   poster: withPosterDefaults,
   labels: withLabelDefaults,
   pacing: withPacingDefaults,
+  landmarks: withLandmarkDefaults,
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
 
 /** True when `value` has the JSON shape of `reference` (finite numbers, same keys for objects). */
 function sameShape(value: unknown, reference: unknown): boolean {
@@ -230,6 +231,7 @@ export function toProjectDocument(state: ProjectSource, name: string, media: Med
       if (track.activityType) out.activityType = track.activityType
       if (track.waypoints?.length) out.waypoints = track.waypoints.map(encodeWaypoint)
       if (track.utcOffsetMin !== undefined) out.utcOffsetMin = track.utcOffsetMin
+      if (track.timesEstimated) out.timesEstimated = true
       return out
     }),
   }
@@ -347,7 +349,7 @@ function decodeTrack(raw: unknown, index: number): Track {
   const label = `Trace n°${index + 1}`
   if (!isRecord(raw)) throw new Error(`${label} : description invalide.`)
   if (typeof raw.id !== 'string' || raw.id === '') throw new Error(`${label} : identifiant (« id ») manquant.`)
-  if (raw.source !== 'gpx' && raw.source !== 'fit') throw new Error(`${label} : origine (« source ») inconnue.`)
+  if (raw.source !== 'gpx' && raw.source !== 'fit' && raw.source !== 'strava') throw new Error(`${label} : origine (« source ») inconnue.`)
   if (!Array.isArray(raw.segments)) throw new Error(`${label} : segments manquants.`)
   const segments = raw.segments.map((s, i) => decodeSegment(s, `${label}, segment ${i + 1}`))
   if (!segments.some((s) => s.points.length > 0)) throw new Error(`${label} : aucun point.`)
@@ -360,6 +362,8 @@ function decodeTrack(raw: unknown, index: number): Track {
     if (raw.waypoints.length > 0) track.waypoints = raw.waypoints.map((w, i) => decodeWaypoint(w, `${label}, point ${i + 1}`))
   }
   if (isUtcOffsetMin(raw.utcOffsetMin)) track.utcOffsetMin = raw.utcOffsetMin
+  // estimated only means something on a timed track
+  if (raw.timesEstimated === true && track.stats.startTime !== undefined) track.timesEstimated = true
   track.id = raw.id
   track.color =
     typeof raw.color === 'string' && /^#[0-9a-f]{6}$/i.test(raw.color) ? raw.color : TRACK_COLORS[index % TRACK_COLORS.length]

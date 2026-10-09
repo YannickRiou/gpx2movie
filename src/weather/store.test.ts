@@ -62,6 +62,17 @@ describe('syncWeather', () => {
     expect(useWeatherStore.getState()).toMatchObject({ status: 'ready', series: SERIES, trackId: 'a' })
   })
 
+  it('fetches again when the same track gets new times (planned departure)', () => {
+    const { deps } = deferredFetcher()
+    const untimed = makeTrack('p', false)
+    syncWeather(untimed, true, { deps })
+    const planned = makeTrack('p', true)
+    syncWeather(planned, true, { deps })
+    syncWeather(planned, true, { deps })
+    expect(deps.fetchWeather).toHaveBeenCalledTimes(1)
+    expect(useWeatherStore.getState()).toMatchObject({ status: 'loading', trackId: 'p', startTime: T0 })
+  })
+
   it('reports failures and retries on demand', async () => {
     const { calls, deps } = deferredFetcher()
     const track = makeTrack('a', true)

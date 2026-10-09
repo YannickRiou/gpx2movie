@@ -4,6 +4,7 @@
  *
  * No React, no renderer: everything here is unit-tested.
  */
+import { inRange, withDefaults } from '../core/guards'
 import type { Track } from '../core/types'
 import type { MediaTable } from '../film/media'
 import type { FilmMedia, FilmPoi, PoiIcon } from '../film/model'
@@ -124,17 +125,15 @@ export function endpointLabels(track: Track): LandmarkLabel[] {
   return [label('start', start, 'Départ', 'epingle'), label('finish', end, 'Arrivée', 'drapeau')]
 }
 
-/** Labels settings of an older project: no kilometre markers nor start and finish, the usual size and range. */
-export function withLabelDefaults(raw: unknown): unknown {
-  return raw !== null && typeof raw === 'object' && !Array.isArray(raw)
-    ? { kmStep: 0, endpoints: false, photos: false, size: 1, rangeKm: LABEL_FADE_END_M / 1000, ...raw }
-    : raw
-}
+/** « Étiquettes dans la vue » (`settings.labels`): climbs and waypoints on, the rest off, size ×1, range 70 km (`LABEL_FADE_END_M`). */
+export const DEFAULT_LABELS = { climbs: true, waypoints: true, kmStep: 0, endpoints: false, photos: false, size: 1, rangeKm: 70 }
+
+/** Labels settings of an older project: the fields added since take their default. */
+export const withLabelDefaults = withDefaults(DEFAULT_LABELS)
 
 /** Value checks of the labels settings (shape already checked). */
 export function isValidLabelSettings(v: { kmStep: number; size: number; rangeKm: number }): boolean {
-  const within = (x: number, r: { min: number; max: number }) => x >= r.min && x <= r.max
-  return (KM_MARKER_STEPS as readonly number[]).includes(v.kmStep) && within(v.size, LABEL_SIZE_RANGE) && within(v.rangeKm, LABEL_RANGE_KM)
+  return (KM_MARKER_STEPS as readonly number[]).includes(v.kmStep) && inRange(v.size, LABEL_SIZE_RANGE) && inRange(v.rangeKm, LABEL_RANGE_KM)
 }
 
 /** One label per GPX waypoint of every track. */

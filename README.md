@@ -31,8 +31,9 @@ OpenFlyover makes a 3D flyover movie from a GPX or FIT track, over the real terr
 You import the track of an outing: hiking, trail running, cycling, ski touring… OpenFlyover lays it on 3D terrain
 covered with orthophotos (orthorectified aerial photos). A camera flies over it, and you export the result as a video.
 
-Everything runs in the browser. There is no account, no API key, no paid service and no server-side code. Your files
-stay on your machine: the browser only downloads terrain, imagery, weather and landmarks from open services.
+Everything runs in the browser. There is no account, no API key, no paid service and no server-side code (the
+optional Strava import goes through your own Strava application). Your files stay on your machine: the browser only
+downloads terrain, imagery, weather and landmarks from open services.
 
 Two ways to use it:
 
@@ -43,14 +44,16 @@ What exists today:
 
 | Area | Features |
 |---|---|
-| Import | GPX and FIT, several tracks at once; heart rate, cadence, power and temperature when present; distance, elevation gain / loss (D+ / D−), duration, elevations |
+| Import | GPX and FIT, several tracks at once, or Strava activities; heart rate, cadence, power and temperature when present; distance, elevation gain / loss (D+ / D−), duration, elevations |
 | Terrain and imagery | Mapterhorn or AWS Terrain Tiles terrain; IGN orthophotos in France and swisstopo in Switzerland, chosen automatically; Esri and Sentinel-2 elsewhere; topographic maps; historical IGN photos (1950–2005); terrain exaggeration; OpenStreetMap lakes and rivers rendered as water that reflects the sky and the sun, with ripples |
 | Flyover | five camera styles (chase, sway, orbit, top-down view, cinematic shot), six presets, duration from 15 s to 10 min, clickable elevation profile |
 | Pacing | slow-motion and pauses at highlights: tops of climbs, passes, nearby summits |
 | Light | physically based sky and haze, sun at the actual time of the outing, terrain shadows, starry night, automatic exposure |
-| Weather | historical weather for the day of the outing (Open-Meteo), shown in a panel and in the scene; volumetric clouds derived from low, mid and high cloud cover (or set by hand), pushed by the wind |
+| Weather | historical weather for the day of the outing (Open-Meteo), or the forecast for an upcoming outing (up to 16 days), shown in a panel and in the scene; volumetric clouds derived from low, mid and high cloud cover (or set by hand), pushed by the wind |
 | Landmarks | summits, passes, huts, lakes… from OpenStreetMap; climbs detected and categorized (cat. 4 to HC); 3D labels; the movie slows down at passes, summits and huts on the track and shows their name |
 | Scouting | an outing not done yet, drawn by placing points on the terrain: the route follows OpenStreetMap paths, with its elevations, and is flown over like a track |
+| Planned outing | for a route without times (Komoot, Visorando, IGNrando, or drawn in "Préparer une sortie"): date, start time, activity and pace give the estimated passing time at each point, the sun and the weather forecast of the day |
+| Roadbook | before setting off: the steep sections (up and down), the passes, summits, huts and water points on the way, with the km, elevation, D+ and passing time; to copy or save as text |
 | Points of interest | your own places ("Picnic", "Paul's chalet"), placed with a right-click on the terrain or at the marker, with an icon (hut, bivouac, summit…), shown like landmarks in the view and in the movie |
 | Track | colored by speed, slope, elevation, heart rate, cadence, power or temperature; width, dashes or dots, glow, track that draws itself as the marker passes |
 | Marker | ball, figurine (hiker, mountaineer, runner, cyclist, bikepacking, mountain bike, skier, paraglider, motorbike, car, light aircraft) facing the direction of travel, or your photo in a circle; adjustable size |
@@ -130,6 +133,25 @@ dropped on the timeline.
 
 The view frames the track. If the track is entirely in France or Switzerland, the imagery switches to IGN or swisstopo, unless you have already chosen a source.
 
+#### Importing from Strava
+
+The **"Strava"** button in the track list (or **"Importer depuis Strava"** (import from Strava) on first launch)
+imports your Strava activities directly. Strava requires an "application" for this. OpenFlyover has no server and ships
+no Strava key, so you create your own application, once:
+
+1. On [strava.com/settings/api](https://www.strava.com/settings/api), create an application (free). Any name and
+   website; in "Authorization Callback Domain", enter `localhost` (site run on your machine, desktop application) or
+   the address of your site if it is hosted (for example `flyover.example.org`).
+2. Copy its **Client ID** and **Client Secret** into OpenFlyover. They are kept in the storage of this browser (or of
+   the desktop application, on this computer) and are sent only to Strava.
+3. Click **"Se connecter"** (connect) and allow the reading of your activities on Strava.
+4. Tick the activities you want ("Plus" (more) to go further back), then **"Importer"** (import).
+
+Access is read-only, but includes private activities and the whole track (privacy zones included): keep this in mind
+before publishing a movie. Strava limits each application to 100 requests per 15 minutes and 1,000 per day (one per
+page of activities, one per imported activity). "Déconnecter" (disconnect) forgets the connection; access can also be
+revoked on strava.com/settings/apps.
+
 ### Planning an outing (scouting)
 
 To fly over a route before going, type a place ("Chamonix") or coordinates ("45.92, 6.87") in **"Préparer une
@@ -139,6 +161,13 @@ terrain › **"Point de passage ici"** (waypoint here) for the start, the interm
 before roads) and adds a track, without times, with its elevations: the movie is edited as for a completed outing.
 "Modifier" (edit) reloads its points to recompute it. The points must fit within about thirty kilometers and be less
 than 500 m from a path.
+
+A track without times (a computed route, or a route prepared on Komoot, Visorando…) has a **"Prévoir la sortie"**
+(plan the outing) section: choose the date, start time, activity and pace, then "Calculer les horaires" (compute the
+times). The sun, the counters and the weather (forecast) then follow the planned outing; "Effacer les horaires" (clear
+the times) returns to the track without times. The "Feuille de route" (roadbook) section of the "Trace" tab lists the
+steep sections and key points of the route with their km, elevation, D+ and passing time; click a line to move the
+marker there, "Copier" (copy) or "Enregistrer (.txt)" (save as text) to keep it.
 
 The track list shows your tracks; the × button deletes one. The flyover, weather, landmarks and climbs follow the first
 track. With two tracks or more, "Enchaîner en un seul parcours" (chain into a single route) merges them into one (in
@@ -180,6 +209,8 @@ order of start time); the message offers "Annuler" (undo).
 - In a stop's panel, "Caméra pendant l'arrêt" (camera during the stop): same as the movie, slow turn around the point,
   wide view or fixed.
 - In the opening panel, the "Depuis la région" (from the region) style starts very high above the region, then dives toward the track; at the closing, the camera climbs back up there. The "Balayage" (sweep) style slowly rotates the overview around the track, then descends into the flyover (at the closing: the reverse).
+- In the opening or closing panel, "Transition": "Enchaîné" (continuous: the camera glides into the flight), "Coupe"
+  (clean cut), "Fondu au noir" or "Fondu au blanc" (fade to black or to white, with its duration).
 - In the "Survol" tab, "Garder ce cadrage ici" (keep this framing here) sets a framing at the marker (diamond on the
   "Plans" (shots) lane): set its distance, tilt and aim in its panel. The camera moves smoothly from one framing to the
   next; the rest of the movie does not change.
@@ -312,7 +343,8 @@ Some sources forbid bulk downloading; they stay online (see
   Next to the name, "Modifié" (modified) indicates changes since the last save.
 - "Ouvrir" (Ctrl+O) reloads it. An invalid setting reverts to its default value and a message tells you.
 - The undo arrows apply to the settings (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y).
-- "Garder dans Mes projets" (keep in my projects) ("Projet" tab) keeps the project in the app: it saves itself and reopens in one click.
+- "Garder dans Mes projets" (keep in my projects) ("Projet" tab) keeps the project in the app: it saves itself and reopens in one click. Closing
+  the app or the tab with unsaved changes first asks for confirmation.
 - Presets ("Projet" tab) are kept in the browser, under the name you give them.
 
 ## How it works
@@ -495,7 +527,7 @@ The icons in `src-tauri/icons/` come from `public/favicon.svg`. To regenerate th
 | `npm run lint` | code analysis (oxlint) |
 | `npm run e2e` | end-to-end tests in a real browser (see below) |
 
-The suite has **about 1,480 tests** (9 October 2026). Each test file sits next to its module
+The suite has **about 1,540 tests** (9 October 2026). Each test file sits next to its module
 (`src/**/*.test.ts`). Network calls and the video encoder are mocked.
 
 The manual checks to run on a machine with a real graphics card are listed in
@@ -546,13 +578,16 @@ All sources are open and keyless. The code declares them in `src/terrain/sources
 | Esri World Imagery | world orthophotos (default imagery) | `services.arcgisonline.com` | "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community" |
 | EOX Sentinel-2 cloudless 2025 | world satellite images, 10 m | `tiles.maps.eox.at` | "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0" |
 | OpenTopoMap | world topographic map | `tile.opentopomap.org` | "Données : © contributeurs OpenStreetMap, SRTM \| Rendu : © OpenTopoMap (CC BY-SA)" |
-| Open-Meteo | historical weather | `archive-api.open-meteo.com` | "Données météo : Open-Meteo.com (CC BY 4.0)" |
+| Open-Meteo | historical weather, forecast for an upcoming outing | `archive-api.open-meteo.com`, `api.open-meteo.com` | "Données météo : Open-Meteo.com (CC BY 4.0)" |
 | OpenStreetMap (Overpass API) | landmarks, water bodies (reflective lakes and rivers), scouting paths | `overpass-api.de`, fallback `maps.mail.ru` | "© contributeurs OpenStreetMap (ODbL)" |
 | OpenStreetMap (Nominatim) | place typed in "Préparer une sortie" (one search on submit, never while typing) | `nominatim.openstreetmap.org` | "© contributeurs OpenStreetMap (ODbL)" |
 
 The status bar, at the bottom of the screen, shows the attributions of the current terrain and imagery. Those of Open-Meteo and OpenStreetMap
 are added when the weather or the landmarks are loaded. The same lines are burned into exported videos and images
 ([see Licenses](#licenses)).
+
+The optional Strava import is not one of these sources: it reads your own activities through your own Strava
+application ([see above](#importing-from-strava)). No Strava key or account is in the code.
 
 | Source | License | Note |
 |---|---|---|
@@ -669,7 +704,7 @@ what will be rendered.
 | Area | Settings |
 |---|---|
 | Timeline (editing) | like video editing software, the base is the continuous flyover of the track, with separate lanes above it: stops (orbit or fixed camera), titles and texts placed and stretched freely in time, points of interest with a stop, media (images, videos); movie assembled automatically on load (opening on the overview → flyover with stops at summits, passes and climbs → closing on the overview), then adjusted. Four increments: 1 — movie model and engine (movie clock, "descente" (descent) or "saut" (jump) opening and closing shots, stops, identical preview and export) **done**; 2 — timeline below the view (shots / stops / texts lanes, drag to move and stretch with snapping, zoom, inspector, movie assembled with an orbit stop at each highlight) **done**; 3 — text lane drawn in the overlay (preview and export, fades, stacked by position; opening and closing cards synced to the movie time) **done**; 4 — media lane: full-screen photos (slow movement) or in a framed card, placed where they were taken (GPS position or photo time), saved in the project **done**; videos (MP4, WebM, MOV up to 50 MB, trimmable, exact frame at export) **done**; video sound (volume, music optionally lowered underneath, mixed at export) **done** |
-| Pacing | **done**: adjustable total duration (15 s–10 min); slow-motion and pauses at highlights (tops of climbs, passes crossed, nearby summits), movie duration kept or extended; speed per section chosen by hand ("Vitesse" lane, ×0.25 to ×4, smooth transitions); establishing shot ("Depuis la région" opening that dives toward the track); "descente", "saut", "depuis la région" and "balayage" openings and closings; adjustable transitions ("Transitions", 0.5 to 4 s: easing into and out of stops, pauses and speed sections) |
+| Pacing | **done**: adjustable total duration (15 s–10 min); slow-motion and pauses at highlights (tops of climbs, passes crossed, nearby summits), movie duration kept or extended; speed per section chosen by hand ("Vitesse" lane, ×0.25 to ×4, smooth transitions); establishing shot ("Depuis la région" opening that dives toward the track); "descente", "saut", "depuis la région" and "balayage" openings and closings; adjustable transitions ("Transitions", 0.5 to 4 s: easing into and out of stops, pauses and speed sections); opening / closing shot transitions ("Enchaîné", "Coupe", fade to black or white) |
 | Camera | **done**: chase, sway (helicopter), orbit, top-down view and cinematic shot styles; named presets; distance, pitch, heading, smoothing; camera of each stop (same as the movie, slow turn, wide view, fixed) and framings along the track (diamonds on the "Plans" lane), including a framing specific to a photo or a text ("Cadrer la caméra pendant cet élément") |
 | Titles and texts | **done**: opening title (title, subtitle, date), timeline texts and subtitles, labels placed on the terrain (summits, passes, villages), 9 positions, appearance and duration of each text, overlay colors and fonts, per element or per text, shared size and range of the 3D labels; rolling credits under the closing card ("Générique") |
 | On-screen data | **done**: overlay drawn on canvas (same rendering in preview and export), three styles (editorial, dark broadcast, light app), opening card, closing card (distance, D+, max elevation, duration, max speed, weather), counters of your choice, profile with adjustable dimensions, mini-map (covered part, north arrow), weather at the marker, logo, free text, 9 positions and one size per widget; 3D labels hidden behind the cards; colors and fonts editable on top of the style, for the whole overlay or per widget. Originally planned: counters (distance, elevation, D+, speed, heart rate, time), elevation profile (adjustable dimensions), mini-map, logo, free text, closing card (max elevation, max speed…); predefined overlay styles (editorial, dark broadcast, light app); position, size and style of each widget |
@@ -695,4 +730,4 @@ What sets OpenFlyover apart: everything stays local, and the data of the outing 
 | Batch rendering | the same movie in several formats at once; a folder of GPX files and a preset → one video per outing, from the command line, without a UI | several formats (format × resolution, still image, poster) in one go, in a chosen folder: done; one video per track in a folder, from the interface or from the command line (desktop application): done |
 | Printable poster | the track on the terrain at very high resolution, with title and figures, for printing | A4 / A3 at 300 dpi (portrait, landscape) and square, 3D overview, title, date, key figures, profile, weather, credits, three styles, several tracks, flat map: done |
 | Music sync | the flyover pacing (slow-motion, transitions) aligned on the beats of a local music file | "Musique" lane (volume, fades, waveform), played in the preview, mixed at export, movie duration fitted to the music, stops, titles and speed sections (slow-motion) synced to the beat: done |
-| Scouting | draw a future route on the terrain (local OSM routing) to fly over it before going | points placed on the terrain, without a track; route computed in the browser on OSM paths, elevations from the terrain: done; profiles (bike, mountain bike) dropped |
+| Scouting | draw a future route on the terrain (local OSM routing) to fly over it before going | points placed on the terrain, without a track; route computed in the browser on OSM paths, elevations from the terrain: done; profiles (bike, mountain bike) dropped; estimated passing times, forecast weather and roadbook for a route without times: done |

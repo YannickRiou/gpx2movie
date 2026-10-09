@@ -19,7 +19,7 @@ import { CROSSED_PASS_M } from '../osm/landmarks'
 import type { Landmark } from '../osm/landmarks'
 import { climbLabelText } from '../scene/labelModel'
 import { formatNumber } from '../ui/format'
-import { AUTO_STOP_S, DEFAULT_FILM, MIN_SPEED_SPAN_M } from './model'
+import { AUTO_STOP_S, MIN_SPEED_SPAN_M } from './model'
 import type { AutoStopMode, Film, FilmSpeed, FilmStop, FilmText } from './model'
 
 export interface AssembleInput {
@@ -76,11 +76,6 @@ export function autoStops(input: AssembleInput, mode: AutoStopMode): FilmStop[] 
 /** `film` with its generated stops written out (`autoStops` cleared): the first edit of a stop on the timeline. */
 export function materializeStops(film: Film, input: AssembleInput): Film {
   return film.autoStops ? { ...film, autoStops: false, stops: autoStops(input, film.autoMode) } : film
-}
-
-/** The film assembled from the track: default opening and closing, generated stops written out, no text. */
-export function assembleFilm(input: AssembleInput): Film {
-  return materializeStops(DEFAULT_FILM, input)
 }
 
 /** Stops of `film`: generated while `autoStops` is set, else its own. */

@@ -29,7 +29,7 @@ import { EffectComposer, ToneMapping, disposePassWithoutEffects } from '@react-t
 import { EffectPass, SMAAEffect, ToneMappingMode } from 'postprocessing'
 import type { AerialPerspectiveEffect, SkyLightProbe, SunDirectionalLight } from '@takram/three-atmosphere'
 import { AerialPerspective, Atmosphere, Sky, SkyLight, Stars, SunLight, type AtmosphereApi } from '@takram/three-atmosphere/r3f'
-import { buildTrackPath, samplePath } from '../flyover/path'
+import { samplePath, trackPathOf } from '../flyover/path'
 import { mslLocalToEcef } from '../geo/geoid'
 import { sunDateAt, sunDayMs } from '../flyover/sun'
 import { useAppStore } from '../state/store'
@@ -73,8 +73,8 @@ export function AtmosphereLayer() {
   const [sun, setSun] = useState<SunDirectionalLight | null>(null)
   /** day used when the track has no timestamps */
   const [today] = useState(() => Date.now())
-  /** only timed tracks need the path, for the sun date and the weather (startTime is set as soon as one point has a time) */
-  const path = useMemo(() => (track && track.stats.startTime !== undefined ? buildTrackPath(track) : null), [track])
+  /** sun date and weather (timed tracks), ground under the marker for the haze (every track) */
+  const path = track ? trackPathOf(track) : null
   const weatherEffect = useMemo(() => new WeatherEffect({ logarithmicDepth: gl.capabilities.logarithmicDepthBuffer }), [gl])
   useEffect(() => () => weatherEffect.dispose(), [weatherEffect])
   /** weather applied to the current frame, kept for the haze colour (after the lights are updated) */

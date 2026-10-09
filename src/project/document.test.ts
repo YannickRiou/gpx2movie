@@ -223,6 +223,21 @@ describe('serializeProject / parseProject', () => {
     d.tracks[0].utcOffsetMin = 'UTC+2'
     expect(parseProject(JSON.stringify(d)).tracks[0]).not.toHaveProperty('utcOffsetMin')
   })
+
+  it('round-trips estimated times, and drops the flag on an untimed track or a wrong value', () => {
+    const track = { ...makeTrack('e', '#FF5A36'), timesEstimated: true }
+    const text = serializeProject({ ...STATE, tracks: [track, makeTrack('b', '#5BC0EB')] }, 'x')
+    const loaded = parseProject(text)
+    expect(loaded.tracks[0].timesEstimated).toBe(true)
+    expect(loaded.tracks[1]).not.toHaveProperty('timesEstimated')
+    const d = JSON.parse(text) as { tracks: { timesEstimated?: unknown; segments: Record<string, unknown>[] }[] }
+    d.tracks[0].timesEstimated = 'oui'
+    d.tracks[1].timesEstimated = true
+    for (const segment of d.tracks[1].segments) delete segment.time
+    const reloaded = parseProject(JSON.stringify(d))
+    expect(reloaded.tracks[0]).not.toHaveProperty('timesEstimated')
+    expect(reloaded.tracks[1]).not.toHaveProperty('timesEstimated')
+  })
 })
 
 describe('parseProject errors', () => {

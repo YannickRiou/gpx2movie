@@ -86,7 +86,9 @@ function MarkerImageField({ marker, update }: { marker: MarkerSettings; update(p
       const [file] = await getPlatform().openFiles({ filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] })
       if (!file) return
       setError(null)
-      update({ image: await fileToAvatarDataUrl(file) })
+      const image = await fileToAvatarDataUrl(file)
+      // the marker as it is now (another change or an undo may have happened during the decoding)
+      useAppStore.getState().setSetting('marker', { ...useAppStore.getState().settings.marker, image })
     } catch {
       setError("Cette image n'a pas pu être lue.")
     }

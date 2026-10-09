@@ -85,11 +85,11 @@ describe('simplifyLine / corridorBoxes', () => {
     ])
     expect(query.startsWith('[out:json][timeout:60];')).toBe(true)
     expect(query.trim().endsWith('out center tags qt;')).toBe(true)
-    expect(query.match(/\(45\.80000,6\.70000,45\.90000,6\.80000\)/g)).toHaveLength(8)
-    expect(query.match(/\(45\.90000,6\.80000,46\.00000,6\.90000\)/g)).toHaveLength(8)
+    expect(query.match(/\(45\.80000,6\.70000,45\.90000,6\.80000\)/g)).toHaveLength(10)
+    expect(query.match(/\(45\.90000,6\.80000,46\.00000,6\.90000\)/g)).toHaveLength(10)
     expect(query).toContain('node["natural"~"^(peak|volcano|saddle)$"]["name"]')
     expect(query).toContain('nwr["natural"="water"]["name"]')
-    expect(trackQuery(northTrack(3, 1000)).match(/\n  /g)).toHaveLength(8)
+    expect(trackQuery(northTrack(3, 1000)).match(/\n  /g)).toHaveLength(10)
   })
 
   it('hashes queries stably', () => {
@@ -109,6 +109,20 @@ describe('parseOverpass', () => {
     expect(features[3]).toMatchObject({ kind: 'hut', detail: 'alpine_hut', lon: 6.7996, lat: 45.8561 })
     expect(features[4]).toMatchObject({ kind: 'lake', detail: 'lake' })
     expect(features[5]).toMatchObject({ kind: 'place', detail: 'village' })
+  })
+
+  it('keeps drinking water without a name, not an unnamed spring', () => {
+    const water = parseOverpass({
+      elements: [
+        { type: 'node', id: 10, lat: 45.88, lon: 6.77, tags: { amenity: 'drinking_water' } },
+        { type: 'node', id: 11, lat: 45.88, lon: 6.78, tags: { name: 'Source du Prarion', natural: 'spring' } },
+        { type: 'node', id: 12, lat: 45.88, lon: 6.79, tags: { natural: 'spring' } },
+      ],
+    })
+    expect(water).toEqual([
+      { id: 'node/10', kind: 'waterPoint', name: 'Eau potable', lon: 6.77, lat: 45.88, detail: 'drinking_water' },
+      { id: 'node/11', kind: 'waterPoint', name: 'Source du Prarion', lon: 6.78, lat: 45.88, detail: 'spring' },
+    ])
   })
 
   it('throws on a server-side error or an unexpected body', () => {

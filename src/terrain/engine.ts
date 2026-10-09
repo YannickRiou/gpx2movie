@@ -110,12 +110,18 @@ export const DEFAULT_TUNING: Readonly<EngineTuning> = {
 export const DEFAULT_SEGMENTS = 64
 export const DEFAULT_ERROR_TARGET_PX = 3
 export const DEFAULT_IMAGERY_ZOOM_OFFSET = 1
+/**
+ * Deepest zoom outside `detailArea` (~14 km tiles at 45°, imagery at z12 with the default offset): seen from very
+ * high or far away, finer tiles would not show, and the distant landscape of the flight stays cheap.
+ */
+export const OUTER_MAX_ZOOM = 11
 /** material colour when a tile has no imagery (neutral grey) */
 export const NO_IMAGERY_COLOR = 0x8a8f94
 
 interface ResolvedOptions {
   frame: TerrainEngineOptions['frame']
   area: TerrainEngineOptions['area']
+  detailArea: TerrainEngineOptions['detailArea']
   terrain: TerrainEngineOptions['terrain']
   imagery: TerrainEngineOptions['imagery']
   imageryZoomOffset: number
@@ -132,6 +138,7 @@ function resolveOptions(raw: TerrainEngineOptions): ResolvedOptions {
   return {
     frame: raw.frame,
     area: raw.area,
+    detailArea: raw.detailArea,
     terrain: raw.terrain,
     imagery: raw.imagery,
     imageryZoomOffset: raw.imageryZoomOffset ?? DEFAULT_IMAGERY_ZOOM_OFFSET,
@@ -176,7 +183,13 @@ export function createTerrainEngine(
   const selection = createSelectionResult()
   const prefetchCameraState = createCameraState()
   const prefetchSelection = createSelectionResult()
-  const selectionParams: SelectionParams = { errorTargetPx: 0, maxZoom: 0, frame: 0, maxLoadAttempts: cfg.maxLoadAttempts }
+  const selectionParams: SelectionParams = {
+    errorTargetPx: 0,
+    maxZoom: 0,
+    frame: 0,
+    maxLoadAttempts: cfg.maxLoadAttempts,
+    outerMaxZoom: OUTER_MAX_ZOOM,
+  }
   const geometryOptions: BuildTileGeometryOptions = { segments: 0, exaggeration: 1, skirtDepthM: 0 }
   /** nodes whose mesh is currently drawn */
   const rendered: TileNode[] = []
@@ -550,6 +563,7 @@ export function createTerrainEngine(
     updateCameraState(cameraState, camera, viewportHeightPx)
     selectionParams.errorTargetPx = opts.errorTargetPx
     selectionParams.maxZoom = opts.maxZoom
+    selectionParams.detailArea = opts.detailArea
     selectionParams.frame = frame
     selectTiles(roots, cameraState, selectionParams, selection)
 
@@ -589,6 +603,7 @@ export function createTerrainEngine(
     updateCameraState(prefetchCameraState, camera, viewportHeightPx)
     selectionParams.errorTargetPx = opts.errorTargetPx
     selectionParams.maxZoom = opts.maxZoom
+    selectionParams.detailArea = opts.detailArea
     selectionParams.frame = frame
     selectTiles(roots, prefetchCameraState, selectionParams, prefetchSelection)
     const limit = Math.max(1, Math.floor(cfg.maxConcurrentLoads * cfg.prefetchLoadShare))

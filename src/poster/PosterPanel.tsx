@@ -3,9 +3,9 @@
  * poster, a live thumbnail of its layout (2D only: the last rendered view, or a placeholder with the track's
  * outline), and the button that renders it. The result is saved like the other exports (export drawer, `getPlatform().saveUrl`).
  */
+import { errorMessage } from '../core/errors'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { errorMessage } from '../core/errors'
 import { isExportBusy, useExportStore } from '../export/store'
 import type { ExportResult } from '../export/store'
 import { buildTrackPath } from '../flyover/path'

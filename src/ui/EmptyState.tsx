@@ -2,10 +2,11 @@ import { useAppStore } from '../state/store'
 import { Icon } from './icons'
 import { chooseProjectToOpen, chooseTracksToImport, loadSample } from './projectActions'
 import { PlaceForm } from './RoutePanel'
+import { StravaImport } from './StravaImport'
 
 /**
- * Welcome card on the stage until a track is loaded: drop hint, file picker, the sample, open a project, and a place
- * to show for a route not walked yet (« Préparer une sortie »).
+ * Welcome card on the stage until a track is loaded: drop hint, file picker, Strava, the sample, open a project, and a
+ * place to show for a route not walked yet (« Préparer une sortie »).
  */
 export function EmptyState() {
   const loading = useAppStore((s) => s.loading)
@@ -22,6 +23,7 @@ export function EmptyState() {
         <button type="button" className="btn btn--primary" onClick={() => void chooseTracksToImport()} disabled={loading}>
           {loading ? 'Import en cours…' : 'Choisir un fichier'}
         </button>
+        <StravaImport welcome />
         <button type="button" className="btn btn--secondary" onClick={loadSample} disabled={loading}>
           Essayer avec l'exemple (Tour du Mont-Blanc)
         </button>

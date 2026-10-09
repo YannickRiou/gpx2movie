@@ -17,6 +17,16 @@ export function formatNumber(value: number, fractionDigits = 0): string {
   return fracPart ? `${sign}${grouped},${fracPart}` : `${sign}${grouped}`
 }
 
+/** 0.35 -> "35 %" (a share in [0, 1], French number format). */
+export function formatPercent(share: number): string {
+  return `${formatNumber(share * 100)} %`
+}
+
+/** 1.5 -> "1,5 s", 1.25 -> "1,25 s": seconds with only the decimals they need (two at most). */
+export function formatSecondsShort(seconds: number): string {
+  return `${formatNumber(seconds, 2).replace(/,?0+$/, '')} s`
+}
+
 /** Metres -> "850 m" below 1 km, otherwise "12,4 km" (999,6 m rounds up to "1,0 km", never "1 000 m"). */
 export function formatDistance(metres: number): string {
   if (!Number.isFinite(metres) || metres < 0) return PLACEHOLDER
@@ -71,4 +81,10 @@ export function formatDistanceGap(metres: number): string {
 /** -30 -> "−30°" */
 export function formatDegrees(deg: number): string {
   return `${deg < 0 ? '−' : ''}${formatNumber(Math.abs(deg))}°`
+}
+
+/** Instant -> "14 h 32", in the browser time zone (as the timeline). */
+export function formatClock(ms: number): string {
+  const date = new Date(ms)
+  return `${date.getHours()} h ${String(date.getMinutes()).padStart(2, '0')}`
 }

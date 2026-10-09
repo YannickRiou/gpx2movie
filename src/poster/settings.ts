@@ -3,6 +3,7 @@
  * (key `poster`), so they are saved in the project document and undone like the others; a preset keeps only the
  * style (the title belongs to the project). Pure module (no DOM, no React).
  */
+import { withDefaults } from '../core/guards'
 import type { OverlayStyleId } from '../overlay/settings'
 
 /**
@@ -69,6 +70,4 @@ export function isValidPoster(p: PosterSettings): boolean {
 }
 
 /** Fields missing from a poster saved before they were added, taken from `DEFAULT_POSTER` (`SETTING_UPGRADES`). */
-export function withPosterDefaults(raw: unknown): unknown {
-  return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? { ...DEFAULT_POSTER, ...raw } : raw
-}
+export const withPosterDefaults = withDefaults(DEFAULT_POSTER)

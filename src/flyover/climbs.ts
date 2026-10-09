@@ -255,14 +255,15 @@ export function detectClimbs(track: Track): Climb[] {
   return climbs
 }
 
-const cache = new WeakMap<Track, Climb[]>()
+/** keyed by the points, like `trackPathOf` */
+const cache = new WeakMap<Track['segments'], Climb[]>()
 
 /** `detectClimbs`, cached per track object (tracks are immutable in the store). */
 export function climbsOf(track: Track): Climb[] {
-  let climbs = cache.get(track)
+  let climbs = cache.get(track.segments)
   if (!climbs) {
     climbs = detectClimbs(track)
-    cache.set(track, climbs)
+    cache.set(track.segments, climbs)
   }
   return climbs
 }

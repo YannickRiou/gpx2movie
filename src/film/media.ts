@@ -123,12 +123,21 @@ function withoutBadBeats(asset: unknown): unknown {
   return rest
 }
 
+/** A photo with a bad position keeps its picture, without the position (not pinned on the relief). */
+function withoutBadPosition(asset: unknown): unknown {
+  if (asset === null || typeof asset !== 'object' || !('lon' in asset || 'lat' in asset)) return asset
+  const a = asset as Record<string, unknown>
+  if (isDegrees(a.lon, 180) && isDegrees(a.lat, 90)) return asset
+  const { lon: _lon, lat: _lat, ...rest } = a
+  return rest
+}
+
 /** Valid pictures of a loaded media table (the others are left out). */
 export function sanitizeMediaTable(raw: unknown): MediaTable {
   const media: MediaTable = {}
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return media
   for (const [id, asset] of Object.entries(raw)) {
-    const entry = withoutBadBeats(asset)
+    const entry = withoutBadPosition(withoutBadBeats(asset))
     if (id && isValidMediaAsset(entry)) media[id] = entry
   }
   return media

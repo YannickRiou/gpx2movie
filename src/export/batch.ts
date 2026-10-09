@@ -13,8 +13,8 @@
  * (sequencing with an injected runner). `exportJob` drives the real export store; the batch store keeps the
  * selection and the last run.
  */
-import { create } from 'zustand'
 import { errorMessage } from '../core/errors'
+import { create } from 'zustand'
 import { supportedExtension } from '../import'
 import type { FolderFile, WritableFolder } from '../platform/folder'
 import { VIDEO_ASPECTS, VIDEO_RESOLUTIONS, videoSize } from './schedule'

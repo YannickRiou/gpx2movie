@@ -77,6 +77,3 @@ export function useFilmClock(): FilmClock {
   const { track, film, durationS, pacing, landmarks } = useFilmSource()
   return useMemo(() => filmClockFor({ track, film, durationS, pacing, landmarks }), [track, film, durationS, pacing, landmarks])
 }
-
-/** The film clock under its former name (camera and export panels). */
-export const usePacing = useFilmClock

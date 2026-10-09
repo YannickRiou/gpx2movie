@@ -31,13 +31,16 @@ describe('media table', () => {
     expect(isValidMediaAsset(asset('a.jpg'))).toBe(true)
     expect(isValidMediaAsset(asset('a.jpg', { name: undefined }))).toBe(true)
     expect(isValidMediaAsset(asset('a.jpg', { lon: 6.86, lat: 45.83 }))).toBe(true)
+    // a bad position is dropped on loading, the photo kept
+    expect(sanitizeMediaTable({ 'photo-1': asset('a.jpg', { lon: 200, lat: 45 }), 'photo-2': asset('b.jpg', { lon: 6.86 }) })).toEqual({
+      'photo-1': asset('a.jpg'),
+      'photo-2': asset('b.jpg'),
+    })
     for (const bad of [
       asset('a', { data: 'https://example.org/a.jpg' }),
       asset('a', { thumb: '' }),
       asset('a', { width: 0 }),
       asset('a', { height: 1.5 }),
-      asset('a', { lon: 6.86 }),
-      asset('a', { lon: 200, lat: 45 }),
       null,
       [],
     ]) {

@@ -35,7 +35,8 @@ export async function saveProject(): Promise<void> {
     state.markProjectSaved()
     showToast({ kind: 'success', text: `Projet enregistré : ${outcome.fileName}` })
   } catch (err) {
-    showToast({ kind: 'error', text: `Impossible d'enregistrer le projet : ${errorMessage(err)}` })
+    const reason = errorMessage(err)
+    showToast({ kind: 'error', text: `Impossible d'enregistrer le projet : ${reason}` })
   }
 }
 
@@ -45,7 +46,8 @@ export async function saveExportedFile(url: string, fileName: string): Promise<v
     const outcome = await getPlatform().saveUrl(url, { fileName })
     if (outcome.saved) showToast({ kind: 'success', text: `Enregistré : ${outcome.fileName}` })
   } catch (err) {
-    showToast({ kind: 'error', text: `Impossible d'enregistrer « ${fileName} » : ${errorMessage(err)}` })
+    const reason = errorMessage(err)
+    showToast({ kind: 'error', text: `Impossible d'enregistrer « ${fileName} » : ${reason}` })
   }
 }
 
@@ -69,7 +71,8 @@ export async function openProject(file: File, entry: ProjectEntry | null = null)
     if (project.warnings.length > 0) showToast({ kind: 'info', text: `${opened}.\n${project.warnings.join('\n')}` })
     else showToast({ kind: 'success', text: opened })
   } catch (err) {
-    showToast({ kind: 'error', text: `Impossible d'ouvrir « ${file.name} » : ${errorMessage(err)}` })
+    const reason = errorMessage(err)
+    showToast({ kind: 'error', text: `Impossible d'ouvrir « ${file.name} » : ${reason}` })
   }
 }
 
@@ -106,8 +109,8 @@ export async function chooseFilesToOpen(): Promise<void> {
 const SAMPLE_URL = '/samples/tour-du-mont-blanc-j1.gpx'
 const SAMPLE_NAME = 'tour-du-mont-blanc-j1.gpx'
 
-/** `importFiles` bound to the app store and the toasts. */
-async function runImport(jobs: ImportJob[]): Promise<void> {
+/** `importFiles` bound to the app store and the toasts (files, the sample, Strava activities). */
+export async function runImport(jobs: ImportJob[]): Promise<void> {
   const { setLoading, addTracks } = useAppStore.getState()
   const outcome = await importFiles(jobs, {
     trackCount: () => useAppStore.getState().tracks.length,

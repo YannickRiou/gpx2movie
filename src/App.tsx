@@ -16,13 +16,14 @@ import { HelpDialog } from './ui/HelpDialog'
 import { Icon } from './ui/icons'
 import type { IconName } from './ui/icons'
 import { LandmarkPanel } from './ui/LandmarkPanel'
-import { installLibraryAutosave } from './ui/library'
+import { installCloseGuard, installLibraryAutosave } from './ui/library'
 import { ModifiedMarker } from './ui/ModifiedMarker'
 import { OverlayPanel } from './ui/OverlayPanel'
 import { PoiPanel } from './ui/PoiPanel'
 import { RoutePanel } from './ui/RoutePanel'
 import { chooseFilesToOpen, openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
+import { RoadbookPanel } from './ui/RoadbookPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
 import { useSafeZonesStore } from './ui/SafeZones'
 import { ONE_SIDE_MAX_WIDTH, SHELL_TABS, isFileDrag, nextTabIndex, parseShellPrefs, shellReducer } from './ui/shell'
@@ -192,6 +193,7 @@ export default function App() {
   useEffect(() => installHistoryShortcuts(getSettingsHistory(), window, () => !isExporting()), [])
   useEffect(() => installSliderGestures(getSettingsHistory()), [])
   useEffect(() => installLibraryAutosave(() => !isExporting()), [])
+  useEffect(() => installCloseGuard(isExporting, saveProject), [])
 
   /** a pointer button is down */
   const pressed = useRef(false)
@@ -387,14 +389,18 @@ export default function App() {
         </nav>
 
         {/* every tab stays mounted: weather, landmarks and export have side effects */}
-        <aside id="side-panel" className="panel" aria-label="Réglages" hidden={shell.collapsed}>
+        {/* no change to the tracks or the settings while a film is being made: the export reads them live */}
+        <aside id="side-panel" className="panel" aria-label="Réglages" hidden={shell.collapsed} inert={exporting}>
           {panel(
             'trace',
             <>
               <TrackList />
               <RoutePanel />
-              <Fold title="Montées" hidden={!hasTracks}>
+              <Fold title="Montées et étiquettes" keys={['labels']} hidden={!hasTracks}>
                 <ClimbList />
+              </Fold>
+              <Fold title="Feuille de route" hidden={!hasTracks}>
+                <RoadbookPanel />
               </Fold>
               <Fold title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
                 <WeatherPanel />
@@ -433,7 +439,7 @@ export default function App() {
           </Suspense>
         </aside>
         {/* the export drawer goes first */}
-        <aside className="dock" aria-label="Inspecteur" hidden={shell.dockOpen || !shell.inspecting}>
+        <aside className="dock" aria-label="Inspecteur" hidden={shell.dockOpen || !shell.inspecting} inert={exporting}>
           {shell.inspecting && !shell.dockOpen && <FilmInspector />}
         </aside>
       </div>

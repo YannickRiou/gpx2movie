@@ -59,6 +59,8 @@ export interface OverlayTrackStats {
   maxSpeedKmh?: number
   /** recorded time of the start (ms since epoch) */
   startTime?: number
+  /** the times are estimated from a planned departure (`Track.timesEstimated`) */
+  timesEstimated?: boolean
   /** weather of the outing, when its series is known */
   weather?: WeatherSummary
 }
@@ -216,6 +218,7 @@ export function prepareOverlayTrack(track: Track, weather?: WeatherSeries | null
       durationS: track.stats.durationS,
       maxSpeedKmh: maxOf(speed),
       startTime: track.stats.startTime,
+      timesEstimated: track.timesEstimated,
       weather: weatherSeries && path.count > 0 ? summarizeOuting(weatherSeries, path) : undefined,
     },
   }

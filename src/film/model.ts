@@ -1,7 +1,8 @@
 /**
  * The film: what the timeline arranges on top of the flight along the first track (« la base, c'est le GPX »).
  *
- * - `opening` / `closing`: overview shot of the whole track before and after the flight ('aucune' = none).
+ * - `opening` / `closing`: overview shot of the whole track before and after the flight ('aucune' = none), joined to
+ *   it by a continuous move, a cut or a dip to black or white (`transition`).
  * - `stops`: the marker stops at a distance along the first track for a while (camera as in the film, orbiting,
  *   pulled back or held). While
  *   `autoStops` is set they are generated from the highlights (`autoStops` in `assemble.ts`, so they follow the
@@ -23,6 +24,8 @@
  * the export. Ids are stable (`stop-3`, `text-1`, `auto-4520` for a generated stop) so the timeline can select
  * an item across edits. Pure module (no DOM, no React, no Three, no store).
  */
+import { isRecord, oneOf } from '../core/guards'
+import { smootherstep } from '../core/math'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { OVERLAY_ANCHORS, OVERLAY_FONT_IDS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN, isHexColor } from '../overlay/settings'
 import type { OverlayAnchor, OverlayFontId } from '../overlay/settings'
@@ -35,11 +38,44 @@ export const SHOT_STYLES = ['aucune', 'descente', 'saut', 'situation', 'balayage
  */
 export type ShotStyle = (typeof SHOT_STYLES)[number]
 
+export const SHOT_TRANSITIONS = ['enchaine', 'coupe', 'fondu-noir', 'fondu-blanc'] as const
+/**
+ * How a shot joins the flight (opening: at its end; closing: at its start). 'enchaine': one continuous camera move
+ * (the shot's style); 'coupe': the wide view held over the whole shot, cut to (or from) the flight at the boundary;
+ * 'fondu-noir' / 'fondu-blanc': the same cut, at the darkest (lightest) point of a dip of the image (`transitionDipAt`).
+ */
+export type ShotTransition = (typeof SHOT_TRANSITIONS)[number]
+export const SHOT_TRANSITION_LABELS: Record<ShotTransition, string> = {
+  enchaine: 'Enchaîné',
+  coupe: 'Coupe',
+  'fondu-noir': 'Fondu au noir',
+  'fondu-blanc': 'Fondu au blanc',
+}
+
 export interface FilmShot {
   style: ShotStyle
   /** seconds at ×1 (unused with 'aucune') */
   durationS: number
+  /** default 'enchaine' (films saved before the transitions keep their continuous move) */
+  transition?: ShotTransition
+  /** length of a dip, centred on the cut (seconds at ×1; default `DIP_DEFAULT_S`) */
+  dipS?: number
+  /** 'situation': how high the shot starts (default 'region') */
+  startHeight?: StartHeight
+  /** 'situation': highlight the administrative region of the outing (OpenStreetMap) and frame it; default off */
+  highlight?: boolean
 }
+
+export const START_HEIGHTS = ['region', 'pays'] as const
+/** Height of the region view of a 'situation' shot (flyover/filmCamera.ts `regionDistanceM`). */
+export type StartHeight = (typeof START_HEIGHTS)[number]
+export const START_HEIGHT_LABELS: Record<StartHeight, string> = { region: 'Région', pays: 'Pays' }
+/** Duration given to a shot when 'situation' is picked, if it was shorter (seconds): the dive is long. */
+export const SITUATION_DURATION_S = 9
+
+/** Length of a dip to black or white (also its validity range in a loaded project), seconds. */
+export const DIP_DURATION_RANGE = { min: 0.3, max: 2, step: 0.1 } as const
+export const DIP_DEFAULT_S = 1
 
 export const STOP_CAMERAS = ['film', 'orbite', 'large', 'fixe'] as const
 /**
@@ -303,6 +339,52 @@ export function shotDurationS(shot: FilmShot): number {
   return shot.style === 'aucune' ? 0 : shot.durationS
 }
 
+/** The shot cuts to or from the flight ('coupe' and the dips) instead of moving into it. */
+export function shotCuts(shot: FilmShot): boolean {
+  return (shot.transition ?? 'enchaine') !== 'enchaine'
+}
+
+/** Colour of the dip of a shot, null without one (no dip transition, or no shot). */
+export function shotDipColor(shot: FilmShot): 'black' | 'white' | null {
+  if (shotDurationS(shot) === 0) return null
+  return shot.transition === 'fondu-noir' ? 'black' : shot.transition === 'fondu-blanc' ? 'white' : null
+}
+
+/** Full-frame colour layer over the image at a film time. */
+export interface TransitionDip {
+  color: 'black' | 'white'
+  /** 0 (clear) to 1 (the whole frame of that colour) */
+  alpha: number
+}
+
+/** Opacity of a dip `lengthS` long centred on `cutS`, at `timeS`: 0 outside, up to 1 at the cut by smootherstep, symmetric. */
+export function dipAlpha(timeS: number, cutS: number, lengthS: number): number {
+  if (!(lengthS > 0)) return 0
+  return smootherstep(1 - Math.abs(timeS - cutS) / (lengthS / 2))
+}
+
+/**
+ * Dip of the image at film time `time.timeS`, null when none: the opening's centred on the start of the flight
+ * (`openingS`), the closing's on its end; the stronger one where they meet (a very short flight). A pure function of
+ * the film time, drawn by the overlay in the preview and the export alike.
+ */
+export function transitionDipAt(
+  film: Pick<Film, 'opening' | 'closing'>,
+  time: { timeS: number; openingS: number; flightS: number },
+): TransitionDip | null {
+  let dip: TransitionDip | null = null
+  const cuts: [FilmShot, number][] = [
+    [film.opening, time.openingS],
+    [film.closing, time.openingS + time.flightS],
+  ]
+  for (const [shot, cutS] of cuts) {
+    const color = shotDipColor(shot)
+    const alpha = color ? dipAlpha(time.timeS, cutS, shot.dipS ?? DIP_DEFAULT_S) : 0
+    if (color && alpha > (dip?.alpha ?? 0)) dip = { color, alpha }
+  }
+  return dip
+}
+
 // ---------------------------------------------------------------------------
 // Ids
 // ---------------------------------------------------------------------------
@@ -335,13 +417,19 @@ export function nextFilmId(film: Film, kind: FilmItemKind): string {
 // ---------------------------------------------------------------------------
 
 const within = (v: unknown, min: number, max: number) => typeof v === 'number' && v >= min && v <= max
-const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
-const oneOf = (list: readonly string[], v: unknown) => typeof v === 'string' && list.includes(v)
 const optionalString = (v: unknown) => v === undefined || typeof v === 'string'
 const isId = (v: unknown) => typeof v === 'string' && v !== ''
 
 export function isValidShot(shot: unknown): shot is FilmShot {
-  return isRecord(shot) && oneOf(SHOT_STYLES, shot.style) && within(shot.durationS, SHOT_DURATION_RANGE.min, SHOT_DURATION_RANGE.max)
+  return (
+    isRecord(shot) &&
+    oneOf(SHOT_STYLES, shot.style) &&
+    within(shot.durationS, SHOT_DURATION_RANGE.min, SHOT_DURATION_RANGE.max) &&
+    (shot.transition === undefined || oneOf(SHOT_TRANSITIONS, shot.transition)) &&
+    (shot.dipS === undefined || within(shot.dipS, DIP_DURATION_RANGE.min, DIP_DURATION_RANGE.max)) &&
+    (shot.startHeight === undefined || oneOf(START_HEIGHTS, shot.startHeight)) &&
+    (shot.highlight === undefined || typeof shot.highlight === 'boolean')
+  )
 }
 
 export function isValidStop(stop: unknown): stop is FilmStop {

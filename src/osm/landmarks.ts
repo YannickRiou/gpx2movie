@@ -6,7 +6,7 @@
  * 2. Kinds switched off and features farther than `maxDistanceM` are dropped.
  * 3. Duplicates (same name, accents and case ignored, within `DEDUPE_RADIUS_M`) keep the most important.
  * 4. Priority (`landmarkPriority`): passes crossed by the track first, then peaks by elevation (a proxy
- *    for prominence) and closeness, passes nearby, huts, lakes, waterfalls / viewpoints / glaciers, places.
+ *    for prominence) and closeness, passes nearby, huts, lakes, waterfalls / viewpoints / glaciers, water points, places.
  *    Range [0, 50), below the GPX waypoints and the climbs of the 3D labels.
  * 5. At most `maxCount` landmarks are kept (highest priorities), returned ordered along the track.
  *
@@ -35,8 +35,17 @@ export const DEFAULT_LANDMARK_SETTINGS: LandmarkSettings = {
     place: false,
     viewpoint: false,
     glacier: false,
+    waterPoint: false,
   },
   maxDistanceM: 1500,
+}
+
+/** The settings of an older project with the kinds added since set to their default (« Points d'eau »). */
+export function withLandmarkDefaults(raw: unknown): unknown {
+  if (raw === null || typeof raw !== 'object') return raw
+  const settings = raw as { kinds?: unknown }
+  if (settings.kinds === null || typeof settings.kinds !== 'object') return raw
+  return { ...settings, kinds: { ...DEFAULT_LANDMARK_SETTINGS.kinds, ...settings.kinds } }
 }
 
 /** Allowed `maxDistanceM` (metres); the upper bound is what one query covers. */
@@ -51,6 +60,20 @@ export const KIND_LABELS: Readonly<Record<OsmKind, string>> = {
   place: 'Villages et hameaux',
   viewpoint: 'Points de vue',
   glacier: 'Glaciers',
+  waterPoint: "Points d'eau",
+}
+
+/** Name of one landmark of each kind (badge of the lists). */
+export const KIND_BADGES: Readonly<Record<OsmKind, string>> = {
+  peak: 'Sommet',
+  pass: 'Col',
+  hut: 'Refuge',
+  lake: 'Lac',
+  waterfall: 'Cascade',
+  place: 'Lieu',
+  viewpoint: 'Vue',
+  glacier: 'Glacier',
+  waterPoint: 'Eau',
 }
 
 /** Most landmarks kept per track (the scene stays readable). */
@@ -165,6 +188,9 @@ export function landmarkPriority(kind: OsmKind, ele: number | undefined, distanc
     case 'place':
       p = 6 + (PLACE_RANK[detail ?? ''] ?? 0) - far
       break
+    case 'waterPoint':
+      p = 10 - far
+      break
   }
   return Math.min(49.9, Math.max(0, p))
 }
@@ -249,6 +275,7 @@ const LABEL_KINDS: Readonly<Record<OsmKind, LabelKind>> = {
   place: 'place',
   viewpoint: 'other',
   glacier: 'other',
+  waterPoint: 'water',
 }
 
 /** Labels of the landmarks of every track: one per OSM element (highest priority kept), at most `maxCount`. */

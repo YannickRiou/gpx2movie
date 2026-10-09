@@ -1,3 +1,4 @@
+import { errorMessage } from '../core/errors'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -14,7 +15,6 @@ import {
   type BatchJobState,
   type TrackRunState,
 } from '../export/batch'
-import { errorMessage } from '../core/errors'
 import { videoBitrate, type CodecCandidate } from '../export/encoder'
 import { containerFor, exportCodec } from '../export/nativeEncoder'
 import {
@@ -43,7 +43,7 @@ import { getPlatform, videoEncoderMissingHint } from '../platform'
 import { canPickFolder, pickFolder, pickReadableFolder, type ReadableFolder, type WritableFolder } from '../platform/folder'
 import { startPoster } from '../poster/export'
 import { PosterPanel } from '../poster/PosterPanel'
-import { usePacing } from '../scene/usePacing'
+import { useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { ModifiedMarker } from './ModifiedMarker'
 import { formatNumber } from './format'
@@ -110,7 +110,7 @@ interface CodecProbe {
 function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; modes: ReactNode; hidden: boolean }) {
   const video = useAppStore((s) => s.settings.video)
   // film length and progress at each film time, with the slow-downs and pauses of the preview
-  const pacing = usePacing()
+  const pacing = useFilmClock()
   const durationS = pacing.totalTime()
   const trackName = useAppStore((s) => s.tracks[0]?.name)
   const setSetting = useAppStore((s) => s.setSetting)
@@ -510,7 +510,7 @@ function trackFolderText(folder: ReadableFolder, files: readonly { name: string 
  */
 function BatchExportPanel({ onClose, modes, hidden }: { onClose?: () => void; modes: ReactNode; hidden: boolean }) {
   const video = useAppStore((s) => s.settings.video)
-  const pacing = usePacing()
+  const pacing = useFilmClock()
   const durationS = pacing.totalTime()
   const track = useAppStore((s) => s.tracks[0])
   const projectName = useAppStore((s) => s.projectName)

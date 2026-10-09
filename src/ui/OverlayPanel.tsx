@@ -31,7 +31,7 @@ import { panelColorOf, resolveOverlayTheme, toHex } from '../overlay/themes'
 import { getPlatform } from '../platform'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
-import { formatNumber } from './format'
+import { formatNumber, formatPercent } from './format'
 import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
 
 const COUNTER_LABELS: Record<CounterId, string> = {
@@ -45,7 +45,7 @@ const COUNTER_LABELS: Record<CounterId, string> = {
 
 type WidgetKey = Exclude<keyof OverlaySettings, 'enabled' | 'style' | 'overrides'>
 
-const percent = (v: number) => `${formatNumber(v * 100)} %`
+const percent = formatPercent
 
 function TextField({ label, value, placeholder, onChange }: { label: string; value: string; placeholder?: string; onChange(v: string): void }) {
   const id = useId()
@@ -124,14 +124,13 @@ function WidgetGroup({
       {enabled && (
         <div className="overlay-widget__body">
           {tabs.length > 1 && (
-            <div className="overlay-widget__tabs segmented" role="tablist" aria-label={`Réglages de ${label}`}>
+            <div className="overlay-widget__tabs segmented" role="group" aria-label={`Réglages de ${label}`}>
               {tabs.map((t) => (
                 <button
                   key={t}
                   type="button"
-                  role="tab"
                   className="segmented__option"
-                  aria-selected={t === shown}
+                  aria-pressed={t === shown}
                   onClick={() => setTab(t)}
                 >
                   {WIDGET_TAB_LABELS[t]}
@@ -345,7 +344,10 @@ export function OverlayPanel() {
       const [file] = await getPlatform().openFiles({ filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'svg'] }] })
       if (!file) return
       setLogoError(null)
-      setWidget('logo', { image: await fileToLogoDataUrl(file) })
+      const image = await fileToLogoDataUrl(file)
+      // the settings as they are now (another change or an undo may have happened during the decoding)
+      const now = useAppStore.getState().settings.overlay
+      setSetting('overlay', { ...now, logo: { ...now.logo, image } })
     } catch {
       setLogoError("Cette image n'a pas pu être lue.")
     }
@@ -459,11 +461,11 @@ export function OverlayPanel() {
                 Météo de la sortie
               </label>
               <div className="field">
-                <label className="field__label" htmlFor={`${id}-credits`}>
+                <label className="field__label" htmlFor={`${id}-end-credits`}>
                   Générique
                 </label>
                 <textarea
-                  id={`${id}-credits`}
+                  id={`${id}-end-credits`}
                   className="input input--multiline"
                   rows={4}
                   maxLength={END_CREDITS_MAX}

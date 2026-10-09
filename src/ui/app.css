@@ -119,6 +119,31 @@
   background: var(--color-line);
 }
 
+.track__badge {
+  margin-left: var(--space-2);
+  font-weight: 600;
+  color: var(--color-accent-strong);
+}
+
+/* « Prévoir la sortie »: folded under the card, date and departure side by side */
+.track__plan {
+  grid-column: 2 / span 2;
+  margin-top: var(--space-2);
+}
+
+.track__plan-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-1);
+}
+
+.track__plan-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
 .tracks__chain {
   margin-top: var(--space-3);
 }
@@ -523,7 +548,7 @@
   border-left: 1px solid var(--color-ink);
 }
 
-.overlay-widget__tabs .segmented__option[aria-selected='true'] {
+.overlay-widget__tabs .segmented__option[aria-pressed='true'] {
   background: var(--color-ink);
   color: var(--color-white);
 }
@@ -1175,6 +1200,83 @@
 
 .landmark__meta {
   font-size: 12px;
+  color: var(--color-ink-soft);
+}
+
+/* « Feuille de route » (RoadbookPanel): one row per key point, columns km · lieu · alt. · heure */
+.roadbook {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.roadbook__summary {
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.roadbook__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.roadbook__row {
+  display: grid;
+  grid-template-columns: 3em minmax(0, 1fr) 4.5em;
+  column-gap: var(--space-2);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  font-size: 13px;
+  color: var(--color-ink);
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.roadbook__row--timed {
+  grid-template-columns: 3em minmax(0, 1fr) 4.5em 4.5em;
+}
+
+.roadbook__row:hover {
+  border-color: var(--color-ink);
+}
+
+.roadbook__head {
+  background: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-ink-soft);
+  cursor: default;
+}
+
+.roadbook__head:hover {
+  border-color: transparent;
+}
+
+.roadbook__km,
+.roadbook__ele,
+.roadbook__time {
+  text-align: right;
+}
+
+.roadbook__name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.roadbook__meta {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--color-ink-soft);
 }
 

@@ -86,7 +86,7 @@ export interface Track {
   /** stable unique id (e.g. crypto.randomUUID()) */
   id: string
   name: string
-  source: 'gpx' | 'fit'
+  source: 'gpx' | 'fit' | 'strava'
   activityType?: string
   segments: TrackSegment[]
   stats: TrackStats
@@ -100,6 +100,8 @@ export interface Track {
    * an offset); absent when the file does not say
    */
   utcOffsetMin?: number
+  /** the point times are estimated from a planned departure (« Prévoir la sortie », src/plan/timing.ts), not recorded */
+  timesEstimated?: boolean
 }
 
 /** A named point stored with a track (GPX <wpt>), not part of the path. */
@@ -175,6 +177,11 @@ export interface TerrainEngineOptions {
   imageryZoomOffset: number
   /** area of interest (lon/lat); tiles entirely outside are never created */
   area: LonLatBounds
+  /**
+   * when set, only the tiles touching it refine down to `maxZoom`; the rest of `area` (the distant landscape of a
+   * view from very high) stops at a coarse zoom
+   */
+  detailArea?: LonLatBounds
   /** vertical exaggeration, 1 = true scale */
   exaggeration: number
   /** screen-space error threshold in pixels (refine when error is larger). Default 3. */

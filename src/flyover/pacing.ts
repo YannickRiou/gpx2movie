@@ -33,6 +33,7 @@
  * No highlight (or pacing disabled, or nothing to slow down nor pause) gives the identity pacing, exactly the
  * constant ground speed of `advanceProgress`. Pure functions (no DOM, no React, no Three, no store).
  */
+import { withDefaults } from '../core/guards'
 import { clamp, lastIndexAtOrBelow } from '../core/math'
 import type { Track } from '../core/types'
 import { CROSSED_PASS_M, type Landmark } from '../osm/landmarks'
@@ -94,9 +95,7 @@ export const SPEED_EASE_S = DEFAULT_PACING.transitionS
 export const SPEED_SAMPLES = 32
 
 /** Pacing of a project saved before a field was added: its default value. */
-export function withPacingDefaults(raw: unknown): unknown {
-  return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? { ...DEFAULT_PACING, ...raw } : raw
-}
+export const withPacingDefaults = withDefaults(DEFAULT_PACING)
 
 /** Every number inside its slider range. */
 export function isValidPacing(pacing: PacingSettings): boolean {

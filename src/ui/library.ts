@@ -1,14 +1,15 @@
 /**
  * « Mes projets » on the app side: the list and the entry of the open project (`useLibraryStore`), keeping the open
  * project in the library, and its autosave a few seconds after each change (never during an export). Storage is the
- * platform's `projectLibrary` (src/platform/projectLibrary.ts). Opening an entry goes through `openProject`.
+ * platform's `projectLibrary` (src/platform/projectLibrary.ts). Opening an entry goes through `openProject`. Closing
+ * the window or tab writes the last change first, and asks when something would be lost (`installCloseGuard`).
  */
-import { create } from 'zustand'
 import { errorMessage } from '../core/errors'
+import { create } from 'zustand'
 import type { Track } from '../core/types'
 import { useMediaStore } from '../film/media'
 import { getPlatform } from '../platform'
-import type { ProjectEntry, ProjectLibrary } from '../platform'
+import type { Platform, ProjectEntry, ProjectLibrary } from '../platform'
 import { sortProjectEntries } from '../platform/projectLibrary'
 import { projectFileName, serializeProject } from '../project/document'
 import { useAppStore } from '../state/store'
@@ -248,5 +249,118 @@ export function installLibraryAutosave(canSave: () => boolean): () => void {
     unsubscribe()
     saver.cancel()
     if (autosave === saver) autosave = null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Closing the window or tab
+// ---------------------------------------------------------------------------
+
+/** Longest wait for the last write when the desktop window closes: it closes anyway after that. */
+export const CLOSE_FLUSH_TIMEOUT_MS = 4000
+
+/** What closing now would lose: the film being exported, else changes not saved (« Modifié »); null when nothing. */
+export type CloseLoss = 'export' | 'changes' | null
+
+export function closeLoss({ exporting, dirty }: { exporting: boolean; dirty: boolean }): CloseLoss {
+  return exporting ? 'export' : dirty ? 'changes' : null
+}
+
+/** Resolves once `promise` settles, or after `ms` at the latest. */
+export function settleWithin(promise: Promise<unknown>, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    promise.then(done, done)
+  })
+}
+
+export interface CloseSteps {
+  /** write the change waiting for the autosave */
+  flush(): Promise<void>
+  loss(): CloseLoss
+  ask(loss: 'export' | 'changes'): Promise<'save' | 'close' | 'cancel'>
+  /** « Enregistrer » (file) */
+  save(): Promise<void>
+}
+
+/**
+ * Desktop window asked to close: true to close it. The last change of a project kept in « Mes projets » is written
+ * first (no question then); otherwise a question when something would be lost.
+ */
+export async function confirmClose(steps: CloseSteps, timeoutMs = CLOSE_FLUSH_TIMEOUT_MS): Promise<boolean> {
+  await settleWithin(steps.flush(), timeoutMs)
+  const loss = steps.loss()
+  if (loss === null) return true
+  const answer = await steps.ask(loss)
+  if (answer !== 'save') return answer === 'close'
+  await steps.save()
+  // save dialog closed or write failed: still « Modifié », the window stays open
+  return steps.loss() === null
+}
+
+const isOpenProjectDirty = () => {
+  const state = useAppStore.getState()
+  return isProjectDirty(projectOf(state), state.savedProject)
+}
+
+/** The question of the desktop window, answered with the step of `confirmClose`. */
+async function askBeforeClose(ask: NonNullable<Platform['ask']>, loss: 'export' | 'changes'): Promise<'save' | 'close' | 'cancel'> {
+  if (loss === 'export') {
+    const answer = await ask({
+      title: "Fermer pendant l'export ?",
+      text: "Le film en cours d'export sera perdu.",
+      yes: 'Fermer quand même',
+      cancel: 'Annuler',
+    })
+    return answer === 'yes' ? 'close' : 'cancel'
+  }
+  const state = useAppStore.getState()
+  const name = effectiveProjectName(state.projectName, state.tracks[0]?.name)
+  const answer = await ask({
+    title: 'Fermer sans enregistrer ?',
+    text: `Les changements de « ${name} » ne sont pas enregistrés.`,
+    yes: 'Enregistrer',
+    no: 'Fermer sans enregistrer',
+    cancel: 'Annuler',
+  })
+  return answer === 'yes' ? 'save' : answer === 'no' ? 'close' : 'cancel'
+}
+
+/**
+ * Nothing lost on closing. Page hidden or left: the waiting change is written at once (web: not awaited, a Cache
+ * Storage write started there usually ends, but nothing guarantees it). Web: the browser's « quitter le site ? »
+ * (its own text) when something would be lost. Desktop: `confirmClose`. Once, by `App`.
+ */
+export function installCloseGuard(exporting: () => boolean, save: () => Promise<void>): () => void {
+  const platform = getPlatform()
+  const loss = () => closeLoss({ exporting: exporting(), dirty: isOpenProjectDirty() })
+  const flush = () => void flushAutosave()
+  const flushIfHidden = () => {
+    if (document.visibilityState === 'hidden') flush()
+  }
+  const onBeforeUnload = (event: BeforeUnloadEvent) => {
+    flush()
+    if (loss() === null) return
+    event.preventDefault()
+    // older browsers ask only when it is set
+    event.returnValue = true
+  }
+  const { ask } = platform
+  const stopGuard =
+    ask && platform.guardClose
+      ? platform.guardClose(() => confirmClose({ flush: flushAutosave, loss, ask: (l) => askBeforeClose(ask, l), save }))
+      : null
+  window.addEventListener('pagehide', flush)
+  document.addEventListener('visibilitychange', flushIfHidden)
+  if (!stopGuard) window.addEventListener('beforeunload', onBeforeUnload)
+  return () => {
+    window.removeEventListener('pagehide', flush)
+    document.removeEventListener('visibilitychange', flushIfHidden)
+    window.removeEventListener('beforeunload', onBeforeUnload)
+    stopGuard?.()
   }
 }

@@ -37,7 +37,7 @@ import { Line2 } from 'three/addons/lines/Line2.js'
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 import type { LocalFrame, TerrainEngine, Track, TrackPoint } from '../core/types'
-import { useExportStore } from '../export/store'
+import { registerDrapeFlush, useExportStore } from '../export/store'
 import {
   TRACK_METRICS,
   colorizeValues,
@@ -634,6 +634,16 @@ export function TrackLines() {
   // Re-drape (debounced, with a bounded wait so a long tile stream cannot starve it) whenever the engine
   // reports new or removed tiles.
   const redrape = useDebouncedCallback(drapeAll, REDRAPE_DEBOUNCE_MS, REDRAPE_MAX_WAIT_MS)
+  // the video export runs the pending re-drape right away instead of waiting for the debounce
+  useEffect(
+    () =>
+      registerDrapeFlush(() => {
+        const pending = redrape.isPending()
+        redrape.flush()
+        return pending
+      }),
+    [redrape],
+  )
 
   useEffect(() => {
     if (!engine) return

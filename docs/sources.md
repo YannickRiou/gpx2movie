@@ -308,6 +308,12 @@ no quota header returned). Displayed attribution: "Données météo : Open-Meteo
 Log (curl, 2026-10-07): `start_date=end_date=2025-07-12`, 2 places (45.89/6.80 and 45.83/6.73) → 200, cells 45.940/6.704 (1,021 m) and
 45.870/6.693 (1,109 m); `2026-10-07` (same day) → 24 complete hours; `2026-10-10` → 400 out of range; `1939-12-31` → 400 out of range.
 
+**Forecast** (planned outing, 2026-10-08): `https://api.open-meteo.com/v1/forecast`, without a key, same terms (CC BY 4.0,
+non-commercial). Same parameters as the archive (`start_date` / `end_date`, several places, `elevation`, `timezone=GMT`,
+`timeformat=unixtime`), same 13 hourly variables and same response shape (24 hours per day from 0:00 UTC). Range: from
+92 days back to today + 15 days (on 8 October: `2026-10-23` → 200, `2026-10-24` → 400 "out of allowed range from
+2026-07-07 to 2026-10-23"). Kept 3 h at most, in memory only (the forecast changes several times a day).
+
 ## Typed place — Nominatim (2026-10-08)
 
 "Préparer une sortie" (plan an outing) searches for a typed place on the public instance `https://nominatim.openstreetmap.org/search`
@@ -326,7 +332,8 @@ private roads, `out geom qt`, response reduced to the type and to points rounded
 
 ## OpenStreetMap landmarks — Overpass API (2026-10-07)
 
-Peaks, passes, huts, lakes, waterfalls, populated places, viewpoints and glaciers around the track, read from OpenStreetMap through
+Peaks, passes, huts, lakes, waterfalls, populated places, viewpoints, glaciers and water points (drinking water, named springs;
+not measured separately, added after the log below) around the track, read from OpenStreetMap through
 the public Overpass instance `https://overpass-api.de/api/interpreter` (no key), with fallback to `https://maps.mail.ru/osm/tools/overpass/api/interpreter`
 (VK Maps, listed on the OSM wiki with no stated limit). **ODbL** data: displayed attribution "© contributeurs OpenStreetMap (ODbL)" (© OpenStreetMap contributors)
 (panel and status bar, link to openstreetmap.org/copyright). Code: `src/osm/overpass.ts`.
