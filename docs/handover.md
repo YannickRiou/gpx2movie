@@ -354,7 +354,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   observable results, frozen v1 / v2 projects (`project/legacy.test.ts`), `projectActions` open / save, audio mix and
   `readAudio` (Web Audio fake), environment `node` with jsdom only where needed (run time ~41 s → ~18 s; 1,556 tests,
   lines 66.9 %, branches 61.9 %); the export loop (`ExportController.test.ts`: frame count, cancel deletes the file,
-  error path). Left: preview == export (`FlyoverRig` vs `viewAt` at N times); 2–3 real FIT files (Garmin, Wahoo, Coros;
+  error path); preview == export (`FlyoverRig` and the export both place the camera with `filmViewAt`, and playing
+  the film reaches the progress of every exported frame, `schedule.test.ts`). Left: 2–3 real FIT files (Garmin, Wahoo, Coros;
   from the user).
 - **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
   and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
