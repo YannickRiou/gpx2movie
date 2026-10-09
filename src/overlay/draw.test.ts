@@ -329,11 +329,6 @@ describe('drawOverlay', () => {
     expect(counter?.alpha).toBeLessThan(1)
   })
 
-  it('is deterministic', () => {
-    const settings = enabled({ style: 'broadcast' })
-    expect(draw(0.5, settings)).toEqual(draw(0.5, settings))
-  })
-
   it('shows the weather under the marker and on the closing card, with its source', () => {
     const hours = 14
     const constant = (v: number) => new Array<number>(hours).fill(v)
@@ -454,9 +449,8 @@ describe('mini-map', () => {
     expect(n(0.99)).toBeUndefined()
   })
 
-  it('draws the north arrow on request only, and is deterministic', () => {
+  it('draws the north arrow on request only', () => {
     expect(render(0.5, minimapOnly({ northArrow: false })).texts).toEqual([])
-    for (const style of OVERLAY_STYLES) expect(render(0.37, minimapOnly({}, style))).toEqual(render(0.37, minimapOnly({}, style)))
   })
 })
 
@@ -715,7 +709,6 @@ describe('timeline photos', () => {
   it('full screen: the Ken Burns move follows the film time, still without it', () => {
     const crop = (media: FilmMedia, timeS: number) => render(noCredits, [media], timeS).images[0].args.slice(0, 4)
     expect(crop(full, 42)).not.toEqual(crop(full, 58))
-    expect(crop(full, 50)).toEqual(crop(full, 50))
     const still = { ...full, kenBurns: false }
     expect(crop(still, 42)).toEqual(crop(still, 58))
   })

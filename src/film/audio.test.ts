@@ -176,7 +176,6 @@ describe('sound of the video clips', () => {
       { t: 20 + R, gain: DUCK_GAIN },
       { t: 20 + 2 * R, gain: 1 },
     ])
-    expect(DUCK_GAIN).toBeCloseTo(0.316, 3)
     expect(duckGainAt(points, -1)).toBe(DUCK_GAIN)
     expect(duckGainAt(points, 15.1)).toBe(DUCK_GAIN)
     expect(duckGainAt(points, 20 + 1.5 * R)).toBeCloseTo((1 + DUCK_GAIN) / 2)

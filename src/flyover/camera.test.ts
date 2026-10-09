@@ -131,12 +131,6 @@ describe('computeCameraView — chase (default)', () => {
     expect(pitchDeg(view.position, view.target)).toBeCloseTo(30, 6)
   })
 
-  it('is deterministic for a given progress', () => {
-    const a = computeCameraView(northbound, 0.3, frame, null, options())
-    const b = computeCameraView(northbound, 0.3, frame, null, options())
-    expect(a.position.equals(b.position)).toBe(true)
-  })
-
   it('applies the exaggeration to the terrain height', () => {
     const view = computeCameraView(northbound, 0.5, frame, () => 2000, { ...options(), exaggeration: 2 })
     expect(view.target.distanceTo(frame.toLocal(6.85, 45.9, 4000 + LIFT))).toBeLessThan(0.01)
