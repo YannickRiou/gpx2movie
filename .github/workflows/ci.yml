@@ -1,9 +1,12 @@
-# Checks on every push and pull request: types, lint, unit tests, production build, and the Rust tests of the desktop
-# app (src-tauri, built against the dist/ just made). No end-to-end tests.
+# Checks on pull requests and on master: types, lint, unit tests and production build (web job, ~1.5 min), and the
+# Rust tests of the desktop app only when src-tauri or this file changed (rust job: its Linux libraries alone take
+# minutes to install). The Rust tests do not use the site, so they build against a placeholder dist/. No end-to-end
+# tests.
 name: CI
 
 on:
   push:
+    branches: [master]
   pull_request:
 
 concurrency:
@@ -11,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -24,9 +27,33 @@ jobs:
       - run: npm run lint
       - run: npx vitest run --maxWorkers=2
       - run: npm run build
-      # the desktop app's own code (native encoder arguments, command line): Linux libraries of Tauri, then its tests
-      - run: |
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: changed
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if git diff --quiet "$BASE" HEAD -- src-tauri .github/workflows/ci.yml 2>/dev/null; then
+            echo 'rust=false' >> "$GITHUB_OUTPUT"
+            echo 'src-tauri inchangé : tests Rust ignorés.'
+          else
+            echo 'rust=true' >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changed.outputs.rust == 'true'
+        run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev build-essential file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-      - run: cargo test --locked
+      - if: steps.changed.outputs.rust == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - if: steps.changed.outputs.rust == 'true'
+        run: mkdir -p dist && echo '<!doctype html><title>placeholder</title>' > dist/index.html
+      - if: steps.changed.outputs.rust == 'true'
+        run: cargo test --locked
         working-directory: src-tauri
