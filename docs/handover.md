@@ -322,8 +322,12 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    shutter interval of each video frame and average them (exact, deterministic, also helps the clouds converge; cost:
    × the sub-frame count). Preview: a cheaper velocity-based blur, or none. Setting: shutter amount 0–1 (0 = off by
    default). Same « Lens » panel, already there: vignette (« Couleurs » › « Plus de réglages »); fixed field of view
-   (`CAMERA_FOV_DEG` = 50°). Not there: adjustable field of view, bloom, lens flare, depth of field — to weigh one by
-   one with the user.
+   (`CAMERA_FOV_DEG` = 50°). Requested by the user, with the motion blur: **bloom** (glow of the bright areas: sun,
+   snow, water; amount and radius), **lens flare** (« Reflet d'objectif » when the sun is in or near the frame),
+   **depth of field** (sharp on the marker, distance blur; amount). All three off by default, in a « Objectif »
+   section, same in preview and export (postprocessing effects in the existing composer: `BloomEffect`,
+   `DepthOfFieldEffect`; lens flare from the sun position, e.g. a custom effect or a maintained library).
+   Adjustable field of view: still to weigh.
 6. **Situation shot, more control** (ideas from MapDirector's « Situate » panel, seen on a Corsica flyover: « Parc
    naturel régional de Corse » outlined in glowing white, name in large type, green dot at the outing). Already here:
    automatic administrative region (levels 4–6), « Région » / « Pays » height, highlight, styles « Depuis la région »
