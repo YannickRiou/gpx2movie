@@ -268,6 +268,35 @@ describe('syncTrackLineSets', () => {
     syncTrackLineSets(group, sets, [], frame, shared, 800, 600)
     shared.dispose()
   })
+
+  it('smooths the points before densifying, keeps the recorded distances and rebuilds when the smoothing changes', () => {
+    const group = new Group()
+    const sets = new Map<string, TrackLineSet>()
+    const shared = createSharedResources()
+    // northwards every ~11 m, zigzagging 4 m east and west
+    const zigzag: TrackPoint[] = Array.from({ length: 30 }, (_, i) => ({ lon: 6.5 + (i % 2 === 0 ? 5e-5 : -5e-5), lat: 45.5 + i * 1e-4 }))
+    const a = makeTrack('a', [zigzag])
+
+    syncTrackLineSets(group, sets, [a], frame, shared, 800, 600)
+    const raw = sets.get('a')!
+    expect(raw.smoothingM).toBe(0)
+    expect(raw.segments[0].source).toBe(a.segments[0].points)
+
+    syncTrackLineSets(group, sets, [a], frame, shared, 800, 600, 100)
+    const smoothed = sets.get('a')!
+    expect(smoothed).not.toBe(raw)
+    expect(raw.object.parent).toBeNull()
+    const [segment] = smoothed.segments
+    expect(segment.source).not.toBe(a.segments[0].points)
+    expect(Math.max(...segment.source.slice(2, -2).map((p) => Math.abs(p.lon - 6.5)))).toBeLessThan(1e-5)
+    // same distance scale as the recorded line (and the marker), though the smoothed line is shorter
+    expect(segment.dist[segment.dist.length - 1]).toBeCloseTo(raw.segments[0].dist[raw.segments[0].dist.length - 1], 3)
+
+    syncTrackLineSets(group, sets, [a], frame, shared, 800, 600, 100)
+    expect(sets.get('a')).toBe(smoothed)
+    syncTrackLineSets(group, sets, [], frame, shared, 800, 600)
+    shared.dispose()
+  })
 })
 
 describe('applyExposure', () => {
@@ -399,7 +428,7 @@ describe('applyTrackStyle', () => {
     const set = sets.get('a')!
     drapeTrackLineSet(set, null, 1)
 
-    applyTrackStyle(sets.values(), { width: 6, dash: 'tirets', glow: true, drawOn: false }, 2, 0.5)
+    applyTrackStyle(sets.values(), { width: 6, dash: 'tirets', glow: true, drawOn: false, smoothingM: 0 }, 2, 0.5)
     expect(set.solidMaterial.linewidth).toBe(12)
     expect(set.ghostMaterial.linewidth).toBe(12)
     expect(set.glowMaterial.linewidth).toBeGreaterThan(12)
@@ -409,7 +438,7 @@ describe('applyTrackStyle', () => {
     // dash distances are measured along the draped line
     expect(set.segments[0].geometry.getAttribute('instanceDistanceStart')).toBeDefined()
 
-    applyTrackStyle(sets.values(), { width: 4, dash: 'plein', glow: false, drawOn: false }, 1, 0)
+    applyTrackStyle(sets.values(), { width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 }, 1, 0)
     expect(set.solidMaterial.dashed).toBe(false)
     expect(set.segments[0].glow.visible).toBe(false)
   })

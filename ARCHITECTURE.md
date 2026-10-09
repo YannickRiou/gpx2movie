@@ -50,6 +50,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/*.tsx` | R3F components | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `TrackPicker` (+ `TrackMenu`, DOM), `CameraRig`, `FlyoverRig`, `useDebouncedCallback` |
 | `src/scene/marker*.ts` + `trackLineStyle.ts` | track and marker (see "Track and marker") | pure: `TrackStyle`, `DEFAULT_TRACK_STYLE`, `MarkerSettings`, `DEFAULT_MARKER`, `isValidTrackStyle`, `isValidMarker`, `withTrackStyleDefaults`, `withMarkerDefaults` (`markerSettings.ts`); `MARKER_FIGURE_PATHS`, `circlePath` (`markerFigures.ts`); `drawBadge`, `readableInk`, `squareCrop`, `fileToAvatarDataUrl`, `loadMarkerImage` (`markerBadge.ts`, 2D canvas); `markerBadge`, `badgeTexture`, `headsLeft`, `placeMarker`, `useMarkerImage`, `MARKER_SCREEN_FACTOR` (`markerSprite.ts`); `createGlowMaterial`, `applyDash`, `quantizedPixelSize`, `cumulativeDistances`, `cutAt`, `cutLine` (`trackLineStyle.ts`); `TrackMarkerSection` (`src/ui`) |
 | `src/flyover/path.ts` | flyover path | `buildTrackPath(track): TrackPath` (concatenated segments, cumulative distances, `time` in ms or NaN), `trackPathOf(track)` (same path, cached per track), `samplePath(path, distanceM): PathSample` (`ele` and `time` interpolated only if both neighbors have them), `recordedTimeAt(path, distanceM)` (fills points without a time), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)`, `pickProjectedPath(screen, distM, px, py, maxPx)` (point of the projected track closest to the pointer) |
+| `src/flyover/smooth.ts` | track smoothing (see "Track and marker") | `smoothPoints(points, windowM)`, `smoothTrack(track, windowM)`, `smoothedTrackPath(track, windowM)` (smoothed positions, recorded distances and times) |
 | `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad? })`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
 | `src/flyover/cameraSettings.ts` | camera styles and presets | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `advanceProgress(progress, dt, speed, durationS)` |
 | `src/flyover/climbs.ts` | detected climbs | `detectClimbs`, `climbsOf(track)` (cached per track), exported thresholds, `CATEGORY_THRESHOLDS` |
@@ -487,7 +488,7 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
 
 ## Track and marker
 
-- **Settings** `settings.trackStyle { width, dash: 'plein' | 'tirets' | 'points', glow, drawOn }` and `settings.marker { kind:
+- **Settings** `settings.trackStyle { width, dash: 'plein' | 'tirets' | 'points', glow, drawOn, smoothingM }` and `settings.marker { kind:
   'boule' | 'figurine' | 'image', figure, image, size, animated }` (`src/scene/markerSettings.ts`, pure). `animated`: the
   figurine bounces and sways with `figureMotion(timeS)` (two steps per second of film, lift up to 8% of the badge through
   `sprite.center`, ±5° through `material.rotation`), a function of the film time only: a paused film keeps its pose,
@@ -500,6 +501,12 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   program key): track color × radial fade (`vUv`), **MAX** blending — no beads at the joints of
   overlapping pieces, the track keeps its hue; the glow mostly lights up dark backgrounds. Follows the exposure and the
   per-vertex colors like the other two passes.
+- **Smoothing** (`smoothingM`, 0–300 m, 0 = off by default; `src/flyover/smooth.ts`, pure): tent-weighted moving average
+  of the positions over `smoothingM` metres of recorded distance, per segment, end points kept, other fields kept.
+  `TrackLines` densifies the smoothed points (rebuild when the value changes); `FlyoverRig` and the export camera use
+  `smoothedTrackPath`, so the marker and the chase camera follow the smoothed line without the GPS jitter. Both keep the
+  **recorded distances** (carried over to the densified points with `resampleValues`): progress, film stops, climbs and
+  the draw-on cut keep their scale. Labels, picking, the ghost racers and the overlay stay on the recorded points.
 - **Dashes / dots**: `LineMaterial` dashes measured in world units (`computeLineDistances`, redone on each
   drape). Scale = size of a pixel at the camera → controls target distance, **rounded to a power of two**
   (`quantizedPixelSize`): dashes stay fixed on the ground during the flight and only change length when the zoom

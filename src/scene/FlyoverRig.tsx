@@ -16,7 +16,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { Sprite, Vector3 } from 'three'
 import { computeFilmView, filmViewMovesWithTime } from '../flyover/filmCamera'
-import { buildTrackPath } from '../flyover/path'
+import { smoothedTrackPath } from '../flyover/smooth'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
 import { frameDelta } from './renderOnDemand'
@@ -37,10 +37,12 @@ interface DefaultControls {
 
 export function FlyoverRig() {
   const track = useAppStore((s) => s.tracks[0])
+  const smoothingM = useAppStore((s) => s.settings.trackStyle.smoothingM)
   const { engine, frame } = useTerrainContext()
   const controls = useThree((s) => s.controls) as unknown as DefaultControls | null
 
-  const path = useMemo(() => (track ? buildTrackPath(track) : null), [track])
+  // the marker and the camera follow the same smoothed positions as the drawn line (TrackLines)
+  const path = useMemo(() => (track ? smoothedTrackPath(track, smoothingM) : null), [track, smoothingM])
   const clock = useFilmClock()
   /** clock the store's film time was computed with */
   const clockRef = useRef(clock)

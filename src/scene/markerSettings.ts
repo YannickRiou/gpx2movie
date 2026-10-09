@@ -20,11 +20,14 @@ export interface TrackStyle {
   glow: boolean
   /** « trace qui se dessine »: only the part already travelled by the marker is drawn */
   drawOn: boolean
+  /** positions averaged over this many metres of track against GPS jitter (`flyover/smooth.ts`), 0 = as recorded */
+  smoothingM: number
 }
 
 export const TRACK_WIDTH_RANGE = { min: 1, max: 12, step: 0.5 } as const
+export const TRACK_SMOOTHING_RANGE = { min: 0, max: 300, step: 10 } as const
 
-export const DEFAULT_TRACK_STYLE: TrackStyle = { width: 4, dash: 'plein', glow: false, drawOn: false }
+export const DEFAULT_TRACK_STYLE: TrackStyle = { width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 }
 
 export const TRACK_DASH_LABELS: Record<TrackDash, string> = { plein: 'Plein', tirets: 'Tirets', points: 'Points' }
 
@@ -93,7 +96,7 @@ export const MARKER_FIGURE_LABELS: Record<MarkerFigure, string> = {
 
 
 export function isValidTrackStyle(style: TrackStyle): boolean {
-  return inRange(style.width, TRACK_WIDTH_RANGE) && oneOf(TRACK_DASHES, style.dash)
+  return inRange(style.width, TRACK_WIDTH_RANGE) && oneOf(TRACK_DASHES, style.dash) && inRange(style.smoothingM, TRACK_SMOOTHING_RANGE)
 }
 
 export function isValidMarker(marker: MarkerSettings): boolean {
