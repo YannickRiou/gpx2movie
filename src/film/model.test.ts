@@ -107,10 +107,10 @@ describe('film model', () => {
     const full = film({
       autoStops: false,
       stops: [stop('stop-1', { label: 'Sommet', source: { kind: 'landmark', ref: 'node/1' } }), stop('auto-4520', { camera: 'fixe' })],
-      texts: [text('text-1', { subtitle: '1 653 m', color: '#dbe64c', font: 'mono' })],
+      texts: [text('text-1', { subtitle: '1 653 m', color: '#dbe64c', font: 'mono' }), text('text-2', { stopId: 'stop-1' })],
       media: [
         media('media-1'),
-        media('media-2', { layout: 'carte', anchor: 'top-right', size: 1.5, kenBurns: false, caption: 'Lac Blanc' }),
+        media('media-2', { layout: 'carte', anchor: 'top-right', size: 1.5, kenBurns: false, caption: 'Lac Blanc', stopId: 'auto-4520' }),
         media('media-3', { kind: 'video', src: 'video-1', inS: 2.5, outS: 9, muted: true }),
       ],
     })
@@ -227,9 +227,27 @@ describe('film model', () => {
       film({ media: [media('media-1', { kind: 'video', inS: 4, outS: 4 })] }),
       film({ media: [media('media-1', { kind: 'video', muted: 'oui' as unknown as boolean })] }),
       film({ stops: [stop('a')], texts: [text('a')] }),
+      film({ texts: [text('text-1', { stopId: '' })] }),
+      film({ media: [media('media-1', { stopId: 3 as unknown as string })] }),
     ]
     for (const f of bad) expect(isValidFilm(f)).toBe(false)
     expect(isValidSetting('film', { ...DEFAULT_FILM, stops: 'none' })).toBe(false)
+  })
+
+  it('loads texts and media attached to a missing stop free, without rejecting the film', () => {
+    const own = film({ autoStops: false, stops: [stop('stop-1')] })
+    const saved = {
+      ...own,
+      texts: [text('text-1', { stopId: 'stop-1' }), text('text-2', { stopId: 'stop-9' })],
+      media: [{ id: 'media-1', startS: 10, durationS: 5, kind: 'image', src: 'photo-1', stopId: 42 }],
+    }
+    const { settings, invalid } = sanitizeSettings({ film: saved })
+    expect(invalid).toEqual([])
+    expect(settings.film.texts).toEqual([text('text-1', { stopId: 'stop-1' }), text('text-2')])
+    expect(settings.film.media).toEqual([media('media-1')])
+    // generated stops are not the film's own: no attachment to them
+    const auto = sanitizeSettings({ film: { ...DEFAULT_FILM, texts: [text('text-1', { stopId: 'auto-4520' })] } })
+    expect(auto.settings.film.texts).toEqual([text('text-1')])
   })
 
   it('older projects keep the stops of their pacing (rythme); new ones stop at every highlight', () => {
@@ -255,7 +273,7 @@ describe('film model', () => {
   })
 
   it('round-trips through the project document', () => {
-    const custom = film({ autoStops: false, stops: [stop('stop-2')], texts: [text('text-1')] })
+    const custom = film({ autoStops: false, stops: [stop('stop-2')], texts: [text('text-1', { stopId: 'stop-2' })] })
     const doc = {
       format: 'openflyover-project',
       version: 1,

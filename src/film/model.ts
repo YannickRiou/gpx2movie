@@ -114,6 +114,8 @@ export interface FilmText {
   /** its own text colour '#rrggbb' and font; absent = those of the overlay */
   color?: string
   font?: OverlayFontId
+  /** stop the text is attached to (`attachToStop`): it follows the stop when it moves, free again once it is gone */
+  stopId?: string
 }
 
 export const AUTO_STOP_MODES = ['temps-forts', 'rythme'] as const
@@ -156,6 +158,8 @@ export interface FilmMedia {
   volume?: number
   /** video synced with the recorded track (« Caler sur le parcours »), see `MediaSync` */
   sync?: MediaSync
+  /** stop the medium is attached to, like a text's (an attached photo is shown during the hold of the stop) */
+  stopId?: string
 }
 
 /**
@@ -419,6 +423,7 @@ export function nextFilmId(film: Film, kind: FilmItemKind): string {
 const within = (v: unknown, min: number, max: number) => typeof v === 'number' && v >= min && v <= max
 const optionalString = (v: unknown) => v === undefined || typeof v === 'string'
 const isId = (v: unknown) => typeof v === 'string' && v !== ''
+const optionalId = (v: unknown) => v === undefined || isId(v)
 
 export function isValidShot(shot: unknown): shot is FilmShot {
   return (
@@ -499,7 +504,8 @@ export function isValidText(text: unknown): text is FilmText {
     oneOf(OVERLAY_ANCHORS, text.anchor) &&
     within(text.size, WIDGET_SIZE_MIN, WIDGET_SIZE_MAX) &&
     (text.color === undefined || isHexColor(text.color)) &&
-    (text.font === undefined || oneOf(OVERLAY_FONT_IDS, text.font))
+    (text.font === undefined || oneOf(OVERLAY_FONT_IDS, text.font)) &&
+    optionalId(text.stopId)
   )
 }
 
@@ -519,7 +525,8 @@ export function isValidMedia(media: unknown): media is FilmMedia {
     (media.outS === undefined || within(media.outS, (inS as number) + 0.01, Number.MAX_VALUE)) &&
     (media.muted === undefined || typeof media.muted === 'boolean') &&
     (media.volume === undefined || within(media.volume, 0, 1)) &&
-    (media.sync === undefined || isValidSync(media.sync))
+    (media.sync === undefined || isValidSync(media.sync)) &&
+    optionalId(media.stopId)
   )
 }
 
@@ -569,13 +576,21 @@ export function isValidFilm(film: Film): boolean {
  * saved before the camera keys none (`cameraKeys: []`), one saved before the points of interest none (`pois: []`),
  * one saved before the landmark titles none (`landmarkTitles: false`: its flight stays as it was);
  * video clips saved before their sound was handled stay silent (`muted: true`). The `epochs` key of earlier versions
- * is dropped.
+ * is dropped. A text or a medium attached to a stop the film does not own (generated stops, unknown id) is loaded free.
  */
 export function withFilmDefaults(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
   const { epochs: _dropped, ...saved } = raw
-  const film = { ...DEFAULT_FILM, autoMode: 'rythme', landmarkTitles: false, ...saved }
-  return Array.isArray(film.media) ? { ...film, media: film.media.map(withMediaDefaults) } : film
+  const film: Record<string, unknown> = { ...DEFAULT_FILM, autoMode: 'rythme', landmarkTitles: false, ...saved }
+  const own = film.autoStops === false && Array.isArray(film.stops) ? film.stops.filter(isRecord).map((s) => s.id) : []
+  const attached = (item: unknown) => {
+    if (!isRecord(item) || !('stopId' in item) || own.includes(item.stopId)) return item
+    const { stopId: _, ...free } = item
+    return free
+  }
+  if (Array.isArray(film.texts)) film.texts = film.texts.map(attached)
+  if (Array.isArray(film.media)) film.media = film.media.map((m: unknown) => attached(withMediaDefaults(m)))
+  return film
 }
 
 function withMediaDefaults(media: unknown): unknown {

@@ -56,7 +56,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/flyover/climbs.ts` | detected climbs | `detectClimbs`, `climbsOf(track)` (cached per track), exported thresholds, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | 3D labels | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`…; `setLabelSource(id, labels)` (prefixed, unique ids), `useLabelSources` |
 | `src/flyover/pacing.ts` | flyover pacing | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance`; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses given by the film); `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
-| `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha`, `START_HEIGHTS`, `START_HEIGHT_LABELS`; `autoStops`, `stopCandidates`, `materializeStops`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
+| `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha`, `START_HEIGHTS`, `START_HEIGHT_LABELS`; `autoStops`, `stopCandidates`, `materializeStops`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `attachToStop`, `followStops`, `edgeScrollSpeed`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
 | `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `regionDistanceM`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | sun date, sunrise / sunset | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | track colored by a metric | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (label, unit, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
@@ -308,7 +308,9 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   panel becomes a drawer above the view; below 700 px the tabs move to a bottom bar, panel and export
   drawer become sheets above, with no format picker in the bar (the drawer tiles remain).
 - **Sections of the Carte and Survol tabs** (`PanelSection.tsx`): `PanelSection` = flat collapsible section (`fold` classes,
-  sticky header: title, "modifié / Par défaut" of its keys, chevron), open initially. Carte: "Fond de carte" (base map)
+  sticky header: title, "modifié / Par défaut" of its keys, chevron), open initially, then as last left: open / folded
+  state remembered by title in the platform storage (`FOLDS_KEY` `openflyover.folds.v1`, `parseFoldPrefs` in `shell.ts`,
+  read once on mount, written on `toggle`; without storage or with an unreadable value every section opens). Carte: "Fond de carte" (base map)
   (imagery), "Relief et trace" (terrain and track; exaggeration, track color), "Lumière" (light), "Atmosphère et météo" (atmosphere and weather; atmosphere,
   shadows, weather in the scene), "Couleurs" (colors; color grading), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset, style as icon tiles, north up),
   "Durée et rythme" (duration and pacing; duration, film duration, slow-downs on / off). Rare settings are in `MoreSettings` ("Plus de
@@ -548,10 +550,12 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   track, same ranges as `CAMERA_RANGES`, `isValidCameraKey`; empty by default, a film saved earlier receives `[]`);
   `speeds[]` `{ id, fromM, toM, factor (×0.25–×4) }` (sections of the first track, in meters, never overlapping,
   they may touch; `isValidSpeed`, empty by default, a film saved earlier receives `[]` through `withFilmDefaults`);
-  `texts[]` `{ id, startS, durationS, text, subtitle?, anchor, size, color?, font? }` (placement of the overlay text widget;
+  `texts[]` `{ id, startS, durationS, text, subtitle?, anchor, size, color?, font?, stopId? }` (placement of the overlay text widget;
   own color and font, otherwise those of the overlay) and
   `media[]` `{ id, startS, durationS, kind: 'image' | 'video', src, layout: 'plein-ecran' | 'carte', anchor, size, kenBurns,
-  caption?, inS?, outS?, muted?, sync? }` (`src` = id of the image or video in the document's media table, see
+  caption?, inS?, outS?, muted?, sync?, stopId? }` (`stopId` on a text or a media item: the stop it is attached to, see
+  "Attached to a stop"; `isValidFilm` only requires a non-empty string, `withFilmDefaults` loads an item attached to a
+  stop the film does not own (unknown id, generated stops, not a string) free, without rejecting the film; `src` = id of the image or video in the document's media table, see
   "Photos" and "Videos"; video: `inS` / `outS` = start and end of the clip in the file, default its start and end,
   `clipTimeS`; `muted` and `volume` (0–1, default 1): video sound, see "Video sound"; `sync` `{ startMs, offsetS, follow }`: video
   synced to the track, see "Video synced to the route"; `MEDIA_DEFAULTS`: full
@@ -708,7 +712,19 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   arrows ±1 s (Shift ±0.1 s, steps merged like a slider), Delete / Backspace deletes (a shot becomes 'aucune'),
   Esc deselects; Space starts / stops playback outside fields and buttons. Ctrl+wheel zooms around the pointer
   (`zoomAt`, ×1 to ×50), − / + buttons and slider around the playhead, "Ajuster" goes back to ×1; native horizontal
-  scrolling.
+  scrolling. **Auto-scroll**: zoomed, a drag (a block already moved past the threshold, or the ruler) within 48 px of
+  an edge scrolls the lanes (`edgeScrollSpeed`, pure: linear up to 900 px/s at the edge and beyond), a
+  `requestAnimationFrame` loop that replays the gesture at the same pointer (the gesture's offset counts the scroll
+  since the press, sub-pixel remainder carried over), stopped on release or cancel; a mere press near the edge does not scroll.
+- **Attached to a stop** (`stopId`, pure in `timeline.ts`): `attachToStop` attaches a text or a video (moved to the start
+  of the stop's hold, duration kept) or a photo (fitted to the hold: shown while the marker holds), or frees it (time
+  kept). `followStops(before, after, clockOf)` runs on every edit of the film (`editFilm`, the timeline's `commit` and
+  `change`, the draft of a gesture): an item the edit did not move itself keeps its offset to the start of the hold (an
+  item fitted to the hold stays fitted, stretched with the stop) when the stop moves in film time (drag, position,
+  duration, other stop, speed portions, shots); an item whose stop is no longer one of the film's own stops (deleted,
+  "Arrêts automatiques" checked again) becomes free where it is; moving the attached item changes its offset.
+  Inspector: "Attaché à : Aucun arrêt / <arrêt>" (attached to: no stop / a stop) for a text, a photo or a video
+  (attaching to a generated stop writes the stops out first; one undo step).
 - **Selection**: `filmSelection` in the store (added at the end of the state, neither saved nor undoable), set by a press or
   focus on a block and by additions (`editFilm` selects the new block), cleared by Esc, closing
   the inspector, a deletion, or when the block no longer exists (undo, other track, generated stops moved:
@@ -717,7 +733,7 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   (style, duration), stop (label, duration, "Caméra pendant l'arrêt" (camera during the stop) as a list with a help sentence, position and window),
   framing (distance, tilt, aim, "À (km)" (at, km), `updateCameraKey`: camera ranges, aim brought back within ±180°), speed (chips ×0.25 ×0.5 ×1.5
   ×2 ×3 ×4, "Réglage fin" (fine adjustment) in powers of 2, from / to in km bounded by `updateSpeed`, effect on the duration), text (text, subtitle, position,
-  size, start, duration), photo (thumbnail, full-screen / card display, Ken Burns, caption, position, size, start, duration),
+  size, start, duration, attached to), photo (thumbnail, full-screen / card display, Ken Burns, caption, position, size, start, duration, attached to),
   video (the same without Ken Burns, plus "Début dans la vidéo" (start in the video), file length, "Son" (sound) block: "Son de la
   vidéo" (video sound) checkbox and volume in %, grayed out according to the flyover speed, and "Calage sur le parcours" (sync to the route) when the filming time
   is known), music (file name, volume in %, fade-in and fade-out 0–10 s, start, duration, "Début dans le
@@ -867,10 +883,13 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   read (placed at the playhead, or synced to the track time); the time of a video added before this sync feature is
   not read again; GoPro GPS stream (GPMF) not read; rejected where WebCodecs is missing (desktop application on Linux); EXIF is only read in JPEGs (not HEIC, which
   most browsers do not decode, nor PNG / WebP); a full-screen photo is cropped to cover the frame (a
-  portrait photo loses its top and bottom); a photo is not linked to a stop (it does not follow it when it moves).
+  portrait photo loses its top and bottom).
   Other limits: the 3D preview only
-  follows a gesture on release; no auto-scroll when dragging at the edge; in `'temps-forts'` mode, the pacing's
-  "pause" slider does not set the duration of the generated stops (4 s, to adjust per stop).
+  follows a gesture on release; in `'temps-forts'` mode, the pacing's
+  "pause" slider does not set the duration of the generated stops (4 s, to adjust per stop); attached items only
+  follow a stop on edits of the film: changing the flyover duration, the pacing, the loaded landmarks or the landmark
+  titles moves the stops in time without them; only the film's own stops (not the generated ones while "Arrêts
+  automatiques" is checked) can carry items.
 
 ## Project (phase 4)
 

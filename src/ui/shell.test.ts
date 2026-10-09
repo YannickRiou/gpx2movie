@@ -8,6 +8,7 @@ import {
   isProjectDirty,
   nextGridIndex,
   nextTabIndex,
+  parseFoldPrefs,
   parseShellPrefs,
   routeOpenedFiles,
   shellReducer,
@@ -186,5 +187,15 @@ describe('parseShellPrefs', () => {
     expect(parseShellPrefs('not json')).toEqual({ tab: 'trace', collapsed: false })
     expect(parseShellPrefs(null)).toEqual({ tab: 'trace', collapsed: false })
     expect(parseShellPrefs('null')).toEqual({ tab: 'trace', collapsed: false })
+  })
+})
+
+describe('parseFoldPrefs', () => {
+  it('reads the fold state of each section, ignoring anything malformed', () => {
+    expect(parseFoldPrefs('{"Caméra":false,"Lumière":true,"Relief":"oui"}')).toEqual({ Caméra: false, Lumière: true })
+    expect(parseFoldPrefs(null)).toEqual({})
+    expect(parseFoldPrefs('{')).toEqual({})
+    expect(parseFoldPrefs('[true]')).toEqual({})
+    expect(parseFoldPrefs('null')).toEqual({})
   })
 })

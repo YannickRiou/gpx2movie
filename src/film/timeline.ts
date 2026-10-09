@@ -1,7 +1,8 @@
 /**
  * Timeline of the film (`ui/Timeline.tsx`): time ↔ pixel scale, ruler, snapping, and the edits of the film made
- * by its gestures (drag a block, drag an edge, nudge, add, remove), as pure functions of the film. The component
- * only turns pointer and keyboard events into these calls and commits the result as one undo step.
+ * by its gestures (drag a block, drag an edge, nudge, add, remove, attach a text or a medium to a stop, which then
+ * follows it), the edge auto-scroll speed, as pure functions. The component only turns pointer and keyboard events
+ * into these calls and commits the result as one undo step.
  *
  * Items are selected by id: 'opening', 'closing', or the id of a stop, a speed portion, a camera key, a text, a medium
  * or a music clip (unique across the film).
@@ -55,6 +56,20 @@ export function fitPxPerS(widthPx: number, totalS: number): number {
 export function zoomAt(zoom: number, factor: number, anchorPx: number, scrollLeft: number): { zoom: number; scrollLeft: number } {
   const next = clamp(zoom * factor, ZOOM_RANGE.min, ZOOM_RANGE.max)
   return { zoom: next, scrollLeft: Math.max(0, ((scrollLeft + anchorPx) * next) / zoom - anchorPx) }
+}
+
+/**
+ * Speed of the automatic scroll of the zoomed timeline while a block or the playhead is dragged near one of its
+ * edges (pixels per second, negative to the left): zero farther than `edgePx` from both edges, growing linearly to
+ * `maxPxPerS` at the edge and beyond it.
+ */
+export function edgeScrollSpeed(clientX: number, left: number, right: number, edgePx = 48, maxPxPerS = 900): number {
+  if (edgePx <= 0 || right - left <= 0) return 0
+  const toLeft = clientX - left
+  const toRight = right - clientX
+  if (toLeft < edgePx && toLeft <= toRight) return -maxPxPerS * Math.min(1, (edgePx - toLeft) / edgePx)
+  if (toRight < edgePx) return maxPxPerS * Math.min(1, (edgePx - toRight) / edgePx)
+  return 0
 }
 
 const TICK_STEPS_S = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]
@@ -717,4 +732,76 @@ export function updateMusic(film: Film, id: string, patch: Partial<Omit<FilmAudi
 export function updateShot(film: Film, key: 'opening' | 'closing', patch: Partial<FilmShot>): Film {
   const shot = { ...film[key], ...patch }
   return { ...film, [key]: { ...shot, durationS: shotDuration(shot.durationS) } }
+}
+
+// ---------------------------------------------------------------------------
+// Texts and media attached to a stop
+// ---------------------------------------------------------------------------
+
+type Attachable = FilmText | FilmMedia
+
+function detach<T extends Attachable>(item: T): T {
+  const { stopId: _, ...free } = item
+  return free as T
+}
+
+/**
+ * Text or medium `id` attached to `stop` (a stop of the clock of `film`, its own stops written out), or free again
+ * (null). Attached, a text or a video moves to the start of the hold of the stop and a photo is fitted to the hold
+ * (shown while the marker holds); freed, it stays where it is.
+ */
+export function attachToStop(film: Film, id: string, stop: ClockStop | null): Film {
+  const attach = <T extends Attachable>(item: T, fit: boolean): T => {
+    if (item.id !== id) return item
+    if (!stop) return detach(item)
+    const startS = roundS(stop.holdStartS)
+    return { ...item, stopId: stop.id, startS, durationS: fit ? itemDuration(stop.holdEndS - stop.holdStartS) : item.durationS }
+  }
+  return { ...film, texts: film.texts.map((t) => attach(t, false)), media: film.media.map((m) => attach(m, m.kind === 'image')) }
+}
+
+/** Two film times equal at the rounding of the stored values. */
+const sameTime = (a: number, b: number) => Math.abs(a - b) < 0.015
+
+/**
+ * `after` (an edit of `before`) with its attached texts and media following their stop: an item the edit did not
+ * move or stretch itself keeps its offset to the start of the stop's hold (an item fitted to the hold stays fitted,
+ * stretched with it); an item whose stop is not among the film's own stops any more (removed, automatic stops back)
+ * becomes free where it is. `clockOf` gives the clock of a film (same track and pacing). `after` itself when nothing
+ * changes.
+ */
+export function followStops(before: Film, after: Film, clockOf: (film: Film) => FilmClock): Film {
+  if (!after.texts.some((t) => t.stopId !== undefined) && !after.media.some((m) => m.stopId !== undefined)) return after
+  const own = new Set(after.autoStops ? [] : after.stops.map((s) => s.id))
+  // only the stops, the speed portions and the shots move a stop in film time
+  const moves =
+    before.stops !== after.stops ||
+    before.speeds !== after.speeds ||
+    before.opening !== after.opening ||
+    before.closing !== after.closing ||
+    before.autoStops !== after.autoStops
+  let clocks: { from: FilmClock; to: FilmClock } | undefined
+  let changed = false
+  const follow = <T extends Attachable>(item: T, previous: readonly T[]): T => {
+    if (item.stopId === undefined) return item
+    if (!own.has(item.stopId)) {
+      changed = true
+      return detach(item)
+    }
+    const old = previous.find((p) => p.id === item.id)
+    if (!moves || !old || old.startS !== item.startS || old.durationS !== item.durationS) return item
+    clocks ??= { from: clockOf(before), to: clockOf(after) }
+    const from = clocks.from.stops.find((s) => s.id === item.stopId)
+    const to = clocks.to.stops.find((s) => s.id === item.stopId)
+    if (!from || !to) return item
+    const fitted = sameTime(item.startS, from.holdStartS) && sameTime(item.startS + item.durationS, from.holdEndS)
+    const startS = roundS(Math.max(0, fitted ? to.holdStartS : item.startS + to.holdStartS - from.holdStartS))
+    const durationS = fitted ? itemDuration(to.holdEndS - to.holdStartS) : item.durationS
+    if (startS === item.startS && durationS === item.durationS) return item
+    changed = true
+    return { ...item, startS, durationS }
+  }
+  const texts = after.texts.map((t) => follow(t, before.texts))
+  const media = after.media.map((m) => follow(m, before.media))
+  return changed ? { ...after, texts, media } : after
 }
