@@ -71,7 +71,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/export/*` | video export | `buildFrameSchedule`, `VIDEO_ASPECTS`, `VIDEO_RESOLUTIONS`, `videoSize`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `nativeEncoder.ts` (desktop ffmpeg): `exportCodec`, `createExportEncoder`, `createNativeVideoEncoder`, `wavFile`, `settle`, `renderSettledFrame`, `composeFrame`, `composeOverlayFrame`, `fillSky` (export sky, reused by the poster), `useExportStore`, `videoFileName`, `overlayBaseName`, `ALPHA_CANDIDATES`, `chooseVideoDestination`, `warnsInMemory`, `filmRate`, `ExportController`; `batch.ts` (batch rendering): pure, tested: `buildBatchJobs`, `formatKey`, `batchBaseName`, `estimateBatch`, `runBatch`, `batchProgressLabel`, `batchSummary`; `exportJob`, `useBatchStore` |
 | `src/poster/*` | poster (see "Poster") | pure, tested: `PosterSettings`, `DEFAULT_POSTER`, `POSTER_FORMATS`, `posterSize`, `isValidPoster`, `withPosterDefaults`; `posterContent`, `posterFigure`, `availableFigures`, `posterStats`, `totalStats`, `trackLine`, `POSTER_LIST_MAX`; `posterLayout` (boxes), `fitText`, `fitLines`, `fitTrackList`, `wrapText`, `truncate`; `drawPoster`, `coverCrop`, `POSTER_THEMES`, `POSTER_FONTS`; `framingPath`, `planFlatMap` (`view.ts`); not pure: `renderFlatMap` (`view.ts`), `currentPosterContent`, `startPoster`, `usePosterPreview`, `previewKey` (`export.ts`), `PosterPanel` |
 | `src/flyover/race.ts` | ghost race | `RACE_SYNC_MODES`, `RACE_CAMERAS`, `STAGE_TRANSITIONS`, `DEFAULT_RACE`, `isValidRace`, `prepareRaceTrack`, `raceTrackOf`, `positionAtTime`, `positionAtDistance`, `arrivalTime`, `buildRace`, `raceAt(race, progress)`, `rankRacers`; `useRace`, `RaceMarkers` |
-| `src/flyover/sequence.ts` + `follow.ts` | several tracks (see "Several tracks") | `Stage`, `Sequence`, `playsInSequence`, `buildSequence`, `sequenceOf`, `filmSequenceOf`, `filmTrackOf`, `stageAt`, `sequenceLandmarks`; `filmFollowOf(tracks, race, smoothingM)`; hooks `useFilmTrack`, `useFilmSequence` (`scene/usePacing.ts`) |
+| `src/flyover/sequence.ts` + `follow.ts` | several tracks (see "Several tracks") | `Stage`, `Sequence`, `playsInSequence`, `buildSequence`, `sequenceOf`, `filmSequenceOf`, `filmTrackOf`, `stageAt`, `trackUnderMarker`, `sequenceLandmarks`; `filmFollowOf(tracks, race, smoothingM)`; hooks `useFilmTrack`, `useFilmSequence` (`scene/usePacing.ts`) |
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | weather in the scene | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction`; `WeatherEffect` |
 | `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | reflective water | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater`; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH`; `WaterLayer`, `WATER_LIFT_M`; `useWaterStore` (`osm/store.ts`) |
 | `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | volumetric clouds | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `withCloudDefaults`, `seaTopFor`, `cloudCoversAt`, `sceneCloudsFrom`, `seaOfClouds`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor`; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
@@ -460,7 +460,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
 - **Logarithmic depth**: `postprocessing` signals it with `LOG_DEPTH`, the Takram shader expects
   `USE_LOGARITHMIC_DEPTH_BUFFER`; the define is added to the effect, otherwise the whole scene is seen as infinitely far.
 - **Track**: unlit materials; their color is divided by `renderer.toneMappingExposure` (`applyExposure`).
-- **Sun at the time of the outing** (`settings.sunFromTrack`, on by default): when the first track is timestamped, the lighting
+- **Sun at the time of the outing** (`settings.sunFromTrack`, on by default): when the first track (« À la suite »: the
+  stage under the marker, see "Several tracks") is timestamped, the lighting
   date is the **recorded** time of the point under the marker (`sunDateAt`; shifted during a situation shot that
   moves the sun, `shotSunShiftMs`, see "Film and timeline"), updated every frame by
   `atmosphereRef.current.updateByDate(date)` in `useFrame` (not the `date` prop: the two do not combine). Points without
@@ -1148,7 +1149,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   WMO codes → French label + icon id.
 - **State** (`src/weather/store.ts`): `status` idle / loading / ready / unavailable / error, `message`, `series`, `trackId`;
   `syncWeather` is called by the panel on each change of the first track or of `settings.weather.enabled` (true by
-  default), cancels the previous request and explains the lack of data.
+  default), cancels the previous request and explains the lack of data. « À la suite », `syncStageWeather` fetches the
+  later stages into `stages` (by track id, see "Several tracks").
 - **Coming next**: rain and snow particles (driven scene: "Weather in the scene" and "Volumetric clouds").
 
 ## Planned outing (route scouting)
@@ -1609,7 +1611,8 @@ it, know at what time you will pass each point, where the sun will be and what t
 
 - `@takram/three-clouds` 0.7.6 (MIT, same family and same versions as `three-atmosphere` / `three-geospatial`).
   `CloudsLayer` (in the `AtmosphereLayer` `EffectComposer`, before `AerialPerspective`, which composites them) is mounted only
-  with the atmosphere, in `manuel` or `mer` mode, or in `meteo` mode once the weather of the first track is loaded.
+  with the atmosphere, in `manuel` or `mer` mode, or in `meteo` mode once the weather of the first track (« À la
+  suite »: of a stage) is loaded.
 - Setting `settings.clouds { mode: 'meteo' | 'manuel' | 'mer' | 'aucun', coverage, altitudeM, seaTopM, seaRender, quality }`
   (default `meteo`, 0.4, 1,200 m, 2,000 m, `volume`, `medium`; `SETTING_CHECKS`: `isValidClouds`; `SETTING_UPGRADES`:
   `withCloudDefaults` for projects saved before `seaTopM` and `seaRender`), "Nuages" (clouds) block of the "Atmosphère
@@ -1799,10 +1802,15 @@ it, know at what time you will pass each point, where the sun will be and what t
   (`stageDipAt`, `DIP_DEFAULT_S` centred on it) merged with the shot dips; both enter the export's held-frame key.
 - Drawn lines with « trace qui se dessine » (`drawOnDistances(…, sequence)`): stages flown whole, the current one to the
   marker, the next ones not yet. Start and finish labels name every stage's ends.
-- Limits: the weather, the sun date and the clouds follow the first track (weather store, `AtmosphereLayer`,
-  `CloudsLayer`), so the sun of a later stage is that of the first track at the same fraction and only the first
-  stage gets weather in the overlay; time smoothing of the camera must not average across a stage cut (as for a
-  shot that cuts).
+- Sun, clouds and weather: `trackUnderMarker(tracks, race, progress)` gives the track under the marker and the
+  progress along it (the stage « À la suite », else the first track at the film progress), resolved once per frame by
+  `AtmosphereLayer` and shared with `CloudsLayer` and `CloudSeaSurface` (`MarkerTrack`): sun date from the stage's own
+  timestamps (`sunDateAt` on its path), weather in the scene, cloud cover, cloud base and wind from its own series. The
+  weather store fetches the later stages too (`syncStageWeather`, `stages` by track id, driven by the weather panel;
+  `weatherSeriesOf(state, track)`), and each stage gets its own series in the overlay (`prepareOverlayFilm`). A pure
+  function of the progress: everything changes on the cut, nothing is interpolated across it.
+- Limits: time smoothing of the camera must not average across a stage cut (as for a shot that cuts); the weather
+  panel, the poster and the « Lumière » sunrise and sunset still show the first track.
 
 ## Track chaining
 

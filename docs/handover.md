@@ -331,9 +331,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    tracks"). « Plusieurs traces » in the track list: « La première » (default, unchanged), « À la suite » (stages
    with their own colour, name and figures, one timeline segment each, stage card, cut or dip between stages, order
    of the list) and « En parallèle » (the ghost race, camera on the first track, the one ahead or all of them,
-   leaderboard toggle). Left: the sun, the clouds and the weather of a later stage still follow the first track (a
-   one-line change in `AtmosphereLayer` / `CloudsLayer` / the weather store, owned by the clouds work); no hold or
-   camera move between stages (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
+   leaderboard toggle); each stage with its own sun, clouds and weather. Left: no hold or camera move between stages
+   (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
 8. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
    the current lots): a built-in openh264 encoder (patents checked: recommended to drop). Dropped by the user: GoPro GPS time (GPMF).
 

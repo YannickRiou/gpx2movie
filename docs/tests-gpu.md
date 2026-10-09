@@ -179,6 +179,9 @@ reproduce it next to the box.
       darkest point of the dip (no camera glide between the two days), the stage card (name, « Étape 2 sur 2 », date,
       distance, D+) centred for 5 s, the counters, profile and mini-map those of the stage; one segment per stage on the
       timeline; "Coupe" and "Fondu au blanc"; the up arrow swaps the stages; same frames in the export (16:9, 9:16).
+- [ ] "Plusieurs traces" › "À la suite" with two stages on two different days (different weather): each stage shows
+      its own day's sun (timeline time and light), clouds and weather in the scene and the overlay weather figures; the
+      change happens on the cut, nothing in between; same in the export.
 - [ ] "Plusieurs traces" › "En parallèle", "Caméra sur" « Celle en tête » (a cut when the lead changes or finishes)
       and « Toutes les traces » (all racers in the frame, the camera pulls back as they spread, no jump); a track
       chosen in the list becomes the first one; "Classement à l'image" with the overlay on; same in the export.
