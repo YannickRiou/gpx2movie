@@ -17,7 +17,7 @@ import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
 import type { IconName } from './icons'
-import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
+import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
 import { TrackMarkerSection } from './TrackMarkerSection'
 
 /** Value of the preset select when the camera matches no preset. */
@@ -307,6 +307,15 @@ export function CameraPanel() {
             <p className="field__hint">Le reste du trajet accélère pour compenser ralentis et pauses.</p>
           </MoreSettings>
         )}
+
+        <RangeField
+          label="Transitions"
+          {...PACING_RANGES.transitionS}
+          value={pacing.transitionS}
+          format={(v) => `${formatNumber(v, 2)} s`}
+          onChange={(transitionS) => updatePacing({ transitionS })}
+        />
+        <p className="field__hint">Durée des changements de vitesse : entrée et sortie des arrêts, des pauses et des portions de vitesse.</p>
       </PanelSection>
 
       <TrackMarkerSection />
