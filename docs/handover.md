@@ -319,17 +319,10 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
 **Proposed, waiting for the user's go**
 4. **Camera smoothing in time**: done on the work branch (« Lissage de la visée », « Lissage de la caméra » 3 s by
    default, « Fin en douceur », « Lissage des virages » in metres; see ARCHITECTURE.md, "Flyover"). To check on a GPU.
-5. **Motion blur** (« Flou de bougé », speed effect; idea from MapDirector's « Lens » panel: field of view 60°, lens
-   flare, vignette, bloom, bloom radius, depth of field, motion blur 0.6). Export: render several sub-frames across the
-   shutter interval of each video frame and average them (exact, deterministic, also helps the clouds converge; cost:
-   × the sub-frame count). Preview: a cheaper velocity-based blur, or none. Setting: shutter amount 0–1 (0 = off by
-   default). Same « Lens » panel, already there: vignette (« Couleurs » › « Plus de réglages »); fixed field of view
-   (`CAMERA_FOV_DEG` = 50°). Requested by the user, with the motion blur: **bloom** (glow of the bright areas: sun,
-   snow, water; amount and radius), **lens flare** (« Reflet d'objectif » when the sun is in or near the frame),
-   **depth of field** (sharp on the marker, distance blur; amount). All three off by default, in a « Objectif »
-   section, same in preview and export (postprocessing effects in the existing composer: `BloomEffect`,
-   `DepthOfFieldEffect`; lens flare from the sun position, e.g. a custom effect or a maintained library).
-   Adjustable field of view: still to weigh.
+5. **« Objectif »**: done on the work branch (« Flou de bougé »: radial speed blur from the film's camera speed, plus
+   the exact shutter blur of the export, 8 sub-frames sharing the cloud renders, and a trail in the preview; « Halo lumineux », « Reflet d'objectif » (atmosphere only), « Profondeur de champ »
+   on the marker; all off by default; ARCHITECTURE.md, "Lens"). Field of view kept fixed (too many framing
+   computations depend on it). To check on a GPU (`docs/tests-gpu.md`).
 6. **Situation shot, more control**: done on the work branch (« Lieu » among the areas containing the track,
    « Maintien » / « Plongée », « Cadrage » with « Capturer la vue actuelle », « Faire bouger le soleil »; see
    ARCHITECTURE.md, "Film and timeline", Camera). To check on a GPU (`docs/tests-gpu.md`); the place list was only
