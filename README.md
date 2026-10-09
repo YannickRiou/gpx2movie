@@ -1,6 +1,7 @@
 # OpenFlyover
 
 [![CI](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml/badge.svg)](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FYannickRiou%2Fgpx2movie%2Fbadges%2Fcoverage.json)](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml)
 [![Desktop installers](https://github.com/YannickRiou/gpx2movie/actions/workflows/desktop.yml/badge.svg)](https://github.com/YannickRiou/gpx2movie/actions/workflows/desktop.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1C2A33.svg)](LICENSE)
 [![Node 24](https://img.shields.io/badge/node-24-1C2A33?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -120,6 +121,7 @@ application is built with `npm run tauri:build`; installers for the three system
 | `npm run preview` | serves `dist/` on <http://localhost:4173> |
 | `npm test` | runs all tests (vitest) |
 | `npx vitest run --maxWorkers=1` | the same tests on a single core, more stable on a busy machine |
+| `npm run coverage` | the tests with code coverage (summary in the terminal, `coverage/coverage-summary.json`); CI publishes the line coverage as the README badge |
 | `npm run typecheck` | TypeScript type check |
 | `npm run lint` | code analysis (oxlint) |
 | `npm run e2e` | end-to-end tests in a real browser (see below) |
