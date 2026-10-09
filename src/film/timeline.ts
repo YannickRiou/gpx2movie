@@ -1,12 +1,10 @@
 /**
- * Timeline of the film (`ui/Timeline.tsx`): time ↔ pixel scale, ruler, snapping, and the edits of the film made
- * by its gestures (drag a block, drag an edge, nudge, add, remove, attach a text or a medium to a stop, which then
- * follows it), the edge auto-scroll speed, as pure functions. The component only turns pointer and keyboard events
- * into these calls and commits the result as one undo step.
+ * Timeline of the film (`ui/Timeline.tsx`): time <-> pixel scale, ruler, snapping, the edits made by its gestures (drag
+ * a block or an edge, nudge, add, remove, attach a text or a medium to a stop), as pure functions. The component only
+ * turns pointer and keyboard events into these calls and commits the result as one undo step.
  *
- * Items are selected by id: 'opening', 'closing', or the id of a stop, a speed portion, a camera key, a text, a medium
- * or a music clip (unique across the film).
- * Times are film times (seconds at ×1 from the first frame, opening included).
+ * Items are selected by id: 'opening', 'closing', or the id of a stop, speed portion, camera key, text, medium or music
+ * clip (unique across the film). Times are film times (seconds at x1 from the first frame, opening included).
  */
 import { clamp } from '../core/math'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'

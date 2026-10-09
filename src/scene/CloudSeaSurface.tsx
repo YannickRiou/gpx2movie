@@ -1,20 +1,14 @@
 /**
  * CloudSeaSurface — the sea of clouds drawn as a lit surface (« Nappe », `settings.clouds.seaRender` 'surface'),
  * inside AtmosphereLayer instead of the volumetric clouds: no ray marching, so no grain, at the cost of a single
- * opaque top (seen from below, an overcast ceiling).
+ * opaque top (seen from below, an overcast ceiling). See ARCHITECTURE.md "Volumetric clouds".
  *
- * One mesh: a radial grid centred under the camera (scene/cloudSea.ts: square cells, dense near the camera, out to
- * the horizon), lifted in the vertex shader to the top of the sea (`seaTopM` × exaggeration, minus the relief) along
- * the curvature of the Earth, and displaced into rolling cumulus billows that drift with the wind of the outing ×
- * film time (same drift as the volumetric clouds). The fragment shader evaluates the same relief per pixel for its
- * normal (octaves smaller than a pixel faded out: noise-free in the distance) and lights it with the sun and sky
- * lights of the atmosphere (warm at golden hour): wrap lighting, creases darker than the tops, self-shadowing from
- * the relief probed toward the sun, forward scattering through the rims and thin tops when looking toward the sun.
- * The aerial perspective of the composer hazes it like the terrain, into the horizon. Soft edge against the relief: a
- * grid of terrain altitudes under the sea (a half-float texture, sampled again when tiles arrive) fades the cloud out
- * where the terrain comes close below it, so the summits emerge without a hard line.
- *
- * Everything is a function of (settings, film time, camera): the export draws the same sea as the preview.
+ * One camera-centred radial mesh (scene/cloudSea.ts) lifted in the vertex shader to the top of the sea along the
+ * curvature of the Earth and displaced into cumulus billows drifting with the wind x film time; the fragment shader
+ * evaluates the same relief per pixel for its normal and lights it with the atmosphere's sun and sky lights.
+ * A grid of terrain altitudes under the sea fades the cloud out where the terrain comes close below it, so the
+ * summits emerge without a hard line. Everything is a function of (settings, film time, camera): the export draws
+ * the same sea as the preview.
  */
 import { useCallback, useEffect, useMemo, type RefObject } from 'react'
 import { useFrame } from '@react-three/fiber'

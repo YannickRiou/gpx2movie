@@ -1,18 +1,11 @@
 /**
- * Tile fetcher: `fetch()` + `createImageBitmap()` behind a priority queue, with bounded concurrency,
- * in-flight de-duplication by URL, an LRU cache of decoded bitmaps, AbortSignal support and automatic
- * retries on transient errors.
+ * Tile fetcher: `fetch()` + `createImageBitmap()` behind a priority queue, with bounded concurrency, in-flight
+ * de-duplication by URL, an LRU cache of decoded bitmaps, AbortSignal support and retries on transient errors.
  *
- * Lifecycle of a request
- * ----------------------
- *   fetchBitmap(url) -> cache hit? resolve immediately
- *                    -> already queued / in flight? join as an extra waiter (re-prioritise if lower)
- *                    -> otherwise queue; the pump starts up to `concurrency` requests, lowest priority first.
- *   A waiter whose AbortSignal fires is rejected with a DOMException("AbortError"); the underlying network
- *   request is only cancelled when its last waiter leaves.
- *   Evicted bitmaps are closed (`ImageBitmap.close()`) to release GPU/CPU memory promptly.
- *   Cache first: when a registered reader of stored tiles (offline packs, `setStoredTileReader`) covers the URL,
- *   the stored copy is decoded instead of asking the network; a miss or an unreadable copy falls back to the network.
+ * A waiter whose AbortSignal fires is rejected with an AbortError; the network request is only cancelled when its
+ * last waiter leaves. Evicted bitmaps are closed (`ImageBitmap.close()`) to release memory promptly.
+ * Cache first: a registered reader of stored tiles (offline packs, `setStoredTileReader`) is asked before the
+ * network; a miss or an unreadable copy falls back to the network.
  */
 import type { TileFetcher, TileFetcherStats } from '../core/types'
 

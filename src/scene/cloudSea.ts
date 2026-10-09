@@ -3,16 +3,12 @@
  * with the wind, its soft edge against the terrain, the camera-centred radial grid it is drawn on and the grid of
  * terrain heights its shader compares it with.
  *
- * Relief: octaves of billows (domes on a jittered grid, the highest one wins: rounded tops, sharp creases where two
- * meet, cauliflower once stacked) from ~2 km down to ~100 m over a gentle swell, in a domain warped by a low-frequency noise so the cells do not line up. Each octave
- * fades to its mean once its wavelength covers fewer than LOD_SAMPLES pixels (or grid cells): nothing smaller than a
- * pixel is drawn, the surface stays noise-free in the distance. `seaRelief` is the reference of the GLSL written by
- * `seaReliefGlsl` (same constants and formulas, double here, single precision there): tested here, drawn there.
+ * Relief: octaves of billows (domes on a jittered grid, the highest wins) from ~2 km down to ~100 m over a gentle swell,
+ * in a domain warped by a low-frequency noise. Each octave fades to its mean once its wavelength covers fewer than
+ * LOD_SAMPLES pixels (or grid cells), so the surface stays noise-free in the distance. `seaRelief` is the reference of
+ * the GLSL written by `seaReliefGlsl` (same constants and formulas, double here, single precision there).
  *
- * Everything is a function of (position, drift): the drift is wind × film time (weather/sceneClouds.ts), so the
- * export draws the same sea as the preview for the same frame.
- *
- * Pure functions (no DOM, no React, no Three).
+ * A function of (position, drift) only, so the export draws the same sea as the preview. Pure (no DOM, React or Three).
  */
 import { clamp } from '../core/math'
 import type { Wind } from '../weather/sceneClouds'

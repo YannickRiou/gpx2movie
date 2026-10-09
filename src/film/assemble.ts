@@ -1,15 +1,11 @@
 /**
- * Automatic assembly of the film when a track is loaded: overview opening, flight with a stop at each highlight
- * of the pacing (climb tops, passes crossed, peaks next to the track; one per cluster, like the pauses it
- * replaces), overview closing. The user retouches it afterwards on the timeline.
+ * Automatic assembly of the film when a track is loaded: overview opening, flight with a stop at each highlight of the
+ * pacing (one per cluster, like the pauses it replaces), overview closing. The user retouches it on the timeline.
  *
- * The highlight kinds and the clustering follow the pacing settings (`climbs`, `landmarks`, `windowM`). New films
- * ('temps-forts') stop at every highlight, camera orbiting; films saved before the timeline ('rythme') keep the
- * pauses of the pacing (only while it is on, `pauseS` each, camera held).
- *
- * « Ralentir et titrer aux repères » (`film.landmarkTitles`): at the most notable landmarks on the track (passes,
- * summits, huts), a slow-down portion and a title card with the name, written into the film (`withLandmarkTitles`)
- * and told apart from the user's own items by their ids (`auto-speed-…`, `auto-text-…`). Pure module.
+ * New films ('temps-forts') stop at every highlight, camera orbiting; films saved before the timeline ('rythme') keep
+ * the pauses of the pacing. « Ralentir et titrer aux repères » (`film.landmarkTitles`) writes a slow-down portion and a
+ * title card at the notable landmarks into the film (`withLandmarkTitles`), told apart from the user's items by their
+ * ids (`auto-speed-...`, `auto-text-...`). Pure module.
  */
 import type { Track } from '../core/types'
 import { climbsOf } from '../flyover/climbs'

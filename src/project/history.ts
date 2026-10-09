@@ -1,14 +1,11 @@
 /**
- * Undo / redo of settings changes.
+ * Undo / redo of settings changes. `createHistory` is generic: it watches immutable snapshots (an object replaced on
+ * every change, such as `settings`) through `subscribe`. Each step keeps only the keys it changed, so undo leaves alone
+ * what changed outside the history (e.g. the imagery source picked automatically on import).
  *
- * `createHistory` is generic: it watches immutable snapshots (any object replaced on every change, such as
- * `settings`) through `subscribe`. Each step keeps only the keys it changed (before / after values), so
- * undo restores those keys and leaves alone what changed outside the history (e.g. the imagery source picked
- * automatically on import). Rapid changes of the same keys (dragging a slider) are coalesced into one step;
- * `transaction` groups several changes (a preset); `beginGesture` keeps one step open however slow the changes (a
- * slider dragged with the pointer, `installSliderGestures`).
- * `getSettingsHistory` binds one instance to `useAppStore`; `installHistoryShortcuts` adds the keyboard;
- * `resetSettings` puts a group of settings back to their defaults as one step (and returns its guarded undo).
+ * Rapid changes of the same keys (a slider drag) are coalesced into one step; `transaction` groups several changes (a
+ * preset); `beginGesture` keeps one step open however slow the changes. `getSettingsHistory` binds one instance to
+ * `useAppStore`; `resetSettings` puts a group of settings back to their defaults as one step.
  */
 import { followFlightTiming } from '../scene/usePacing'
 import { DEFAULT_SETTINGS, useAppStore } from '../state/store'

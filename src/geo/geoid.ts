@@ -1,16 +1,14 @@
 /**
  * Geoid: EGM96 undulation N (metres, height of mean sea level above the WGS84 ellipsoid), 1° grid, bilinear.
  *
- * Elevation tiles (Terrarium) and GPX / FIT elevations are heights above mean sea level (h_msl); ECEF and the Takram
- * atmosphere work in ellipsoid heights: h_ellipsoid = h_msl + N. N is ~+51 m around Chamonix, +45 m in Paris, -107 m
- * south of Sri Lanka (lowest), +85 m over New Guinea (highest).
+ * Elevation tiles and GPX / FIT elevations are heights above mean sea level; ECEF and the Takram atmosphere work in
+ * ellipsoid heights: h_ellipsoid = h_msl + N (~+51 m around Chamonix, -107 m to +85 m worldwide).
+ * The scene keeps MSL heights in its local frame; only what reads it in true ECEF (atmosphere, clouds) uses
+ * `mslLocalToEcef`, the local frame raised by N at its origin. N varies by a few metres at most across a scene, so a
+ * constant offset is enough.
  *
- * The scene keeps MSL heights in its local frame (terrain, track, labels stay consistent with each other); only what
- * reads the scene in true ECEF (atmosphere, clouds) uses `mslLocalToEcef`, the local frame raised by N at its origin.
- * N varies by a few metres at most across a scene (~0.4 m per 10 km around the Mont-Blanc): a constant offset is enough.
- *
- * Grid: src/geo/egm96Grid.ts (scripts/gen-geoid.mjs, NGA EGM96, public domain). Error of the 1° grid against the
- * NGA 15' grid: 0.45 m RMS, < 2 m for 99 % of the globe, up to ~14 m on steep volcanic islands (Hawaii).
+ * Grid: src/geo/egm96Grid.ts (scripts/gen-geoid.mjs, NGA EGM96, public domain). Error against the NGA 15' grid: 0.45 m
+ * RMS, < 2 m for 99 % of the globe, up to ~14 m on steep volcanic islands.
  */
 import { Matrix4, Vector3 } from 'three'
 import type { LocalFrame } from '../core/types'

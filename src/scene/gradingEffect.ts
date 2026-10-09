@@ -1,16 +1,11 @@
 /**
  * Colour grading post-effect (`settings.grading`, scene/grading.ts): the last effect of the chain, after the tone
- * mapping and the anti-aliasing, on display-range linear colours. One cheap per-pixel shader (no texture read, no
- * depth): white balance, saturation, S curve, vignette.
+ * mapping and the anti-aliasing, on display-range linear colours. One cheap per-pixel shader: white balance,
+ * saturation, S curve around mid grey in sRGB (nothing clips), vignette.
  *
- *   colour × gain (warmth, luminance kept) → mix(luma, colour, saturation) → S curve around mid grey in sRGB
- *   (0 and 1 stay in place, nothing clips) → back to linear → × (1 − vignette · smoothstep(0.3, 1, r))
- *
- * r is the distance to the centre in frame units (0 at the centre, 1 in the corners): the vignette follows the
- * format and does not depend on the resolution, so the preview and the export match.
- *
- * Without the atmosphere the canvas is transparent over a CSS sky gradient; `skyBackdrop` then lays the image over
- * the same gradient first (the image is premultiplied: rgb + sky · (1 − alpha)) so that the sky is graded too and
+ * The vignette radius is in frame units (0 at the centre, 1 in the corners): it follows the format and not the
+ * resolution, so the preview and the export match. Without the atmosphere the canvas is transparent over a CSS sky
+ * gradient; `skyBackdrop` lays the (premultiplied) image over the same gradient first, so the sky is graded too and
  * the output is opaque.
  */
 import { BlendFunction, Effect } from 'postprocessing'

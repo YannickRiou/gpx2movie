@@ -1,20 +1,11 @@
 /**
  * Video clips of the film's media lane: reading a file into the media table, the frames drawn by the preview and
- * the frames decoded by the video export.
+ * the frames decoded by the video export. See ARCHITECTURE.md "Film and timeline", Media.
  *
- * - `readMedia(blob)` is the way in for every file of the lane (photo or video), so that the desktop app can give a
- *   Blob read from disk, or later a path, behind the same call. A clip is kept as is (no cheap way to downscale it
- *   in the page), so its file must stay under `MAX_VIDEO_BYTES`; it must be an MP4, WebM or QuickTime file whose
- *   video the browser decodes (WebCodecs, the same decoder as the export).
- * - Preview (`getPreviewVideos`): one HTMLVideoElement per clip, playing along during the playback and
- *   paused on the film time when scrubbing; the last frame seeked to is kept while the next seek runs. A clip
- *   following the flight (`sync.follow`) plays at the rate the recorded time passes under the marker, held during
- *   a stop. Its sound is heard only while it plays at ×1 (`clipHasSound`): muted when scrubbing, at any other speed
- *   and when following the flight, where the browser would resample it.
- * - Export (`createExportVideos`): frame-exact and deterministic, never real-time playback: before every frame the
- *   frame of each visible clip at its time in the file is decoded by mediabunny (the last frame starting at or
- *   before that time), reading forward from the previous one. Its sound is decoded once, before the first frame
- *   (`decodeClipSound`), for the mix of the soundtrack (`film/audio.ts`).
+ * `readMedia(blob)` is the single way in for photos and clips, so the desktop app can give a Blob read from disk behind
+ * the same call. A clip is kept as is (no cheap way to downscale it in the page): at most `MAX_VIDEO_BYTES`, and its
+ * video must be decodable by the browser (WebCodecs, as for the export).
+ * The export is frame-exact and deterministic, never real-time playback.
  *
  * Browser module (DOM, WebCodecs); the frame logic is written over injected sources and tested.
  */

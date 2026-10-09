@@ -1,12 +1,11 @@
 /**
- * Strava API v3 for « Importer depuis Strava ». Strava has no PKCE: exchanging the authorization code needs the
- * client secret. With no server of its own, OpenFlyover lets the user bring their own Strava API application
- * (strava.com/settings/api, free): its Client ID and Client Secret are kept with the tokens in the platform storage
- * and only ever sent to strava.com. Strava answers browsers with CORS (`Access-Control-Allow-Origin: *`), so the site
- * and the desktop webview call it directly.
+ * Strava API v3 for « Importer depuis Strava ». Strava has no PKCE: exchanging the authorization code needs the client
+ * secret. With no server of its own, OpenFlyover lets the user bring their own Strava API application: its Client ID
+ * and Secret are kept with the tokens in the platform storage and only ever sent to strava.com. Strava answers browsers
+ * with CORS, so the site and the desktop webview call it directly. See ARCHITECTURE.md "Strava import".
  *
- * URL builders, callback parsing, refresh decision and error texts are pure (tested); the rest reads the storage
- * and calls `fetch`.
+ * URL builders, callback parsing, refresh decision and error texts are pure (tested); the rest reads the storage and
+ * calls `fetch`.
  */
 import { getPlatform } from '../platform'
 

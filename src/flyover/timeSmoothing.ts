@@ -1,17 +1,14 @@
 /**
  * Smoothing of the flight camera in film time (`settings.camera`): the aim point (« Lissage de la visée ») and the
  * camera (« Lissage de la caméra ») follow the marker's progress averaged over a window of film time, so speed changes,
- * pauses and stops ease the view in and out instead of jerking it; « Fin en douceur » slows the camera down to a stop
- * over the last seconds of the flight.
+ * pauses and stops ease the view instead of jerking it; « Fin en douceur » slows the camera to a stop at the end.
+ * See ARCHITECTURE.md "Flyover", Smoothing in film time.
  *
- * The progress is averaged rather than the placements: at constant speed the average is the progress itself (no
- * change), the averaged point stays on the track (no corner cut in the bends, no angle to average), and a sample
- * costs a look-up in the clock instead of a camera placement (about 65 terrain samples). Raised-cosine weights over
- * TIME_SMOOTHING_SAMPLES fixed offsets: a sum of shifted copies of the clock's progress, so as continuous as it is
- * and a pure function of the film time (the export renders any frame alone). The clock clamps the film time and holds
- * the progress outside the flight (0 during the opening, 1 during the closing): the windows reach across the edges
- * of the flight without a jump, the camera easing out of its rest in the last half window of the opening and into it
- * in the first half window of the closing.
+ * The progress is averaged rather than the placements: at constant speed the average is the progress itself, the
+ * averaged point stays on the track (no corner cut), and a sample costs a clock look-up instead of a camera placement.
+ * Raised-cosine weights over TIME_SMOOTHING_SAMPLES fixed offsets keep it a pure function of the film time (the export
+ * renders any frame alone). The clock holds the progress outside the flight, so the windows reach across its edges
+ * without a jump.
  */
 import type { FilmClock } from '../film/clock'
 import type { CameraViewOptions } from './camera'

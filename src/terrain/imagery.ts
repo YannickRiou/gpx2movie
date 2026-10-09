@@ -1,11 +1,8 @@
 /**
- * Composite imagery texture for one terrain tile.
- *
- * For a terrain tile (z, x, y) and `zoomOffset = k`, the 2^k x 2^k imagery sub-tiles at z + k are drawn
- * into one canvas of `tileSize * 2^k` pixels, which becomes a sRGB `CanvasTexture` with mipmaps.
- * When z + k exceeds the source's maxZoom, the deepest available tiles are cropped / scaled up instead.
- * Sub-tiles outside the source coverage are skipped; failed sub-tiles are left grey; the promise only
- * rejects when every sub-tile failed or the signal was aborted.
+ * Composite imagery texture for one terrain tile: for a tile (z, x, y) and `zoomOffset = k`, the 2^k x 2^k imagery
+ * sub-tiles at z + k are drawn into one canvas of `tileSize * 2^k` pixels (an sRGB `CanvasTexture` with mipmaps).
+ * Past the source's maxZoom the deepest tiles are cropped / scaled up; sub-tiles outside the source coverage are
+ * skipped and failed ones left grey; the promise rejects only when every sub-tile failed or the signal was aborted.
  *
  * `planImagerySubtiles` is pure (and tested); `loadImageryTexture` does the fetching and drawing.
  */

@@ -1,14 +1,12 @@
 /**
- * TrackPicker — direct manipulation of the first track in the 3D view: a click on the line moves the playhead there
- * (film time of that progress), a right-click opens a small menu « Ajouter un arrêt ici » / « Ajouter un texte ici » /
- * « Accélérer / ralentir ici » (`TrackMenu`, DOM, next to the canvas); the cursor becomes a pointer over the line. A
- * right-click on the relief, on the line or off it, also offers « Point d'intérêt ici » (a name typed in the menu). A
- * press that travels `CLICK_SLOP_PX` or more is a camera drag (OrbitControls), not a click. Nothing during an export.
+ * TrackPicker — direct manipulation of the first track in the 3D view: a click on the line moves the playhead there, a
+ * right-click opens a small menu (`TrackMenu`, DOM, next to the canvas) to add a stop, a text, a speed portion or a
+ * point of interest. A press that travels `CLICK_SLOP_PX` or more is a camera drag (OrbitControls), not a click.
+ * Nothing during an export.
  *
- * Picking is in screen space (`pickProjectedPath`, pure): samples of the path draped like the line (terrain height, else
- * recorded elevation, × exaggeration + lift), projected with the camera, nearest within `PICK_RADIUS_PX`. A part of the
- * line hidden by the relief can be picked too (the line shows it in transparency). The relief is picked by a ray on the
- * tiles drawn, only on a right-click (the point of the track picked when no tile is under the pointer yet).
+ * Picking is in screen space (`pickProjectedPath`, pure): the path draped like the line, projected with the camera,
+ * nearest within `PICK_RADIUS_PX`; a part hidden by the relief can be picked too. The relief is picked by a ray on the
+ * tiles drawn, only on a right-click.
  */
 import { useEffect, useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'

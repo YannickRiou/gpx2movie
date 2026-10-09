@@ -1,20 +1,13 @@
 /**
  * OpenStreetMap landmarks near a track, through the public Overpass API (no key, ODbL data).
  *
- * One bounded query per track: the kinds are searched inside one bounding box around the track (expanded
- * by the largest distance the UI offers), or inside a few boxes along it when the track spans more than
- * `MAX_BOX_SPAN_M`. A plain box is by far the cheapest Overpass form (index lookup, ~2–3 s for the sample
- * track) where `around:` on a polyline of a few dozen vertices times out on the public server (> 80 s)
- * (docs/sources.md); the exact distance to the track is computed here (`landmarks.ts`). Changing the kinds
- * or the distance later only filters the cached result and never sends a new query.
+ * One bounded query per track (a bounding box, or a few along it past `MAX_BOX_SPAN_M`): a plain box is by far the
+ * cheapest Overpass form, where `around:` on a polyline times out on the public server (docs/sources.md); the exact
+ * distance to the track is computed here (`landmarks.ts`). Changing the kinds or the distance only filters the cache.
  *
- * Usage policy: requests are sent one at a time (module queue), results are cached in memory and in the
- * platform storage (`getPlatform().storage`, localStorage on both targets) keyed by a hash of the query, a busy
- * server (HTTP 429 / 504) is retried once after a delay and then the next endpoint of `OVERPASS_ENDPOINTS` is tried.
- * The query builder, the response guard and the planar distances are shared with `water.ts` and `landmarks.ts`.
- *
- * The POST body is form-encoded so the browser sends a "simple" CORS request: overpass-api.de answers the
- * OPTIONS preflight with 406.
+ * Usage policy: one request at a time, cached in memory and in the platform storage, one retry on HTTP 429 / 504 then
+ * the next of `OVERPASS_ENDPOINTS`. The POST body is form-encoded so the browser sends a "simple" CORS request:
+ * overpass-api.de answers the OPTIONS preflight with 406.
  */
 import { cyrb53 } from '../core/math'
 import type { LonLat, LonLatBounds, Track } from '../core/types'

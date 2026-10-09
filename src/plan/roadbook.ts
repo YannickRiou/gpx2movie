@@ -1,18 +1,11 @@
 /**
  * Roadbook (« Feuille de route ») of a route, planned or recorded: its steep sections and its key points ordered along
  * it, each with distance, elevation, climb since the start and, when the track has times, the time of passage.
+ * See ARCHITECTURE.md "Roadbook".
  *
- * - Steep sections: runs of points whose slope (`metricValues(…, 'slope')`, the ±50 m window of the slope colouring)
- *   is at least `STEEP_PERCENT`, uphill or downhill. Runs of the same direction less than `STEEP_MERGE_GAP_M` apart
- *   are merged, runs shorter than `STEEP_MIN_LENGTH_M` dropped; « très raide » when the steepest windowed slope of the
- *   run reaches `VERY_STEEP_PERCENT`.
- * - Key points: start, end, climb tops (`climbsOf`), OSM landmarks near the route (`ROADBOOK_LANDMARKS`), the points of
- *   interest of the film (at the nearest track point) and the start of each steep section. A climb top with a pass or
- *   a summit less than `SAME_PLACE_M` away along the track is that landmark (one row).
- * - D+ since the start: `computeElevationGain` (the rule of the track stats) on the elevations up to the row, so the
- *   last row matches `track.stats.ascentM`.
- *
- * Pure functions (no DOM, no React).
+ * Steep sections are runs of the windowed slope (`metricValues(..., 'slope')`) of at least `STEEP_PERCENT`, merged and
+ * filtered by the `STEEP_*` constants. D+ since the start uses `computeElevationGain` (the rule of the track stats), so
+ * the last row matches `track.stats.ascentM`. Pure functions (no DOM, no React).
  */
 import type { Track } from '../core/types'
 import type { FilmPoi } from '../film/model'

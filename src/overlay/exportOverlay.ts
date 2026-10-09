@@ -1,12 +1,10 @@
 /**
- * Bridge between the film overlay and the video export: the export draws every frame through the same
- * `drawOverlay` as the preview (OverlayCanvas), so the movie shows exactly what the viewer sees.
+ * Bridge between the film overlay and the video export: the export draws every frame through the same `drawOverlay` as
+ * the preview (OverlayCanvas), so the movie shows what the viewer sees.
  *
- * The export draws synchronously, so the logo is loaded ahead of time, whenever the setting changes, and the
- * pictures of the photos and the frames of the video clips shown by a frame before it is composed
- * (`loadFrameMedia`, decoded at the frame's time: never real-time playback; `releaseFrameMedia` after the export).
- * `overlayExtras` reads what both draw beyond the track (timeline texts and photos, credits of the sources in use,
- * ghost-race leaderboard, dip of a shot transition, card and dip of a stage « À la suite »).
+ * The export draws synchronously, so the logo is loaded ahead of time and the pictures and video-clip frames shown by a
+ * frame are decoded before it is composed (`loadFrameMedia`, at the frame's time; `releaseFrameMedia` after the export).
+ * `overlayExtras` reads what both draw beyond the track (timeline texts and photos, credits, leaderboard, dips, cards).
  */
 import type { Track } from '../core/types'
 import { DIP_DEFAULT_S, dipAlpha, transitionDipAt } from '../film/model'

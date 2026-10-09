@@ -3,10 +3,9 @@
  * list of the tracks, credits of the sources. Pure (no DOM, no React): `posterContent` takes the tracks and what the
  * stores know.
  *
- * Several tracks: a set of outings sums them (figures of all the tracks, their count in the subtitle, no weather of a
- * single day); a ghost race keeps the figures and weather of the lead (the same route). Either way the list of the
- * tracks takes the place of the profile: up to POSTER_LIST_MAX tracks are listed (name, distance, D+, date), more
- * are only counted and summed.
+ * Several tracks: a set of outings sums them (no weather of a single day); a ghost race keeps the figures and weather
+ * of the lead (the same route). Either way the list of the tracks takes the place of the profile (up to
+ * POSTER_LIST_MAX tracks listed, more are only counted and summed).
  */
 import type { Track, TrackStats } from '../core/types'
 import { buildTrackPath, elevationProfile } from '../flyover/path'

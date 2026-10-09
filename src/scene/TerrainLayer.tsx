@@ -1,13 +1,11 @@
 /**
- * TerrainLayer — owns the terrain engine lifecycle (create / configure / dispose) and shares the engine
- * and the local tangent frame with sibling scene components through React context.
+ * TerrainLayer — owns the terrain engine lifecycle (create / configure / dispose) and shares the engine and the local
+ * tangent frame with sibling scene components through React context.
  *
- * The engine is created in an effect, never in useMemo: React StrictMode double-invokes effects, and
- * "create in the effect body, dispose in its cleanup" is the only pattern that cannot leak GPU resources.
- *
- * The engine is recreated only when the local frame changes, when the tracks grow outside the area the current
- * engine was built for or when a 'situation' shot is added or removed (its view from very high needs a much larger,
- * coarse area: `engineAreaFor`); settings changes are forwarded with `engine.setOptions`.
+ * The engine is created in an effect, never in useMemo: React StrictMode double-invokes effects, and "create in the
+ * effect body, dispose in its cleanup" is the only pattern that cannot leak GPU resources.
+ * It is recreated only when the local frame changes, when the tracks grow outside its area or when a 'situation' shot
+ * is added or removed (`engineAreaFor`); settings changes go through `engine.setOptions`.
  */
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'

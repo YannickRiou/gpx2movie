@@ -1,19 +1,15 @@
 /**
- * Labels — names anchored on the draped relief, drawn inside WebGL so a canvas capture (video export)
- * includes them: tops of the climbs of the first track, GPX waypoints of every track, points of interest placed by
- * hand (`film.pois`), and every external source registered in `labelSources.ts`. The start and the finish of every
- * track always have a flag pin, named on the first track with « Départ et arrivée » (`labels.endpoints`).
+ * Labels — names anchored on the draped relief, drawn inside WebGL so a canvas capture (video export) includes them:
+ * climb tops, GPX waypoints, points of interest (`film.pois`) and the sources registered in `labelSources.ts`.
+ * The start and the finish of every track always have a flag pin.
  *
- * Each label is a Sprite (sizeAttenuation off, so a constant size on screen) whose canvas texture holds an
- * ink panel with white text, a stem and an anchor dot in the accent of its kind (a point of interest has a pin
- * in place of the accent stripe). Sprites skip the depth
- * test; instead, every frame, a label fades out when its line of sight passes under the relief or when it
- * is far away, and colliding labels are dropped by priority; they also fade out while an opening or closing
- * card of the film overlay is shown. Opacity is a pure function of the view, the progress, the film time and
- * the overlay settings (no temporal smoothing) so any frame renders the same in isolation.
+ * Each label is a Sprite (sizeAttenuation off: constant screen size). Sprites skip the depth test; instead, every frame,
+ * a label fades out when its line of sight passes under the relief or when it is far away, and colliding labels are
+ * dropped by priority. Opacity is a pure function of the view, the progress, the film time and the overlay settings
+ * (no temporal smoothing) so any frame renders the same in isolation.
  *
- * Anchors are draped like the track (terrain height, else the recorded elevation, × exaggeration) and
- * re-draped (debounced) whenever the terrain engine reports new tiles. Must be rendered inside TerrainLayer.
+ * Anchors are draped like the track and re-draped (debounced) when the terrain engine reports new tiles.
+ * Must be rendered inside TerrainLayer.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'

@@ -1,13 +1,10 @@
 /**
  * Geometry of the highlighted administrative region (osm/region.ts) for scene/RegionHighlight.tsx: the darkened
- * outside as one triangle mesh (a box `marginM` around the region with the region cut out, earcut of three's
- * ShapeUtils on an equirectangular plane), the points of its border rings for the glowing line, and where its name
- * goes (`labelPoint`).
+ * outside as one triangle mesh (a box `marginM` around the region with the region cut out), the points of its border
+ * rings for the glowing line, and where its name goes (`labelPoint`).
  *
- * The rings are even-odd like the region's: a ring inside no other is an outer ring (a hole of the darkened box,
- * exclaves included), a ring inside one other is an enclave, darkened on its own; deeper nesting is ignored.
- *
- * Pure (three is used for its triangulation only).
+ * The rings are even-odd: a ring inside no other is an outer ring (a hole of the darkened box, exclaves included), a
+ * ring inside one other is an enclave, darkened on its own; deeper nesting is ignored. Pure (three: triangulation only).
  */
 import { ShapeUtils, Vector2 } from 'three'
 import type { LonLat, LonLatBounds } from '../core/types'

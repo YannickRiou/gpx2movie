@@ -1,28 +1,13 @@
 /**
  * AtmosphereLayer — physically based sky, sun / sky lighting and aerial perspective (Takram's precomputed
- * atmospheric scattering). Rendered inside TerrainLayer: the local frame gives the world → ECEF matrix, raised by the
- * geoid undulation at its origin (scene heights are above sea level, Takram expects ellipsoid heights: geo/geoid.ts).
+ * atmospheric scattering). Rendered inside TerrainLayer; see ARCHITECTURE.md "Atmosphere" for the pass chain.
  *
- * Lighting uses light sources (SunLight + SkyLight) so the terrain keeps its MeshStandardMaterial; the
- * aerial perspective post-process adds the distance haze, and the composer tone-maps the HDR result (Khronos
- * Neutral, which keeps the hues of the orthophotos and the track).
- *
- * Every frame: the sun date follows the playback (recorded time under the marker, else the solar hour, see
- * flyover/sun.ts; « À la suite » those of the stage under the marker, as its weather and clouds), then the exposure
- * opens up as the sun goes down and a faint night fill keeps the relief readable (scene/exposure.ts).
- * The weather of the outing under the marker at that date (weather/sceneWeather.ts, `settings.weatherScene`)
- * then dims the sun and sky lights, fades the shadows, adds exposure, and drives the weather post-effect
- * (extra haze near the ground, veiled sky, desaturation: scene/weatherEffect.ts).
- * The SMAA runs in a pass of its own, after the tone mapping: on the edges it blends the pass input, so merged into
- * the pass of the other effects it would put back the raw HDR image (no haze, no tone mapping) along the ridges.
- * The colour grading (`settings.grading`, scene/GradingComposer.tsx) closes the chain, in the same pass after the SMAA
- * and the « Objectif » effects (`settings.lens`, scene/useLensEffects.ts); the motion blur adds a last pass.
- * Volumetric clouds (`settings.clouds`, scene/CloudsLayer.tsx) are composited by the aerial perspective; while they
- * are shown, the veil over the sky pixels is lighter (the clouds themselves cover it). A sea of clouds rendered as a
- * surface (scene/CloudSeaSurface.tsx) is a mesh of the scene instead, hazed by the aerial perspective like the terrain.
- * The precomputed scattering textures ship with the package and are served locally at /atmosphere/ (see
- * vite.config.ts): generating them at start-up runs in idle callbacks, which never fire while a heavy scene
- * keeps the main thread busy, and the lights would stay black.
+ * The local frame gives the world -> ECEF matrix, raised by the geoid undulation: scene heights are above sea level,
+ * Takram expects ellipsoid heights (geo/geoid.ts).
+ * The SMAA runs in a pass of its own, after the tone mapping: on the edges it blends the pass input, so merged into the
+ * pass of the other effects it would put back the raw HDR image (no haze, no tone mapping) along the ridges.
+ * The scattering textures are served locally at /atmosphere/ (vite.config.ts): generating them at start-up runs in idle
+ * callbacks, which never fire while a heavy scene keeps the main thread busy, and the lights would stay black.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'

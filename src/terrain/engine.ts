@@ -1,13 +1,9 @@
 /**
- * Terrain engine: owns the quadtree, streams DEM + imagery tiles, builds meshes into a
- * THREE.Group and drives the level of detail once per frame. Framework-agnostic (no React).
+ * Terrain engine: owns the quadtree, streams DEM + imagery tiles, builds meshes into a THREE.Group and drives the
+ * level of detail once per frame. Framework-agnostic (no React). Design: ARCHITECTURE.md "Terrain engine".
  *
- * Data access (fetcher, DEM decoding, height field, imagery compositing) is injected through
- * `EngineDeps` so the engine can be driven in tests without network, canvas or WebGL.
- *
- * Lifecycle of a node: empty -> loading -> ready | failed. `update()` renders the selection,
- * starts loads within a concurrency budget, rebuilds dirty geometries (exaggeration change) with a
- * per-frame budget and periodically unloads nodes that have not been visited for a while.
+ * Data access (fetcher, DEM decoding, height field, imagery compositing) is injected through `EngineDeps` so the engine
+ * can be driven in tests without network, canvas or WebGL.
  */
 import { FrontSide, Group, Mesh, MeshStandardMaterial } from 'three'
 import type { PerspectiveCamera, Texture } from 'three'

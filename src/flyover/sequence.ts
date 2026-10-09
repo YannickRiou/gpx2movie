@@ -1,12 +1,11 @@
 /**
- * « À la suite » (several tracks, `settings.race.sequence`): the film flies the tracks one after the other, in the order
- * of the list, without merging them. The film runs along a sequence track (their segments one after the other, like
- * « Enchaîner en un seul parcours » but in list order and never stored), so the clock, the stops, the camera keys and
- * the landmarks work in metres along it; each track stays a stage with its own colour, name and figures, and the camera
- * flies each stage on its own path (`flyover/follow.ts`): the jump from one stage to the next is a cut.
+ * « À la suite » (`settings.race.sequence`): the film flies the tracks one after the other, in list order, without
+ * merging them. The film runs along a sequence track (never stored), so the clock, the stops, the camera keys and the
+ * landmarks work in metres along it; each track stays a stage with its own colour, name and figures, and the camera
+ * flies each stage on its own path (`flyover/follow.ts`). See ARCHITECTURE.md "Several tracks".
  *
- * Pure functions (no DOM, no React, no Three, no store); results cached on their inputs so they keep their identity
- * from one frame to the next (memoised clocks and paths).
+ * Pure functions (no DOM, React, Three or store); results cached on their inputs so they keep their identity from one
+ * frame to the next.
  */
 import type { Track } from '../core/types'
 import { chainName } from '../import/chain'

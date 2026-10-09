@@ -1,12 +1,11 @@
 /**
- * Project document: one self-contained, versioned JSON file holding every setting, the tracks and the pictures
- * of the film (media table, `film/media.ts`).
- * Pure functions (no store, no DOM): `serializeProject` / `parseProject`, settings sanitising and
- * the version migration chain. Applying a parsed project to the store lives in `apply.ts`.
+ * Project document: one self-contained, versioned JSON file holding every setting, the tracks and the pictures of the
+ * film (media table, `film/media.ts`). Pure functions: `serializeProject` / `parseProject`, settings sanitising and the
+ * version migration chain. Applying a parsed project to the store lives in `apply.ts`.
  *
- * Settings are handled generically over the keys of `DEFAULT_SETTINGS`: a new setting is saved,
- * validated (against the type of its default) and restored without touching this file. Add an entry
- * to `SETTING_CHECKS` only when a value of the right type can still be invalid (enum, catalogue id, range).
+ * Settings are handled generically over the keys of `DEFAULT_SETTINGS`: a new setting is saved, validated (against the
+ * type of its default) and restored without touching this file. Add an entry to `SETTING_CHECKS` only when a value of
+ * the right type can still be invalid (enum, catalogue id, range).
  */
 import { isRecord } from '../core/guards'
 import type { Track, TrackPoint, TrackSegment, Waypoint } from '../core/types'

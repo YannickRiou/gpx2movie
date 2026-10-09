@@ -1,17 +1,13 @@
 /**
  * WaterLayer — lakes and rivers of OpenStreetMap (osm/water.ts) as a reflective water surface slightly above the
- * relief, inside TerrainLayer.
+ * relief, inside TerrainLayer. See ARCHITECTURE.md "Reflective water".
  *
- * Geometry: each polygon is meshed once (scene/waterMesh.ts: grid cells inside the water, fade from the shore), then
- * draped like the track (`engine.sampleHeight` × exaggeration + WATER_LIFT_M) and re-draped (debounced, flushed by
- * the video export) when tiles arrive. A lake is flat at a low percentile of its heights (the DEM of its banks does
- * not lift it), a river area follows its valley. One merged geometry, one draw call.
+ * Each polygon is meshed once (scene/waterMesh.ts), draped like the track (`engine.sampleHeight` x exaggeration +
+ * WATER_LIFT_M) and re-draped (debounced, flushed by the video export) when tiles arrive. A lake is flat at a low
+ * percentile of its heights (the DEM of its banks does not lift it), a river area follows its valley.
  *
- * Shading: MeshStandardMaterial (sun light, sun glint of a low roughness, relief shadows) extended in
- * `onBeforeCompile`: normals of four gentle waves (directional sines animated by the film time, faded out when
- * smaller than a few pixels, no shimmer in the distance), Fresnel reflection of the sky (radiance of the sky light
- * probe of the atmosphere in the reflected direction, else a fixed sky colour), opacity = shore fade ×
- * mix(WATER_OPACITY, 1, Fresnel) × strength. Everything is a function of the film time: the export is deterministic.
+ * Shading: MeshStandardMaterial extended in `onBeforeCompile` (animated waves faded out below a few pixels, Fresnel
+ * reflection of the sky). Everything is a function of the film time: the export is deterministic.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useFrame } from '@react-three/fiber'

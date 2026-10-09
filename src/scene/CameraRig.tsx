@@ -1,15 +1,12 @@
 /**
  * CameraRig — orbit controls plus "fit to tracks".
  *
- * A fit is performed when the store's `fitRequest` counter changes, and once when bounds first appear
- * while the rig is mounted. The first fit snaps (no fly-in from the default camera spot); later fits
- * animate position and target over ~800 ms with ease-in-out. Any user interaction cancels the animation.
+ * A fit runs when the store's `fitRequest` counter changes, and once when bounds first appear. The first fit snaps;
+ * later ones animate position and target over ~800 ms, cancelled by any user interaction.
  *
- * Whenever the controls move the camera (orbit, pan, zoom, damping, fit), it is lifted to stay
- * FREE_CAMERA_CLEARANCE_M above the draped relief, so it never looks at the tiles from below; also when the ground
- * changes under a camera sitting still (tiles loaded, reported by the engine, or another exaggeration): one sample,
- * and a frame drawn only if it moved. Nothing is sampled otherwise, nor while the film plays or a video is exported
- * (FlyoverRig drives the camera then).
+ * Whenever the controls move the camera, or the ground changes under a camera sitting still, it is lifted to stay
+ * FREE_CAMERA_CLEARANCE_M above the draped relief (one sample, and a frame drawn only if it moved). Nothing is sampled
+ * otherwise, nor while the film plays or a video is exported (FlyoverRig drives the camera then).
  */
 import { useCallback, useEffect, useMemo, useRef, type ComponentRef } from 'react'
 import { invalidate, useFrame } from '@react-three/fiber'

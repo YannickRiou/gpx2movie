@@ -1,14 +1,10 @@
 /**
- * One film per track of a folder (« Un film par trace »), app side: each file shown alone with its automatic film,
- * the request fields of that film, and the app put back as it was at the end of the run (`runTrackFilms` in
- * batch.ts runs the tracks).
+ * One film per track of a folder (« Un film par trace »), app side: each file shown alone with its automatic film, and
+ * the app put back as it was at the end of the run (`runTrackFilms` in batch.ts runs the tracks).
  *
- * Every setting stays (style, camera, overlay, format). The film keeps its shots, its options and its music, not
- * what was placed by hand for the tracks loaded before: stops (generated again), speed portions, framings, texts,
- * photos and videos, points of interest. Its landmark titles are made again once the landmarks have arrived.
- *
- * The undo history records nothing during the run, and the tracks and settings are put back as the same objects:
- * « Enregistré » stays, and undoing after the run goes back to the steps of before.
+ * Every setting stays; the film keeps its shots, options and music, not the items placed by hand for the tracks loaded
+ * before (stops are generated again). The undo history records nothing during the run, and the tracks and settings are
+ * put back as the same objects: « Enregistré » stays, and undoing after the run goes back to the steps of before.
  */
 import { filmClockFor } from '../film/clock'
 import type { Film } from '../film/model'

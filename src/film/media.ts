@@ -1,18 +1,11 @@
 /**
  * Pictures and video clips of the film's media lane, and the sound files of its music lane: the media table of the
  * project document, file access and decoding of the pictures (the clips: `video.ts`; the music: `audio.ts`).
+ * See ARCHITECTURE.md "Film and timeline", Media.
  *
- * The table maps an id (`film.media[].src`) to the picture, kept downscaled as a JPEG data URL, or to the video
- * clip, kept as is (its original bytes, `MAX_VIDEO_BYTES` at most), each with a small thumbnail, so that a project
- * stays one self-contained file (web and desktop app alike) while the settings and their undo history only hold
- * ids. A sound file is kept as is too (`MAX_AUDIO_BYTES` at most), with a small waveform (`peaks`) instead of a
- * thumbnail. An entry stays in the table when its medium leaves the film (undo brings it back); a saved project keeps
- * only the entries its film uses (`usedMedia`).
- *
- * Files come in through `readMedia(blob)` (`video.ts`: `readPhoto` or `readVideo`): the web file picker and drop
- * give a File, the desktop app will give a Blob read from disk. Drawing reads decoded pictures from
- * `getMediaBitmaps()`: decoded on demand, cached by id, released once the film no longer uses them, a few at most
- * held at once.
+ * The table maps an id (`film.media[].src`) to the picture (downscaled JPEG data URL) or to the original clip / sound
+ * bytes, so a project stays one self-contained file while the settings and the undo history only hold ids. An entry
+ * stays when its medium leaves the film (undo brings it back); a saved project keeps only `usedMedia`.
  *
  * Unlike the rest of `film/`, this module touches the browser (canvas, createImageBitmap) and holds a store;
  * the table checks, the data URL decoding and the cache (decoder injected) are pure and tested.

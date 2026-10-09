@@ -1,14 +1,12 @@
 /**
- * Flyover camera: the view (camera position, look-at target = marker) as a pure function of the progress, the
- * film time, the camera settings and the terrain sampler. No smoothing state from frame to frame, so a given
- * progress and film time always give the same image: the video export can render any frame on its own.
+ * Flyover camera: the view (camera position, look-at target = marker) as a pure function of the progress, the film
+ * time, the camera settings and the terrain sampler. No frame-to-frame state, so the video export can render any frame
+ * on its own. Styles and the steady-heights scheme: ARCHITECTURE.md "Flyover".
  *
- * Every style places the camera on a sphere around the aim point (above the marker, at the smoothed ground
- * height), then raises it to keep MIN_GROUND_CLEARANCE_M above the smoothed ground and the sight line to the aim
- * above the relief. The heights are read from terrain samples that stay put while the marker moves (fixed track
- * distances, a fixed grid), so the camera follows the relief without riding each bump. Each term is continuous in
- * the progress and the film time, so the camera never jumps. The time-based motions (orbit, cinematic swing)
- * follow the film time, so they keep moving while the pacing holds the progress.
+ * Each style places the camera on a sphere around the aim point, then raises it to keep MIN_GROUND_CLEARANCE_M above the
+ * smoothed ground and the sight line above the relief. The heights are read from terrain samples that stay put while
+ * the marker moves, so the camera follows the relief without riding each bump. The time-based motions (orbit, cinematic
+ * swing) follow the film time, so they keep moving while the pacing holds the progress.
  */
 import { Vector3 } from 'three'
 import { clamp, lastIndexAtOrBelow } from '../core/math'
@@ -233,14 +231,11 @@ function placement(
 }
 
 /**
- * Camera view at `progress` along `path` and film time `options.timeS`. The camera looks at the aim point along
- * the reference direction rotated by the view angle, from `distance` away at `pitch` above the horizon; it is then
- * raised (pitch steepens) to stay MIN_GROUND_CLEARANCE_M above the smoothed terrain (MIN_TERRAIN_CLEARANCE_M above
- * the actual terrain) and until the sight line to the aim clears the terrain between.
- * Aim = marker x / z at the smoothed ground height (`trackGround`, at least the grid ground the clearance reads,
- * so the sight line ends above it) + `liftM`. Heights: terrain sample, else recorded elevation, else 0; times
- * `exaggeration`. Time smoothing (`aimProgress`, `cameraProgress`, see `timeSmoothing.ts`): the aim point and the
- * camera follow their own progress; the camera then stands around its own point of the track, at the aim's height.
+ * Camera view at `progress` along `path` and film time `options.timeS`: looks at the aim point from `distance` away
+ * at `pitch` above the horizon, then raised (pitch steepens) to stay MIN_GROUND_CLEARANCE_M above the smoothed terrain
+ * (MIN_TERRAIN_CLEARANCE_M above the actual one) and until the sight line to the aim clears the terrain between.
+ * Aim = marker x / z at the smoothed ground height (`trackGround`) + `liftM`. Heights: terrain sample, else recorded
+ * elevation, else 0; times `exaggeration`. `aimProgress` / `cameraProgress`: see `timeSmoothing.ts`.
  */
 export function computeCameraView(
   path: TrackPath,

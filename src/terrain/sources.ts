@@ -1,11 +1,7 @@
 /**
  * Catalogue of open tile sources (no API key). Attribution strings MUST be shown in the UI.
- *
- * Every value below was verified empirically (HTTP status, CORS for http://127.0.0.1:5173, tile pixel
- * size read from the image header, max zoom probed around Chamonix and in a second region, capabilities
- * documents): 2026-10-05, maps and dated orthophotos 2026-10-07. Details and test log: docs/sources.md.
- * All sources send `Access-Control-Allow-Origin`, so no Vite proxy entry is needed today
- * (see TILE_PROXIES in vite.config.ts if that changes).
+ * Every value was verified empirically (HTTP status, CORS, tile size, max zoom; log in docs/sources.md). All sources
+ * send `Access-Control-Allow-Origin`, so no Vite proxy entry is needed today (see TILE_PROXIES in vite.config.ts).
  */
 import type { ImagerySource, LonLat, LonLatBounds, TerrainSource, TileKey, TileSourceBase } from '../core/types'
 

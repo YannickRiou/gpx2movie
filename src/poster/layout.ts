@@ -1,14 +1,11 @@
 /**
- * Poster layout as pure functions: boxes in pixels for the 3D view, the text panel and each text row, and text
- * fitting (a text is shrunk, then cut with « … », until it fits its box). The box geometry depends only on the size,
- * the style and which rows are present, never on measured text: the size of the 3D view to render is known before
- * the fonts are measured, and the drawing cannot push a row onto its neighbour. The list of several tracks takes the
- * place of the profile, in two columns on a square poster.
+ * Poster layout as pure functions: boxes in pixels for the 3D view, the text panel and each text row, and text fitting
+ * (shrunk, then cut with « … »). The box geometry depends only on the size, the style and which rows are present, never
+ * on measured text: the size of the 3D view to render is known before the fonts are measured, and the drawing cannot
+ * push a row onto its neighbour. See ARCHITECTURE.md "Poster".
  *
- * Units: 1 u = 1 % of the shorter side. Portrait and square posters stack the view above the text; landscape ones
- * put the text in a column beside the view. Styles: « Éditorial » (paper page, view inset with a margin),
- * « Diffusion » (view full bleed, ink band or column with a trail-red bar), « Application » (view over the whole
- * poster, text on a floating paper card).
+ * Units: 1 u = 1 % of the shorter side. Portrait and square posters stack the view above the text; landscape ones put
+ * the text in a column beside the view.
  */
 import type { PosterStyleId } from './settings'
 

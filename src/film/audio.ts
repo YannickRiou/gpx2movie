@@ -1,26 +1,12 @@
 /**
  * Music of the film (« Musique » lane): reading a sound file into the media table, its waveform, the volume of a
- * clip over time, the playback along the preview and the mix of the exported film, the sound of the video clips
- * included.
+ * clip over time, the playback along the preview and the mix of the exported film (video clip sound included).
+ * See ARCHITECTURE.md "Film and timeline", Music.
  *
- * - `readAudio(file)`: MP3, M4A / AAC, OGG / Opus, WAV or FLAC of `MAX_AUDIO_BYTES` at most, kept as is (the project
- *   stays one file), decoded once by the Web Audio API to check it, draw its waveform (`peaks`) and find its beats
- *   (`beats`, `film/beats.ts`).
- * - « Caler sur le rythme » (`snapFilmToMusic`): the stops and the title cards moved onto those beats.
- * - Volume of a clip (`musicEnvelope`): its volume with a linear fade in and out, the same breakpoints for the
- *   preview (`musicGainAt`) and the export (gain automation), so both sound alike.
- * - Video clips with sound (`clipSounds`): their file played from `inS` while the clip shows it, with fades of a few
- *   milliseconds at both edges so they never click; « Baisser la musique sous les vidéos » (`film.duckMusic`) lowers
- *   the music by `DUCK_DB` under them, with short ramps (`duckEnvelope`).
- * - Preview (`startMusicPreview`): one HTMLAudioElement per clip, playing along while the film plays (speed,
- *   volume, fades and ducking followed, seeked again past `MUSIC_DRIFT_S` of drift), paused otherwise; muted on
- *   demand. The sound of the video clips comes from their own elements (`film/video.ts`).
- * - Export (`mixFilmAudio`): deterministic, never real time: every music clip and every video clip with sound is
- *   decoded and mixed by an OfflineAudioContext over the exact length of the exported film (opening, stops,
- *   closing and the held frames at both ends included), then handed to the video encoder.
- *
- * Browser module (Web Audio, media elements); the waveform, the volume, the mix plan, the preview logic over
- * injected elements and the film length fitted to the music are pure and tested.
+ * Preview and export share the same volume breakpoints (`musicEnvelope`, fades, ducking), so both sound alike.
+ * The export mix is deterministic, never real time (OfflineAudioContext over the exact film length).
+ * Browser module (Web Audio, media elements); the waveform, the volume, the mix plan, the preview logic over injected
+ * elements and the film length fitted to the music are pure and tested.
  */
 import { create } from 'zustand'
 import { clamp } from '../core/math'

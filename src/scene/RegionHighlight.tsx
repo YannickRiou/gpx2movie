@@ -1,18 +1,14 @@
 /**
  * RegionHighlight — the administrative region of the outing (osm/region.ts) seen from the region view of a
- * 'situation' shot that highlights it, inside TerrainLayer: outside darkened, glowing light border, name in the
- * middle of the region, an orange dot at the outing.
+ * 'situation' shot that highlights it, inside TerrainLayer: outside darkened, glowing border, name, a dot at the outing.
  *
- * The region is asked for (`syncRegion`, Overpass queue and cache) only while such a shot is in the film. No region
- * (none found, offline, failed query): nothing is drawn and the shot frames the track as before.
+ * The region is asked for (`syncRegion`) only while such a shot is in the film; none found, offline or failed query:
+ * nothing is drawn and the shot frames the track as before.
  *
- * Geometry built once per region (scene/regionMesh.ts); its border points, the dot and the name are draped like the
- * track and re-draped (debounced, flushed by the video export) when tiles arrive, the corners of the darkened box lie
- * far beyond the frame. Everything skips the depth test and is drawn after the terrain and the track line, in this
- * order: the darkened outside (one mesh), the glow and the line of the border (two LineSegments2 on one geometry), the
- * dot and the name (sprites of a constant screen size). Unlit colours divided by the exposure, like the track.
- * Opacity is a pure function of the film time (`regionHighlightOpacity`): whole at the top of the shot, gone during
- * the dive, so the preview and the export draw the same frames. Hidden on the poster's overview still.
+ * Everything skips the depth test and is drawn after the terrain and the track line, in this order: darkened outside,
+ * border (glow then line), dot and name. Unlit colours divided by the exposure, like the track. Opacity is a pure
+ * function of the film time (`regionHighlightOpacity`) so the preview and the export draw the same frames.
+ * Hidden on the poster's overview still.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'

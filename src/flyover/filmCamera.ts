@@ -2,22 +2,13 @@
  * Camera of the film: the flight camera (`computeCameraView`) during the flight, with the framing of the camera
  * keys (`keyedCamera`), an overview of the whole track for the opening and closing shots, the camera of each stop
  * ('orbite', 'large', 'fixe'). A pure function of the film time, the progress, the settings and the terrain sampler,
- * like the flight camera: the export renders any frame alone.
+ * like the flight camera: the export renders any frame alone. Shots and transitions: ARCHITECTURE.md "Film and timeline".
  *
- * Overview: target = centre of the track's box in the local frame (ground height there), distance =
- * OVERVIEW_DISTANCE_FACTOR × box diagonal (more for a frame taller than wide, so 9:16 keeps the whole track),
- * OVERVIEW_PITCH_DEG above the horizon, on the side the flight camera looks from where the shot joins the flight
- * (no turn during the transition). Transition between the overview and the flight view: target lerped,
- * direction nlerped, distance interpolated geometrically, eased by smootherstep, kept MIN_GROUND_CLEARANCE_M
- * above the ground. 'descente' eases over the whole shot; 'saut' holds the overview and moves in JUMP_S.
- * 'situation' eases over the whole shot like 'descente', from (or to) the region view: the overview's side, much
- * higher and steeper (`regionDistanceM`: tens to hundreds of kilometres), aimed at the highlighted administrative
- * region when there is one, in one move that passes the overview's distance on the way; it may hold the region view
- * first (`holdS`) and the shot's framing may set its tilt, distance, compass heading and headroom (`regionView`).
- * 'balayage': the overview turns SWEEP_DEG around its target (ending on the flight's side) during the first
- * SWEEP_SHARE of the opening, then glides like 'descente' over the rest; the closing plays it backwards.
- * A shot whose transition cuts ('coupe', dips to black or white) holds its wide view and cuts at the boundary with
- * the flight (`shotWeight`).
+ * Overview: target = centre of the track's box, distance = OVERVIEW_DISTANCE_FACTOR x box diagonal (more for a frame
+ * taller than wide, so 9:16 keeps the whole track), on the side the flight camera looks from where the shot joins
+ * the flight (no turn during the transition). The transition lerps the target, nlerps the direction, interpolates the
+ * distance geometrically (smootherstep) and stays MIN_GROUND_CLEARANCE_M above the ground. A shot that cuts ('coupe',
+ * dips to black or white) holds its wide view and cuts at the boundary with the flight (`shotWeight`).
  */
 import { Vector3 } from 'three'
 import { clamp, smootherstep } from '../core/math'
@@ -493,13 +484,11 @@ export interface FilmView extends CameraView {
 }
 
 /**
- * Camera at film time `timeS` and `progress` (the store's: the export nudges it to re-place the camera). The
- * time-based flight styles follow the flight time, so they start where the opening hands over. The camera keys
- * set the framing along the track, a stop's camera adds its own move. The aim and the camera follow the progress
- * smoothed in film time (`timeSmoothing.ts`; the camera keys and the stops keep the marker's progress and time). With
- * several tracks, the flight camera flies what `options.follow` gives (a stage, a ghost racer, the racers together);
- * the shots still frame the film track. The smoothed progresses are carried along the followed path only while it is
- * the same one (never averaged across a stage cut or a change of leader).
+ * Camera at film time `timeS` and `progress` (the store's: the export nudges it to re-place the camera). The time-based
+ * flight styles follow the flight time, so they start where the opening hands over. The aim and the camera follow the
+ * progress smoothed in film time (`timeSmoothing.ts`; camera keys and stops keep the marker's progress and time). With
+ * several tracks the flight camera flies what `options.follow` gives, the shots still frame the film track; smoothed
+ * progresses are never averaged across a stage cut or a change of leader.
  */
 export function computeFilmView(
   path: TrackPath,

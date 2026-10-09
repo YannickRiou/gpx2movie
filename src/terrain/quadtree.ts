@@ -1,10 +1,7 @@
 /**
- * Terrain quadtree: tile nodes, conservative bounding volumes and the LOD selection
- * (replacement refinement driven by screen-space error).
- *
- * Pure logic on top of three's math classes (Vector3, Sphere, Frustum): no WebGL, no DOM.
- * The engine (engine.ts) owns the loading / disposal side effects; this module only decides
- * what should be rendered and what should be loaded, in which order.
+ * Terrain quadtree: tile nodes, conservative bounding volumes and the LOD selection (replacement refinement driven by
+ * screen-space error). Pure logic on three's math classes: no WebGL, no DOM. The engine (engine.ts) owns the loading and
+ * disposal side effects; this module only decides what to render and what to load, in which order.
  */
 import { Frustum, Matrix4, Sphere, Vector3 } from 'three'
 import type { BufferGeometry, Mesh, MeshStandardMaterial, PerspectiveCamera, Texture } from 'three'
@@ -269,16 +266,11 @@ const selectionContext: SelectionContext = {
 }
 
 /**
- * Replacement refinement:
- *  - a visible node whose sse exceeds the target is split; its four children replace it only
- *    when every child that is in the frustum is ready (children outside the frustum count as
- *    ready but are still queued at low priority so they are there when the camera turns);
- *  - until then the parent keeps being rendered (if ready) and the children are queued;
- *  - a node that should be drawn but is not ready (failed, evicted, `maxZoom` lowered...) is queued
- *    and its ready descendants in the frustum are drawn instead, so the area is never left empty;
- *  - a node is never split beyond `maxZoom`;
- *  - `toLoad` is sorted by priority (visible: sse descending, then culled nodes shallowest first).
- * `out` is reused between calls so the hot path does not allocate.
+ * Replacement refinement: a visible node whose sse exceeds the target is split, but its children replace it only when
+ * every child in the frustum is ready (the others are queued at low priority); until then the parent keeps being
+ * rendered. A node that should be drawn but is not ready is queued and its ready descendants are drawn instead, so the
+ * area is never left empty. Never split beyond `maxZoom`. `toLoad` is sorted by priority (visible: sse descending, then
+ * culled nodes shallowest first). `out` is reused between calls so the hot path does not allocate.
  */
 export function selectTiles(
   roots: readonly TileNode[],

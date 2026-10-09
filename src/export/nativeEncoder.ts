@@ -1,11 +1,8 @@
 /**
  * Native video encoder of the desktop app, where the webview has no WebCodecs (WebKitGTK on Linux): the system's
- * ffmpeg, run by the Rust commands of src-tauri/src/video.rs, writing the file picked in the save dialog. Same
- * contract as the WebCodecs session (`VideoEncodeSession`): each frame of the compositor is read back
- * (`getImageData`) and sent as raw RGBA bytes, a binary body rather than JSON; `video_frame` answers once ffmpeg took
- * it. MP4 / H.264, plus AAC when the film has sound (the mixed soundtrack handed over first as a WAV file); WebM / VP9
- * and Opus when the name typed in the save dialog ends in `.webm`. The overlay alone (`transparent`) is WebM / VP9 with
- * its alpha, like the WebCodecs export.
+ * ffmpeg, run by the Rust commands of src-tauri/src/video.rs, writing the file picked in the save dialog. Same contract
+ * as the WebCodecs session (`VideoEncodeSession`): each frame is read back and sent as raw RGBA bytes (a binary body,
+ * not JSON). See ARCHITECTURE.md "Video export without WebCodecs (Linux)".
  *
  * Also the choice between both encoders: `exportCodec` (what the export panel shows) and `createExportEncoder`.
  */

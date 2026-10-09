@@ -2,11 +2,9 @@
  * Water bodies around a track from OpenStreetMap (Overpass, same client, queue and cache as the landmarks): lakes and
  * river areas as polygons with holes, for the reflective water of the scene (scene/WaterLayer.tsx).
  *
- * One query per track: `natural=water`, `waterway=riverbank` and `water=*` ways and multipolygon relations in the
- * corridor boxes of the track, WATER_MARGIN_M wide, with their full geometry (`out geom`). The response is reduced
- * here (pure): rings of the relations stitched from their member ways, inner rings assigned to their outer ring,
- * rings simplified (WATER_SIMPLIFY_M), small polygons dropped, the largest MAX_WATER_POLYGONS kept, coordinates
- * rounded; only that compact result is cached (localStorage, 30 days).
+ * One query per track in the corridor boxes of the track, with full geometry. The response is reduced here (pure):
+ * relation rings stitched, simplified (WATER_SIMPLIFY_M), small polygons dropped, the largest MAX_WATER_POLYGONS kept;
+ * only that compact result is cached (localStorage, 30 days).
  */
 import type { LonLat, Track } from '../core/types'
 import {

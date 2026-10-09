@@ -1,12 +1,9 @@
 /**
  * Elevation tile decoding (Terrarium / Mapbox Terrain-RGB) and bilinear sampling of height grids.
  *
- * Encodings
- * ---------
  *   terrarium : h = R * 256 + G + B / 256 - 32768             (resolution 1/256 m)
  *   mapbox    : h = -10000 + (R * 65536 + G * 256 + B) * 0.1  (resolution 0.1 m)
  * Pixels with alpha 0, and the Terrarium (0, 0, 0) sentinel (-32768 m), decode to NaN (nodata).
- *
  * Grids are row-major with row 0 at the north edge (see `HeightGrid` in core/types).
  */
 import { clamp } from '../core/math'

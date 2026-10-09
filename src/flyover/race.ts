@@ -1,33 +1,13 @@
 /**
- * Ghost race (« course fantôme »): several tracks replayed together during the flyover of the first one.
+ * Ghost race (« course fantôme »): the other tracks replayed together during the flyover of the first one.
+ * Each is placed as a pure function of the lead's progress; sync modes `elapsed`, `clock`, `distance` and the
+ * time <-> distance tables: ARCHITECTURE.md "Ghost race".
  *
- * The playback progress p stays the distance fraction of the lead track (tracks[0], followed by the camera);
- * this module places every other track for that p, as a pure function of p (each exported frame stays
- * independent). Sync modes:
+ * Gap to the lead (leaderboard): « the same point » is the same fraction of each own track, exact only on the same
+ * route. Time modes: difference of the race times at which racer and lead reached the furthest point both reached
+ * (positive = behind). `distance` without timestamps: difference of the distances covered (metres).
  *
- * - `elapsed`: same elapsed recorded time since each track's own start (successive outings, or friends who
- *   did not start together). The lead's time at p is its first arrival at distance p · L.
- * - `clock`: same absolute recorded time (group outing on the same day). Before its start a track waits at
- *   its start, after its end it stays at its end.
- * - `distance`: same distance fraction of each own track (works without timestamps).
- *
- * The time modes need timestamps on every track, otherwise the race falls back to `distance` for all.
- *
- * Time ↔ distance: each track gets a time per point, points without time bridged by distance between their
- * timed neighbours, then made non-decreasing (running maximum against GPS clock glitches). Time → position
- * interpolates linearly in time between two consecutive points: the marker holds still during a stop
- * (time passes, distance does not) and glides across a gap between two segments. Distance → time is the
- * first arrival (start of a stop). Both are binary searches: O(log n) per track and per frame.
- *
- * Gaps (leaderboard): « the same point » is the same fraction of each own track — exact only when the tracks
- * follow the same route, an approximation otherwise (two recordings of one route differ by a few %).
- * - time modes: difference between the race times at which the racer and the lead reached the furthest point
- *   both have reached, the one still behind counting the current time (classic live gap: « the lead went
- *   through here 1 min 20 ago »). Positive = behind the lead.
- * - `distance` with timestamps: difference of the elapsed times needed to reach the current fraction.
- * - `distance` without timestamps: difference of the distances covered (metres, negative = behind).
- *
- * Pure functions (no DOM, no React, no Three, no store).
+ * Pure functions (no DOM, React, Three or store).
  */
 import { oneOf } from '../core/guards'
 import { firstIndexAtOrAbove, lastIndexAtOrBelow } from '../core/math'

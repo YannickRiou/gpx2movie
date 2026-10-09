@@ -1,14 +1,12 @@
 /**
  * Cast shadows of the relief under the atmosphere's sun (a DirectionalLight).
  *
- * One shadow map, refitted every frame just before the renderer draws it, to the part of the scene that can
- * receive a visible shadow: the view frustum cut at a distance that grows with the camera height, intersected
- * with the bounding box of the terrain meshes currently drawn. Its near plane is pushed towards the sun up to
- * the top of the terrain box, so a ridge outside the view still casts into it (the terrain engine keeps the
- * ready tiles outside the view frustum visible for that purpose; three culls them from the main pass).
- * The ortho bounds are quantised and snapped to whole texels so the shadows do not shimmer when the camera moves.
- *
- * No React here: `fitShadowFrustum` and `shadowDistance` are pure and unit-tested.
+ * One shadow map, refitted every frame to the part of the scene that can receive a visible shadow: the view frustum
+ * cut at a distance that grows with the camera height, intersected with the bounding box of the drawn terrain meshes.
+ * Its near plane is pushed towards the sun so a ridge outside the view still casts into it (the terrain engine keeps
+ * those ready tiles visible for that purpose; three culls them from the main pass). The ortho bounds are quantised and
+ * snapped to whole texels so the shadows do not shimmer when the camera moves.
+ * `fitShadowFrustum` and `shadowDistance` are pure and unit-tested.
  */
 import { Box3, Frustum, LightShadow, Matrix4, OrthographicCamera, Plane, Vector3 } from 'three'
 import type { Camera, Light, Mesh, Object3D } from 'three'

@@ -1,28 +1,11 @@
 /**
  * The film: what the timeline arranges on top of the flight along the first track (« la base, c'est le GPX »).
+ * Opening / closing shots, stops, speed portions, camera keys, texts, media, music and points of interest;
+ * see ARCHITECTURE.md "Film and timeline".
  *
- * - `opening` / `closing`: overview shot of the whole track before and after the flight ('aucune' = none), joined to
- *   it by a continuous move, a cut or a dip to black or white (`transition`).
- * - `stops`: the marker stops at a distance along the first track for a while (camera as in the film, orbiting,
- *   pulled back or held). While
- *   `autoStops` is set they are generated from the highlights (`autoStops` in `assemble.ts`, so they follow the
- *   OpenStreetMap landmarks loaded later), as `autoMode` says; the first edit on the timeline writes them into
- *   `stops` and clears the flag.
- * - `speeds`: portions of the first track (metres) flown faster or slower by hand (`factor`), not overlapping;
- *   the flight pacing eases into and out of each (`flightPacing`).
- * - `cameraKeys`: framings of the flight camera at a distance along the first track (`keyedCamera`).
- * - `texts` and `media`: items anchored in film time (seconds at ×1 from the very start, opening included), on
- *   their own lanes, drawn by the overlay. A medium names its picture or video clip by id (`src`): the bytes live in the media
- *   table of the project document (`film/media.ts`), so the settings and the undo history stay light.
- * - `audio`: music clips of the soundtrack, in film time too, on the « Musique » lane: played along by the preview
- *   and mixed into the exported film (`film/audio.ts`); their files are in the media table as well. The sound of the
- *   video clips joins that mix (`clipHasSound`), and `duckMusic` lowers the music under it.
- * - `pois`: points of interest named by hand (« Le chalet de Paul »), drawn as labels on the relief like the
- *   OpenStreetMap landmarks (`poiLabels`, scene/labelModel.ts); edited by `film/pois.ts`.
- *
- * Part of `Settings` (key `film`): saved in the project document, undone, read the same way by the preview and
- * the export. Ids are stable (`stop-3`, `text-1`, `auto-4520` for a generated stop) so the timeline can select
- * an item across edits. Pure module (no DOM, no React, no Three, no store).
+ * Part of `Settings` (key `film`): saved in the project, undone, read the same way by the preview and the export.
+ * Ids are stable (`stop-3`, `text-1`, `auto-4520` for a generated stop) so the timeline can select an item across
+ * edits. Pure module (no DOM, React, Three or store).
  */
 import { isRecord, oneOf } from '../core/guards'
 import { smootherstep } from '../core/math'
@@ -638,12 +621,10 @@ export function isValidFilm(film: Film): boolean {
 
 /**
  * Fill-in of a film saved before a field existed (`SETTING_UPGRADES`): missing fields from `DEFAULT_FILM`, except
- * `autoMode`, which keeps the automatic stops of those films following the pacing ('rythme') as they did; media
- * saved before their placement get `MEDIA_DEFAULTS`; a film saved before the music gets no music (`audio: []`), one
- * saved before the camera keys none (`cameraKeys: []`), one saved before the points of interest none (`pois: []`),
- * one saved before the landmark titles none (`landmarkTitles: false`: its flight stays as it was);
- * video clips saved before their sound was handled stay silent (`muted: true`). The `epochs` key of earlier versions
- * is dropped. A text or a medium attached to a stop the film does not own (generated stops, unknown id) is loaded free.
+ * `autoMode`, which keeps the automatic stops of those films following the pacing ('rythme'). Films saved before
+ * music, camera keys, points of interest or landmark titles get none of them, and old video clips stay silent
+ * (`muted: true`), so they look and sound as saved. The `epochs` key of earlier versions is dropped. A text or a
+ * medium attached to a stop the film does not own (generated stops, unknown id) is loaded free.
  */
 export function withFilmDefaults(raw: unknown): unknown {
   if (!isRecord(raw)) return raw

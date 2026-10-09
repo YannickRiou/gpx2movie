@@ -19,14 +19,10 @@ import type { OverlayAssets } from './draw'
 import { createOverlayFilmCache, overlayExtras, photoAssets } from './exportOverlay'
 
 /**
- * Preview of the film overlay: a 2D canvas stacked over the 3D view, redrawn by `drawOverlay` on the next
- * animation frame after the progress or film time, the settings, the film clock, the film track, its weather,
- * the landmarks, a decoded photo, a video frame or the view size change (store subscriptions, no React render per
- * frame). Video clips are video elements playing along during the playback, seeked to the film time when scrubbing
- * (none during an export, which decodes its own frames); their sound is heard while playing at ×1, unless the
- * timeline's speaker button cuts the sound of the preview. Rendered while the overlay or the source credits are
- * enabled, or the film has photos, clips, a dip to black or white between its shots and the flight, or stages
- * « À la suite » (their cards and dips).
+ * Preview of the film overlay: a 2D canvas stacked over the 3D view, redrawn by `drawOverlay` on the next animation
+ * frame after any change of what it reads (store subscriptions, no React render per frame). Video clips are video
+ * elements playing along during the playback, seeked to the film time when scrubbing (none during an export, which
+ * decodes its own frames). Rendered only while something is to draw (overlay or credits on, photos, clips, dips, stages).
  */
 export function OverlayCanvas() {
   const enabled = useAppStore(

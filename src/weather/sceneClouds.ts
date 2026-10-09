@@ -1,13 +1,10 @@
 /**
  * Volumetric clouds of the scene (`@takram/three-clouds`): the setting, the cloud cover per layer (weather of the
- * outing or manual), the parameters of the three cloud layers or of the sea of clouds, and the drift of the clouds
- * with the wind.
+ * outing or manual), the parameters of the three cloud layers or of the sea of clouds, and the drift with the wind.
  *
- * Everything is a pure function of (setting, conditions, film time): the video export renders the same clouds for
- * the same frame. The wind is the one at the start of the outing, constant for the film, so the drift is a
- * plain product (wind × film time), never an accumulation over frames.
- *
- * Pure functions (no DOM, no React, no Three).
+ * A pure function of (setting, conditions, film time), so the export renders the same clouds for the same frame. The
+ * wind is the one at the start of the outing, constant for the film: the drift is wind x film time, never an
+ * accumulation over frames. Pure (no DOM, React or Three).
  */
 import { withDefaults } from '../core/guards'
 import { clamp } from '../core/math'
@@ -232,14 +229,9 @@ export function sceneCloudsFrom(covers: CloudCovers | null, geometry: CloudGeome
  * Sea of clouds: one dense layer, a quilt over the whole scene, whose top is flat at the scale of the scene and
  * rolls like the top of cumulus at the scale of a few hundred metres.
  *
- * Thickness SEA_THICKNESS_M below the top (base above the valley floors: a camera following the track under the sea
- * sees an overcast ceiling rather than a white-out; from above the layer is opaque, the valleys are hidden anyway).
- * In a layer the cloudy threshold rises towards its top for every texel of the weather texture: coverage just below
- * 1 keeps the layer cloudy almost everywhere at mid-height, and the exponent < 1 brings the texels closer to 1, so the
- * tops vary by a few hundred metres only, with dips over the empty texels that break the sheet. A crisp threshold
- * (coverage filter width 0.3 instead of 0.6), a density decreasing from the base to the top (wispy tops, dense
- * bottom) and a shape noise of 4 km instead of 3.3 km erode the top into cumulus billows that shade each other; a
- * density of 0.15 (0.3 before) lets the light into the billows instead of a flat white surface.
+ * Thickness SEA_THICKNESS_M below the top: the base stays above the valley floors, so a camera under the sea sees an
+ * overcast ceiling rather than a white-out. The tuning (coverage just below 1, exponent, crisp threshold, density 0.15)
+ * keeps the tops within a few hundred metres and erodes them into cumulus billows (ARCHITECTURE.md "Volumetric clouds").
  */
 export function seaOfClouds(seaTopM: number, exaggeration: number): SceneClouds {
   const k = Number.isFinite(exaggeration) && exaggeration > 0 ? exaggeration : 1
