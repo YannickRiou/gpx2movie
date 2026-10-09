@@ -117,8 +117,9 @@ idle, no more frames. A frame is requested on every frame while the film plays, 
 change in the stores read by the scene (application except `terrainStats` and `loading`, weather, highlighted region,
 labels, export), after
 a drape (track, water, labels), the loading of the label font or the marker image, and for each
-texture from the three loaders (sky, clouds): the time for the temporal upsampling of the clouds to converge
-(~16 frames). OrbitControls (drei) requests its own frames, damping included. The time step of a frame is
+texture from the three loaders (sky, clouds): the time for the temporal upsampling of the clouds to fill
+(~16 frames). The clouds ask for frames themselves until a still view has averaged `CLOUD_SETTLE_FRAMES` = 32
+frames (`previewCloudPass`, below). OrbitControls (drei) requests its own frames, damping included. The time step of a frame is
 capped at `MAX_FRAME_DELTA_S` = 0.25 s (`frameDelta`), and `wakeScene` resets the clock when the scene was asleep
 (`clock.getDelta()`): playback and reframing do not jump after a pause.
 The export keeps `frameloop 'never'` and draws its own frames. Measured with software rendering: no more frame requests
@@ -126,7 +127,8 @@ once the margin has elapsed (~30 s there, one frame per second; ~0.5 s on a real
 counted in frames (retry of a failed tile, unloading) wait for the next frame.
 
 Cloud preview: lightened "bas" (low) preset (`PREVIEW_MARCH`: 120 steps of at least 150 m, 15 for shadows, instead of
-200, 100 m and 25), at half resolution and temporally upsampled; the export goes back to the chosen quality.
+200, 100 m and 25), at full resolution, temporally upsampled while the view changes, averaged with the "bas" marches
+once it is still (see "Volumetric clouds", Quality); the export goes back to the chosen quality.
 
 ## Terrain engine — design
 
@@ -1562,24 +1564,64 @@ it, know at what time you will pass each point, where the sun will be and what t
   library rises towards the top of the layer for every texel at nearly the same height, so the top is flat at the
   scale of the scene and the shape noise erodes it into billows of 100–200 m, with gentle dips over the empty texels;
   density 0.3 (cumulus 0.2). Same drift with the wind and same export path as the other modes.
+  Shape (October 2026, after a real-GPU screenshot: a flat, uniform whitish sheet): coverage 0.95 and exponent 0.75,
+  so the dips over the empty texels break the sheet; a crisper threshold (`coverageFilterWidth` 0.3 instead of 0.6),
+  a density decreasing from the base to the top (`densityProfile` −0.5·h + 1 instead of 0.75·h + 0.25: dense bottom,
+  wispy top), a shape noise of 4 km instead of 3.3 km (`shapePeriodM`, `shapeRepeat` of the effect, cumulus-scale
+  billows) and a density of 0.15: the light enters the billows, which shade each other at a low sun, instead of
+  a flat white surface. `SceneClouds` carries the optional shape (`CloudShape`) and period; the other modes keep the
+  library defaults. The visible tops sit a little below `seaTopM` (the density fades towards the top of the layer).
 - Wind: the archive's wind at the start of the outing (constant for the film, 4 m/s westerly breeze by default) × 2 at altitude
   × `CLOUD_TIMELAPSE` (20). Drift = wind × film time (`playback.timeS`, otherwise `clock.timeAtProgress`): offsets of
   the weather texture (Jacobian of the shader's cube-sphere UV, `weatherOffsetFor`) and of the shape textures (ECEF
   displacement × repeat) set directly on every frame, library velocities at zero: nothing accumulates.
-- Quality: preview with the `low` preset, half resolution, temporal upsampling. Export (`isExportBusy`): preset
-  `settings.clouds.quality`, full resolution, no upsampling and no shadow map TAA; the effect's `update`
-  is wrapped: 2 / 4 / 6 renders per frame with the frame counter set to k (noise slice) and `temporalAlpha`
-  = 1/(k+1) — the first discards the history, the following ones average (still camera, zero velocity). An exported
-  frame therefore never depends on the previous ones, whatever the number of `settle` renders.
+- Quality: preview with the `low` preset, full resolution (half until October 2026). While the view changes (camera, sun, cover, layers or
+  drift differ from the previous frame: `cloudInputs`), temporal upsampling: one pixel in 16 is marched per frame and
+  the others are reprojected, cheap but never averaged: each pixel keeps the single noisy ray marched for it, and on
+  the dense sea of clouds the jitter of the march start (up to two steps of 150 m and more) showed as a regular grain
+  of 4 × 4 cloud pixels (8 × 8 screen pixels at half resolution: the speckle of the user's real-GPU screenshot) that
+  a still view kept for good, whatever the number of frames drawn. Once the inputs are those of the previous frame
+  (`previewCloudPass`), every pixel of the pass is marched with the marches of the `low` preset (`STILL_MARCH`: 200
+  steps of at least 100 m, 25 for the shadow map) and the frames are averaged (`temporalAlpha` 1, 1/2 … 1/32: the
+  first discards the upsampled history), the clouds asking for frames until 32 are averaged; any change goes back to
+  upsampling and `PREVIEW_MARCH`. Cost: while the view moves, 1/16 of the canvas pixels marched per frame (1/64 at
+  half resolution before); once still, 32 frames marching every pixel, ~0.5–1 s on a real GPU (estimate; the first
+  one compiles the variant of the shader without upsampling once); the view stays interactive, any input goes back
+  to upsampling. Export (`isExportBusy`): preset `settings.clouds.quality`, full resolution, no upsampling and no
+  shadow map TAA; the effect's `update` is wrapped: 16 / 24 / 32 renders per frame (`EXPORT_SAMPLES`, low / medium /
+  high; 2 / 4 / 6 before) with the frame counter set to k (noise slice) and `temporalAlpha` = 1/(k+1) — the first
+  discards the history, the following ones average (still camera, zero velocity). An exported frame therefore never
+  depends on the previous ones, whatever the number of `settle` renders. The export cost of the clouds grows in
+  proportion (×6 for "Moyenne").
+- Grain, measured with SwiftShader (sea of clouds at 1,800 m, noon, still view 681 × 383, no terrain; mean absolute
+  difference between neighbouring pixels in a cloud-only crop, 8-bit, 0.6 on a smooth sky): before (upsampled, never
+  averaged) 5.9; still view averaged over 32 frames 0.7–0.9 at half resolution, 1.0 at full resolution (sharper); exported frame
+  "Moyenne" (medium) 9.7 with 4 renders, 2.4–2.9 with 24 (real shape detail included). Two still views differing only
+  by their noise slices: 1.46 apart with the golden-ratio noise, 1.99 with the former one. The grain is the march, not
+  SwiftShader: the sky and the terrain of the same frames are smooth (0.6), and the same speckle shows on the user's
+  real GPU. A plain average of the export renders (no variance clipping) was tried and dropped: its brightness
+  depended on the noise slices (unexplained). Verified: the root cause (upsampling keeps one noisy ray per pixel, the
+  resolve shader never averages it) and the numbers above; inferred: the cost on a real GPU.
 - Local resources: textures served at `/clouds/` by the `vite.config.ts` plugin (~2.8 MB). The spatio-temporal blue
   noise (STBN) of the Takram examples is not in the package (downloaded from GitHub, NVIDIA license): it is
-  replaced by an interleaved gradient noise generated at startup (`cloudNoise.ts`, 128 × 128 × 64), also passed to
+  replaced by an interleaved gradient noise generated at startup (`cloudNoise.ts`, 128 × 128 × 64; slice z shifted by
+  z × the golden ratio, modulo 1, so that consecutive slices stratify the march start of a pixel), also passed to
   `AerialPerspective` (otherwise it downloads it as soon as the clouds provide their shadow map).
 - Limits: the terrain is lit by sources (`SunLight`), so cloud shadows do not reach it (the
   sun stays dimmed by the weather); layers at a fixed altitude for the whole film; in the preview, temporal upsampling
-  trails when the camera moves fast; high cost on a weak GPU ("Aucun" (none) mode). In software rendering
-  (SwiftShader, headless tests) the clouds turn black once the sun is below ~35° (every mode), because of their
-  shadow map: with `cloudLayers[i].shadow = false` they render; not checked on a GPU.
+  trails when the camera moves fast, and the moving or playing preview keeps the grain of the upsampling (only a still
+  view and the export average); high cost on a weak GPU ("Aucun" (none) mode). The edge of the sea of clouds against
+  the relief is where the march stops on the depth of the terrain: three-clouds 0.7.6 has no option to soften it
+  (no soft-particle or depth-fade parameter); the lower density and the wispy top of the sea soften it somewhat.
+- Cloud shadow map (`SHADOW_MAX_FAR_M` = 50 km, `shadow.temporalPass` off): by default the library spreads its
+  cascades over the camera's far plane (5,000 km here, `FlyoverCanvas`), so the first of the two 256² cascades of the
+  preview covered ~1,000 km; below a sun of ~35° every cloud turned black (SwiftShader, every mode). Limited to
+  50 km, the clouds render down to a sun at the horizon, self-shadowed; the reprojection of the shadow map still made
+  the clouds beyond its range black at a low sun, so it is off (export already without it; the preview averages the
+  jitter of the shadow map with the frames of a still view). Beyond 50 km the clouds get the light of the short march
+  towards the sun only. Verified with SwiftShader (golden hour, sea of clouds, with relief): black before, lit and
+  self-shadowed after; not yet on a GPU. The resolve also drops a non-finite history or output (`guardResolve`,
+  defensive: a single NaN frame would otherwise stay in the history for good).
 
 ## Reflective water (phase 3)
 

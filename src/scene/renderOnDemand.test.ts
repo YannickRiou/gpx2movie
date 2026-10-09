@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 const invalidate = vi.hoisted(() => vi.fn())
 vi.mock('@react-three/fiber', () => ({ invalidate, useFrame: vi.fn(), useThree: vi.fn() }))
 
-const { MAX_FRAME_DELTA_S, frameDelta, sceneChanged, wakeScene } = await import('./renderOnDemand')
+const { CLOUD_SETTLE_FRAMES, MAX_FRAME_DELTA_S, frameDelta, previewCloudPass, sceneChanged, wakeScene } = await import('./renderOnDemand')
 
 describe('render on demand', () => {
   it('wakes the scene for a change of anything but the quiet keys', () => {
@@ -23,5 +23,15 @@ describe('render on demand', () => {
     invalidate.mockClear()
     wakeScene()
     expect(invalidate).toHaveBeenCalledTimes(1)
+  })
+
+  it('upscales the preview clouds while the view changes, then averages the still frames until converged', () => {
+    expect(previewCloudPass(0)).toEqual({ upscale: true, alpha: 1, more: true })
+    // the first still frame discards the upscaled history, the next ones make a running average
+    expect(previewCloudPass(1)).toEqual({ upscale: false, alpha: 1, more: true })
+    expect(previewCloudPass(4)).toEqual({ upscale: false, alpha: 1 / 4, more: true })
+    expect(previewCloudPass(CLOUD_SETTLE_FRAMES)).toEqual({ upscale: false, alpha: 1 / CLOUD_SETTLE_FRAMES, more: false })
+    // frames drawn later for something else (tiles): the average keeps its weight
+    expect(previewCloudPass(CLOUD_SETTLE_FRAMES * 3).alpha).toBe(1 / CLOUD_SETTLE_FRAMES)
   })
 })

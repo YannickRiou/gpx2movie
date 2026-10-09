@@ -114,6 +114,18 @@ export interface CloudLayerParams {
   densityScale: number
   /** local weather^exponent: > 1 thins the layer out relative to the dominant one */
   weatherExponent: number
+  /** shape of the layer; the three-clouds defaults of the layer when absent */
+  shape?: CloudShape
+}
+
+/** Shape of a cloud layer (`CloudLayer` of three-clouds). */
+export interface CloudShape {
+  /** width of the cloudy threshold of the weather texture: smaller is crisper */
+  coverageFilterWidth: number
+  /** height fraction where the layer is the widest, through hf^bias (0.35: low in the layer, rounded tops) */
+  shapeAlteringBias: number
+  /** density × (linear × height fraction + constant), from the base (0) to the top (1) of the layer */
+  densityProfile: { linear: number; constant: number }
 }
 
 export interface SceneClouds {
@@ -121,6 +133,8 @@ export interface SceneClouds {
   coverage: number
   /** low (channel r), mid (g), high (b) */
   layers: [CloudLayerParams, CloudLayerParams, CloudLayerParams]
+  /** period of the shape noise (metres); three-clouds default (1 / 0.0003, ~3.3 km) when absent */
+  shapePeriodM?: number
 }
 
 export interface CloudGeometry {
@@ -142,11 +156,16 @@ const MAX_EXPONENT = 8
 /** Coverage of three-clouds above which every texel is cloudy (default coverage filter width 0.6). */
 const FULL_COVERAGE = 0.4
 const MAX_COVERAGE = 0.55
-/** Sea of clouds: thickness (metres, not exaggerated), coverage, exponent and density of its layer (`seaOfClouds`). */
+/**
+ * Sea of clouds (`seaOfClouds`): thickness (metres, not exaggerated), coverage, exponent, density, shape of its layer
+ * and period of its shape noise (metres).
+ */
 const SEA_THICKNESS_M = 600
-const SEA_COVERAGE = 1
-const SEA_EXPONENT = 0.5
-const SEA_DENSITY = 0.3
+const SEA_COVERAGE = 0.95
+const SEA_EXPONENT = 0.75
+const SEA_DENSITY = 0.15
+const SEA_SHAPE: CloudShape = { coverageFilterWidth: 0.3, shapeAlteringBias: 0.35, densityProfile: { linear: -0.5, constant: 1 } }
+const SEA_SHAPE_PERIOD_M = 4000
 
 /**
  * `coverage` of three-clouds giving a cloudy fraction 0, 0.1, …, 1 of the sky, per channel of its weather texture
@@ -208,9 +227,12 @@ export function sceneCloudsFrom(covers: CloudCovers | null, geometry: CloudGeome
  *
  * Thickness SEA_THICKNESS_M below the top (base above the valley floors: a camera following the track under the sea
  * sees an overcast ceiling rather than a white-out; from above the layer is opaque, the valleys are hidden anyway).
- * In a layer the cloudy threshold rises towards its top for every texel of the weather texture: coverage 1 makes
- * the layer cloudy everywhere at mid-height, and the exponent < 1 brings the texels closer to 1, so the tops vary by
- * ~100–200 m only (the shape noise erodes them into billows), with gentle dips over the empty texels.
+ * In a layer the cloudy threshold rises towards its top for every texel of the weather texture: coverage just below
+ * 1 keeps the layer cloudy almost everywhere at mid-height, and the exponent < 1 brings the texels closer to 1, so the
+ * tops vary by a few hundred metres only, with dips over the empty texels that break the sheet. A crisp threshold
+ * (coverage filter width 0.3 instead of 0.6), a density decreasing from the base to the top (wispy tops, dense
+ * bottom) and a shape noise of 4 km instead of 3.3 km erode the top into cumulus billows that shade each other; a
+ * density of 0.15 (0.3 before) lets the light into the billows instead of a flat white surface.
  */
 export function seaOfClouds(seaTopM: number, exaggeration: number): SceneClouds {
   const k = Number.isFinite(exaggeration) && exaggeration > 0 ? exaggeration : 1
@@ -223,10 +245,12 @@ export function seaOfClouds(seaTopM: number, exaggeration: number): SceneClouds 
         heightM: SEA_THICKNESS_M,
         densityScale: SEA_DENSITY,
         weatherExponent: SEA_EXPONENT,
+        shape: SEA_SHAPE,
       },
       off,
       { ...off },
     ],
+    shapePeriodM: SEA_SHAPE_PERIOD_M,
   }
 }
 

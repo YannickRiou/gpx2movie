@@ -83,7 +83,7 @@ reproduce it next to the box.
       identical to before.
 - [ ] On-demand rendering: still view → the GPU drops to almost nothing (task manager, GPU tab); nothing
       frozen after a change: drag a slider, rotate the camera (damping to the end), tiles that
-      arrive, clouds that settle (~0.5 s), label font, marker image, water, reframing (full
+      arrive, clouds that settle (~0.5–1 s), label font, marker image, water, reframing (full
       animation); playback resumes without a jump after a long pause; export unchanged.
 - [ ] Preview clouds (fewer computation steps than the "bas" (low) preset): no visible bands or holes compared
       with before; the export keeps its quality.
@@ -145,6 +145,10 @@ reproduce it next to the box.
       prises" (photos where they were taken): a phone photo with GPS pinned at the right place, caption as its text.
 - [ ] "Mer de nuages" (sea of clouds): a flat, dense layer filling the valleys, summits above « Sommet de la mer de
       nuages » emerging, warm at sunset (clouds not black at a low sun, unlike SwiftShader); identical in the export.
+- [ ] "Mer de nuages", grain and shape: a still view settles within ~1 s into smooth clouds (no speckle, compare with
+      the October 2026 screenshot); billows with shaded crevices, warm at golden hour, a broken top; the moving
+      preview may keep a fine grain; an exported video has no grain on the clouds (« Qualité des nuages à
+      l’export » « Moyenne » and « Fine »), and its export time per frame (×6 for the clouds) stays acceptable.
 - [ ] "Générique" (credits) of the closing card: the card holds, then card and lines roll up and leave the frame on the
       last frame, in 16:9 and 9:16, in the 3 overlay styles; readable on snow.
 - [ ] "Transitions" (Survol tab) at 0.5 s then 4 s: easing into a stop, a pause and a "Vitesse" section shorter / longer,

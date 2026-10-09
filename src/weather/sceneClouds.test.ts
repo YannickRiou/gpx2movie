@@ -124,9 +124,14 @@ describe('seaOfClouds', () => {
     expect(sea.coverage).toBeLessThanOrEqual(1)
     expect(low.altitudeM + low.heightM).toBe(1500)
     expect(low.heightM).toBeGreaterThan(0)
-    expect(low.densityScale).toBeGreaterThan(0.2)
-    // texels pulled towards full cover: a flat top
+    expect(low.densityScale).toBeGreaterThan(0.1)
+    // texels pulled towards full cover: a flat top at the scale of the scene
     expect(low.weatherExponent).toBeLessThan(1)
+    // billows: crisper threshold than the library's 0.6, denser at the base than at the top, cumulus-scale noise
+    expect(low.shape?.coverageFilterWidth).toBeLessThan(0.6)
+    const profile = low.shape?.densityProfile
+    expect(profile && profile.constant).toBeGreaterThan(profile ? profile.linear + profile.constant : Infinity)
+    expect(sea.shapePeriodM).toBeGreaterThan(1 / 0.0003)
     expect([mid.heightM, high.heightM, mid.densityScale, high.densityScale]).toEqual([0, 0, 0, 0])
     const tall = seaOfClouds(1500, 2).layers[0]
     expect(tall.altitudeM + tall.heightM).toBe(3000)
