@@ -303,9 +303,9 @@ remain the source for each work item.
 Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by owner:
 
 **In progress (code)**
-1. Volumetric clouds: grain (accumulation does not converge with render on demand and one render per exported
-   frame), flat look of the « Mer de nuages », hard edge against the relief, black clouds at low sun (cloud shadow
-   map). Being fixed; to judge on a real GPU.
+1. Volumetric clouds: done on the work branch (still views and exported frames averaged over 32 / 16–32 renders,
+   sea of clouds with a dense base and wispy tops, lit at a low sun; ARCHITECTURE.md, clouds). The edge against the
+   relief can only be softened through density (three-clouds has no option). To judge on a GPU (`docs/tests-gpu.md`).
 2. « Mer de nuages » as a surface (« Nappe »): noise-free mesh layer as an alternative to the volumetric one, to
    compare on a real GPU; keep the better one (or both).
 3. On the work branch, not yet merged: « Lissage de la trace » out of « Plus de réglages », « Plan de situation à
