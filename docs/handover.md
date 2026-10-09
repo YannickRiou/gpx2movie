@@ -289,15 +289,19 @@ remain the source for each work item.
 
 ## Proposed next steps
 
-The roadmap has nothing left to build. What remains is in the user's hands:
+The roadmap is built except one feature. What remains:
 
-1. Tests on the machine with a GPU (`docs/tests-gpu.md`), first run of the GitHub workflows, signing certificate if
-   wanted; run command-line rendering once on a real machine; create a personal Strava application for the import.
-2. Merge this branch's PR after review.
-3. Finish the two work items interrupted on `lot-suites` (see "Work merged from `lot-suites`"), then full checks,
-   screenshots and a PR.
-4. Extensions proposed on `lot-suites` and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF),
-   overlay-only export on the Linux desktop, a built-in openh264 encoder.
+1. **Region highlight** (the only unfinished work item, "Interrupted 1" above): `src/scene/RegionHighlight.tsx`,
+   wiring `syncRegion` / `useRegionStore` to the film, "Hauteur de départ" ("Région" / "Pays") and "Mettre en avant
+   la région" in the opening inspector (`START_HEIGHT_LABELS` exists but is not shown), OpenStreetMap credit, docs.
+2. In the user's hands: tests on the machine with a GPU (`docs/tests-gpu.md`), first launch of the desktop
+   application, command-line rendering once on a real machine, a real Strava import (CORS of the token exchange from
+   the browser to confirm), signing certificates if wanted, then a first `v0.1.0` tag (release published by
+   `desktop.yml`).
+3. Before a public release: decide on the Garmin FIT SDK license (see "Limits and open points").
+4. Extensions proposed and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only
+   export on the Linux desktop, a built-in openh264 encoder; the ported features' known limits (roadbook lists hidden
+   landmarks, smoothing not applied to ghost racers / labels / mini-map / poster).
 5. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
