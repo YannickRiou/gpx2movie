@@ -29,6 +29,7 @@ import {
   LABEL_TEXT_COLOR,
   climbLabels,
   kmLabels,
+  endpointLabels,
   distanceFade,
   labelOpacity,
   lineOfSightClearance,
@@ -108,7 +109,7 @@ function drawLabelTexture(rawText: string, kind: LandmarkKind, icon: PoiIcon = '
   if (!ctx) return null
   const s = TEXTURE_SCALE
   ctx.font = labelFont(s)
-  const pin = kind === 'poi'
+  const pin = kind === 'poi' || kind === 'endpoint'
   // left of the text: the accent stripe and its padding, or a padding, the pin and a gap
   const lead = pin ? PIN_X + PIN_PX + PIN_GAP : STRIPE_W + PAD_X
   const width = Math.ceil(lead + PAD_X + ctx.measureText(text).width / s)
@@ -288,6 +289,7 @@ export function Labels() {
     if (show.climbs && first) out.push(...climbLabels(first, climbsOf(first)))
     if (show.waypoints) out.push(...waypointLabels(tracks))
     if (first) out.push(...kmLabels(first, show.kmStep))
+    if (show.endpoints && first) out.push(...endpointLabels(first))
     out.push(...poiLabels(pois))
     out.push(...externalLabels(sources))
     return out

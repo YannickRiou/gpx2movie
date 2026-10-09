@@ -8,10 +8,14 @@ import type { Track } from '../core/types'
 import type { FilmPoi, PoiIcon } from '../film/model'
 import type { Climb, ClimbCategory } from '../flyover/climbs'
 import { samplePath, trackPathOf } from '../flyover/path'
+import { haversineM } from '../geo/lonLat'
 import { formatNumber } from '../ui/format'
 
-/** 'poi': a point of interest placed by hand (drawn with a pin instead of the stripe); 'km': a kilometre marker. */
-export type LandmarkKind = 'climb' | 'waypoint' | 'peak' | 'pass' | 'hut' | 'water' | 'place' | 'other' | 'poi' | 'km'
+/**
+ * 'poi': a point of interest placed by hand (drawn with a pin instead of the stripe); 'km': a kilometre marker;
+ * 'endpoint': the start or the finish of the first track (drawn with its pictogram too).
+ */
+export type LandmarkKind = 'climb' | 'waypoint' | 'peak' | 'pass' | 'hut' | 'water' | 'place' | 'other' | 'poi' | 'km' | 'endpoint'
 
 export interface LandmarkLabel {
   /** unique across every source (prefix it with the source id) */
@@ -43,12 +47,17 @@ export const LABEL_KIND_ACCENTS: Readonly<Record<LandmarkKind, string>> = {
   other: '#D6CDBB', // --color-line
   poi: '#FF8A5C', // --color-accent-light
   km: '#EAE4D6', // --color-card
+  endpoint: '#FFFFFF', // --color-white
 }
 export const LABEL_PANEL_COLOR = '#1C2A33' // --color-ink
 export const LABEL_TEXT_COLOR = '#FFFFFF' // --color-white
 
 /** Priority of waypoint labels; climbs come above them, hardest first (`climbPriority`). */
 export const WAYPOINT_PRIORITY = 50
+/** Start and finish come above the climbs and waypoints, below the points of interest. */
+export const ENDPOINT_PRIORITY = 150
+/** Closer than this (metres), the start and the finish are one label: a loop. */
+export const LOOP_GAP_M = 100
 /** Kilometre markers give way to every named label. */
 export const KM_PRIORITY = 20
 /** Spacing of the kilometre markers (km) the user can pick; 0 = none. */
@@ -94,9 +103,31 @@ export function kmLabels(track: Track, stepKm: number): LandmarkLabel[] {
   return out
 }
 
-/** Labels settings of an older project: no kilometre markers, the usual size and range. */
+/** « Départ » (pin) and « Arrivée » (flag) at both ends of `track`; one « Départ et arrivée » for a loop. */
+export function endpointLabels(track: Track): LandmarkLabel[] {
+  const path = trackPathOf(track)
+  if (path.count === 0) return []
+  const start = samplePath(path, 0)
+  const end = samplePath(path, path.lengthM)
+  const label = (id: string, at: typeof start, text: string, icon: PoiIcon): LandmarkLabel => ({
+    id: `endpoint:${track.id}:${id}`,
+    lon: at.lon,
+    lat: at.lat,
+    ele: at.ele,
+    text,
+    kind: 'endpoint',
+    priority: ENDPOINT_PRIORITY,
+    icon,
+  })
+  if (haversineM(start, end) < LOOP_GAP_M) return [label('loop', start, 'Départ et arrivée', 'drapeau')]
+  return [label('start', start, 'Départ', 'epingle'), label('finish', end, 'Arrivée', 'drapeau')]
+}
+
+/** Labels settings of an older project: no kilometre markers nor start and finish, the usual size and range. */
 export function withLabelDefaults(raw: unknown): unknown {
-  return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? { kmStep: 0, size: 1, rangeKm: LABEL_FADE_END_M / 1000, ...raw } : raw
+  return raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+    ? { kmStep: 0, endpoints: false, size: 1, rangeKm: LABEL_FADE_END_M / 1000, ...raw }
+    : raw
 }
 
 /** Value checks of the labels settings (shape already checked). */

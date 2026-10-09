@@ -69,6 +69,14 @@ export function ClimbList() {
           />
           Points nommés du fichier GPX
         </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={labels.endpoints}
+            onChange={(e) => setSetting('labels', { ...labels, endpoints: e.currentTarget.checked })}
+          />
+          Départ et arrivée
+        </label>
         <label className="field">
           <span className="field__label">Bornes kilométriques</span>
           <select
