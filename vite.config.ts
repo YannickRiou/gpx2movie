@@ -91,5 +91,7 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     // fonts.test.ts reads this stylesheet with ?raw (other CSS stays stubbed out in tests)
     css: { include: [/src\/ui\/fonts\.css/] },
+    // `npm run coverage`; CI publishes the summary as the README badge
+    coverage: { provider: 'v8', include: ['src/**'], exclude: ['src/**/*.test.*', 'src/**/__fixtures__/**'], reporter: ['text-summary', 'json-summary'] },
   },
 })

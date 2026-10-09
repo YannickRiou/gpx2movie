@@ -93,7 +93,7 @@ full customization through a single project document, WebCodecs video export, Ta
 - Node is not in the global PATH. Prefix each command:
   - PowerShell: `$env:Path = "C:\Users\MadCreator\AppData\Roaming\fnm\node-versions\v24.21.0\installation;" + $env:Path; npm test`
   - Bash: `export PATH="/c/Users/MadCreator/AppData/Roaming/fnm/node-versions/v24.21.0/installation:$PATH"; npm test`
-- Scripts: `npm run dev` (port 5173), `npm run build`, `npm test` (vitest run), `npm run typecheck` (tsc --noEmit).
+- Scripts: `npm run dev` (port 5173), `npm run build`, `npm test` (vitest run), `npm run coverage` (same with coverage), `npm run typecheck` (tsc --noEmit).
 
 ## Loading (bundle splitting)
 

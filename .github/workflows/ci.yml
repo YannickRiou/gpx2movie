@@ -1,7 +1,7 @@
-# Checks on pull requests and on master: lint, unit tests and production build with its type check (web job), and the
-# Rust tests of the desktop app only when src-tauri or this file changed (rust job: its Linux libraries alone take
-# minutes to install). The Rust tests do not use the site, so they build against a placeholder dist/. No end-to-end
-# tests.
+# Checks on pull requests and on master: lint, unit tests with coverage and production build with its type check (web
+# job), and the Rust tests of the desktop app only when src-tauri or this file changed (rust job: its Linux libraries
+# alone take minutes to install). The Rust tests do not use the site, so they build against a placeholder dist/. No
+# end-to-end tests. On master, the line coverage feeds the README badge (badge job, `badges` branch).
 name: CI
 
 on:
@@ -28,7 +28,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: npx vitest run
+      - run: npm run coverage
+      - if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/coverage-summary.json
       # `tsc -b` type checks both projects (tsconfig.app.json, tsconfig.node.json) before the Vite build: no separate typecheck step
       - run: npm run build
 
@@ -62,3 +67,26 @@ jobs:
       - if: steps.changed.outputs.rust == 'true'
         run: cargo test --locked
         working-directory: src-tauri
+
+  badge:
+    if: github.event_name == 'push'
+    needs: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage
+          path: ${{ runner.temp }}
+      # a shields.io endpoint file on its own branch, read by the README badge; committed only when the value changes
+      - run: |
+          git config user.name 'Yannick Riou'
+          git config user.email '59170639+YannickRiou@users.noreply.github.com'
+          if git fetch -q origin badges; then git switch -qc badges FETCH_HEAD; else git switch -q --orphan badges; fi
+          pct=$(jq -r '.total.lines.pct | floor' "$RUNNER_TEMP/coverage-summary.json")
+          printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"1C2A33"}\n' "$pct" > coverage.json
+          git add coverage.json
+          git diff --cached --quiet || { git commit -qm "Coverage badge: $pct% of lines" && git push -q origin badges; }
