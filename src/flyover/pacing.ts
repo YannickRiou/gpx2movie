@@ -18,14 +18,14 @@
  * 4. Pauses (the stops of the film, given to `flightPacing`; `pacingFromHighlights` derives them): highlights
  *    closer than `windowM` form one cluster, paused once at its highlight nearest its middle for `pauseS`. A
  *    pause of length P adds exactly P to the film: in film time, the moving clock du/dτ eases from 1 to 0 over E
- *    (raised cosine), holds 0 for P − E, eases back to 1 over E; E = min(`PAUSE_EASE_S`, P, room before / after
+ *    (raised cosine), holds 0 for P − E, eases back to 1 over E; E = min(`transitionS`, P, room before / after
  *    the neighbouring pauses and the ends), so the marker never stops abruptly.
  * 5. Duration: `keepDuration` scales the base speed (factor c) so that the film lasts D at ×1 whatever the
  *    highlights; pauses then take at most `MAX_PAUSE_SHARE` of D (shortened in proportion beyond). Without it,
  *    c = 1: slow-downs and pauses lengthen the film.
  * 6. Speed portions (`speeds` of `flightPacing`, set by hand on the timeline): the local speed is also multiplied
  *    by m(x) = factor^w(x) over [fromM, toM], w rising from 0 to 1 as a raised cosine over the first
- *    `SPEED_EASE_S` seconds at the base speed inside the portion (at most half of it) and falling back the same
+ *    `transitionS` seconds at the base speed inside the portion (at most half of it) and falling back the same
  *    way at its end, so the speed never jumps; `SPEED_SAMPLES` grid steps across each transition. Applied
  *    whatever `settings.enabled`, combined with the slow-downs (product) and the pauses; `keepDuration` still
  *    keeps D.
@@ -54,6 +54,11 @@ export interface PacingSettings {
   pauseS: number
   /** keep the film at `flyoverDurationS` (the base speed rises) instead of lengthening it */
   keepDuration: boolean
+  /**
+   * longest transition into and out of a speed portion or a pause (film seconds at ×1): the speed eases over it
+   * instead of jumping; « Transitions » of the Survol tab
+   */
+  transitionS: number
 }
 
 export const DEFAULT_PACING: PacingSettings = {
@@ -64,6 +69,7 @@ export const DEFAULT_PACING: PacingSettings = {
   windowM: 1000,
   pauseS: 2,
   keepDuration: true,
+  transitionS: 1.5,
 }
 
 /** Slider ranges (also the validity ranges of a loaded project). */
@@ -71,20 +77,26 @@ export const PACING_RANGES = {
   slowFactor: { min: 0.1, max: 1, step: 0.05 },
   windowM: { min: 100, max: 10000, step: 100 },
   pauseS: { min: 0, max: 10, step: 0.5 },
+  transitionS: { min: 0.5, max: 4, step: 0.25 },
 } as const satisfies Partial<Record<keyof PacingSettings, { min: number; max: number; step: number }>>
 
 /** A peak at most this far from the track is a highlight (metres). */
 export const PEAK_NEAR_M = 300
-/** Longest ease into and out of a pause (film seconds at ×1). */
-export const PAUSE_EASE_S = 1.5
+/** Longest ease into and out of a pause by default (film seconds at ×1, `transitionS`). */
+export const PAUSE_EASE_S = DEFAULT_PACING.transitionS
 /** With `keepDuration`, the pauses take at most this share of the flyover duration. */
 export const MAX_PAUSE_SHARE = 0.5
 /** Grid steps across the window (±windowM) of each highlight. */
 export const WINDOW_SAMPLES = 64
-/** Longest transition into and out of a speed portion (film seconds at the base speed, ×1). */
-export const SPEED_EASE_S = 1.5
+/** Longest transition into and out of a speed portion by default (film seconds at the base speed, ×1, `transitionS`). */
+export const SPEED_EASE_S = DEFAULT_PACING.transitionS
 /** Grid steps across each transition of a speed portion. */
 export const SPEED_SAMPLES = 32
+
+/** Pacing of a project saved before a field was added: its default value. */
+export function withPacingDefaults(raw: unknown): unknown {
+  return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? { ...DEFAULT_PACING, ...raw } : raw
+}
 
 /** Every number inside its slider range. */
 export function isValidPacing(pacing: PacingSettings): boolean {
@@ -348,7 +360,7 @@ export function flightPacing(
   if (!(L > 0) || !(durationS > 0)) return identityPacing(durationS > 0 ? durationS : 1)
   const highlights = settings.enabled ? normalizeHighlights(highlightsM, L) : []
   const slows = highlights.length > 0 && settings.slowFactor < 1
-  const ramps = speedRamps(speeds, L, (SPEED_EASE_S * L) / durationS)
+  const ramps = speedRamps(speeds, L, (settings.transitionS * L) / durationS)
   if (!slows && stops.length === 0 && ramps.length === 0) return identityPacing(durationS)
   const W = settings.windowM
   const pauseAt = stops.map((s) => clamp(s.atM, 0, L))
@@ -380,7 +392,7 @@ export function flightPacing(
   // pauses: moving time of the paused node, eases limited by the neighbours and the ends
   const pu = pauseAt.map((x) => uTable[lastIndexAtOrBelow(xTable, x)])
   const ease = pu.map((u, k) =>
-    Math.min(PAUSE_EASE_S, pauseS[k], 2 * u, 2 * (U - u), k > 0 ? u - pu[k - 1] : Infinity, k < pu.length - 1 ? pu[k + 1] - u : Infinity),
+    Math.min(settings.transitionS, pauseS[k], 2 * u, 2 * (U - u), k > 0 ? u - pu[k - 1] : Infinity, k < pu.length - 1 ? pu[k + 1] - u : Infinity),
   )
   /** film time at which each pause starts easing in, and its moving time then */
   const startT = pu.map((u, k) => u - ease[k] / 2 + added[k])

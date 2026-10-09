@@ -13,7 +13,7 @@ import { sanitizeMediaTable, usedMedia } from '../film/media'
 import type { MediaTable } from '../film/media'
 import { isValidFilm, withFilmDefaults } from '../film/model'
 import { FLYOVER_DURATION_RANGE, isValidCamera } from '../flyover/cameraSettings'
-import { isValidPacing } from '../flyover/pacing'
+import { isValidPacing, withPacingDefaults } from '../flyover/pacing'
 import { isValidRace } from '../flyover/race'
 import { isSunDate } from '../flyover/sun'
 import { TRACK_COLORS } from '../import'
@@ -141,6 +141,7 @@ export const SETTING_UPGRADES: { [K in keyof Settings]?: (raw: unknown) => unkno
   marker: withMarkerDefaults,
   poster: withPosterDefaults,
   labels: withLabelDefaults,
+  pacing: withPacingDefaults,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
