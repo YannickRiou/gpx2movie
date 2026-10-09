@@ -130,6 +130,8 @@ features included), `npm run build`,
 - **Linux desktop export on the GPU**: MP4 encoded with `h264_nvenc`, else `h264_vaapi`, else `libx264`, chosen by a
   real ffmpeg probe once per run (`video.rs`); not tried on a GPU.
 - **T with a stop selected**: the new text is attached to that stop (`addText` with the stop, one undo step).
+- **Overlay-only export on the Linux desktop**: WebM / VP9 with alpha through ffmpeg (`yuva420p`), like the web;
+  alpha checked with ffprobe and a decoded frame in the container, not tried in an editor (`docs/tests-gpu.md`).
 - **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
   constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
   "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK).
@@ -339,8 +341,7 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    one-line change in `AtmosphereLayer` / `CloudsLayer` / the weather store, owned by the clouds work); no hold or
    camera move between stages (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
 8. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
-   the current lots): overlay-only export on the
-   Linux desktop, a built-in openh264 encoder. Dropped by the user: GoPro GPS time (GPMF).
+   the current lots): a built-in openh264 encoder (patents checked: recommended to drop). Dropped by the user: GoPro GPS time (GPMF).
 
 **Before the final release (`v0.1.0`), once the lots above are merged**
 - **Final review** (user's request): one full pass over the product before tagging. Code: dead code and unused

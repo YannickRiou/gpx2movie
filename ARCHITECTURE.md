@@ -1403,8 +1403,8 @@ it, know at what time you will pass each point, where the sun will be and what t
   `buildFrameTimes` as the film, hence the same frames, at the same instants, frame for frame; `runOverlayOnly`
   (`ExportController`) does not touch the scene (no size, no `frameloop`, no waiting for tiles, no WebGL image) and does not
   mix the sound. Each frame is redrawn (`composeOverlayFrame`: canvas cleared, transparent, then `DrawOverlay`
-  with `loadFrameMedia` before), then encoded as WebM / VP9 with transparency (`createVideoEncoder(…, { transparent })`,
-  sole candidate `ALPHA_CANDIDATES`): mediabunny (`alpha: 'keep'`) splits color and alpha in a worker and encodes
+  with `loadFrameMedia` before), then encoded as WebM / VP9 with transparency (`createExportEncoder(…, { transparent })`,
+  sole candidate `ALPHA_CANDIDATES`; on the Linux desktop, ffmpeg: see "Video export without WebCodecs"): mediabunny (`alpha: 'keep'`) splits color and alpha in a worker and encodes
   the alpha with a second VP9 encoder, stored next to each frame (`BlockAdditional`, `AlphaMode` header). The
   browser therefore only needs an ordinary VP9 encoder, checked by `isConfigSupported` (`pickCodec`); without VP9,
   the drawer says so and disables the button (no fallback to a PNG image sequence: thousands of images in memory, and
@@ -1884,7 +1884,7 @@ JavaScript.
 
 - **Commands** (async: they do not block the window), one session per export, in a `Mutex<Videos>`:
   `video_available` (`ffmpeg -version` started and successful), `video_sound` (binary body: the sound as WAV, written to the
-  temporary folder → id), `video_open(path, width, height, fps, quality, sound)` → id, `video_frame` (binary body:
+  temporary folder → id), `video_open(path, width, height, fps, quality, transparent, sound)` → id, `video_frame` (binary body:
   the RGBA image, id in the `x-video-session` header), `video_finish(id)` → file size, `video_cancel(id)`.
   Arguments fixed in Rust (`ffmpeg_args`, tested by `cargo test`): `-f rawvideo -pix_fmt rgba -s WxH -r fps -i -`
   [`-i son.wav`] `-c:v libx264 -preset medium -crf <qualité> -pix_fmt yuv420p`, colors converted and tagged BT.709
@@ -1894,6 +1894,13 @@ JavaScript.
   `nativeCodecFor` on the JavaScript side): `-c:v libvpx-vp9 -crf <qualité> -b:v 0 -deadline good -cpu-used 4 -row-mt 1`,
   sound `-c:a libopus`, `-f webm`; `crf` standard 34, high 31, maximum 26 (tried with the ffmpeg of an Ubuntu install: VP9 +
   Opus read by `ffprobe`, 44.1 kHz WAV resampled automatically).
+- **Overlay alone** (`transparent`, see "Overlay only"): always WebM / VP9, whatever the name typed (MP4 / H.264 has
+  no alpha), the same file as the web export: `-pix_fmt yuva420p` instead of `yuv420p` (in the list of
+  `ffmpeg -h encoder=libvpx-vp9`); libvpx-vp9 encodes the alpha as a second stream, which the WebM muxer stores
+  beside each frame (`alpha_mode` 1). `-auto-alt-ref` left alone: 2-pass only (same help), and the export is 1-pass.
+  Not probed on the GPU (no hardware alpha). Tried with ffmpeg 6.1: synthetic RGBA frames (transparent, opaque and
+  half-transparent areas), `ffprobe` shows `alpha_mode=1`, decoded back with `-c:v libvpx-vp9` as `yuva420p`: alpha
+  0 / 255 / 129 for 0 / 255 / 128, every transparent pixel at 0.
 - **H.264 on the GPU** (`h264_encoder`): before the first MP4 export of a run (outside the lock), ffmpeg encodes a
   tenth of a second of black (`probe_args`: `-f lavfi -i color=c=black:s=256x256:d=0.1 … -f null -`, 5 s at most,
   then killed) with `h264_nvenc`, then `h264_vaapi`; the first that succeeds is kept for the run (`OnceLock`, name
@@ -1919,11 +1926,11 @@ JavaScript.
   file. `video_cancel` kills ffmpeg and deletes the file; no effect on a session that has already finished.
 - **JavaScript side** (`src/export/nativeEncoder.ts`): `createNativeVideoEncoder` has the `VideoEncodeSession` contract
   (`addFrame`, `finish`, `cancel`); `createExportEncoder` picks it when `videoEncoder` is `'native'`, otherwise
-  WebCodecs (`ExportController`); `exportCodec` replaces `pickCodec` in the drawer and the batch: MP4 / H.264 if
-  `video_available` answers yes (asked every time: ffmpeg installed while the application is running is detected), null
+  WebCodecs (`ExportController`); `exportCodec` replaces `pickCodec` in the drawer and the batch: MP4 / H.264 (WebM / VP9 for the
+  overlay alone) if `video_available` answers yes (asked every time: ffmpeg installed while the application is running is detected), null
   otherwise, and the drawer says "installez ffmpeg" (install ffmpeg) (`videoEncoderMissingHint`). The Tauri invoke function is imported on
   first call: the website loads none of it.
-- **Not yet**: overlay-only export (transparent WebM) remains limited to WebCodecs (the drawer says so); no built-in
+- **Not yet**: no built-in
   fallback without ffmpeg (`openh264` crate + MP4 muxing in Rust, considered: H.264 "baseline", a few MB more).
   Rejected: `ffmpeg` as a sidecar (`bundle.externalBin`, 70 to 100 MB per platform, GPL license with x264); `rav1e` (AV1
   in pure Rust, too slow in 4K, less universal playback).

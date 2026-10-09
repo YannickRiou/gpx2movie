@@ -71,7 +71,6 @@ describe('detection', () => {
     const caps = (isDesktop: boolean, videoEncoder: VideoEncoderKind) => ({ isDesktop, videoEncoder, canStreamToDisk: isDesktop })
     expect(videoEncoderMissingHint(caps(false, 'webcodecs'))).toBeNull()
     expect(videoEncoderMissingHint(caps(true, 'native'))).toMatch(/installez ffmpeg/)
-    expect(videoEncoderMissingHint(caps(true, 'native'), true)).toMatch(/application de bureau/)
     expect(videoEncoderMissingHint(caps(false, null))).toMatch(/WebCodecs/)
   })
 })

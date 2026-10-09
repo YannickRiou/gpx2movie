@@ -311,7 +311,7 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         <p className="field__hint" role="alert">
           Ce navigateur ne sait pas encoder une vidéo WebM (VP9) de {formatNumber(width)} × {formatNumber(height)} pixels,
           nécessaire à l'habillage transparent :{' '}
-          {videoEncoderMissingHint(undefined, true) ?? 'exportez-le depuis Chrome ou Edge, ou choisissez une résolution plus petite.'}
+          {videoEncoderMissingHint() ?? 'exportez-le depuis Chrome ou Edge, ou choisissez une résolution plus petite.'}
         </p>
       )}
       {codec === null && !overlayOnly && (
