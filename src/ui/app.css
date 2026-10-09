@@ -509,6 +509,30 @@
   padding-left: var(--space-5);
 }
 
+/* « Contenu / Style / Visibilité » of an overlay element: buttons in the segmented control */
+.overlay-widget__tabs .segmented__option {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px var(--space-2);
+}
+
+.overlay-widget__tabs .segmented__option + .segmented__option {
+  border-left: 1px solid var(--color-ink);
+}
+
+.overlay-widget__tabs .segmented__option[aria-selected='true'] {
+  background: var(--color-ink);
+  color: var(--color-white);
+}
+
+.overlay-widget__tabs .segmented__option:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
 /* « Couleurs et polices »: native colour picker, then round swatches */
 .color-row {
   display: flex;
