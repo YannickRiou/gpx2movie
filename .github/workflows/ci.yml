@@ -1,4 +1,4 @@
-# Checks on pull requests and on master: types, lint, unit tests and production build (web job, ~1.5 min), and the
+# Checks on pull requests and on master: lint, unit tests and production build with its type check (web job), and the
 # Rust tests of the desktop app only when src-tauri or this file changed (rust job: its Linux libraries alone take
 # minutes to install). The Rust tests do not use the site, so they build against a placeholder dist/. No end-to-end
 # tests.
@@ -13,9 +13,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -23,13 +27,14 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
       - run: npm run lint
-      - run: npx vitest run --maxWorkers=2
+      - run: npx vitest run
+      # `tsc -b` type checks both projects (tsconfig.app.json, tsconfig.node.json) before the Vite build: no separate typecheck step
       - run: npm run build
 
   rust:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:

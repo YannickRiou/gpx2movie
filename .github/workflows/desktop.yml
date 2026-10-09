@@ -10,13 +10,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # needed to create and publish the release
+  contents: read
 
 jobs:
   # tag only: one draft release for the three build jobs to upload to
   release:
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # creates the draft release
     outputs:
       id: ${{ steps.create.outputs.id }}
     steps:
@@ -45,6 +47,9 @@ jobs:
             args: '--bundles appimage,deb'
 
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
+    permissions:
+      contents: write # uploads the installers to the release
 
     steps:
       - uses: actions/checkout@v7
@@ -140,6 +145,8 @@ jobs:
     needs: [release, build]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # publishes the release
     steps:
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
