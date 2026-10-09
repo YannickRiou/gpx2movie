@@ -556,7 +556,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
 - **Model** (`src/film/model.ts`, `settings.film`: saved in the project document, undoable, validated by
   `isValidFilm` in `SETTING_CHECKS`, no migration: an old project receives `DEFAULT_FILM`):
   `opening` / `closing` `{ style: 'aucune' | 'descente' | 'saut' | 'situation' | 'balayage', durationS, transition?, dipS?,
-  startHeight?, highlight? }` (1–30 s; default descente 6 s / 5 s; `transition` `'enchaine'` by default, `'coupe'`,
+  startHeight?, highlight? }` (1–30 s; default descente 6 s / 5 s; a shot switched to `situation` while it still has its
+  default duration gets `SITUATION_DURATION_S`, 9 s, for its long dive (`updateShot`; saved films keep theirs); `transition` `'enchaine'` by default, `'coupe'`,
   `'fondu-noir'`, `'fondu-blanc'`, `dipS` 0.3–2 s, 1 s by default: optional, an old film stays continuous;
   `startHeight` `'region'` (default) or `'pays'` and `highlight` (default off) for a `situation` shot, see below);
   `autoStops` (generated stops) and `autoMode`: `'temps-forts'` (default for new projects) or `'rythme'` (earlier

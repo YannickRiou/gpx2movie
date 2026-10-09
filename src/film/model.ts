@@ -75,7 +75,7 @@ export const START_HEIGHT_LABELS: Record<StartHeight, string> = { region: 'Régi
 export function highlightsRegion(film: Pick<Film, 'opening' | 'closing'>): boolean {
   return [film.opening, film.closing].some((shot) => shot.style === 'situation' && shot.highlight === true)
 }
-/** Duration given to a shot when 'situation' is picked, if it was shorter (seconds): the dive is long. */
+/** Duration given to a shot switched to 'situation' while it had its default duration (seconds): the dive is long. */
 export const SITUATION_DURATION_S = 9
 
 /** Length of a dip to black or white (also its validity range in a loaded project), seconds. */

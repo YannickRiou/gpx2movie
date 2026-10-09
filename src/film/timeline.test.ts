@@ -4,7 +4,7 @@ import { DEFAULT_PACING } from '../flyover/pacing'
 import { buildTrack } from '../import/stats'
 import { buildFilmClock } from './clock'
 import type { FilmClockInput } from './clock'
-import { AUDIO_DEFAULTS, AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, MIN_SPEED_SPAN_M, VIDEO_SOUND_DEFAULTS, clipTimeS, isValidFilm } from './model'
+import { AUDIO_DEFAULTS, AUTO_STOP_S, DEFAULT_FILM, MEDIA_DEFAULTS, MIN_SPEED_SPAN_M, SITUATION_DURATION_S, VIDEO_SOUND_DEFAULTS, clipTimeS, isValidFilm } from './model'
 import type { Film, FilmAudio, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
 import {
   NEW_MEDIA_S,
@@ -289,6 +289,19 @@ describe('edits', () => {
       text: 'Titre',
     })
     expect(updateShot(film, 'closing', { style: 'saut', durationS: 0 }).closing).toEqual({ style: 'saut', durationS: 1 })
+  })
+
+  it('lengthens a shot switched to « Depuis la région » only while it has its default duration', () => {
+    expect(updateShot(DEFAULT_FILM, 'opening', { style: 'situation' }).opening).toEqual({ style: 'situation', durationS: SITUATION_DURATION_S })
+    expect(updateShot(DEFAULT_FILM, 'closing', { style: 'situation' }).closing.durationS).toBe(SITUATION_DURATION_S)
+    // a duration the user chose, or a style that is not 'situation', is kept
+    const custom = updateShot(DEFAULT_FILM, 'opening', { durationS: 7 })
+    expect(updateShot(custom, 'opening', { style: 'situation' }).opening.durationS).toBe(7)
+    expect(updateShot(DEFAULT_FILM, 'opening', { style: 'saut' }).opening.durationS).toBe(DEFAULT_FILM.opening.durationS)
+    // already 'situation': shortening it back to the default sticks
+    const situation = updateShot(DEFAULT_FILM, 'opening', { style: 'situation' })
+    const shortened = updateShot(situation, 'opening', { durationS: DEFAULT_FILM.opening.durationS })
+    expect(updateShot(shortened, 'opening', { highlight: true }).opening.durationS).toBe(DEFAULT_FILM.opening.durationS)
   })
 
   it('tells whether a selected item is still in the film', () => {
