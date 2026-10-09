@@ -3,9 +3,9 @@ import type { Track } from '../core/types'
 import { buildTrack } from '../import/stats'
 import type { Landmark } from '../osm/landmarks'
 import { isValidSetting, sanitizeSettings } from '../project/document'
+import { buildPacing } from './__fixtures__/pacing'
 import { advanceProgress } from './cameraSettings'
 import {
-  buildPacing,
   DEFAULT_PACING,
   flightPacing,
   isValidPacing,

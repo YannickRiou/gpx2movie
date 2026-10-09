@@ -452,19 +452,3 @@ export function flightPacing(
     },
   }
 }
-
-export interface PacingInput {
-  /** first track (none: identity pacing) */
-  track: Track | undefined
-  /** `settings.flyoverDurationS`: film length at ×1 without pacing */
-  durationS: number
-  settings: PacingSettings
-  /** OpenStreetMap landmarks of the track (from the landmark store), used when `settings.landmarks` */
-  landmarks?: readonly Landmark[]
-}
-
-/** Pacing of the flyover of `track`. */
-export function buildPacing({ track, durationS, settings, landmarks = [] }: PacingInput): Pacing {
-  if (!track || !settings.enabled) return pacingFromHighlights(0, [], durationS, settings)
-  return pacingFromHighlights(track.stats.distanceM, pacingHighlights(track, settings, landmarks), durationS, settings)
-}
