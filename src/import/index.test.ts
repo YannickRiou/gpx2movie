@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import gpxText from './__fixtures__/two-segments.gpx?raw'
 import { buildFitActivity } from './__fixtures__/fit-activity'

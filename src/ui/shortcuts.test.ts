@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { SHORTCUTS, SHORTCUT_GROUPS, keyFocus, matchShortcut, seekTime, withShortcut } from './shortcuts'
 import type { KeyLike } from './shortcuts'

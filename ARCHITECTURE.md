@@ -10,7 +10,7 @@ full customization through a single project document, WebCodecs video export, Ta
 
 - Vite 8 + React 19 + TypeScript (strict), oxlint.
 - three + @react-three/fiber + @react-three/drei, zustand.
-- Tests: vitest (jsdom environment). `*.test.ts` files sit next to their modules.
+- Tests: vitest (node environment; jsdom in the files that need the DOM, `// @vitest-environment jsdom`). `*.test.ts` files sit next to their modules.
 - No Tailwind: vanilla CSS with variables (design system in `src/ui/theme.css`).
 
 ## Coordinate conventions (see `src/core/types.ts`)

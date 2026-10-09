@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import sampleGpx from '../../public/samples/tour-du-mont-blanc-j1.gpx?raw'
 import type { TrackPoint } from '../core/types'

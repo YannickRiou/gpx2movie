@@ -87,7 +87,8 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'jsdom',
+    // files that need the DOM say so on their first line: // @vitest-environment jsdom
+    environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     // fonts.test.ts reads this stylesheet with ?raw (other CSS stays stubbed out in tests)
     css: { include: [/src\/ui\/fonts\.css/] },
