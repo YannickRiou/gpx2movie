@@ -18,7 +18,9 @@ Allow 15 to 30 minutes per system (the Rust cache shortens later runs).
 
 1. Put the same number in `src-tauri/tauri.conf.json` (`version`) and `src-tauri/Cargo.toml` (`version`), for example
    `0.2.0`. This is the number that appears in the file names.
-2. Create and push the tag: `git tag v0.2.0`, then `git push origin v0.2.0`.
+2. Regenerate the third-party licenses with `npm run notices` (after `npm ci`; the first run takes about 8 minutes because
+   of the crates.io rate limit) and commit `THIRD_PARTY_NOTICES.md`: it is shipped with the installers.
+3. Create and push the tag: `git tag v0.2.0`, then `git push origin v0.2.0`.
 
 ## Where to download them
 
