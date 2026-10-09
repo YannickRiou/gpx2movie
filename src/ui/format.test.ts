@@ -3,6 +3,7 @@ import {
   formatPercent,
   formatSecondsShort,
   formatAscent,
+  formatClock,
   formatDistance,
   formatDistanceGap,
   formatDuration,
@@ -96,5 +97,12 @@ describe('formatPercent / formatSecondsShort', () => {
     expect(formatSecondsShort(1.5)).toBe('1,5 s')
     expect(formatSecondsShort(1.25)).toBe('1,25 s')
     expect(formatSecondsShort(2)).toBe('2 s')
+  })
+})
+
+describe('formatClock', () => {
+  it('reads the browser clock, minutes zero-padded', () => {
+    expect(formatClock(new Date(2026, 9, 10, 8, 5).getTime())).toBe('8 h 05')
+    expect(formatClock(new Date(2026, 9, 10, 14, 32).getTime())).toBe('14 h 32')
   })
 })

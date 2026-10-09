@@ -5,7 +5,7 @@
  * Storage stays localStorage: the webview keeps it in the app data folder. A film is written while it is encoded
  * through a file handle (`open`, `seek`, `write`), removed if the export does not finish. Offline tiles are files
  * under `<app data>/tiles/`, « Mes projets » under `<app data>/projects/` (the only folders the capability adds to the
- * fs scope).
+ * fs scope). Closing the window waits for `guardClose` (last write, question when something would be lost).
  */
 import { droppedFiles, fileNameOf, keyValueStore, mimeTypeOf, saveFilters } from './platform'
 import type { Capabilities, FileFilter, Platform, SaveFileOptions, SaveOutcome, WritableFile } from './platform'
@@ -83,5 +83,20 @@ export function createDesktopPlatform(capabilities: Capabilities): Platform {
     droppedFiles,
     tileCache: createDesktopTileCache(() => import('@tauri-apps/plugin-fs')),
     projectLibrary: createProjectLibrary(createDesktopLibraryFiles(() => import('@tauri-apps/plugin-fs'))),
+    guardClose(beforeClose) {
+      // with this listener the window no longer closes on its own: Tauri calls it, then `destroy` unless prevented
+      const listening = import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
+        getCurrentWindow().onCloseRequested(async (event) => {
+          if (!(await beforeClose().catch(() => true))) event.preventDefault()
+        }),
+      )
+      return () => void listening.then((unlisten) => unlisten())
+    },
+    async ask({ title, text, yes, no, cancel }) {
+      const { message } = await import('@tauri-apps/plugin-dialog')
+      const buttons = no === undefined ? { ok: yes, cancel } : { yes, no, cancel }
+      const answer = await message(text, { title, kind: 'warning', buttons })
+      return answer === yes ? 'yes' : answer === no ? 'no' : 'cancel'
+    },
   }
 }

@@ -1,5 +1,5 @@
-import { useEffect, useId, useState } from 'react'
 import { errorMessage } from '../core/errors'
+import { useEffect, useId, useState } from 'react'
 import { getPlatform } from '../platform'
 import type { ProjectEntry } from '../platform'
 import { applySettings } from '../project/apply'

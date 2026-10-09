@@ -14,10 +14,12 @@ then run `git status` and `npm run typecheck`.
   `git reset --hard origin/<branch>`. New commits: same identity, English messages.
 - `ai-dev/confident-darwin-83rxik` (cloud session): review fixes, simplifications, knowledge base (see "Work in
   progress").
-- `lot-suites` (not merged, the user's work in progress): route scouting with planned times, forecast weather and a
-  roadbook; opening / closing transitions (cross-dissolve, cut, fade to black or white); saving on close; in
-  progress: locator map from very high up with the region highlighted (2 `filmCamera` tests failing), Strava import.
-  Next: merge it (27 conflicting files with `master`).
+- `lot-suites` (the user's batch after PR #7, pushed, no PR of its own): route scouting with planned times, forecast
+  weather and a roadbook; opening / closing transitions (continuous, cut, fade to black or white); saving on close;
+  shared helpers; and two work items left unfinished there (locator map from very high up with the region
+  highlighted, Strava import; see "Work merged from `lot-suites`"). **Merged into this branch** (`merge-lot-suites`,
+  started from `ai-dev/confident-darwin-83rxik`) on 9 October 2026, its documentation translated to English during the
+  merge. The GitHub CI (`ci.yml`) runs on each push.
 - Method: one branch per batch, one PR with a manual test procedure, merge (`gh pr merge N --merge`), then a new
   branch from `origin/master`.
 - **Push**: just `git push`. The `origin` remote is `git@github-yannickriou:YannickRiou/gpx2movie.git`, an SSH alias
@@ -100,6 +102,63 @@ Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (92 files, 
   `PanelSection`, shared "Position" / "Texte" / "Taille" fields, duplicated poster and terrain constants, test-only
   pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer`; "Texte libre" drawn like a timeline text (behaviour
   change, needs the user's OK).
+
+## Work merged from `lot-suites`
+
+State at the last `lot-suites` commit (8 October 2026, evening): typecheck, lint (0 errors), build and `cargo check
+--target x86_64-pc-windows-msvc` OK; vitest: 2 tests failing out of 1,487 (`src/flyover/filmCamera.test.ts`, "region
+view"). In this merge, `src/flyover/filmCamera.test.ts` and the `src/osm` tests pass; the full suite is to be run
+again. Nothing from this batch has been seen in a browser.
+
+Done (tests green, never seen on screen):
+
+- **Planned outing, times**: `src/plan/timing.ts` (DIN 33466 for hiking, ITRA km-effort for trail running, a
+  Naismith-like rule adapted to cycling, pace factor), "Prévoir la sortie" (plan the outing) in the card of a track
+  without times (`TrackList.tsx`, `Track.timesEstimated`, "horaires estimés" (estimated times) chip, "Effacer les
+  horaires" (clear the times)), weather from the Open-Meteo **forecast** (`api.open-meteo.com/v1/forecast`, 16 days,
+  3 h memory cache; desktop CSP widened). Works on a route computed by the scouting ("Préparer une sortie") as on an
+  imported one.
+- **Roadbook**: `src/plan/roadbook.ts`, `src/ui/RoadbookPanel.tsx` ("Trace" tab, under "Montées et étiquettes" (climbs and labels)): steep
+  sections ≥ 15 % / ≥ 25 %, key points (climbs, passes, summits, huts, water points, points of interest), km /
+  elevation / D+ / time, click = playhead, "Copier" (copy), "Enregistrer (.txt)" (save as text). New landmark type
+  `waterPoint` (water points, out of the film by default).
+- **Shot transitions**: opening / closing "Enchaîné" (continuous, default), "Coupe" (cut), "Fondu au noir / au blanc"
+  (fade to black / white, 0.3–2 s); `FilmShot.transition`, `dipS`, `transitionDipAt`, `shotWeight`. Not at stops
+  (explained in `ARCHITECTURE.md`).
+- **Saving on close**: desktop `onCloseRequested` (pending write, 4 s at most, then the question "Fermer sans
+  enregistrer ?" (close without saving?) or "Fermer pendant l'export ?" (close during the export?)), site `pagehide` /
+  `beforeunload`. When the application exits, the ffmpeg encodings in progress are stopped and their partial files
+  deleted (`lib.rs`, `cancel_all` in `video.rs`).
+- Shared helpers: `core/errors.ts` (`errorMessage`), `clamp` from `core/math.ts` everywhere.
+
+**Interrupted 1 — locator map from very high up, region highlighted** (user's request: like the "Valais/Wallis" view
+of MapDirector: an almost top-down view of the whole administrative region of the outing, outside darkened, glowing
+white border, name of the region in the centre, orange dot at the outing, then the dive):
+
+- done: `src/osm/region.ts` (Overpass `is_in` then `out geom`, admin levels 4 to 6, the smallest region that contains
+  the track and is at least 5 times larger, rings stitched with `stitchRings`, simplified to 2,000 points, cache);
+  `regionDistanceM` / `regionView` rewritten in `src/flyover/filmCamera.ts` (start height "Région" / "Pays"
+  (region / country), `StartHeight`, 55–165 km for "Région", × 2.5 for "Pays", framing on the region's box); terrain
+  engine: wider area and zoom cap outside the corridor (`src/terrain/quadtree.ts`, `engine.ts`,
+  `src/scene/TerrainLayer.tsx`, `REGION_AREA_MARGIN_M`).
+- left: the `src/scene/RegionHighlight.tsx` rendering (named in `region.ts`, **not written yet**: darken outside the
+  region, glowing line, name, dot, fade during the dive, same in preview and export); calling `syncRegion` /
+  `useRegionStore` from the film (nothing does yet); the setting in the opening inspector ("Hauteur de départ" (start
+  height), "Mettre en avant la région" (highlight the region)); the OpenStreetMap credit when the region is shown;
+  the atmosphere seen from very high up (clouds cut above a certain height?); the user documentation (README,
+  `docs/tests-gpu.md`). `ARCHITECTURE.md` describes the camera part and what is missing.
+
+**Interrupted 2 — Strava import** (almost finished): `src/strava/api.ts` (authorization, token exchange and refresh,
+list of activities, GPS / time / altitude / sensor streams), `src/strava/track.ts` (streams → `Track`),
+`src/ui/StravaImport.tsx` ("Importer depuis Strava" (import from Strava) on the home screen and "Strava" in the track list),
+`src/platform/oauthRedirect.ts` + `public/oauth-callback.html` (site: login window that comes back to
+`oauth-callback.html`; desktop: plugins `tauri-plugin-oauth` (listens on 127.0.0.1) and `tauri-plugin-opener`, in
+`Cargo.toml`, `lib.rs` and `capabilities/default.json`), CSP for `www.strava.com`. Choice: "your own Strava
+application" (Client ID / Secret pasted once, kept in the platform storage of this browser or this computer, sent
+only to strava.com), because the token exchange requires the secret and the project has no server; no Strava key is
+in the code. Documented in the README ("Importing from Strava"), `ARCHITECTURE.md` ("Strava import") and
+`docs/tests-gpu.md` (section 6 bis). Left: review the whole, real test (CORS of `www.strava.com/oauth/token` from the
+browser to be confirmed).
 
 ## Visual checks still to do (never seen on screen)
 
@@ -216,9 +275,13 @@ remain the source for each work item.
 The roadmap has nothing left to build. What remains is in the user's hands:
 
 1. Tests on the machine with a GPU (`docs/tests-gpu.md`), first run of the GitHub workflows, signing certificate if
-   wanted; run command-line rendering once on a real machine.
+   wanted; run command-line rendering once on a real machine; create a personal Strava application for the import.
 2. Merge this branch's PR after review.
-3. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+3. Finish the two work items interrupted on `lot-suites` (see "Work merged from `lot-suites`"), then full checks,
+   screenshots and a PR.
+4. Extensions proposed on `lot-suites` and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF),
+   overlay-only export on the Linux desktop, a built-in openh264 encoder.
+5. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.
@@ -233,6 +296,9 @@ version on 9 October 2026); check again at its next release.
 - Videos: 50 MB at most (the project contains them: ~1.33 × their size in the JSON file), not placed
   by GPS (synced only by time, the track must be timestamped); an old project edited by hand with a video missing from its table keeps it in the film without
   showing it (`parseProject` only removes photos without an image).
+- "Prévoir la sortie" reads the start time in the device's time zone, not one derived from the coordinates.
+- Strava import: the user's own Strava application, limited by Strava to 100 requests per 15 minutes and 1,000 per
+  day; read access includes private activities and privacy zones.
 - Firefox / Safari not tested for export (WebCodecs). HTTPS required outside `localhost`.
 - No component rendering tests (no Testing Library); `npm run e2e` checks the main flows in a
   real browser, but the look is still checked by hand, with screenshots.

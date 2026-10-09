@@ -43,9 +43,22 @@ export const CACHE_TTL_MS = 30 * 24 * 3600 * 1000
 
 const CACHE_PREFIX = 'openflyover.osm.v1.'
 
-export type OsmKind = 'peak' | 'pass' | 'hut' | 'lake' | 'waterfall' | 'place' | 'viewpoint' | 'glacier'
+export type OsmKind = 'peak' | 'pass' | 'hut' | 'lake' | 'waterfall' | 'place' | 'viewpoint' | 'glacier' | 'waterPoint'
 
-export const OSM_KINDS: readonly OsmKind[] = ['peak', 'pass', 'hut', 'lake', 'waterfall', 'place', 'viewpoint', 'glacier']
+export const OSM_KINDS: readonly OsmKind[] = [
+  'peak',
+  'pass',
+  'hut',
+  'lake',
+  'waterfall',
+  'place',
+  'viewpoint',
+  'glacier',
+  'waterPoint',
+]
+
+/** Name of a drinking water point without one (most fountains and taps have none). */
+export const UNNAMED_DRINKING_WATER = 'Eau potable'
 
 /** A named OSM element, reduced to what the landmarks need. */
 export interface OsmFeature {
@@ -174,7 +187,7 @@ export function corridorBoxes(track: Track, marginM = MAX_LANDMARK_DISTANCE_M, m
   return boxes.map((b) => expand(b, marginM))
 }
 
-/** One Overpass statement per kind; every one requires a name. */
+/** Overpass statements of the kinds; every one requires a name except drinking water (named `UNNAMED_DRINKING_WATER`). */
 const STATEMENTS: readonly string[] = [
   'node["natural"~"^(peak|volcano|saddle)$"]["name"]',
   'node["mountain_pass"="yes"]["name"]',
@@ -184,6 +197,8 @@ const STATEMENTS: readonly string[] = [
   'node["place"~"^(town|village|hamlet)$"]["name"]',
   'node["tourism"="viewpoint"]["name"]',
   'nwr["natural"="glacier"]["name"]',
+  'node["amenity"="drinking_water"]',
+  'node["natural"="spring"]["name"]',
 ]
 
 /** Overpass bounding box filter `(south,west,north,east)`, 1e-5° (~1 m). */
@@ -229,6 +244,8 @@ function classify(tags: Record<string, string>): { kind: OsmKind; detail?: strin
   if (natural === 'glacier') return { kind: 'glacier' }
   if (tags.tourism === 'viewpoint') return { kind: 'viewpoint' }
   if (tags.place === 'town' || tags.place === 'village' || tags.place === 'hamlet') return { kind: 'place', detail: tags.place }
+  if (tags.amenity === 'drinking_water') return { kind: 'waterPoint', detail: 'drinking_water' }
+  if (natural === 'spring') return { kind: 'waterPoint', detail: 'spring' }
   return null
 }
 
@@ -246,12 +263,13 @@ export function parseOverpass(json: unknown): OsmFeature[] {
   for (const element of overpassElements(json) as OverpassElement[]) {
     const tags = element.tags
     if (!tags) continue
-    const name = (tags['name:fr'] ?? tags.name ?? '').trim()
+    const type = classify(tags)
+    if (!type) continue
+    const tagged = (tags['name:fr'] ?? tags.name ?? '').trim()
+    const name = tagged || (type.detail === 'drinking_water' ? UNNAMED_DRINKING_WATER : '')
     const lat = element.lat ?? element.center?.lat
     const lon = element.lon ?? element.center?.lon
     if (!name || lat === undefined || lon === undefined) continue
-    const type = classify(tags)
-    if (!type) continue
     const feature: OsmFeature = { id: `${element.type}/${element.id}`, kind: type.kind, name, lon, lat }
     if (tags.ele) feature.ele = tags.ele
     if (type.detail) feature.detail = type.detail

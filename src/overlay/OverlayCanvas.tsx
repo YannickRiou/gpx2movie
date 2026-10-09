@@ -3,6 +3,7 @@ import type { Track } from '../core/types'
 import { isExportBusy, useExportStore } from '../export/store'
 import { useMusicPreview } from '../film/audio'
 import { getMediaBitmaps, mediaToLoad } from '../film/media'
+import { shotDipColor } from '../film/model'
 import type { FilmMedia } from '../film/model'
 import { clipRateAt } from '../film/timeline'
 import { getPreviewVideos } from '../film/video'
@@ -25,11 +26,15 @@ import { overlayExtras, photoAssets } from './exportOverlay'
  * frame). Video clips are video elements playing along during the playback, seeked to the film time when scrubbing
  * (none during an export, which decodes its own frames); their sound is heard while playing at ×1, unless the
  * timeline's speaker button cuts the sound of the preview. Rendered while the overlay or the source credits are
- * enabled, or the film has photos or clips.
+ * enabled, or the film has photos, clips or a dip to black or white between its shots and the flight.
  */
 export function OverlayCanvas() {
   const enabled = useAppStore(
-    (s) => (s.settings.overlay.enabled || s.settings.overlay.credits.enabled || s.settings.film.media.length > 0) && s.tracks.length > 0,
+    (s) => {
+      const { overlay, film } = s.settings
+      const dips = shotDipColor(film.opening) !== null || shotDipColor(film.closing) !== null
+      return (overlay.enabled || overlay.credits.enabled || film.media.length > 0 || dips) && s.tracks.length > 0
+    },
   )
   return enabled ? <OverlayPreview /> : null
 }

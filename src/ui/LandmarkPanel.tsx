@@ -1,24 +1,11 @@
 import { useEffect, useId } from 'react'
-import { KIND_LABELS, LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
+import { KIND_BADGES, KIND_LABELS, LANDMARK_DISTANCE_RANGE } from '../osm/landmarks'
 import { OSM_ATTRIBUTION, OSM_KINDS } from '../osm/overpass'
-import type { OsmKind } from '../osm/overpass'
 import { syncLandmarks, useLandmarkStore } from '../osm/store'
 import { setLandmarkTitles } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { PanelSection } from './PanelSection'
 import { formatDistance, formatNumber } from './format'
-
-/** Badge of each kind in the list (singular). */
-const KIND_BADGES: Readonly<Record<OsmKind, string>> = {
-  peak: 'Sommet',
-  pass: 'Col',
-  hut: 'Refuge',
-  lake: 'Lac',
-  waterfall: 'Cascade',
-  place: 'Lieu',
-  viewpoint: 'Vue',
-  glacier: 'Glacier',
-}
 
 /**
  * « Repères (OpenStreetMap) » (foldable section of the Carte tab): kinds and corridor width, « Ralentir et titrer aux

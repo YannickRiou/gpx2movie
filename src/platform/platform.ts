@@ -127,6 +127,22 @@ export interface Platform {
   readonly tileCache: TileCache | null
   /** « Mes projets »; null when the browser has no Cache Storage (page not served over HTTPS) */
   readonly projectLibrary: ProjectLibrary | null
+  /**
+   * Desktop: `beforeClose` runs when the window is asked to close (title bar, Alt+F4) and the window waits for it:
+   * closed once it resolves true (or fails), kept open on false. Absent on the web (`beforeunload`, see ui/library.ts).
+   */
+  guardClose?(beforeClose: () => Promise<boolean>): () => void
+  /** Desktop: a native question; the button pressed, 'cancel' also for Escape. */
+  ask?(question: Question): Promise<'yes' | 'no' | 'cancel'>
+}
+
+/** A question with two buttons, or three with `no` (between the other two). */
+export interface Question {
+  title: string
+  text: string
+  yes: string
+  no?: string
+  cancel: string
 }
 
 /** Tauri v2 sets `isTauri` (and `__TAURI_INTERNALS__`) on the window of its webview. */

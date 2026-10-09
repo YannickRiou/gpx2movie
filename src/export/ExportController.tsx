@@ -16,14 +16,15 @@
  * The overlay alone (`overlayOnly`) skips the scene: the same frames, each overlay drawn on a cleared canvas and encoded
  * with its transparency, so the file lines up frame for frame with the film.
  */
+import { errorMessage } from '../core/errors'
 import { useEffect, useRef } from 'react'
 import { useThree, type RootState } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
-import { errorMessage } from '../core/errors'
 import type { LocalFrame, TerrainEngine } from '../core/types'
 import { mixFilmAudio } from '../film/audio'
 import type { FilmClock } from '../film/clock'
 import { useMediaStore } from '../film/media'
+import { transitionDipAt } from '../film/model'
 import { computeFilmView, filmViewMovesWithTime, overviewView, type FilmView } from '../flyover/filmCamera'
 import { buildTrackPath, type TrackPath } from '../flyover/path'
 import { loadOverlayFonts } from '../overlay/assets'
@@ -372,11 +373,13 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     if (isCanceled()) throw new ExportCanceledError()
     // WebCodecs, else the system's ffmpeg (desktop app on Linux)
     session = await createExportEncoder(compositor, { ...request, audio })
-    /** opacities of the timed overlay (cards, timeline texts, photos and clips) at a frame, '' without overlay */
-    const overlayKey = (progress: number, timeS: number) =>
-      deps.overlay()
-        ? overlayTimedState(settings.overlay, settings.film.texts, overlayTime(filmClock, progress, timeS), settings.film.media).join()
-        : ''
+    /** opacities of the timed overlay (cards, timeline texts, photos and clips, dip) at a frame, '' without overlay */
+    const overlayKey = (progress: number, timeS: number) => {
+      if (!deps.overlay()) return ''
+      const time = overlayTime(filmClock, progress, timeS)
+      const dip = transitionDipAt(settings.film, time)?.alpha
+      return overlayTimedState(settings.overlay, settings.film.texts, time, settings.film.media, dip).join()
+    }
     let previous = Number.NaN
     const sceneMovesWithTime =
       (settings.marker.kind === 'figurine' && settings.marker.animated) ||

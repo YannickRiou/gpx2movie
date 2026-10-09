@@ -9,6 +9,7 @@ import {
   landmarkText,
   parseEle,
   projectOnPath,
+  withLandmarkDefaults,
 } from './landmarks'
 import type { OsmFeature } from './overpass'
 
@@ -151,5 +152,14 @@ describe('landmarkLabels', () => {
       { id: 'osm:node/3', lon: 6.78, lat: 45.9, text: 'Glacier', kind: 'other', priority: 14 },
     ])
     expect(landmarkLabels([a, b], 1)).toHaveLength(1)
+  })
+})
+
+describe('withLandmarkDefaults', () => {
+  it('gives an older project the kinds added since, off', () => {
+    const { waterPoint: _added, ...olderKinds } = DEFAULT_LANDMARK_SETTINGS.kinds
+    const older = { enabled: true, kinds: { ...olderKinds, place: true }, maxDistanceM: 800 }
+    expect(withLandmarkDefaults(older)).toEqual({ ...older, kinds: { ...older.kinds, waterPoint: false } })
+    expect(withLandmarkDefaults('x')).toBe('x')
   })
 })

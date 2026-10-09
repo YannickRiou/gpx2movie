@@ -501,6 +501,11 @@
   margin: 0;
 }
 
+.section-head__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
 /* foldable sections (Montées, Météo) */
 .fold__summary {
   display: flex;
@@ -1296,6 +1301,63 @@
   flex-direction: column;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
+}
+
+/* « Importer depuis Strava » (frame of « Sources et licences ») */
+.strava__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.strava__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.strava__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.strava__actions > .field__hint {
+  margin-right: auto;
+}
+
+.strava__list {
+  max-height: min(360px, 45vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.strava__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px var(--space-2);
+  align-items: center;
+  padding: var(--space-2) var(--space-1);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.strava__name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.strava__meta {
+  grid-column: 2;
+  color: var(--text-2);
+  font-size: 12px;
 }
 
 /* « Raccourcis clavier » (frame of « Sources et licences ») */

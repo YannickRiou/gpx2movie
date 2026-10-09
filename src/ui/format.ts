@@ -82,3 +82,9 @@ export function formatDistanceGap(metres: number): string {
 export function formatDegrees(deg: number): string {
   return `${deg < 0 ? '−' : ''}${formatNumber(Math.abs(deg))}°`
 }
+
+/** Instant -> "14 h 32", in the browser time zone (as the timeline). */
+export function formatClock(ms: number): string {
+  const date = new Date(ms)
+  return `${date.getHours()} h ${String(date.getMinutes()).padStart(2, '0')}`
+}

@@ -63,6 +63,10 @@ reproduce it next to the box.
       intro and outro (descent from the overview).
 - [ ] Intro and outro "Depuis la région" (from the region) (16:9 and 9:16, short and long track): terrain loaded in time for the
       very high view (no terrain edge, no blurry tiles), dive toward the track and climb back without stutter.
+- [ ] Shot transitions (Opening / Closing inspector): clean "Coupe" (cut) at the start and at the end of the flight; "Fondu au
+      noir" and "Fondu au blanc" (fade to black / to white, 0.3 s and 2 s): the picture goes through the color, the camera jump
+      hidden at the darkest point, only the credits visible on top, tiles loaded when the picture comes back; same rendering
+      in the exported video; "Enchaîné" (continuous) identical to before.
 - [ ] Atmosphere, shadows, clouds ("Météo" / "Manuel" / "Aucun" (none)) and water: acceptable frames per second; clouds and water in
       low sun (reflections, ripples), no gray patches on the imagery.
 - [ ] Color grading ("Carte" tab › "Couleurs" (colors)): presets "Naturel" → "Noir et blanc" (natural → black and white), with and without atmosphere; no
@@ -147,15 +151,45 @@ reproduce it next to the box.
 - [ ] Ghost race ranking in the 3 styles: color dots and gaps aligned, no width jump,
       "Tête" (lead), then "Arrivée" (finish).
 
+- [ ] Close the tab (Chrome, Firefox): nothing asked without changes, nor with a "Mes projets" project changed more than
+      3 s ago; "Quitter le site ?" (leave site?, the browser's own wording) with "Modifié" outside "Mes projets", during an
+      export, or right after a change to a kept project (reopened: the change is there).
+
 - [ ] Join two tracks of a two-day hike ("Trace" tab, then when dropping both files): a single
       track "J1 → J2" (D1 → D2) or with the common name, no line between the end of day 1 and the start of day 2, marker that jumps
       over this gap; "Annuler" (undo) restores both tracks.
+- [ ] Planned outing: Komoot or Visorando GPX without times, "Prévoir la sortie" (plan the outing; the day after tomorrow,
+      8:00, hike); "horaires estimés" (estimated times) chip, plausible arrival time, sun and timeline time moving on,
+      "Prévision" (forecast) weather in the panel and in the scene, "Temps" (time) counter preceded by "≈"; a start 20 days
+      ahead has no weather and says so; "Effacer les horaires" (clear the times) returns to the track without times;
+      project reopened: times and chip kept.
+- [ ] Roadbook ("Feuille de route", "Trace" tab): Alpine route, "Repères" (landmarks) on; steep sections and passes, huts,
+      water points in order, climb top merged with the pass; click on a line = marker and camera at the right place;
+      "≈" times after "Prévoir la sortie"; "Copier" (copy) then paste into an editor, "Enregistrer (.txt)" (site and
+      desktop); columns aligned in the 320 px panel.
 
 ## 6. Offline
 
 - [ ] Prepare the sample at 2 km (with IGN, then Esri): estimate, progress, "Pause" / "Reprendre" (resume) / "Annuler" (cancel), pack listed.
 - [ ] Cut the network (DevTools › Network › Offline, or Wi-Fi) and reload: view and export without holes in the corridor.
 - [ ] Delete the pack: tiles fetched from the network again. Firefox (persistent storage), Safari (quota).
+
+## 6 bis. Strava import (your own Strava application, created on strava.com/settings/api)
+
+- [ ] Site (`npm run dev`, callback domain `localhost`): "Importer depuis Strava" (import from Strava), Client ID and
+      Secret, "Se connecter" (connect): Strava window, "Autoriser" (authorize), window closed, list of activities; tracks
+      already loaded untouched.
+- [ ] Site: "Annuler" (cancel) while waiting, refusal on Strava ("Autorisation refusée", authorization refused), wrong
+      Client Secret (message, form kept), pop-ups blocked (message).
+- [ ] Site: "Plus" (more), search by name, import of two activities (ride with power, hike): names, dates, activity, D+,
+      heart rate in the counters; activity without GPS refused with its name.
+- [ ] Site: expired token (set `expiresAt` to 0 in `openflyover.strava.tokens.v1`) renewed without asking anything;
+      access revoked on strava.com/settings/apps → back to "Se connecter"; "Déconnecter" (disconnect), "Oublier ces
+      identifiants" (forget these credentials).
+- [ ] Hosted site: callback domain = the site's host, same steps.
+- [ ] Desktop (`npm run tauri:dev`, Windows): "Se connecter" opens the system browser on Strava, the "Connexion
+      transmise" (connection passed on) page shows, the application lists the activities; import; no CSP error in the
+      console.
 
 ## 7. Desktop application (Windows, Linux)
 
@@ -167,6 +201,10 @@ reproduce it next to the box.
 - [ ] "Mes projets" (my projects): "Garder dans Mes projets" (keep in my projects), files in `%APPDATA%\io.github.yannickriou.openflyover\projects`,
       automatic save a few seconds after a change, list read again on restart, open, rename,
       delete.
+- [ ] Close the window right after a change to a "Mes projets" project: closed without a question, change there on
+      restart; outside "Mes projets" and "Modifié": "Enregistrer" (save; save dialog, "Annuler" there keeps the window
+      open), "Fermer sans enregistrer" (close without saving), "Annuler"; during an export: "Fermer quand même" (close
+      anyway).
 - [ ] `npm run tauri:build`: installer produced, installed application that starts.
 
 On Linux (Ubuntu 22.04 or later, WebKitGTK without WebCodecs: export through the system `ffmpeg`):

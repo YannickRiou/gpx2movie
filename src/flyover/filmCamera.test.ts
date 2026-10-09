@@ -21,11 +21,17 @@ import {
   OVERVIEW_PITCH_DEG,
   overviewDistanceM,
   overviewView,
+  COUNTRY_DISTANCE_FACTOR,
   REGION_DISTANCE_FACTOR,
+  REGION_FIT_MARGIN,
+  REGION_MAX_DISTANCE_M,
+  REGION_MIN_DISTANCE_M,
   REGION_PITCH_DEG,
+  REGION_REACH_M,
   regionDistanceM,
   regionView,
   shotBlend,
+  shotWeight,
   smootherstep,
   stopOrbitRad,
   STOP_WIDE_DISTANCE_FACTOR,
@@ -85,6 +91,17 @@ describe('easing', () => {
     expect(shotBlend('saut', 'closing', JUMP_S / 2, 4)).toBeCloseTo(0.5, 12)
     expect(shotBlend('saut', 'closing', JUMP_S, 4)).toBe(1)
     expect(shotBlend('saut', 'opening', 0.25, 0.5)).toBe(0.5)
+  })
+
+  it('cut: the wide view over the whole shot, the weight jumping at the boundary; « Enchaîné » is the shot blend', () => {
+    for (const transition of ['coupe', 'fondu-noir', 'fondu-blanc'] as const) {
+      const shot: FilmShot = { style: 'descente', durationS: 6, transition }
+      for (const localS of [0, 3, 6 - 1e-9]) expect(shotWeight(shot, 'opening', localS, 6)).toBe(0)
+      for (const localS of [0, 2.5, 5]) expect(shotWeight(shot, 'closing', localS, 5)).toBe(1)
+    }
+    for (const shot of [{ style: 'saut', durationS: 6 }, { style: 'saut', durationS: 6, transition: 'enchaine' }] as FilmShot[]) {
+      for (const localS of [0, 5.6, 5.8, 6]) expect(shotWeight(shot, 'opening', localS, 6)).toBe(shotBlend('saut', 'opening', localS, 6))
+    }
   })
 
   it('stop orbit: still at both ends of the window, out at the middle, bounded', () => {
@@ -150,16 +167,18 @@ describe('region view (« Depuis la région »)', () => {
     }
   })
 
-  it('distance: ×5 the diagonal for a short track, kept on the terrain area or within what the overview shows, never under it', () => {
-    expect(regionDistanceM(1_000, 300, 16 / 9)).toBeCloseTo(REGION_DISTANCE_FACTOR * 1_000, 9)
-    // the test track: 4.4 km straight north, the frame stays within the 25 km margin around it
-    const onTerrain = regionDistanceM(4_400, 0, 16 / 9)
-    expect(onTerrain).toBeCloseTo(25_000 / groundReach(REGION_PITCH_DEG, 16 / 9), 6)
-    expect(onTerrain).toBeLessThan(REGION_DISTANCE_FACTOR * 4_400)
-    // a long outing: the frame reaches as far as the overview's, no farther
-    const overview = overviewDistanceM(100_000, 16 / 9)
-    const wide = regionDistanceM(100_000, 35_000, 16 / 9)
-    expect(wide * groundReach(REGION_PITCH_DEG, 16 / 9)).toBeCloseTo(overview * groundReach(OVERVIEW_PITCH_DEG, 16 / 9), 6)
+  it('distance: ×8 the diagonal within 55–165 km, « Pays » farther, a region box filling the frame, within reach, never under the overview', () => {
+    // start altitude of the region view: a short outing from the minimum, a medium one ×8 its diagonal, a long one capped
+    expect(regionDistanceM(1_000, 300, 16 / 9)).toBeCloseTo(REGION_MIN_DISTANCE_M, 6)
+    expect(regionDistanceM(10_000, 3_000, 16 / 9)).toBeCloseTo(REGION_DISTANCE_FACTOR * 10_000, 6)
+    expect(regionDistanceM(50_000, 15_000, 16 / 9)).toBeCloseTo(REGION_MAX_DISTANCE_M, 6)
+    expect(regionDistanceM(10_000, 3_000, 16 / 9, 'pays')).toBeCloseTo(COUNTRY_DISTANCE_FACTOR * REGION_DISTANCE_FACTOR * 10_000, 6)
+    // a highlighted region: its larger side fills the frame height, with the margin
+    const fitted = regionDistanceM(10_000, 3_000, 16 / 9, 'region', { widthM: 120_000, heightM: 80_000 })
+    expect(fitted).toBeCloseTo((REGION_FIT_MARGIN * 120_000) / (2 * Math.tan((25 * Math.PI) / 180)), 6)
+    // the frame reaches no farther than REGION_REACH_M beyond the track's box
+    const far = regionDistanceM(10_000, 3_000, 16 / 9, 'pays', { widthM: 2_000_000, heightM: 1_000_000 })
+    expect(far * groundReach(REGION_PITCH_DEG, 16 / 9)).toBeCloseTo(3_000 + REGION_REACH_M, 6)
     for (const [diagonal, halfSide, aspect] of [[100, 0, 16 / 9], [4_400, 0, 9 / 16], [300_000, 100_000, 1]]) {
       expect(regionDistanceM(diagonal, halfSide, aspect)).toBeGreaterThanOrEqual(overviewDistanceM(diagonal, aspect))
     }
@@ -185,13 +204,16 @@ describe('region view (« Depuis la région »)', () => {
     const range = (view: { position: Vector3; target: Vector3 }) => view.position.distanceTo(view.target)
     let previous = computeFilmView(path, clock, 0, 0, frame, flat, options)
     let previousStep = 0
+    // the dive in 8 s from the region view (about 55 km up for this short track), frame by frame at 30 i/s
+    const dive = range(previous)
+    const meanStep = dive / (8 * 30)
     for (let t = 1 / 30; t <= 8; t += 1 / 30) {
       const view = computeFilmView(path, clock, t, 0, frame, flat, options)
       const step = view.position.distanceTo(previous.position)
       expect(range(view)).toBeLessThan(range(previous))
-      // the fastest frame of a 20 km dive in 8 s, and no jolt from one frame to the next
-      expect(step).toBeLessThan(250)
-      expect(Math.abs(step - previousStep)).toBeLessThan(10)
+      // the eased dive peaks at 3 × its mean speed (688 m per frame for 55 km in 8 s), with no jolt between frames
+      expect(step).toBeLessThan(3.2 * meanStep)
+      expect(Math.abs(step - previousStep)).toBeLessThan(0.1 * meanStep)
       previous = view
       previousStep = step
     }
@@ -215,6 +237,17 @@ describe('computeFilmView', () => {
     expectSameView(computeFilmView(path, descent, t, 1, frame, flat, options), flightAt(1, descent.flightS))
     const end = computeFilmView(path, descent, descent.totalTime(), 1, frame, flat, options)
     expectSameView(end, overviewView(path, frame, flat, 1, 16 / 9, flightAt(1, descent.flightS)))
+  })
+
+  it('cut: the overview held until the flight starts, the flight view held until the closing, then the overview', () => {
+    const clock = clockOf({ style: 'descente', durationS: 6, transition: 'fondu-noir' }, { style: 'descente', durationS: 5, transition: 'coupe' })
+    const overview = overviewView(path, frame, flat, 1, 16 / 9, flightAt(0, 0))
+    for (const t of [0, 3, 6 - 1e-6]) expectSameView(computeFilmView(path, clock, t, 0, frame, flat, options), overview)
+    expectSameView(computeFilmView(path, clock, 6, 0, frame, flat, options), flightAt(0, 0))
+    const closingS = clock.openingS + clock.flightS
+    expectSameView(computeFilmView(path, clock, closingS - 1e-6, 1, frame, flat, options), flightAt(1, clock.flightS - 1e-6), 1e-2)
+    const end = overviewView(path, frame, flat, 1, 16 / 9, flightAt(1, clock.flightS))
+    for (const t of [closingS, closingS + 2.5, clock.totalTime()]) expectSameView(computeFilmView(path, clock, t, 1, frame, flat, options), end)
   })
 
   it('continuous over the whole film (no jump between frames at 30 i/s)', () => {

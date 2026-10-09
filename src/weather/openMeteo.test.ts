@@ -3,10 +3,12 @@ import type { TrackPoint } from '../core/types'
 import { buildTrackPath } from '../flyover/path'
 import { buildTrack } from '../import/stats'
 import {
+  OPEN_METEO_FORECAST_URL,
   WeatherError,
   buildArchiveUrl,
   createWeatherCache,
   fetchOutingWeather,
+  forecastCacheKey,
   outingDays,
   parseArchiveResponse,
   sampleLocations,
@@ -98,13 +100,22 @@ describe('sampleLocations', () => {
 })
 
 describe('outingDays', () => {
-  it('spans the UTC days of the outing with an hour of margin, clamped to today', () => {
-    expect(outingDays(START, START + 6 * HOUR, NOW)).toEqual({ startDay: '2025-07-12', endDay: '2025-07-12' })
+  it('spans the UTC days of a past outing with an hour of margin, from the archive', () => {
+    expect(outingDays(START, START + 6 * HOUR, NOW)).toEqual({ source: 'archive', startDay: '2025-07-12', endDay: '2025-07-12' })
     expect(outingDays(Date.UTC(2025, 6, 12, 0, 30), Date.UTC(2025, 6, 12, 23, 30), NOW)).toEqual({
+      source: 'archive',
       startDay: '2025-07-11',
       endDay: '2025-07-13',
     })
-    expect(outingDays(NOW - 2 * HOUR, NOW + 20 * HOUR, NOW).endDay).toBe('2026-10-07')
+  })
+
+  it('takes the forecast for an outing that ends after today, up to the 16th day', () => {
+    expect(outingDays(NOW - 2 * HOUR, NOW + 20 * HOUR, NOW)).toEqual({ source: 'forecast', startDay: '2026-10-07', endDay: '2026-10-08' })
+    const in3Days = Date.UTC(2026, 9, 10, 6)
+    expect(outingDays(in3Days, in3Days + 8 * HOUR, NOW)).toEqual({ source: 'forecast', startDay: '2026-10-10', endDay: '2026-10-10' })
+    // a trek running past the last forecast day keeps its forecast days
+    const day15 = Date.UTC(2026, 9, 22, 6)
+    expect(outingDays(day15, day15 + 48 * HOUR, NOW)).toMatchObject({ source: 'forecast', endDay: '2026-10-22' })
   })
 
   it('refuses dates outside the archive and very long spans', () => {
@@ -116,7 +127,7 @@ describe('outingDays', () => {
       }
       return 'ok'
     }
-    expect(reason(NOW + 48 * HOUR, NOW + 50 * HOUR)).toMatch(/^unavailable: .*futur/)
+    expect(reason(Date.UTC(2026, 9, 23, 6), Date.UTC(2026, 9, 23, 12))).toMatch(/^unavailable: .*16 jours/)
     expect(reason(Date.UTC(1939, 5, 1), Date.UTC(1939, 5, 1, 5))).toMatch(/^unavailable: .*1940/)
     expect(reason(START, START + 40 * 24 * HOUR)).toMatch(/^unavailable: .*31 jours/)
   })
@@ -135,6 +146,24 @@ describe('buildArchiveUrl', () => {
     expect(url.searchParams.get('end_date')).toBe('2025-07-13')
     expect(url.searchParams.get('hourly')).toContain('weather_code')
     expect(new URL(buildArchiveUrl([{ lon: 6.8, lat: 45.89 }], '2025-07-12', '2025-07-12')).searchParams.has('elevation')).toBe(false)
+  })
+
+  it('asks the forecast endpoint with the same parameters', () => {
+    const url = new URL(buildArchiveUrl([{ lon: 6.8, lat: 45.89, ele: 1000 }], '2026-10-10', '2026-10-10', OPEN_METEO_FORECAST_URL))
+    expect(url.origin + url.pathname).toBe('https://api.open-meteo.com/v1/forecast')
+    expect(url.searchParams.get('start_date')).toBe('2026-10-10')
+    expect(url.searchParams.get('elevation')).toBe('1000')
+    expect(url.searchParams.get('hourly')).toContain('cloud_cover_low')
+  })
+})
+
+describe('forecastCacheKey', () => {
+  it('changes every 3 hours, unlike the archive key', () => {
+    const place = { lon: 6.8, lat: 45.9 }
+    const slot = Date.UTC(2026, 9, 8, 6)
+    expect(forecastCacheKey(place, '2026-10-10', slot)).toBe(forecastCacheKey(place, '2026-10-10', slot + 3 * HOUR - 1))
+    expect(forecastCacheKey(place, '2026-10-10', slot)).not.toBe(forecastCacheKey(place, '2026-10-10', slot + 3 * HOUR))
+    expect(forecastCacheKey(place, '2026-10-10', slot)).not.toBe(weatherCacheKey(place, '2026-10-10'))
   })
 })
 
@@ -188,6 +217,28 @@ describe('fetchOutingWeather', () => {
     const recentFetch = vi.fn(async () => Response.json(archiveBody(2, '2026-10-06', 1)))
     await fetchOutingWeather(recent, { fetch: recentFetch, cache: createWeatherCache(recentStorage), now: NOW })
     expect(recentStorage.data.size).toBe(0)
+  })
+
+  it('fetches a planned outing from the forecast, kept in memory for 3 hours only', async () => {
+    const departure = Date.UTC(2026, 9, 10, 7)
+    const planned = pathOf([
+      { lon: 6.8, lat: 45.9, ele: 1000, time: departure },
+      { lon: 6.9, lat: 45.9, ele: 1100, time: departure + 4 * HOUR },
+    ])
+    const storage = memoryStorage()
+    const cache = createWeatherCache(storage)
+    const fetchMock = vi.fn<typeof fetch>(async () => Response.json(archiveBody(2, '2026-10-10', 1)))
+    const s = await fetchOutingWeather(planned, { fetch: fetchMock, cache, now: NOW })
+    expect(s.forecast).toBe(true)
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/^https:\/\/api\.open-meteo\.com\/v1\/forecast\?/)
+    expect(storage.data.size).toBe(0)
+    await fetchOutingWeather(planned, { fetch: fetchMock, cache, now: NOW + HOUR / 2 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await fetchOutingWeather(planned, { fetch: fetchMock, cache, now: NOW + 3 * HOUR })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // a past outing still comes from the archive, without the flag
+    const past = await fetchOutingWeather(outing, { fetch: vi.fn(async () => Response.json(archiveBody(2, '2025-07-12', 1))), cache, now: NOW })
+    expect(past).not.toHaveProperty('forecast')
   })
 
   it('reports errors in French', async () => {

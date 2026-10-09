@@ -1,7 +1,7 @@
 /**
  * Weather of the first track (zustand), fetched when a timed track is loaded and `settings.weather.enabled`
- * allows it. `syncWeather` is idempotent: calling it again for the same track and setting does nothing, so
- * React effects may call it freely.
+ * allows it. `syncWeather` is idempotent: calling it again for the same track, start time and setting does
+ * nothing, so React effects may call it freely; new (estimated) times on the same track fetch again.
  */
 import { create } from 'zustand'
 import type { Track } from '../core/types'
@@ -16,11 +16,12 @@ export interface WeatherState {
   /** why there is no weather (unavailable / error), in French */
   message: string | null
   series: WeatherSeries | null
-  /** track the status refers to */
+  /** track the status refers to, and its start time then (null when untimed) */
   trackId: string | null
+  startTime: number | null
 }
 
-const INITIAL: WeatherState = { status: 'idle', message: null, series: null, trackId: null }
+const INITIAL: WeatherState = { status: 'idle', message: null, series: null, trackId: null, startTime: null }
 
 export const useWeatherStore = create<WeatherState>()(() => ({ ...INITIAL }))
 
@@ -47,23 +48,26 @@ export function syncWeather(
     if (state.status !== 'idle' || state.trackId !== null) useWeatherStore.setState({ ...INITIAL })
     return
   }
-  if (state.trackId === track.id && state.status !== 'idle' && !(retry && state.status === 'error')) return
+  const startTime = track.stats.startTime ?? null
+  const sameTrack = state.trackId === track.id && state.startTime === startTime
+  if (sameTrack && state.status !== 'idle' && !(retry && state.status === 'error')) return
 
   controller?.abort()
   controller = null
-  if (track.stats.startTime === undefined) {
+  if (startTime === null) {
     useWeatherStore.setState({
       status: 'unavailable',
-      message: 'Trace non horodatée : la météo ne peut pas être datée.',
+      message: 'Trace non horodatée : prévoyez la sortie (liste des traces) pour dater la météo.',
       series: null,
       trackId: track.id,
+      startTime,
     })
     return
   }
 
   const ctrl = new AbortController()
   controller = ctrl
-  useWeatherStore.setState({ status: 'loading', message: null, series: null, trackId: track.id })
+  useWeatherStore.setState({ status: 'loading', message: null, series: null, trackId: track.id, startTime })
   deps.fetchWeather(buildTrackPath(track), { signal: ctrl.signal }).then(
     (series) => {
       if (controller !== ctrl) return
