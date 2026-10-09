@@ -23,9 +23,10 @@ export const UINT8 = 0x02
 export const UINT16 = 0x84
 export const SINT32 = 0x85
 export const UINT32 = 0x86
+export const BYTE = 0x0d
 
-/** [field number, base type, raw value] */
-export type FitField = readonly [number, number, number]
+/** [field number, base type, raw value or array of raw values] */
+export type FitField = readonly [number, number, number | readonly number[]]
 
 export interface FitMessage {
   /** Global message number (0 file_id, 18 session, 20 record, 34 activity…). */
@@ -60,13 +61,13 @@ export function encodeFit(messages: FitMessage[]): ArrayBuffer {
     data.push(devFieldSizes.length > 0 ? 0x60 : 0x40, 0, bigEndian ? 1 : 0)
     pushInt(data, num, 2, bigEndian)
     data.push(fields.length)
-    for (const [field, baseType] of fields) data.push(field, sizeOf(baseType), baseType)
+    for (const [field, baseType, value] of fields) data.push(field, sizeOf(baseType) * values(value).length, baseType)
     if (devFieldSizes.length > 0) {
       data.push(devFieldSizes.length)
       devFieldSizes.forEach((size, i) => data.push(i, size, 0))
     }
     data.push(timeOffset === undefined ? 0x00 : 0x80 | (timeOffset & 0x1f))
-    for (const [, baseType, value] of fields) pushInt(data, value, sizeOf(baseType), bigEndian)
+    for (const [, baseType, value] of fields) for (const v of values(value)) pushInt(data, v, sizeOf(baseType), bigEndian)
     for (const size of devFieldSizes) data.push(...new Array<number>(size).fill(0xff))
   }
   const header = [14, 0x20]
@@ -80,7 +81,11 @@ export function encodeFit(messages: FitMessage[]): ArrayBuffer {
 }
 
 function sizeOf(baseType: number): number {
-  return [1, 1, 1, 2, 2, 4, 4][baseType & 0x1f]
+  return [1, 1, 1, 2, 2, 4, 4, 1, 4, 8, 1, 2, 4, 1][baseType & 0x1f]
+}
+
+function values(value: number | readonly number[]): readonly number[] {
+  return typeof value === 'number' ? [value] : value
 }
 
 /** Copy bytes into a standalone ArrayBuffer (what File.arrayBuffer() hands to parseFit). */

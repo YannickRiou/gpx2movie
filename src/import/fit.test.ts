@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { FitField, FitMessage } from './__fixtures__/fit-activity'
 import {
   buildFitActivity,
+  BYTE,
   encodeFit,
   ENUM,
+  FIT_ACTIVITY_START,
   fitSeconds,
   SINT32,
   toArrayBuffer,
@@ -135,4 +138,41 @@ describe('parseFit', () => {
     expect(p1.lat).toBeCloseTo(45.5, 7)
     expect(p1.lon).toBeCloseTo(6.5, 7)
   })
+
+  it('gives records without heart rate the bpm of the nearest sample of the hr messages', async () => {
+    const t0 = fitSeconds(FIT_ACTIVITY_START)
+    const record = (t: number, hr?: number): FitMessage => {
+      const fields: FitField[] = [
+        [253, UINT32, t0 + t],
+        [0, SINT32, toSemicircles(45.5)],
+        [1, SINT32, toSemicircles(6.5 + t / 1000)],
+      ]
+      if (hr !== undefined) fields.push([3, UINT8, hr])
+      return { num: 20, fields }
+    }
+    // strap clock in 1/1024 s, its low 12 bits roll over between the anchor and the next sample
+    const e0 = 300 * 4096 + 0xf00
+    const deltas = [1024, 2048, 3584, 4096] // 1 s, 2 s, 3.5 s, 4 s after the anchor
+    const file = encodeFit([
+      { num: 132, fields: [[253, UINT32, t0], [9, UINT32, e0], [6, UINT8, [100]]] },
+      { num: 132, fields: [[10, BYTE, pack12(deltas.map((d) => (e0 + d) & 0xfff))], [6, UINT8, [101, 102, 103, 104]]] },
+      record(0),
+      record(1),
+      record(2),
+      record(3),
+      record(4, 150),
+      record(10),
+    ])
+    const points = (await parseFit(file, 'nage.fit'))[0].segments[0].points
+    expect(points.map((p) => p.hr)).toEqual([100, 101, 102, 103, 150, undefined])
+  })
 })
+
+/** Pack 12-bit values least significant bit first, as hr.event_timestamp_12 stores them. */
+function pack12(values: number[]): number[] {
+  const bytes = new Array<number>(Math.ceil((values.length * 12) / 8)).fill(0)
+  values.forEach((value, i) => {
+    for (let b = 0; b < 12; b++) if ((value >> b) & 1) bytes[(i * 12 + b) >> 3] |= 1 << ((i * 12 + b) & 7)
+  })
+  return bytes
+}

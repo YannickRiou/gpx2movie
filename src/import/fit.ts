@@ -1,7 +1,7 @@
 /**
  * FIT activity parser. The decoder is written from the public FIT protocol description and reads only what a track
  * needs: file header, definition and data messages (both byte orders, compressed timestamp headers; developer fields
- * skipped), then the record, session, sport and activity messages. Scale and offset are applied (altitude…) and
+ * skipped), then the record, hr, session, sport and activity messages. Scale and offset are applied (altitude…) and
  * timestamps stay in seconds since the FIT epoch; positions stay in semicircles: degrees are computed here.
  */
 import type { Track, TrackPoint } from '../core/types'
@@ -23,9 +23,22 @@ export interface RecordMesg {
   temperature?: number
 }
 
+/**
+ * Decoded hr message: heart rate a chest strap buffered and the watch wrote in bursts (swimming, some multisport
+ * files). `eventTimestamp` is in seconds on the strap's clock; a message with a `timestamp` anchors that clock.
+ */
+export interface HrMesg {
+  timestamp?: number
+  fractionalTimestamp?: number
+  time256?: number
+  eventTimestamp?: number[]
+  filteredBpm?: number[]
+}
+
 /** The decoded messages the importer reads, named as in the FIT profile. */
 export interface FitMessages {
   recordMesgs?: RecordMesg[]
+  hrMesgs?: HrMesg[]
   sessionMesgs?: { sport?: number }[]
   sportMesgs?: { sport?: number }[]
   activityMesgs?: { timestamp?: Date | number; localTimestamp?: number }[]
@@ -49,6 +62,7 @@ const MESSAGES: Readonly<Record<number, { key: keyof FitMessages; fields: Readon
       13: ['temperature'],
     },
   },
+  132: { key: 'hrMesgs', fields: { 253: ['timestamp'], 0: ['fractionalTimestamp', 32768], 1: ['time256', 256] } },
   18: { key: 'sessionMesgs', fields: { 5: ['sport'] } },
   12: { key: 'sportMesgs', fields: { 0: ['sport'] } },
   34: { key: 'activityMesgs', fields: { 253: ['timestamp'], 5: ['localTimestamp'] } },
@@ -107,6 +121,42 @@ function isFitHeader(view: DataView, at: number): boolean {
   return view.getUint32(at + 8, true) === 0x5449462e // ".FIT"
 }
 
+/** Running hr event_timestamp (1/1024 s), onto which the 12-bit packed values accumulate. */
+interface EventClock {
+  total: number
+  last: number
+}
+
+/**
+ * Array fields of the hr message: filtered_bpm (6), event_timestamp (9, uint32, 1/1024 s) and event_timestamp_12 (10,
+ * the low 12 bits of successive event timestamps packed least significant bit first, accumulated onto the last one).
+ */
+function readHrArray(view: DataView, at: number, num: number, size: number, little: boolean, clock: EventClock) {
+  const values: number[] = []
+  if (num === 6) {
+    for (let i = 0; i < size; i++) values.push(orUndefined(view.getUint8(at + i), 0xff) ?? NaN)
+    return ['filteredBpm', values] as const
+  }
+  if (num === 9) {
+    for (let i = 0; i + 4 <= size; i += 4) {
+      clock.total = clock.last = view.getUint32(at + i, little)
+      values.push(clock.total / 1024)
+    }
+    return ['eventTimestamp', values] as const
+  }
+  if (num === 10) {
+    for (let bit = 0; bit + 12 <= size * 8; bit += 12) {
+      const byte = at + (bit >> 3)
+      const low = ((view.getUint8(byte) | (view.getUint8(byte + 1) << 8)) >> (bit & 7)) & 0xfff
+      clock.total += (low - clock.last) & 0xfff
+      clock.last = low
+      values.push(clock.total / 1024)
+    }
+    return ['eventTimestamp', values] as const
+  }
+  return undefined
+}
+
 interface Definition {
   global: number
   little: boolean
@@ -117,13 +167,14 @@ interface Definition {
 }
 
 /**
- * Decode the record, session, sport and activity messages of a FIT file (chained files included). Decoding stops at
+ * Decode the record, hr, session, sport and activity messages of a FIT file (chained files included). Decoding stops at
  * the first truncated or malformed message; what came before is kept and `error` tells why. The CRC is not checked:
  * a damaged file still shows what it holds.
  */
 function decodeFit(buffer: ArrayBuffer): { messages: FitMessages; error?: string } {
   const view = new DataView(buffer)
   const messages: FitMessages = {}
+  const clock: EventClock = { total: 0, last: 0 }
   let pos = 0
   try {
     while (pos < view.byteLength) {
@@ -155,10 +206,16 @@ function decodeFit(buffer: ArrayBuffer): { messages: FitMessages; error?: string
         if (!definition) throw new Error('message sans définition')
         if (pos + definition.size > view.byteLength) throw new RangeError()
         const decoded = MESSAGES[definition.global]
-        const mesg: Record<string, number> = {}
+        const mesg: Record<string, number | number[]> = {}
         let at = pos
         for (const [num, size, baseType] of definition.fields) {
-          // arrays (size > base type size) are not read: none of the kept fields is one
+          const array = definition.global === 132 ? readHrArray(view, at, num, size, definition.little, clock) : undefined
+          if (array) {
+            mesg[array[0]] = array[1]
+            at += size
+            continue
+          }
+          // other arrays (size > base type size) are not read: none of the kept fields is one
           const value =
             size === BASE_TYPE_SIZES[baseType] ? readInteger(view, at, baseType, definition.little) : undefined
           at += size
@@ -173,7 +230,7 @@ function decodeFit(buffer: ArrayBuffer): { messages: FitMessages; error?: string
           if (decoded?.fields[253]) mesg.timestamp = lastTimestamp
         }
         pos += definition.size
-        if (decoded) ((messages[decoded.key] ??= []) as Record<string, number>[]).push(mesg)
+        if (decoded) ((messages[decoded.key] ??= []) as Record<string, number | number[]>[]).push(mesg)
       }
       pos = end + 2 // file CRC
     }
@@ -233,6 +290,47 @@ export function recordToPoint(record: RecordMesg): TrackPoint | undefined {
   return point
 }
 
+/** Heart rate samples of the hr messages, [epoch ms, bpm]; messages before the first anchor are ignored. */
+function expandHeartRates(hrMesgs: HrMesg[]): [number, number][] {
+  const samples: [number, number][] = []
+  let anchor: number | undefined
+  let anchorEvent = 0
+  for (const { timestamp, fractionalTimestamp, time256, eventTimestamp = [], filteredBpm = [] } of hrMesgs) {
+    if (timestamp !== undefined && eventTimestamp.length > 0) {
+      anchor = timestamp + (fractionalTimestamp ?? time256 ?? 0)
+      anchorEvent = eventTimestamp[0]
+    }
+    if (anchor === undefined) continue
+    for (let i = 0; i < Math.min(eventTimestamp.length, filteredBpm.length); i++) {
+      // a uint32 event_timestamp rolls over every 2^32 / 1024 s
+      const event = eventTimestamp[i] < anchorEvent ? eventTimestamp[i] + 2 ** 22 : eventTimestamp[i]
+      if (filteredBpm[i] > 0) samples.push([(anchor + event - anchorEvent) * 1000 + FIT_EPOCH_MS, filteredBpm[i]])
+    }
+  }
+  return samples.sort((a, b) => a[0] - b[0])
+}
+
+/** Largest gap between a record and the hr sample whose bpm it takes. */
+const HR_TOLERANCE_MS = 2000
+
+/** Records without heart rate take the bpm of the nearest hr sample (within HR_TOLERANCE_MS); the others keep theirs. */
+function mergeHeartRates(records: RecordMesg[], samples: [number, number][]): void {
+  if (samples.length === 0) return
+  for (const record of records) {
+    const time = toEpochMs(record.timestamp)
+    if (time === undefined || finite(record.heartRate) !== undefined) continue
+    let lo = 0
+    let hi = samples.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (samples[mid][0] < time) lo = mid + 1
+      else hi = mid
+    }
+    const nearest = lo > 0 && time - samples[lo - 1][0] < Math.abs(samples[lo][0] - time) ? samples[lo - 1] : samples[lo]
+    if (Math.abs(nearest[0] - time) <= HR_TOLERANCE_MS) record.heartRate = nearest[1]
+  }
+}
+
 /** Sport of the activity ("hiking", "cycling"…) from the session, else the sport message. */
 function readSport(messages: FitMessages): string | undefined {
   const sport = messages.sessionMesgs?.[0]?.sport ?? messages.sportMesgs?.[0]?.sport
@@ -262,6 +360,7 @@ export async function parseFit(buffer: ArrayBuffer, fileName: string): Promise<T
   if (buffer.byteLength < 14) throw invalid('fichier trop court')
   if (!isFitHeader(new DataView(buffer), 0)) throw invalid('en-tête « .FIT » absent')
   const { messages, error } = decodeFit(buffer)
+  mergeHeartRates(messages.recordMesgs ?? [], expandHeartRates(messages.hrMesgs ?? []))
 
   const points: TrackPoint[] = []
   for (const record of messages.recordMesgs ?? []) {
