@@ -132,9 +132,10 @@ features included), `npm run build`,
 - **T with a stop selected**: the new text is attached to that stop (`addText` with the stop, one undo step).
 - **Overlay-only export on the Linux desktop**: WebM / VP9 with alpha through ffmpeg (`yuva420p`), like the web;
   alpha checked with ffprobe and a decoded frame in the container, not tried in an editor (`docs/tests-gpu.md`).
-- **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
-  constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
-  "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK).
+- **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
+  `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
+  list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept); "Texte libre" drawn like a
+  timeline text (behaviour change, needs the user's OK).
 
 ## Work merged from `lot-suites`
 
