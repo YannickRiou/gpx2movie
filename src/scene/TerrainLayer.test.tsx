@@ -79,6 +79,7 @@ describe('engine options from settings', () => {
     labels: { climbs: true, waypoints: true, kmStep: 0, endpoints: false, size: 1, rangeKm: 70 },
     weather: { enabled: true },
     weatherScene: { enabled: true, strength: 1 },
+    haze: 0,
     clouds: { mode: 'meteo' as const, coverage: 0.4, altitudeM: 1200, quality: 'medium' as const },
     water: { enabled: true, strength: 1 },
     overlay: DEFAULT_OVERLAY,
