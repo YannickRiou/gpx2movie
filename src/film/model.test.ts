@@ -116,8 +116,8 @@ describe('film model', () => {
     expect(situationTiming({ durationS: 4, holdS: 6 })).toEqual({ holdS: 4, moveS: 0 })
   })
 
-  it('region shot: framing optional (automatic by default), each field within its range', () => {
-    const framed = { style: 'situation', durationS: 9, tiltDeg: 10, distanceKm: 35, heading: 'boussole', bearingDeg: 0, headroomPct: 10 } as const
+  it('region shot: framing and moving sun optional (automatic, still by default), each field within its range', () => {
+    const framed = { style: 'situation', durationS: 9, tiltDeg: 10, distanceKm: 35, heading: 'boussole', bearingDeg: 0, headroomPct: 10, moveSun: true } as const
     expect(isValidFilm(film({ opening: framed }))).toBe(true)
     const bad: Partial<FilmShot>[] = [
       { tiltDeg: 0 },
@@ -128,6 +128,7 @@ describe('film model', () => {
       { bearingDeg: 360 },
       { headroomPct: -5 },
       { headroomPct: 50 },
+      { moveSun: 'oui' as never },
     ]
     for (const patch of bad) expect(isValidFilm(film({ opening: { ...framed, ...patch } }))).toBe(false)
   })

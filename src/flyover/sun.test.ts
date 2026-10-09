@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import { buildFilmClock } from '../film/clock'
+import type { FilmShot } from '../film/model'
 import { buildTrack } from '../import/stats'
+import { DEFAULT_PACING } from './pacing'
 import { buildTrackPath } from './path'
-import { SUN_CHIPS, clockHourOfSolar, isSunDate, solarDay, solarHourOf, solarHourToDate, sunChipHour, sunDateAt, sunDayMs, sunTimes } from './sun'
+import {
+  SHOT_SUN_HOURS,
+  SUN_CHIPS,
+  clockHourOfSolar,
+  isSunDate,
+  shotSunShiftMs,
+  solarDay,
+  solarHourOf,
+  solarHourToDate,
+  sunChipHour,
+  sunDateAt,
+  sunDayMs,
+  sunTimes,
+} from './sun'
 import type { SolarDay } from './sun'
 
 describe('solarHourToDate', () => {
@@ -160,5 +176,43 @@ describe('sunDayMs / isSunDate', () => {
     expect(isSunDate('2024-06-21')).toBe(true)
     expect(isSunDate('2024-13-40')).toBe(false)
     expect(isSunDate('21/06/2024')).toBe(false)
+  })
+})
+
+describe('shotSunShiftMs', () => {
+  const HOUR = 3_600_000
+  const clockOf = (opening: FilmShot, closing: FilmShot) =>
+    buildFilmClock({
+      opening,
+      closing,
+      stops: [],
+      cameraKeys: [],
+      lengthM: 4_000,
+      highlightsM: [],
+      durationS: 60,
+      pacing: { ...DEFAULT_PACING, keepDuration: false },
+    })
+  const moving = { style: 'situation', durationS: 8, moveSun: true } as const
+
+  it('opening: from SHOT_SUN_HOURS before the flight, slowing down to it; closing: from it, speeding up', () => {
+    const clock = clockOf(moving, { ...moving, durationS: 6 })
+    expect(shotSunShiftMs(clock, 0)).toBe(-SHOT_SUN_HOURS * HOUR)
+    expect(shotSunShiftMs(clock, 4)).toBeCloseTo(-SHOT_SUN_HOURS * HOUR * 0.25, 6)
+    expect(shotSunShiftMs(clock, 8)).toBe(0)
+    expect(shotSunShiftMs(clock, 30)).toBe(0)
+    const closingS = clock.openingS + clock.flightS
+    expect(shotSunShiftMs(clock, closingS)).toBe(0)
+    expect(shotSunShiftMs(clock, closingS + 3)).toBeCloseTo(SHOT_SUN_HOURS * HOUR * 0.25, 6)
+    expect(shotSunShiftMs(clock, clock.totalTime())).toBe(SHOT_SUN_HOURS * HOUR)
+    // the sun stands still where the shot meets the flight: no jump in its speed
+    const speed = (t: number) => (shotSunShiftMs(clock, t + 0.001) - shotSunShiftMs(clock, t - 0.001)) / 0.002
+    expect(Math.abs(speed(8 - 0.002))).toBeLessThan((0.01 * SHOT_SUN_HOURS * HOUR) / 8)
+  })
+
+  it('none without the switch, outside a « Depuis la région » shot', () => {
+    for (const shot of [{ style: 'situation', durationS: 8 }, { style: 'descente', durationS: 8, moveSun: true }] as const) {
+      const clock = clockOf(shot, shot)
+      for (const t of [0, 4, clock.totalTime()]) expect(shotSunShiftMs(clock, t)).toBe(0)
+    }
   })
 })

@@ -58,7 +58,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/flyover/pacing.ts` | flyover pacing | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance`; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses given by the film); `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
 | `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha`, `START_HEIGHTS`, `START_HEIGHT_LABELS`, `highlightsRegion`; `autoStops`, `stopCandidates`, `materializeStops`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `attachToStop`, `followStops`, `edgeScrollSpeed`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
 | `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `situationTarget`, `situationFramingOf`, `regionDistanceM`, `regionHighlightOpacity`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
-| `src/flyover/sun.ts` | sun date, sunrise / sunset | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
+| `src/flyover/sun.ts` | sun date, sunrise / sunset | `shotSunShiftMs(clock, timeS)`, `SHOT_SUN_HOURS`, `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | track colored by a metric | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (label, unit, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposure under the atmosphere | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
 | `src/weather/*` | weather of the outing (archive, or forecast for a planned outing) | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays` (source and days), `forecastCacheKey`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION`; `weatherAt(series, timeMs, lon, lat)`, `weatherAtTimes(series, timesMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel`; `useWeatherStore`, `syncWeather` |
@@ -433,7 +433,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   `USE_LOGARITHMIC_DEPTH_BUFFER`; the define is added to the effect, otherwise the whole scene is seen as infinitely far.
 - **Track**: unlit materials; their color is divided by `renderer.toneMappingExposure` (`applyExposure`).
 - **Sun at the time of the outing** (`settings.sunFromTrack`, on by default): when the first track is timestamped, the lighting
-  date is the **recorded** time of the point under the marker (`sunDateAt`), updated every frame by
+  date is the **recorded** time of the point under the marker (`sunDateAt`; shifted during a situation shot that
+  moves the sun, `shotSunShiftMs`, see "Film and timeline"), updated every frame by
   `atmosphereRef.current.updateByDate(date)` in `useFrame` (not the `date` prop: the two do not combine). Points without
   a time are filled by interpolation over distance (`recordedTimeAt`); a pause or a jump between segments is crossed
   instantly. Without timestamps or with the option unchecked: fixed solar time. The timeline shows the recorded time at the marker
@@ -564,8 +565,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   `startHeight` `'region'` (default) or `'pays'`, `highlight` (default off) and `regionId` (« Lieu », OSM area
   `relation/<id>` or `way/<id>`, absent = automatic) and `holdS` (« Maintien », 0–10 s, `SITUATION_HOLD_RANGE`,
   absent = 0) and its framing, `tiltDeg` (1–60°), `distanceKm` (5–400 km), `heading` (`'libre'` / `'boussole'`),
-  `bearingDeg` (0–359°), `headroomPct` (0–30 %), all absent by default (`SituationFraming`) for a `situation` shot,
-  see below);
+  `bearingDeg` (0–359°), `headroomPct` (0–30 %), all absent by default (`SituationFraming`), and `moveSun` (default
+  off) for a `situation` shot, see below);
   `autoStops` (generated stops) and `autoMode`: `'temps-forts'` (default for new projects) or `'rythme'` (earlier
   projects);
   `stops[]` `{ id, atM, durationS (0.5–60 s), camera: 'film' | 'orbite' | 'large' | 'fixe', label?, source?: { kind, ref? } }`
@@ -672,7 +673,14 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   `situationTarget` (region centre when the shot highlights and it is loaded, else the track's), and
   `situationFramingOf` turns it into tilt, distance and bearing, rounded and clamped (heading set to « Boussole »).
   A compass bearing opposite to the flight's direction makes the camera turn quickly during the push-in (directions
-  are nlerped, as for every shot). The camera far plane (5,000 km) limits nothing; seen from above,
+  are nlerped, as for every shot). **Moving sun** (« Soleil » › « Faire bouger le soleil », `moveSun`): a time lapse
+  of `SHOT_SUN_HOURS` (2 h) of the day over the whole shot, added to the sun date of the frame
+  (`shotSunShiftMs(clock, timeS)` in `src/flyover/sun.ts`, applied by `AtmosphereLayer`, so the clouds and the
+  weather under the marker follow it): opening −2 h · (1 − u)², closing +2 h · u² (u = share of the shot). Chosen as
+  the simplest that joins the flight: the shot ends (starts) exactly at the flight's own sun, with the sun slowing to
+  a stop there, so no jump of light or of shadow speed at the boundary; the shadows sweep the relief seen from above.
+  No setting of its own (hours, direction): a start before dawn simply rises the sun. A pure function of the film
+  time: preview and export light the same frames. Only with the atmosphere (the fixed lights have no sun date). The camera far plane (5,000 km) limits nothing; seen from above,
   the engine picks coarse tiles (loading in time: `docs/tests-gpu.md`). **Region highlight** ("Mettre en avant la
   région" (highlight the region) in the shot inspector, under "Hauteur de départ" (start height), "Hauteur de fin" for
   the closing; `highlight`, off by default: no Overpass request and an unchanged framing for every film saved before,

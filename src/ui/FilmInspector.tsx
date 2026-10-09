@@ -52,6 +52,7 @@ import {
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { buildTrackPath } from '../flyover/path'
+import { SHOT_SUN_HOURS } from '../flyover/sun'
 import { REGION_KIND_LABELS, candidateId, captureFraming, useRegionStore, type RegionStatus } from '../osm/region'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
@@ -384,6 +385,7 @@ export function FilmInspector() {
   const { track, film, pacing } = useFilmSource()
   const clock = useFilmClock()
   const path = useMemo(() => (track ? buildTrackPath(track) : null), [track])
+  const atmosphere = useAppStore((s) => s.settings.atmosphere)
   if (!item || !track || !path) return null
   const lengthM = track.stats.distanceM
   const change = (fn: (f: Film) => Film, stops: boolean) => editFilm((f) => ({ film: fn(f) }), { stops, step: false })
@@ -548,6 +550,23 @@ export function FilmInspector() {
               onChange={(patch) => change((f) => updateShot(f, item, patch), false)}
             />
             <SituationFramingFields phase={item} shot={shot} onChange={(patch) => change((f) => updateShot(f, item, patch), false)} />
+            <InspectorGroup title="Soleil">
+              <label className="checkbox checkbox--switch">
+                <input
+                  type="checkbox"
+                  checked={shot.moveSun === true}
+                  aria-describedby={`${id}-sun-hint`}
+                  onChange={(e) => change((f) => updateShot(f, item, { moveSun: e.currentTarget.checked || undefined }), false)}
+                />
+                Faire bouger le soleil
+              </label>
+              <p id={`${id}-sun-hint`} className="field__hint">
+                {item === 'opening'
+                  ? `Accéléré : le soleil part de ${SHOT_SUN_HOURS} h avant le départ et ralentit jusqu’à l’heure du survol ; les ombres balaient le relief.`
+                  : `Accéléré : le soleil repart de l’heure de l’arrivée et avance de ${SHOT_SUN_HOURS} h ; les ombres balaient le relief.`}
+                {!atmosphere && ' Avec l’atmosphère seulement.'}
+              </p>
+            </InspectorGroup>
           </>
         )}
         {shot.style !== 'situation' &&

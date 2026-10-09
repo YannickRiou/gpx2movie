@@ -4,6 +4,7 @@
  *
  * Pure functions (no DOM, no React, no Three).
  */
+import type { FilmClock } from '../film/clock'
 import { recordedTimeAt, type TrackPath } from './path'
 
 const DAY_MS = 86_400_000
@@ -48,6 +49,26 @@ export function sunDateAt(path: TrackPath | null, progress: number, opts: SunDat
     if (time !== undefined) return new Date(time)
   }
   return solarHourToDate(opts.dayMs, opts.lon, opts.solarHour)
+}
+
+/** Hours of the day the sun runs over a 'situation' shot that moves it (« Faire bouger le soleil »). */
+export const SHOT_SUN_HOURS = 2
+
+/**
+ * Shift (ms) of the sun date at film time `timeS` during a 'situation' shot with `moveSun`, 0 anywhere else: a time
+ * lapse of SHOT_SUN_HOURS over the whole shot that joins the flight's own sun without a jump. Opening: from
+ * SHOT_SUN_HOURS before the time at the start of the flight, slowing down to it (−H·(1 − u)², u = share of the
+ * shot); closing: from the time at the end of the flight, speeding up to SHOT_SUN_HOURS after it (H·u²). The sun
+ * thus stands still where the shot meets the flight. A pure function of the film time: the preview and the export
+ * light the same frames.
+ */
+export function shotSunShiftMs(clock: Pick<FilmClock, 'stateAt' | 'opening' | 'closing'>, timeS: number): number {
+  const state = clock.stateAt(timeS)
+  if (state.phase !== 'opening' && state.phase !== 'closing') return 0
+  const shot = state.phase === 'opening' ? clock.opening : clock.closing
+  if (shot.style !== 'situation' || shot.moveSun !== true || !(state.lengthS > 0)) return 0
+  const u = Math.min(1, Math.max(0, state.localS / state.lengthS))
+  return (state.phase === 'opening' ? -((1 - u) ** 2) : u ** 2) * SHOT_SUN_HOURS * HOUR_MS
 }
 
 /** Local mean solar time (hours) at `lon` of `date`, counted from the UTC day containing `dayMs` (inverse of `solarHourToDate`). */

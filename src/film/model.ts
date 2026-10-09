@@ -80,6 +80,8 @@ export interface FilmShot {
   heading?: SituationHeading
   bearingDeg?: number
   headroomPct?: number
+  /** 'situation': the sun moves during the shot (« Faire bouger le soleil », flyover/sun.ts `shotSunShiftMs`); default off */
+  moveSun?: boolean
 }
 
 export const SITUATION_HEADINGS = ['libre', 'boussole'] as const
@@ -497,7 +499,8 @@ export function isValidShot(shot: unknown): shot is FilmShot {
     (shot.distanceKm === undefined || within(shot.distanceKm, SITUATION_DISTANCE_KM_RANGE.min, SITUATION_DISTANCE_KM_RANGE.max)) &&
     (shot.heading === undefined || oneOf(SITUATION_HEADINGS, shot.heading)) &&
     (shot.bearingDeg === undefined || within(shot.bearingDeg, SITUATION_BEARING_RANGE.min, SITUATION_BEARING_RANGE.max)) &&
-    (shot.headroomPct === undefined || within(shot.headroomPct, SITUATION_HEADROOM_RANGE.min, SITUATION_HEADROOM_RANGE.max))
+    (shot.headroomPct === undefined || within(shot.headroomPct, SITUATION_HEADROOM_RANGE.min, SITUATION_HEADROOM_RANGE.max)) &&
+    (shot.moveSun === undefined || typeof shot.moveSun === 'boolean')
   )
 }
 

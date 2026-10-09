@@ -31,7 +31,7 @@ import type { AerialPerspectiveEffect, SkyLightProbe, SunDirectionalLight } from
 import { AerialPerspective, Atmosphere, Sky, SkyLight, Stars, SunLight, type AtmosphereApi } from '@takram/three-atmosphere/r3f'
 import { samplePath, trackPathOf } from '../flyover/path'
 import { mslLocalToEcef } from '../geo/geoid'
-import { sunDateAt, sunDayMs } from '../flyover/sun'
+import { shotSunShiftMs, sunDateAt, sunDayMs } from '../flyover/sun'
 import { useAppStore } from '../state/store'
 import { CLEAR_SCENE_WEATHER, hazeExtinction, sceneWeatherAt } from '../weather/sceneWeather'
 import type { SceneWeather } from '../weather/sceneWeather'
@@ -42,6 +42,7 @@ import { DEFAULT_GROUND_HEIGHT_M } from './CameraRig'
 import { useGradingEffect } from './GradingComposer'
 import { nightFillIntensity, sceneExposure, sunElevation } from './exposure'
 import { useTerrainContext } from './TerrainLayer'
+import { useFilmClock } from './usePacing'
 import { SHADOW_MAP_SIZE, TerrainShadow } from './terrainShadow'
 import { WeatherEffect } from './weatherEffect'
 
@@ -73,6 +74,8 @@ export function AtmosphereLayer() {
   const [sun, setSun] = useState<SunDirectionalLight | null>(null)
   /** day used when the track has no timestamps */
   const [today] = useState(() => Date.now())
+  /** film clock: a 'situation' shot may move the sun (`shotSunShiftMs`) */
+  const clock = useFilmClock()
   /** sun date, weather under the marker and the ground there for its haze */
   const path = track ? trackPathOf(track) : null
   const weatherEffect = useMemo(() => new WeatherEffect({ logarithmicDepth: gl.capabilities.logarithmicDepthBuffer }), [gl])
@@ -113,12 +116,13 @@ export function AtmosphereLayer() {
     const atmosphere = atmosphereRef.current
     if (!frame || !up || !atmosphere) return
     const { playback, settings } = useAppStore.getState()
-    const date = sunDateAt(path, playback.progress, {
+    const sunDate = sunDateAt(path, playback.progress, {
       sunFromTrack: settings.sunFromTrack,
       solarHour: settings.sunHour,
       lon: frame.origin.lon,
       dayMs: sunDayMs(settings.sunDate, track?.stats.startTime, today),
     })
+    const date = new Date(sunDate.getTime() + shotSunShiftMs(clock, playback.timeS ?? clock.timeAtProgress(playback.progress)))
     atmosphere.updateByDate(date)
     dateRef.current = date
     const elevation = sunElevation(atmosphere.sunDirection, up)
