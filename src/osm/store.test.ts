@@ -5,8 +5,19 @@ import { useLabelSources } from '../scene/labelSources'
 import { DEFAULT_LANDMARK_SETTINGS } from './landmarks'
 import type { LandmarkSettings } from './landmarks'
 import { OverpassError } from './overpass'
-import { holdRegion, syncRegion, useRegionStore } from './region'
-import type { AdminRegion } from './region'
+import {
+  candidateId,
+  chooseRegion,
+  containingRegions,
+  holdRegion,
+  parseRegionCandidates,
+  parseRegionGeometry,
+  regionCandidatesQuery,
+  regionGeometryQuery,
+  syncRegion,
+  useRegionStore,
+} from './region'
+import type { AdminCandidate, AdminRegion, RegionAnswer } from './region'
 import type { OsmFeature } from './overpass'
 import { resetLandmarkStore, syncLandmarks, useLandmarkStore } from './store'
 
@@ -143,15 +154,15 @@ describe('holdRegion', () => {
   const box = { west: 7.0, south: 46.0, east: 7.1, north: 46.1 }
   const region: AdminRegion = { id: 'relation/1', name: 'Valais/Wallis', bounds: { west: 6.7, south: 45.8, east: 8.5, north: 46.7 }, rings: [] }
   const later = () => {
-    let resolve: (r: AdminRegion | null) => void = () => {}
-    const fetch = vi.fn(() => new Promise<AdminRegion | null>((r) => (resolve = r)))
-    return { fetch, resolve: (r: AdminRegion | null) => resolve(r) }
+    let resolve: (r: RegionAnswer) => void = () => {}
+    const fetch = vi.fn((_track: unknown, _id: string | null) => new Promise<RegionAnswer>((r) => (resolve = r)))
+    return { fetch, resolve: (r: AdminRegion | null) => resolve({ candidates: [], autoId: r?.id ?? null, region: r }) }
   }
 
   it('keeps a region arriving during an export aside until it ends', async () => {
     syncRegion(null, false)
     const { fetch, resolve } = later()
-    syncRegion(box, true, fetch)
+    syncRegion(box, true, null, fetch)
     holdRegion(true)
     resolve(region)
     await flush()
@@ -165,12 +176,99 @@ describe('holdRegion', () => {
   it('drops a held answer once the region is no longer wanted', async () => {
     syncRegion(null, false)
     const { fetch, resolve } = later()
-    syncRegion(box, true, fetch)
+    syncRegion(box, true, null, fetch)
     holdRegion(true)
     resolve(region)
     await flush()
     syncRegion(null, false)
     holdRegion(false)
     expect(useRegionStore.getState()).toMatchObject({ key: null, status: 'idle', region: null })
+  })
+
+  it('asks again for another place of the same track, keeping the list of places meanwhile', async () => {
+    syncRegion(null, false)
+    const first = later()
+    syncRegion(box, true, null, first.fetch)
+    const park: AdminCandidate = { type: 'relation', id: 9, kind: 'protege', level: NaN, name: 'Parc', bounds: box }
+    first.fetch.mockClear()
+    first.resolve(region)
+    await flush()
+    useRegionStore.setState({ candidates: [park] })
+    const second = later()
+    syncRegion(box, true, 'relation/9', second.fetch)
+    expect(second.fetch.mock.calls[0][1]).toBe('relation/9')
+    expect(useRegionStore.getState()).toMatchObject({ status: 'loading', candidates: [park] })
+    // same box and place: nothing asked
+    syncRegion(box, true, 'relation/9', second.fetch)
+    expect(second.fetch).toHaveBeenCalledTimes(1)
+    syncRegion(null, false)
+  })
+})
+
+describe('region candidates', () => {
+  const track = { west: 8.9, south: 42.1, east: 9.0, north: 42.2 }
+  const element = (type: string, id: number, tags: Record<string, string>, [w, s, e, n]: number[]) => ({
+    type,
+    id,
+    tags,
+    bounds: { minlon: w, minlat: s, maxlon: e, maxlat: n },
+  })
+  const json = {
+    elements: [
+      element('relation', 1, { boundary: 'administrative', admin_level: '4', name: 'Corse' }, [8.5, 41.3, 9.6, 43.1]),
+      element('relation', 2, { boundary: 'administrative', admin_level: '6', name: 'Haute-Corse' }, [8.5, 41.8, 9.6, 43.1]),
+      element('relation', 3, { boundary: 'protected_area', protect_class: '5', name: 'Parc naturel régional de Corse' }, [8.55, 41.4, 9.4, 42.9]),
+      element('relation', 4, { place: 'island', name: 'Corse', 'name:fr': 'Corse' }, [8.53, 41.33, 9.57, 43.03]),
+      element('way', 5, { leisure: 'nature_reserve', name: 'Réserve' }, [8.95, 42.15, 8.96, 42.16]),
+      element('way', 6, { boundary: 'administrative', admin_level: '6', name: 'Way boundary' }, [8, 41, 10, 44]),
+      element('relation', 7, { natural: 'mountain_range', name: 'Monte Cinto' }, [8.8, 42.0, 9.1, 42.4]),
+      element('relation', 8, { boundary: 'administrative', admin_level: '8', name: 'Commune' }, [8.8, 42.0, 9.1, 42.3]),
+      element('relation', 9, { boundary: 'national_park' }, [8, 41, 10, 44]),
+    ],
+  }
+
+  it('asks for every kind of area in one is_in query', () => {
+    const query = regionCandidatesQuery({ lon: 8.95, lat: 42.15 })
+    expect(query).toContain('is_in(42.15000,8.95000)')
+    for (const tag of ['"admin_level"~"^[456]$"', 'national_park|protected_area', '"leisure"="nature_reserve"', '"place"="island"', '"natural"="mountain_range"']) {
+      expect(query).toContain(tag)
+    }
+    expect(regionGeometryQuery(5, 'way')).toContain('way(5);')
+    expect(regionGeometryQuery(3)).toContain('rel(3);')
+  })
+
+  it('parses the named areas with their kind, not other boundaries nor unnamed ones', () => {
+    const candidates = parseRegionCandidates(json)
+    expect(candidates.map((c) => `${candidateId(c)} ${c.kind}`)).toEqual([
+      'relation/1 admin',
+      'relation/2 admin',
+      'relation/3 protege',
+      'relation/4 ile',
+      'way/5 protege',
+      'relation/7 massif',
+    ])
+    expect(candidates[1].level).toBe(6)
+    expect(Number.isNaN(candidates[2].level)).toBe(true)
+  })
+
+  it('lists the areas containing the whole track, smallest first; the automatic choice stays administrative', () => {
+    const candidates = parseRegionCandidates(json)
+    expect(containingRegions(candidates, track).map((c) => c.id)).toEqual([7, 2, 3, 4, 1])
+    // the smallest administrative boundary 5 × larger than the track, as before the other kinds were asked
+    expect(chooseRegion(candidates, track)?.id).toBe(2)
+    expect(chooseRegion(candidates.filter((c) => c.kind !== 'admin'), track)).toBeNull()
+  })
+
+  it('reads the geometry of a closed way as one ring', () => {
+    const ring = [
+      { lon: 8.95, lat: 42.15 },
+      { lon: 8.96, lat: 42.15 },
+      { lon: 8.96, lat: 42.16 },
+      { lon: 8.95, lat: 42.15 },
+    ]
+    const [region] = parseRegionGeometry({ elements: [{ type: 'way', id: 5, tags: { name: 'Réserve' }, geometry: ring }] })
+    expect(region).toMatchObject({ id: 'way/5', name: 'Réserve' })
+    expect(region.rings).toHaveLength(1)
+    expect(region.rings[0]).toHaveLength(3)
   })
 })

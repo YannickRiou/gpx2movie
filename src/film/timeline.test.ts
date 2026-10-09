@@ -37,6 +37,7 @@ import {
   syncClip,
   syncClipPlacement,
   updateCameraKey,
+  setFilmPlace,
   updateShot,
   updateSpeed,
   updateStop,
@@ -302,6 +303,14 @@ describe('edits', () => {
     const situation = updateShot(DEFAULT_FILM, 'opening', { style: 'situation' })
     const shortened = updateShot(situation, 'opening', { durationS: DEFAULT_FILM.opening.durationS })
     expect(updateShot(shortened, 'opening', { highlight: true }).opening.durationS).toBe(DEFAULT_FILM.opening.durationS)
+  })
+
+  it('sets the place of both shots, and removes it to go back to automatic', () => {
+    const placed = setFilmPlace(DEFAULT_FILM, 'relation/3')
+    expect([placed.opening.regionId, placed.closing.regionId]).toEqual(['relation/3', 'relation/3'])
+    const auto = setFilmPlace(placed, null)
+    expect(auto.opening).toEqual(DEFAULT_FILM.opening)
+    expect('regionId' in auto.closing).toBe(false)
   })
 
   it('tells whether a selected item is still in the film', () => {

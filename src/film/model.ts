@@ -64,6 +64,11 @@ export interface FilmShot {
   startHeight?: StartHeight
   /** 'situation': highlight the administrative region of the outing (OpenStreetMap) and frame it; default off */
   highlight?: boolean
+  /**
+   * 'situation' with `highlight`: the place highlighted (« Lieu »), an OSM area containing the track ("relation/123",
+   * "way/45"); absent = the automatic administrative region. One place per film: `setFilmPlace` writes both shots.
+   */
+  regionId?: string
 }
 
 export const START_HEIGHTS = ['region', 'pays'] as const
@@ -75,6 +80,13 @@ export const START_HEIGHT_LABELS: Record<StartHeight, string> = { region: 'Régi
 export function highlightsRegion(film: Pick<Film, 'opening' | 'closing'>): boolean {
   return [film.opening, film.closing].some((shot) => shot.style === 'situation' && shot.highlight === true)
 }
+/** Place chosen for the region highlight (`regionId` of the first shot that highlights it), null: automatic. */
+export function filmRegionId(film: Pick<Film, 'opening' | 'closing'>): string | null {
+  const shot = [film.opening, film.closing].find((s) => s.style === 'situation' && s.highlight === true)
+  return shot?.regionId ?? null
+}
+/** Form of a stored place: an OSM relation or way. */
+export const isRegionId = (v: unknown): v is string => typeof v === 'string' && /^(relation|way)\/\d+$/.test(v)
 /** Duration given to a shot switched to 'situation' while it had its default duration (seconds): the dive is long. */
 export const SITUATION_DURATION_S = 9
 
@@ -438,7 +450,8 @@ export function isValidShot(shot: unknown): shot is FilmShot {
     (shot.transition === undefined || oneOf(SHOT_TRANSITIONS, shot.transition)) &&
     (shot.dipS === undefined || within(shot.dipS, DIP_DURATION_RANGE.min, DIP_DURATION_RANGE.max)) &&
     (shot.startHeight === undefined || oneOf(START_HEIGHTS, shot.startHeight)) &&
-    (shot.highlight === undefined || typeof shot.highlight === 'boolean')
+    (shot.highlight === undefined || typeof shot.highlight === 'boolean') &&
+    (shot.regionId === undefined || isRegionId(shot.regionId))
   )
 }
 

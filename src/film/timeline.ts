@@ -731,15 +731,24 @@ export function updateMusic(film: Film, id: string, patch: Partial<Omit<FilmAudi
 }
 
 /**
- * Shot `key` with `patch`, duration clamped to its range. Switched to 'situation' with its default duration still,
- * the shot gets `SITUATION_DURATION_S`: the dive from the region is long.
+ * Shot `key` with `patch`, duration clamped to its range; a field patched to undefined is removed (back to its
+ * default). Switched to 'situation' with its default duration still, the shot gets `SITUATION_DURATION_S`: the dive
+ * from the region is long.
  */
 export function updateShot(film: Film, key: 'opening' | 'closing', patch: Partial<FilmShot>): Film {
   const before = film[key]
   const longer =
     patch.style === 'situation' && before.style !== 'situation' && patch.durationS === undefined && before.durationS === DEFAULT_FILM[key].durationS
-  const shot = { ...before, ...patch, ...(longer && { durationS: SITUATION_DURATION_S }) }
-  return { ...film, [key]: { ...shot, durationS: shotDuration(shot.durationS) } }
+  const shot: Record<string, unknown> = { ...before, ...patch, ...(longer && { durationS: SITUATION_DURATION_S }) }
+  for (const field of Object.keys(shot)) if (shot[field] === undefined) delete shot[field]
+  const merged = shot as unknown as FilmShot
+  return { ...film, [key]: { ...merged, durationS: shotDuration(merged.durationS) } }
+}
+
+/** The place highlighted by the 'situation' shots (« Lieu »; null: automatic), the same for the opening and the closing. */
+export function setFilmPlace(film: Film, regionId: string | null): Film {
+  const patch = { regionId: regionId ?? undefined }
+  return updateShot(updateShot(film, 'opening', patch), 'closing', patch)
 }
 
 // ---------------------------------------------------------------------------

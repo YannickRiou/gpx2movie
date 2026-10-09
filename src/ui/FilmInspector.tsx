@@ -29,6 +29,7 @@ import {
   formatFilmTime,
   formatSpeedFactor,
   removeFilmItem,
+  setFilmPlace,
   updateCameraKey,
   updateMedia,
   updateMusic,
@@ -42,7 +43,7 @@ import {
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { buildTrackPath } from '../flyover/path'
-import { useRegionStore, type RegionStatus } from '../osm/region'
+import { REGION_KIND_LABELS, candidateId, useRegionStore, type RegionStatus } from '../osm/region'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
@@ -50,7 +51,7 @@ import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber, formatPercent } from './format'
 import { Icon } from './icons'
 import { FilmTextStyleFields } from './OverlayPanel'
-import { RangeField } from './PanelSection'
+import { InfoTip, RangeField } from './PanelSection'
 import { nextGridIndex } from './shell'
 import { showToast } from './toast'
 
@@ -91,6 +92,52 @@ export function RegionHint({ id, highlight }: { id: string; highlight: boolean }
       {highlight && regionStatus === 'ready' && regionName ? `${regionName} : ` : ''}
       {REGION_HINTS[highlight ? regionStatus : 'idle']}
     </p>
+  )
+}
+
+/** Titled group of fields of a 'situation' shot (« Lieu », « Durées », « Cadrage », « Soleil »). */
+function InspectorGroup({ title, children }: { title: string; children: ReactNode }) {
+  const id = useId()
+  return (
+    <section className="film-inspector__group" aria-labelledby={id}>
+      <h3 id={id} className="film-inspector__group-title">
+        {title}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
+/**
+ * « Lieu »: the place highlighted, among the areas that contain the track (smallest first, osm/region.ts), or the
+ * automatic administrative region. A place saved but not offered (still loading, or no longer containing the track)
+ * stays selected; the highlight then falls back to the automatic one.
+ */
+function PlaceSelect({ value, onChange }: { value: string | null; onChange(regionId: string | null): void }) {
+  const id = useId()
+  const candidates = useRegionStore((s) => s.candidates)
+  const autoId = useRegionStore((s) => s.autoId)
+  const loading = useRegionStore((s) => s.status === 'loading')
+  const auto = candidates.find((c) => candidateId(c) === autoId)
+  const known = value === null || candidates.some((c) => candidateId(c) === value)
+  return (
+    <div className="field">
+      <div className="field__label-row">
+        <label className="field__label" htmlFor={id}>
+          Lieu
+        </label>
+        <InfoTip text="La zone mise en avant et cadrée : région administrative, parc, espace protégé, île ou massif qui contient toute la trace (OpenStreetMap), du plus petit au plus grand." />
+      </div>
+      <select id={id} className="select" value={value ?? ''} onChange={(e) => onChange(e.currentTarget.value || null)}>
+        <option value="">{auto ? `Automatique (${auto.name})` : 'Automatique'}</option>
+        {candidates.map((c) => (
+          <option key={candidateId(c)} value={candidateId(c)}>
+            {c.name} · {REGION_KIND_LABELS[c.kind]}
+          </option>
+        ))}
+        {!known && <option value={value ?? ''}>{loading ? 'Recherche des lieux…' : 'Lieu enregistré (introuvable)'}</option>}
+      </select>
+    </div>
   )
 }
 const STOP_CAMERA_HINTS: Record<StopCamera, string> = {
@@ -324,16 +371,21 @@ export function FilmInspector() {
                 ))}
               </select>
             </div>
-            <label className="checkbox checkbox--switch">
-              <input
-                type="checkbox"
-                checked={shot.highlight === true}
-                aria-describedby={`${id}-highlight-hint`}
-                onChange={(e) => change((f) => updateShot(f, item, { highlight: e.currentTarget.checked }), false)}
-              />
-              Mettre en avant la région
-            </label>
-            <RegionHint id={`${id}-highlight-hint`} highlight={shot.highlight === true} />
+            <InspectorGroup title="Lieu">
+              <label className="checkbox checkbox--switch">
+                <input
+                  type="checkbox"
+                  checked={shot.highlight === true}
+                  aria-describedby={`${id}-highlight-hint`}
+                  onChange={(e) => change((f) => updateShot(f, item, { highlight: e.currentTarget.checked }), false)}
+                />
+                Mettre en avant la région
+              </label>
+              <RegionHint id={`${id}-highlight-hint`} highlight={shot.highlight === true} />
+              {shot.highlight === true && (
+                <PlaceSelect value={shot.regionId ?? null} onChange={(regionId) => change((f) => setFilmPlace(f, regionId), false)} />
+              )}
+            </InspectorGroup>
           </>
         )}
         {range(

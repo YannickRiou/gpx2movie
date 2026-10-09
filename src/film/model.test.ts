@@ -10,6 +10,7 @@ import {
   clipHasSound,
   clipTimeS,
   dipAlpha,
+  filmRegionId,
   highlightsRegion,
   isValidFilm,
   nextFilmId,
@@ -89,6 +90,20 @@ describe('film model', () => {
       film({ opening: { style: 'situation', durationS: 9, highlight: 'oui' as never } }),
     ]
     for (const f of bad) expect(isValidFilm(f)).toBe(false)
+  })
+
+  it('region shot: place optional (automatic by default), an OSM relation or way, the first highlighting shot’s', () => {
+    expect(filmRegionId(DEFAULT_FILM)).toBeNull()
+    const park = film({
+      opening: { style: 'situation', durationS: 9, highlight: true, regionId: 'relation/3' },
+      closing: { style: 'situation', durationS: 9, highlight: true, regionId: 'way/5' },
+    })
+    expect(isValidFilm(park)).toBe(true)
+    expect(filmRegionId(park)).toBe('relation/3')
+    expect(filmRegionId({ ...park, opening: { ...park.opening, highlight: false } })).toBe('way/5')
+    for (const regionId of ['node/1', 'relation/', 'relation/1a', 3 as never]) {
+      expect(isValidFilm(film({ opening: { style: 'situation', durationS: 9, regionId } }))).toBe(false)
+    }
   })
 
   it('dip curve: 0 outside its window, symmetric, 1 at the cut', () => {

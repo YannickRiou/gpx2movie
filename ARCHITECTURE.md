@@ -64,7 +64,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/weather/*` | weather of the outing (archive, or forecast for a planned outing) | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays` (source and days), `forecastCacheKey`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION`; `weatherAt(series, timeMs, lon, lat)`, `weatherAtTimes(series, timesMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel`; `useWeatherStore`, `syncWeather` |
 | `src/plan/timing.ts` | estimated times of a planned outing (see "Planned outing") | `PLAN_ACTIVITIES`, `PLAN_ACTIVITY_LABELS`, `PACE_RANGE`, `OutingPlan`, `stretchHours`, `estimateElapsedS`, `withEstimatedTimes`, `withoutTimes`, `planActivityOf`, `localDepartureMs`, `localDayAndTime`, `localUtcOffsetMin` |
 | `src/plan/roadbook.ts` | roadbook (see "Planned outing") | `steepSections`, `roadbookLandmarks`, `buildRoadbook` → `Roadbook` (`rows`, `steep`, totals), `formatPlaceClock`, `passageText`, `roadbookSummary`, `longestSteepText`, `roadbookText`, thresholds `STEEP_PERCENT`, `VERY_STEEP_PERCENT`, `STEEP_MIN_LENGTH_M`, `STEEP_MERGE_GAP_M`, `SAME_PLACE_M`, `ROADBOOK_LANDMARKS` |
-| `src/osm/region.ts` + `src/scene/regionMesh.ts` + `src/scene/RegionHighlight.tsx` | administrative region of the outing, framed and highlighted by the region view (see "Film and timeline", Camera) | `regionName`, `regionCandidatesQuery`, `parseRegionCandidates`, `chooseRegion`, `regionGeometryQuery`, `parseRegionGeometry`, `simplifyRings`, `fetchRegion`, `regionFrame`, `REGION_MIN_RATIO`, `REGION_MAX_POINTS`; `useRegionStore`, `syncRegion`, `holdRegion`; pure, tested: `buildRegionMesh`, `ringDepths`, `labelPoint`, `ringSegments`, `LABEL_GRID`; `RegionHighlight` |
+| `src/osm/region.ts` + `src/scene/regionMesh.ts` + `src/scene/RegionHighlight.tsx` | administrative region of the outing, framed and highlighted by the region view (see "Film and timeline", Camera) | `regionName`, `regionCandidatesQuery`, `regionKind`, `REGION_KIND_LABELS`, `parseRegionCandidates`, `containingRegions`, `chooseRegion`, `candidateId`, `regionGeometryQuery`, `parseRegionGeometry`, `simplifyRings`, `fetchRegion`, `regionFrame`, `REGION_MIN_RATIO`, `REGION_MAX_POINTS`; `useRegionStore`, `syncRegion`, `holdRegion`; pure, tested: `buildRegionMesh`, `ringDepths`, `labelPoint`, `ringSegments`, `LABEL_GRID`; `RegionHighlight` |
 | `src/osm/*` | OpenStreetMap landmarks | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures`; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `splitHidden`, `DEFAULT_LANDMARK_SETTINGS`, `withLandmarkDefaults`, `LANDMARK_DISTANCE_RANGE`, `KIND_LABELS`, `KIND_BADGES`; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
 | `src/overlay/*` | film overlay | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `withOverrides`, `resolveOverlayTheme`, `leaderboardRows`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (bridge to the export), `OverlayCanvas` |
 | `src/export/*` | video export | `buildFrameSchedule`, `VIDEO_ASPECTS`, `VIDEO_RESOLUTIONS`, `videoSize`, `createVideoEncoder(canvas, options)`, `ExportCanceledError`, `nativeEncoder.ts` (desktop ffmpeg): `exportCodec`, `createExportEncoder`, `createNativeVideoEncoder`, `wavFile`, `settle`, `renderSettledFrame`, `composeFrame`, `composeOverlayFrame`, `fillSky` (export sky, reused by the poster), `useExportStore`, `videoFileName`, `overlayBaseName`, `ALPHA_CANDIDATES`, `chooseVideoDestination`, `warnsInMemory`, `filmRate`, `ExportController`; `batch.ts` (batch rendering): pure, tested: `buildBatchJobs`, `formatKey`, `batchBaseName`, `estimateBatch`, `runBatch`, `batchProgressLabel`, `batchSummary`; `exportJob`, `useBatchStore` |
@@ -561,7 +561,8 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   startHeight?, highlight? }` (1–30 s; default descente 6 s / 5 s; a shot switched to `situation` while it still has its
   default duration gets `SITUATION_DURATION_S`, 9 s, for its long dive (`updateShot`; saved films keep theirs); `transition` `'enchaine'` by default, `'coupe'`,
   `'fondu-noir'`, `'fondu-blanc'`, `dipS` 0.3–2 s, 1 s by default: optional, an old film stays continuous;
-  `startHeight` `'region'` (default) or `'pays'` and `highlight` (default off) for a `situation` shot, see below);
+  `startHeight` `'region'` (default) or `'pays'`, `highlight` (default off) and `regionId` (« Lieu », OSM area
+  `relation/<id>` or `way/<id>`, absent = automatic) for a `situation` shot, see below);
   `autoStops` (generated stops) and `autoMode`: `'temps-forts'` (default for new projects) or `'rythme'` (earlier
   projects);
   `stops[]` `{ id, atM, durationS (0.5–60 s), camera: 'film' | 'orbite' | 'large' | 'fixe', label?, source?: { kind, ref? } }`
@@ -656,9 +657,15 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   région" (highlight the region) in the shot inspector, under "Hauteur de départ" (start height), "Hauteur de fin" for
   the closing; `highlight`, off by default: no Overpass request and an unchanged framing for every film saved before,
   the user opts in): while the opening or the closing highlights it (`highlightsRegion`), `RegionHighlight` calls
-  `syncRegion` with the first track's box (`src/osm/region.ts`: Overpass `is_in`, admin levels 4 to 6, the smallest
-  boundary that contains the track's box and is at least 5 times larger, rings stitched with `stitchRings` and
-  simplified to 2,000 points, same queue and cache as the landmarks); `FlyoverRig` and the export frame it
+  `syncRegion` with the first track's box and the place chosen (`src/osm/region.ts`: one Overpass `is_in` request for
+  the areas around the centre of the box, tags and box only: admin levels 4 to 6, `boundary=national_park` /
+  `protected_area`, `leisure=nature_reserve`, `place=island`, `natural=mountain_range`, relations and closed ways;
+  those containing the whole box, smallest first, are offered in « Lieu » (`containingRegions`, store `candidates`);
+  `regionId` of the first shot that highlights (`filmRegionId`; `setFilmPlace` writes both shots: one place per film,
+  one region in the store), else the automatic choice, unchanged: the smallest administrative boundary that contains
+  the track's box and is at least 5 times larger (`chooseRegion`, `autoId`); a saved place no longer offered falls
+  back to it. Then the geometry of the chosen area only, rings stitched with `stitchRings` (a closed way is one ring)
+  and simplified to 2,000 points, same queue and cache as the landmarks); `FlyoverRig` and the export frame it
   (`useRegionStore.frame`), and the camera is placed again when it arrives, except during a video export: the export
   holds the region it started with (`holdRegion`, none if it was still loading) and an answer arriving meanwhile is
   applied at its end, so neither the framing nor the highlight changes mid-film. No boundary, offline or a failed query
