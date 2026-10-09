@@ -10,5 +10,9 @@ import { useAppStore } from '../state/store'
 export function useRace(): Race | null {
   const tracks = useAppStore((s) => s.tracks)
   const sync = useAppStore((s) => s.settings.race.sync)
-  return useMemo(() => (tracks.length >= 2 ? buildRace(tracks.map(raceTrackOf), sync) : null), [tracks, sync])
+  const smoothingM = useAppStore((s) => s.settings.trackStyle.smoothingM)
+  return useMemo(
+    () => (tracks.length >= 2 ? buildRace(tracks.map((t) => raceTrackOf(t, smoothingM)), sync) : null),
+    [tracks, sync, smoothingM],
+  )
 }

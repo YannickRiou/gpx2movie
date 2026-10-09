@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TrackPoint } from '../core/types'
 import { buildTrack } from '../import/stats'
-import { buildTrackPath } from './path'
+import { buildTrackPath, trackPathOf } from './path'
 import {
   arrivalTime,
   buildRace,
@@ -14,6 +14,7 @@ import {
   rankRacers,
 } from './race'
 import type { RaceSync, RaceTrack, Racer } from './race'
+import { smoothedTrackPath } from './smooth'
 
 const T0 = Date.UTC(2025, 6, 14, 8, 0, 0)
 const MIN = 60_000
@@ -74,7 +75,27 @@ describe('prepareRaceTrack', () => {
 
   it('caches per track object', () => {
     const track = buildTrack({ name: 'x', source: 'gpx', segments: [{ points: [{ lon: 6, lat: 45 }, { lon: 6.01, lat: 45 }] }] })
-    expect(raceTrackOf(track)).toBe(raceTrackOf(track))
+    expect(raceTrackOf(track, 0)).toBe(raceTrackOf(track, 0))
+  })
+
+  it('follows the smoothed line, recorded distances kept, cached per smoothing value', () => {
+    // zigzag eastwards: the smoothing pulls the inner points towards the middle line
+    const points: TrackPoint[] = Array.from({ length: 12 }, (_, i) => ({
+      lon: 6.8 + i * 0.001,
+      lat: 45.9 + (i % 2) * 0.0005,
+      time: T0 + i * MIN,
+    }))
+    const track = buildTrack({ name: 'z', source: 'gpx', segments: [{ points }] })
+    const recorded = raceTrackOf(track, 0)
+    expect(recorded.path).toBe(trackPathOf(track))
+    const smoothed = raceTrackOf(track, 200)
+    expect(smoothed).not.toBe(recorded)
+    expect(raceTrackOf(track, 200)).toBe(smoothed)
+    expect(Array.from(smoothed.path.lat)).toEqual(Array.from(smoothedTrackPath(track, 200).lat))
+    expect(smoothed.path.lat[5]).not.toBeCloseTo(recorded.path.lat[5], 6)
+    expect(smoothed.path.dist).toBe(recorded.path.dist)
+    expect(smoothed.startMs).toBe(T0)
+    expect(raceTrackOf(track, 0).path).toBe(trackPathOf(track))
   })
 })
 

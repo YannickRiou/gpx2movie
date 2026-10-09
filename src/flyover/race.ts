@@ -31,7 +31,8 @@
  */
 import { firstIndexAtOrAbove, lastIndexAtOrBelow } from '../core/math'
 import type { Track } from '../core/types'
-import { samplePath, trackPathOf, type TrackPath } from './path'
+import { samplePath, type TrackPath } from './path'
+import { smoothedTrackPath } from './smooth'
 
 export const RACE_SYNC_MODES = ['elapsed', 'clock', 'distance'] as const
 export type RaceSync = (typeof RACE_SYNC_MODES)[number]
@@ -108,15 +109,17 @@ export function prepareRaceTrack(path: TrackPath): RaceTrack {
   return endMs > startMs ? { path, times, startMs, endMs } : untimed
 }
 
-const cache = new WeakMap<Track, RaceTrack>()
+const cache = new WeakMap<Track, { smoothingM: number; prepared: RaceTrack }>()
 
-/** `prepareRaceTrack(trackPathOf(track))`, cached per track object. */
-export function raceTrackOf(track: Track): RaceTrack {
-  let prepared = cache.get(track)
-  if (!prepared) {
-    prepared = prepareRaceTrack(trackPathOf(track))
-    cache.set(track, prepared)
-  }
+/**
+ * `prepareRaceTrack(smoothedTrackPath(track, smoothingM))`: the racer follows its smoothed line
+ * (`trackStyle.smoothingM`, recorded distances and times kept). Cached per track object for the last smoothing.
+ */
+export function raceTrackOf(track: Track, smoothingM: number): RaceTrack {
+  const cached = cache.get(track)
+  if (cached && cached.smoothingM === smoothingM) return cached.prepared
+  const prepared = prepareRaceTrack(smoothedTrackPath(track, smoothingM))
+  cache.set(track, { smoothingM, prepared })
   return prepared
 }
 

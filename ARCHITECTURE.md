@@ -506,9 +506,10 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
 - **Smoothing** (`smoothingM`, 0–300 m, 0 = off by default; `src/flyover/smooth.ts`, pure): tent-weighted moving average
   of the positions over `smoothingM` metres of recorded distance, per segment, end points kept, other fields kept.
   `TrackLines` densifies the smoothed points (rebuild when the value changes); `FlyoverRig` and the export camera use
-  `smoothedTrackPath`, so the marker and the chase camera follow the smoothed line without the GPS jitter. Both keep the
-  **recorded distances** (carried over to the densified points with `resampleValues`): progress, film stops, climbs and
-  the draw-on cut keep their scale. Labels, picking, the ghost racers and the overlay stay on the recorded points.
+  `smoothedTrackPath`, so the marker and the chase camera follow the smoothed line without the GPS jitter, and so do
+  the ghost racers (`raceTrackOf(track, smoothingM)`, cached for the last value). Both keep the **recorded distances**
+  (carried over to the densified points with `resampleValues`): progress, film stops, climbs and the draw-on cut keep
+  their scale. Labels, picking and the overlay stay on the recorded points.
 - **Dashes / dots**: `LineMaterial` dashes measured in world units (`computeLineDistances`, redone on each
   drape). Scale = size of a pixel at the camera → controls target distance, **rounded to a power of two**
   (`quantizedPixelSize`): dashes stay fixed on the ground during the flight and only change length when the zoom

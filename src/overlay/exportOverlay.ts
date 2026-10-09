@@ -32,7 +32,10 @@ function leaderboardAt(progress: number): LeaderboardRow[] | undefined {
   const { tracks, settings } = useAppStore.getState()
   if (!settings.overlay.leaderboard.enabled || !settings.race.enabled || tracks.length < 2) return undefined
   // tables cached per track: building the race is cheap
-  const race = buildRace(tracks.map(raceTrackOf), settings.race.sync)
+  const race = buildRace(
+    tracks.map((t) => raceTrackOf(t, settings.trackStyle.smoothingM)),
+    settings.race.sync,
+  )
   return leaderboardRows(raceAt(race, progress), tracks)
 }
 
