@@ -11,8 +11,8 @@ sources were checked.
 | AWS Terrain Tiles | terrain | `s3.amazonaws.com/elevation-tiles-prod` | "Terrain Tiles (Mapzen / AWS Open Data) — SRTM, GMTED2010, ETOPO1 courtesy of USGS/NOAA, EU-DEM © Copernicus, ArcticDEM et autres sources ouvertes" |
 | IGN Géoplateforme | orthophotos and Plan IGN in France, photos from 1950 to 2005 | `data.geopf.fr/wmts` | "© IGN — Géoplateforme (BD ORTHO, licence ouverte Etalab 2.0)", and variants per layer |
 | swisstopo | orthophotos and national map in Switzerland | `wmts.geo.admin.ch` | "© swisstopo (SWISSIMAGE, OGD)", "© swisstopo (carte nationale, OGD)" |
-| Esri World Imagery | world orthophotos (default imagery) | `services.arcgisonline.com` | "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community" |
-| EOX Sentinel-2 cloudless 2025 | world satellite images, 10 m | `tiles.maps.eox.at` | "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0" |
+| Esri World Imagery | world orthophotos (optional) | `services.arcgisonline.com` | "Powered by Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community" |
+| EOX Sentinel-2 cloudless 2025 | world satellite images, 10 m (default imagery outside France and Switzerland) | `tiles.maps.eox.at` | "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025) — CC BY-NC-SA 4.0" |
 | OpenTopoMap | world topographic map | `tile.opentopomap.org` | "Données : © contributeurs OpenStreetMap, SRTM \| Rendu : © OpenTopoMap (CC BY-SA)" |
 | Open-Meteo | historical weather, forecast for an upcoming outing | `archive-api.open-meteo.com`, `api.open-meteo.com` | "Données météo : Open-Meteo.com (CC BY 4.0)" |
 | OpenStreetMap (Overpass API) | landmarks, water bodies (reflective lakes and rivers) | `overpass-api.de`, fallback `maps.mail.ru` | "© contributeurs OpenStreetMap (ODbL)" |
@@ -23,23 +23,36 @@ are added when the weather or the landmarks are loaded. The same lines are burne
 
 The optional Strava import is not one of these sources: it reads your own activities through your own Strava
 application ([user guide](user-guide.html#import)). No Strava key or account is in the code. It goes through
-`www.strava.com` only (authorization, token, API v3) and falls under the [Strava API Agreement](https://www.strava.com/legal/api):
-the activities stay on the user's device, but the agreement restricts showing a user's Strava data to other people
-and asks for Strava branding ("Powered by Strava") in applications distributed publicly. **To be reviewed** before
-sharing a film made from a Strava activity or distributing the application widely.
+`www.strava.com` only (authorization, token, API v3) and falls under the [Strava API Agreement](https://www.strava.com/legal/api)
+and its [API policy](https://www.strava.com/legal/api_policy) (effective 2026-06-01, read 2026-10-09):
+
+- Data may be displayed only to the Strava user it belongs to (§ 2.3, 6.1) and kept in a cache for 7 days at most (§ 6.2);
+  a user's deletion request must be honoured within 48 hours (§ 6.3) and after revocation within 30 days (§ 7.4);
+  a standard-tier application is limited to 10 Strava users (§ 3.3).
+- Attribution is optional, but when given it must follow the [brand guidelines](https://developers.strava.com/guidelines/):
+  the text "Powered by Strava" or "Compatible with Strava", no Strava mark in the application's name or icon, no
+  implied endorsement. The "Connect with Strava" button image is only needed if that image is used.
+
+What the application does: each user brings their own Strava application (10-user limit not an issue); the dialog shows
+the text mark "Powered by Strava" and warns that the Strava terms reserve the display of the data to the user, so a film
+made from a Strava activity should not be published without thinking; "Déconnecter Strava" and "Oublier ces
+identifiants" erase the tokens and the application from the device. The list of activities is kept in memory only. An
+imported activity becomes a track of the project like a GPX file: it stays in the project file the user saves on their
+own device. Strictly read, that is longer than the 7-day cache of § 6.2; accepted (decision of 9 October 2026) because the
+data is the user's own, kept on their device and shown only to them, as with a GPX file they export from Strava. Revoking the access at Strava (strava.com/settings/apps) is up to the user.
 
 | Source | License | Note |
 |---|---|---|
 | Mapterhorn, AWS Terrain Tiles | open data (CC BY 4.0, OGL, public domain…) | credit the sources |
 | IGN | Licence Ouverte Etalab 2.0 | commercial use allowed |
 | swisstopo | open data (OGD) | credit the source, reasonable use |
-| Esri | Esri terms | **to be reviewed** before any commercial use; offline for personal use only |
+| Esri | Esri terms (ArcGIS Online terms of use) | "Powered by Esri" and the data credits are mandatory; **no offline copy** (tiles cannot be harvested outside Esri Content Packages); keyless use in a distributed application is not covered by what Esri publishes: Esri is an **optional source, never the default** |
 | EOX Sentinel-2 cloudless | CC BY-NC-SA 4.0 | **no commercial use** |
 | OpenTopoMap | CC BY-SA | volunteer-run server: moderate use; a video made with this base map must stay under the same license |
 | Open-Meteo | CC BY 4.0 | free **non-commercial** API, 10,000 requests per day max |
 | OpenStreetMap | ODbL | public Overpass server: moderate use |
 
-OpenFlyover is a personal, non-commercial project: all sources can go into an offline pack, with a lower daily limit for those that discourage bulk downloads:
+OpenFlyover is a personal, non-commercial project: all sources can go into an offline pack, with a lower daily limit for those that discourage bulk downloads, except Esri, whose terms forbid it:
 
 | Source | Offline | Why |
 |---|---|---|
@@ -48,7 +61,7 @@ OpenFlyover is a personal, non-commercial project: all sources can go into an of
 | IGN Géoplateforme | yes, 50,000 tiles per day (all layers) | Licence Ouverte Etalab 2.0; public service to be used sparingly |
 | EOX Sentinel-2 cloudless | yes, 20,000 tiles per day | CC BY-NC-SA 4.0: copying allowed for non-commercial use ([terms](https://cloudless.eox.at/products/viewing)) |
 | swisstopo | yes, personal use, 10,000 tiles / day | its terms ask to avoid automated bulk downloads ([terms](https://www.geo.admin.ch/en/general-terms-of-use-fsdi)): keep the corridor short |
-| Esri World Imagery | yes, personal use, 10,000 tiles / day | Esri normally reserves offline use for its own applications ("for Export" service): keep the corridor short |
+| Esri World Imagery | **no**: the imagery stays online, the pack holds the terrain only | basemap tiles may only be taken offline with Esri Content Packages and Esri software; systematic harvesting is prohibited ([terms summary](https://downloads2.esri.com/arcgisonline/docs/tou_summary.pdf)) |
 | OpenTopoMap | yes, personal use, 2,000 tiles / day | volunteer-run server that asks to avoid bulk downloads ([about](https://opentopomap.org/about)) |
 
 A source whose terms have not been checked stays online. The daily limits
@@ -84,7 +97,7 @@ Zermatt (7.75, 46.02) → z12 = 2136/1456, z20 = 546861/372959; New York (−74.
 | `aws-terrarium` | `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` | 0–15 | 256 px | Terrarium, 8-bit RGB PNG | `*` | worldwide | public sources (USGS 3DEP/SRTM/GMTED2010, NOAA ETOPO1, EU-DEM Copernicus, ArcticDEM, CC BY NZ/AT/NO/AU/UK OGL…) — see `tilezen/joerd/docs/attribution.md` | "Terrain Tiles (Mapzen / AWS Open Data) — SRTM, GMTED2010, ETOPO1 courtesy of USGS/NOAA, EU-DEM © Copernicus, ArcticDEM…" |
 | `ign-ortho` | `https://data.geopf.fr/wmts?…LAYER=ORTHOIMAGERY.ORTHOPHOTOS&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg` | 0–19 (`PM_0_19`) | 256 px | JPEG | `*` | Metropolitan France + Corsica (box −5.6/41.2 → 10.0/51.3, **over-approximation**: the border strip inside the box returns a white 200 tile or a 404); z ≤ 12 available everywhere (low-resolution worldwide mosaic) | Etalab Open Licence 2.0 (BD ORTHO), terms of use `cartes.gouv.fr/cgu`, `Fees: none` | `© IGN — Géoplateforme (BD ORTHO)` |
 | `swisstopo` | `https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg` | 0–20 (`3857_20`) | 256 px | JPEG | `*` | box 5.140242/45.398181 → 11.47757/48.230651 (WGS84BoundingBox from the GetCapabilities); real tiles up to z20 over the whole box, but **much lower resolution outside Switzerland/Liechtenstein** | swisstopo OGD, free of charge, "fair use" (~20,000 users/day) | `© swisstopo` |
-| `arcgis-world-imagery` | `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` | 0–19 (the service declares 24 LODs, z0–23; above 19, a 200 placeholder is returned where there is no imagery) | 256 px | JPEG | `*` | worldwide | Esri Master Agreement; see § Esri | `Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community` (service `copyrightText` field) |
+| `arcgis-world-imagery` | `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` | 0–19 (the service declares 24 LODs, z0–23; above 19, a 200 placeholder is returned where there is no imagery) | 256 px | JPEG | `*` | worldwide | Esri Master Agreement; see § Esri | `Powered by Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community` (service `copyrightText` field) |
 | `eox-s2cloudless` | `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/{z}/{y}/{x}.jpg` | 0–16 in the catalog (server: 200 up to z18 at Chamonix, 404 at z19; native ≈ z14 / 10 m) | 256 px | JPEG | reflected origin (`access-control-allow-origin: http://127.0.0.1:5173`) | worldwide | **CC BY-NC-SA 4.0** (commercial use: separate EOX license) | `EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025)` |
 | `ign-plan` | `https://data.geopf.fr/wmts?…LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&…&FORMAT=image/png` | 0–19 (`PM_0_19`) | 256 px | RGB PNG | `*` | France (same box as `ign-ortho`); 404 outside France from z13 | Etalab Open Licence 2.0 | `© IGN — Géoplateforme (Plan IGN)` |
 | `swisstopo-carte` | `https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/{z}/{x}/{y}.jpeg` | 0–19 (`3857_19`) | 256 px | JPEG | `*` | swisstopo box; outside Switzerland + border strip, **white tile** (668 B) from z16 | swisstopo OGD, "fair use" | `© swisstopo` |
@@ -162,12 +175,21 @@ All sources respond with a CORS header for the origin `http://127.0.0.1:5173`: *
   Since the server does not return 404 beyond the data, the catalog sets `maxZoom: 19` (available everywhere);
   the "crop the deepest tile" strategy in `imagery.ts` cannot detect this placeholder.
 - CORS: `Access-Control-Allow-Origin: *`.
-- Terms: legacy service "services.arcgisonline.com", accessible without a key. It is governed by the Esri Master Agreement
-  (`esri.com/en-us/legal/terms/full-master-agreement`, summary `downloads2.esri.com/arcgisonline/docs/tou_summary.pdf`):
-  attribution is mandatory (the service `copyrightText`, and "Powered by Esri" for applications); use is free for development,
-  testing and non-commercial/internal use; commercial use, or use in a distributed product, in principle requires an ArcGIS account
-  (the ArcGIS Location Services free tier covers 2 M basemap tiles per month) and forbids offline caching
-  of tiles outside the provided mechanisms. To be reassessed before the "offline packs" phase and before any commercial distribution.
+- Terms (read 2026-10-09; the full terms, `esri.com/en-us/legal/terms/full-master-agreement` and the product terms E300, could not be
+  read in full, the points below come from the [terms summary](https://downloads2.esri.com/arcgisonline/docs/tou_summary.pdf), the
+  [attribution guide](https://developers.arcgis.com/documentation/mapping-apis-and-services/deployment/basemap-attribution/) and
+  Esri's developer licensing pages):
+  - attribution is mandatory: "Powered by Esri" and the names of the data providers (the service `copyrightText`, which says
+    "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"), always visible with the map. The status bar,
+    the film credits and the poster show both (`attribution` in `sources.ts`).
+  - offline: basemap tiles may only be taken offline with Esri Content Packages, for Esri software; systematic harvesting
+    and redistribution are prohibited. Hence Esri is **refused in offline packs** (`policy.ts`); temporary caching while
+    online (the in-memory tile cache) is fine.
+  - keyless use: `services.arcgisonline.com` still answers without a key (checked 2026-10-09), but Esri's current documentation
+    sends applications to an ArcGIS Location Platform account and token (`ibasemaps-api.arcgis.com`), and nothing published
+    says that anonymous use of the legacy host is granted to a distributed application. Decision (9 October 2026): Esri stays
+    an optional source the user picks; the default imagery is EOX Sentinel-2 cloudless, replaced by IGN or swisstopo when the
+    track lies in France or Switzerland.
 
 ### EOX Sentinel-2 cloudless (imagery)
 
@@ -334,7 +356,7 @@ Visual check (headless Chromium, sample track Les Houches → Les Contamines): `
    as "no refinement possible" (keep the parent displayed), not as an error to retry or a blocking "failed" tile.
 2. **Esri placeholder**: beyond z19, Esri returns 200 with a "no data" image; do not exceed the catalog `maxZoom`.
 3. **EOX is NC** (CC BY-NC-SA 4.0): to be removed, or replaced by a commercial EOX license, if the product becomes paid.
-4. **Esri**: terms to be reread before commercial distribution or offline caching ("offline packs" phase).
+4. **Esri**: never in an offline pack; credit "Powered by Esri" + data credits everywhere the credits are shown; optional, never the default (§ Esri).
 5. **swisstopo**: the coverage box includes a wide strip outside Switzerland where tiles exist up to z20 but are much blurrier;
    at Chamonix the imagery exists but is less detailed than BD ORTHO.
 6. **IGN outside metropolitan France**: the overseas territories (DROM-COM) are not covered by the single `coverage` box; multi-box coverage would require a change to `TileSourceBase` (frozen types).

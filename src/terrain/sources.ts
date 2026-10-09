@@ -84,7 +84,8 @@ export const IMAGERY_SOURCES: ImagerySource[] = [
     minZoom: 0,
     maxZoom: 19,
     tileSize: 256,
-    attribution: 'Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community',
+    // Esri requires "Powered by Esri" plus the data credits (copyrightText of the service).
+    attribution: 'Powered by Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community',
   },
   {
     kind: 'imagery',

@@ -75,7 +75,7 @@ describe('addTracks', () => {
 
   it('keeps the default imagery when no regional source covers the trip', () => {
     useAppStore.getState().addTracks([CA])
-    expect(useAppStore.getState().settings.imagerySourceId).toBe('arcgis-world-imagery')
+    expect(useAppStore.getState().settings.imagerySourceId).toBe('eox-s2cloudless')
   })
 
   it('keeps the regional choice when a later track leaves the coverage', () => {
@@ -168,7 +168,7 @@ describe('settings and misc', () => {
     useAppStore.getState().setSetting('wireframe', true)
     expect(useAppStore.getState().settings).toEqual({
       terrainSourceId: 'mapterhorn',
-      imagerySourceId: 'arcgis-world-imagery',
+      imagerySourceId: 'eox-s2cloudless',
       imageryZoomOffset: 1,
       exaggeration: 1.5,
       wireframe: true,

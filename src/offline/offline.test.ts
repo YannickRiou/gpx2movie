@@ -49,7 +49,9 @@ function distanceFromTrackM(key: TileKey, track: LonLatBounds): number {
 
 describe('offline policy', () => {
   it('refuses the providers whose terms forbid bulk download', () => {
-    for (const id of ['opentopomap', 'arcgis-world-imagery', 'swisstopo', 'swisstopo-carte']) {
+    expect(offlinePolicy('arcgis-world-imagery').allowed).toBe(false)
+    expect(offlinePolicy('arcgis-world-imagery').reason).not.toBe('')
+    for (const id of ['opentopomap', 'swisstopo', 'swisstopo-carte']) {
       // personal use: allowed with a low daily cap and a caution
       expect(offlinePolicy(id).allowed, id).toBe(true)
       expect(offlinePolicy(id).personalUse, id).toBe(true)

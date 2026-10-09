@@ -1874,7 +1874,8 @@ ticked ones.
   `buildTrack`: one segment, time = `start_date` + `time`, `Track.source = 'strava'`, activity name, activity = FIT
   sport name (`stravaActivityType`: `Ride` → `cycling`, `TrailRun` → `trail_running`…, otherwise the type in
   snake_case), time offset from `utc_offset`. An activity without a GPS position is refused.
-- **Strava API terms**: personal use, data shown only to the connected athlete (nothing is sent elsewhere), limits of
+- **Strava API terms** (docs/sources.md): the dialog shows the text mark "Powered by Strava" and warns that the data is
+  for the user alone; "Déconnecter Strava" clears the tokens. Personal use, data shown only to the connected athlete (nothing is sent elsewhere), limits of
   100 requests / 15 min and 1,000 / day per application (one request per page of activities, one per imported
   activity, plus the refresh).
 
@@ -2040,10 +2041,11 @@ of a flyover of the loaded tracks; the view and the export then read them withou
   plan: overview shots and high orbits (coarse levels, already there), 4K export (one more level in a wide
   corridor).
 - **Policy** (`policy.ts`): one decision per source, reasons and links in `docs/sources.md`; a source missing from the
-  table is refused. OpenTopoMap, Esri World Imagery and swisstopo (photos and map) are allowed for personal use
-  (`personalUse`, warning in the panel) with a low limit. A refused imagery source does not prevent the pack: it
+  table is refused. OpenTopoMap and swisstopo (photos and map) are allowed for personal use
+  (`personalUse`, warning in the panel) with a low limit. Esri World Imagery is refused (its terms forbid offline
+  copies). A refused imagery source does not prevent the pack: it
   then only contains the terrain, and the imagery stays online. Limit per day and per device: Mapterhorn 20,000,
-  IGN 50,000 (all layers), EOX 20,000, Esri and swisstopo 10,000, OpenTopoMap 2,000; AWS unlimited.
+  IGN 50,000 (all layers), EOX 20,000, swisstopo 10,000, OpenTopoMap 2,000; AWS unlimited.
 - **Download** (`download.ts`): 4 requests at a time, `downloadTile` retries (the fetcher's), tiles already
   in the pack skipped, 4xx = "pas de donnée ici" (no data here; Mapterhorn beyond z12 outside fine areas), stop after 20 consecutive network
   failures or if the storage refuses a tile, pause (requests in progress finish), resume, cancel

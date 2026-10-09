@@ -169,7 +169,7 @@ export interface AppState {
 
 export const DEFAULT_SETTINGS: Settings = {
   terrainSourceId: 'mapterhorn',
-  imagerySourceId: 'arcgis-world-imagery',
+  imagerySourceId: 'eox-s2cloudless',
   imageryZoomOffset: 1,
   exaggeration: 1,
   wireframe: false,
