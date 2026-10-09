@@ -10,25 +10,62 @@
  * normal (octaves smaller than a pixel faded out: noise-free in the distance) and lights it with the sun and sky
  * lights of the atmosphere (warm at golden hour): wrap lighting, creases darker than the tops, self-shadowing from
  * the relief probed toward the sun, forward scattering through the rims and thin tops when looking toward the sun.
- * The aerial perspective of the composer hazes it like the terrain, into the horizon.
+ * The aerial perspective of the composer hazes it like the terrain, into the horizon. Soft edge against the relief: a
+ * grid of terrain altitudes under the sea (a half-float texture, sampled again when tiles arrive) fades the cloud out
+ * where the terrain comes close below it, so the summits emerge without a hard line.
  *
  * Everything is a function of (settings, film time, camera): the export draws the same sea as the preview.
  */
-import { useEffect, useMemo, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, type RefObject } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { BufferAttribute, BufferGeometry, DoubleSide, Mesh, ShaderMaterial, Uniform, Vector2, Vector3, type HemisphereLight } from 'three'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  DataTexture,
+  DataUtils,
+  DoubleSide,
+  HalfFloatType,
+  LinearFilter,
+  Mesh,
+  RedFormat,
+  ShaderMaterial,
+  Uniform,
+  Vector2,
+  Vector3,
+  type HemisphereLight,
+} from 'three'
 import type { SkyLightProbe, SunDirectionalLight } from '@takram/three-atmosphere'
+import type { LocalFrame, LonLatBounds, TerrainEngine } from '../core/types'
+import { registerDrapeFlush } from '../export/store'
 import { samplePath, type TrackPath } from '../flyover/path'
+import { expandBounds } from '../geo/lonLat'
 import { useAppStore } from '../state/store'
+import { AREA_MARGIN_M, AREA_MIN_SIZE_M } from '../terrain/engine'
 import { cloudDrift, filmWind } from '../weather/sceneClouds'
 import { useWeatherStore } from '../weather/store'
-import { buildRadialGrid, glslFloat, seaBaseAltitude, seaReliefGlsl } from './cloudSea'
+import {
+  EDGE_FADE_M,
+  NO_TERRAIN_M,
+  buildRadialGrid,
+  glslFloat,
+  seaBaseAltitude,
+  seaReliefGlsl,
+  terrainBoxOf,
+  terrainGridCentres,
+  type TerrainBox,
+} from './cloudSea'
+import { wakeScene } from './renderOnDemand'
+import { useTerrainContext } from './TerrainLayer'
+import { REDRAPE_DEBOUNCE_MS, REDRAPE_MAX_WAIT_MS } from './TrackLines'
+import { useDebouncedCallback } from './useDebouncedCallback'
 import { useFilmClock } from './usePacing'
 
 /** Radial grid: first ring, horizon (beyond the loaded terrain, so the sea hides its edge) and sectors. */
 const GRID_INNER_M = 8
 const GRID_OUTER_M = 300_000
 const GRID_SEGMENTS = 256
+/** Terrain altitudes under the sea: TERRAIN_GRID² samples over the terrain area (~200 m apart for 50 km). */
+const TERRAIN_GRID = 256
 /** Diffuse reflectance of the cloud tops. */
 const SEA_ALBEDO = 0.8
 /** Wrap lighting: light still reaches surfaces turned this far from the sun (multiple scattering in the cloud). */
@@ -84,6 +121,11 @@ uniform vec3 seaSunDirection;
 uniform vec3 seaSunIrradiance;
 uniform vec3 seaSkyIrradiance;
 uniform float seaAlbedo;
+uniform float seaBase;
+uniform sampler2D seaTerrain;
+uniform vec2 seaTerrainMin;
+uniform vec2 seaTerrainSize;
+uniform float seaEdgeFade;
 varying vec3 vSeaWorld;
 
 // Part of the sun reaching the relief h at p: the coarse relief probed toward the sun at a few distances, against
@@ -143,6 +185,13 @@ void main() {
   // the rim of the grid, far beyond the haze, fades out
   float rimDistance = length(vSeaWorld.xz - seaCenter);
   float alpha = 1.0 - smoothstep(${glslFloat(0.75 * GRID_OUTER_M)}, ${glslFloat(GRID_OUTER_M)}, rimDistance);
+  // soft edge against the relief: the cloud thins out where the terrain comes close below it (cloudSea.ts edgeFade)
+  vec2 terrainUv = (vSeaWorld.xz - seaTerrainMin) / seaTerrainSize;
+  bool inside = all(greaterThanEqual(terrainUv, vec2(0.0))) && all(lessThanEqual(terrainUv, vec2(1.0)));
+  float ground = inside ? texture2D(seaTerrain, terrainUv).r : SEA_NO_TERRAIN;
+  alpha *= smoothstep(0.0, seaEdgeFade, seaBase + h - ground);
+  // nothing drawn, no depth written: the track and the water behind stay visible
+  if (alpha < 0.004) discard;
   gl_FragColor = vec4(radiance, alpha);
 }
 `
@@ -150,7 +199,7 @@ void main() {
 const WORLD_UP = new Vector3(0, 1, 0)
 const _irradiance = new Vector3()
 
-function createSeaUniforms(cellRatio: number) {
+function createSeaUniforms(cellRatio: number, terrain: DataTexture) {
   return {
     seaCenter: new Uniform(new Vector2()),
     seaDrift: new Uniform(new Vector2()),
@@ -160,6 +209,10 @@ function createSeaUniforms(cellRatio: number) {
     seaSunIrradiance: new Uniform(new Vector3()),
     seaSkyIrradiance: new Uniform(new Vector3()),
     seaAlbedo: new Uniform(SEA_ALBEDO),
+    seaTerrain: new Uniform(terrain),
+    seaTerrainMin: new Uniform(new Vector2()),
+    seaTerrainSize: new Uniform(new Vector2(1, 1)),
+    seaEdgeFade: new Uniform(EDGE_FADE_M),
   }
 }
 
@@ -169,7 +222,13 @@ function createSeaMesh() {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new BufferAttribute(grid.positions, 3))
   geometry.setIndex(new BufferAttribute(grid.index, 1))
-  const uniforms = createSeaUniforms(grid.cellRatio)
+  // terrain altitudes under the sea (half floats: filtered on every WebGL 2 device), unknown until sampled
+  const halfHeights = new Uint16Array(TERRAIN_GRID * TERRAIN_GRID).fill(DataUtils.toHalfFloat(NO_TERRAIN_M))
+  const terrain = new DataTexture(halfHeights, TERRAIN_GRID, TERRAIN_GRID, RedFormat, HalfFloatType)
+  terrain.magFilter = LinearFilter
+  terrain.minFilter = LinearFilter
+  terrain.needsUpdate = true
+  const uniforms = createSeaUniforms(grid.cellRatio, terrain)
   const material = new ShaderMaterial({ vertexShader, fragmentShader, uniforms, side: DoubleSide, transparent: true })
   const mesh = new Mesh(geometry, material)
   mesh.name = 'cloud-sea'
@@ -177,7 +236,24 @@ function createSeaMesh() {
   mesh.frustumCulled = false
   // never picked: the track picker and the camera target the relief and the track
   mesh.raycast = () => {}
-  return { mesh, uniforms }
+  return { mesh, uniforms, terrain, halfHeights }
+}
+
+const _local = new Vector3()
+
+/** Box of the local frame over the terrain area (the tracks and AREA_MARGIN_M around, like the engine). */
+function terrainBoxFor(bounds: LonLatBounds, frame: LocalFrame): TerrainBox {
+  const area = expandBounds(bounds, AREA_MARGIN_M, AREA_MIN_SIZE_M)
+  const corners = [
+    [area.west, area.south],
+    [area.east, area.south],
+    [area.east, area.north],
+    [area.west, area.north],
+  ].map(([lon, lat]) => {
+    const p = frame.toLocal(lon, lat, 0, _local)
+    return { x: p.x, z: p.z }
+  })
+  return terrainBoxOf(corners)
 }
 
 interface CloudSeaSurfaceProps {
@@ -188,7 +264,10 @@ interface CloudSeaSurfaceProps {
 }
 
 export function CloudSeaSurface({ sun, sky, nightFill, path }: CloudSeaSurfaceProps) {
+  const { engine, frame } = useTerrainContext()
   const track = useAppStore((s) => s.tracks[0])
+  const bounds = useAppStore((s) => s.bounds)
+  const exaggeration = useAppStore((s) => s.settings.exaggeration)
   const series = useWeatherStore((s) => (track && s.trackId === track.id ? s.series : null))
   const clock = useFilmClock()
   const startTime = track?.stats.startTime
@@ -198,13 +277,66 @@ export function CloudSeaSurface({ sun, sky, nightFill, path }: CloudSeaSurfacePr
     [series, startTime, start?.lon, start?.lat],
   )
 
-  const { mesh, uniforms } = useMemo(() => createSeaMesh(), [])
+  const sea = useMemo(() => createSeaMesh(), [])
+  const { mesh, uniforms } = sea
   useEffect(
     () => () => {
-      mesh.geometry.dispose()
-      mesh.material.dispose()
+      sea.mesh.geometry.dispose()
+      sea.mesh.material.dispose()
+      sea.terrain.dispose()
     },
-    [mesh],
+    [sea],
+  )
+
+  // Terrain altitudes under the sea for its soft edge, sampled again (debounced, flushed by the export) when tiles
+  // arrive: TERRAIN_GRID² samples of the loaded relief, at most a few times a second.
+  const grid = useMemo(() => {
+    if (!bounds || !frame) return null
+    const box = terrainBoxFor(bounds, frame)
+    const centres = terrainGridCentres(box, TERRAIN_GRID)
+    // lon, lat of each sample, once per area (the conversion costs more than the height lookup)
+    const lonLat = new Float64Array(centres.length)
+    for (let i = 0; i < centres.length; i += 2) {
+      const { lon, lat } = frame.toLonLat(_local.set(centres[i], 0, centres[i + 1]))
+      lonLat[i] = lon
+      lonLat[i + 1] = lat
+    }
+    return { box, lonLat }
+  }, [bounds, frame])
+  const sample = useCallback(
+    (current: TerrainEngine | null, factor: number) => {
+      if (!grid) return
+      const { box, lonLat } = grid
+      for (let i = 0; i < sea.halfHeights.length; i++) {
+        const h = current?.sampleHeight(lonLat[2 * i], lonLat[2 * i + 1])
+        sea.halfHeights[i] = DataUtils.toHalfFloat(h === undefined ? NO_TERRAIN_M : h * factor)
+      }
+      sea.terrain.needsUpdate = true
+      sea.uniforms.seaTerrainMin.value.set(box.minX, box.minZ)
+      sea.uniforms.seaTerrainSize.value.set(box.sizeX, box.sizeZ)
+      wakeScene()
+    },
+    [sea, grid],
+  )
+  useEffect(() => sample(engine, exaggeration), [sample, engine, exaggeration])
+  const resample = useDebouncedCallback(sample, REDRAPE_DEBOUNCE_MS, REDRAPE_MAX_WAIT_MS)
+  useEffect(() => {
+    if (!engine) return
+    const unsubscribe = engine.onChange(() => resample(engine, exaggeration))
+    return () => {
+      unsubscribe()
+      resample.cancel()
+    }
+  }, [engine, exaggeration, resample])
+  // the video export samples the pending tiles right away instead of waiting for the debounce
+  useEffect(
+    () =>
+      registerDrapeFlush(() => {
+        const pending = resample.isPending()
+        resample.flush()
+        return pending
+      }),
+    [resample],
   )
 
   // Once the Takram lights are updated for this frame (priority 0) and before the composer renders (priority 1).
@@ -216,6 +348,7 @@ export function CloudSeaSurface({ sun, sky, nightFill, path }: CloudSeaSurfacePr
     // noise point = position − (east, −north) (cloudSea.ts `seaNoisePoint`, +Z south)
     u.seaDrift.value.set(drift.east, -drift.north)
     u.seaBase.value = seaBaseAltitude(settings.clouds.seaTopM, settings.exaggeration)
+    u.seaEdgeFade.value = EDGE_FADE_M * settings.exaggeration
     const sunIrradiance = u.seaSunIrradiance.value
     if (sun) {
       u.seaSunDirection.value.subVectors(sun.position, sun.target.position).normalize()

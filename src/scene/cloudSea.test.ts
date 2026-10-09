@@ -13,12 +13,12 @@ import {
   gradientNoise,
   octaveWeight,
   rimFade,
-  sampleTerrainGrid,
   seaBaseAltitude,
   seaNoisePoint,
   seaRelief,
   seaReliefGlsl,
   terrainBoxOf,
+  terrainGridCentres,
 } from './cloudSea'
 
 describe('sea relief', () => {
@@ -133,14 +133,13 @@ describe('grids', () => {
     }
   })
 
-  it('samples the terrain at the texel centres of a box', () => {
+  it('places the terrain samples at the texel centres of a box', () => {
     const box = terrainBoxOf([
       { x: -100, z: 50 },
       { x: 300, z: -150 },
     ])
     expect(box).toEqual({ minX: -100, minZ: -150, sizeX: 400, sizeZ: 200 })
-    const grid = sampleTerrainGrid(box, 2, (x, z) => (x > 0 ? x + z : undefined))
-    expect(Array.from(grid)).toEqual([NO_TERRAIN_M, 200 - 100, NO_TERRAIN_M, 200])
+    expect(Array.from(terrainGridCentres(box, 2))).toEqual([0, -100, 200, -100, 0, 0, 200, 0])
   })
 })
 

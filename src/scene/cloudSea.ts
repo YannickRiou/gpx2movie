@@ -251,21 +251,13 @@ export function terrainBoxOf(points: readonly { x: number; z: number }[]): Terra
   return { minX, minZ, sizeX: Math.max(...xs) - minX, sizeZ: Math.max(...zs) - minZ }
 }
 
-/**
- * Terrain altitudes at the centres of an n × n grid over `box` (row-major, rows along +Z), as a texture samples
- * them; NO_TERRAIN_M where `altitudeAt` knows nothing.
- */
-export function sampleTerrainGrid(
-  box: TerrainBox,
-  n: number,
-  altitudeAt: (x: number, z: number) => number | undefined,
-  out = new Float32Array(n * n),
-): Float32Array {
+/** Centres of the texels of an n × n grid over `box`, as x, z pairs (row-major, rows along +Z), where a texture samples them. */
+export function terrainGridCentres(box: TerrainBox, n: number): Float64Array {
+  const out = new Float64Array(2 * n * n)
   for (let j = 0; j < n; j++) {
-    const z = box.minZ + ((j + 0.5) / n) * box.sizeZ
     for (let i = 0; i < n; i++) {
-      const h = altitudeAt(box.minX + ((i + 0.5) / n) * box.sizeX, z)
-      out[j * n + i] = h !== undefined && Number.isFinite(h) ? h : NO_TERRAIN_M
+      out[2 * (j * n + i)] = box.minX + ((i + 0.5) / n) * box.sizeX
+      out[2 * (j * n + i) + 1] = box.minZ + ((j + 0.5) / n) * box.sizeZ
     }
   }
   return out
