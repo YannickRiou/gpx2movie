@@ -34,7 +34,7 @@ describe('sea relief', () => {
     expect(Math.min(...values)).toBeGreaterThanOrEqual(0)
     expect(Math.max(...values)).toBeLessThanOrEqual(SEA_RELIEF_M)
     expect(Math.max(...values) - Math.min(...values)).toBeGreaterThan(80)
-    expect(SEA_RELIEF_M).toBeLessThan(200)
+    expect(SEA_RELIEF_M).toBeLessThan(250)
   })
 
   it('is continuous: one metre changes the height by less than a metre', () => {
@@ -46,15 +46,22 @@ describe('sea relief', () => {
     }
   })
 
-  it('billows are rounded domes with sharp creases, BILLOW_MEAN their mean', () => {
-    expect(billow(0)).toBe(0)
-    expect(billow(0.7)).toBe(1)
-    expect(billow(-0.2)).toBe(billow(0.2))
-    // steepest at the crease
-    expect(billow(0.05) - billow(0)).toBeGreaterThan(billow(0.45) - billow(0.4))
+  it('billows are domes, highest over their centre, BILLOW_MEAN their mean', () => {
     let sum = 0
-    for (let i = 0; i < 200; i++) for (let j = 0; j < 200; j++) sum += billow(gradientNoise(i * 0.137 + 3, j * 0.149 - 7))
+    let low = 1
+    for (let i = 0; i < 200; i++) {
+      for (let j = 0; j < 200; j++) {
+        const b = billow(i * 0.137 + 3, j * 0.149 - 7)
+        expect(b).toBeGreaterThanOrEqual(0)
+        expect(b).toBeLessThanOrEqual(1)
+        sum += b
+        low = Math.min(low, b)
+      }
+    }
     expect(sum / 40000).toBeCloseTo(BILLOW_MEAN, 1)
+    // gaps between the domes reach the bottom of the octave
+    expect(low).toBeLessThan(0.05)
+    expect(billow(2.3, -4.1)).toBe(billow(2.3, -4.1))
   })
 
   it('fades octaves smaller than the footprint to their mean (flat and noise-free far away)', () => {

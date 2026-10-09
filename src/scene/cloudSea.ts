@@ -3,8 +3,8 @@
  * with the wind, its soft edge against the terrain, the camera-centred radial grid it is drawn on and the grid of
  * terrain heights its shader compares it with.
  *
- * Relief: billow octaves (|gradient noise|, puffed: rounded domes, sharp creases between them) from ~2 km down to
- * ~100 m over a gentle swell, in a domain warped by a low-frequency noise so the cells do not line up. Each octave
+ * Relief: octaves of billows (domes on a jittered grid, the highest one wins: rounded tops, sharp creases where two
+ * meet, cauliflower once stacked) from ~2 km down to ~100 m over a gentle swell, in a domain warped by a low-frequency noise so the cells do not line up. Each octave
  * fades to its mean once its wavelength covers fewer than LOD_SAMPLES pixels (or grid cells): nothing smaller than a
  * pixel is drawn, the surface stays noise-free in the distance. `seaRelief` is the reference of the GLSL written by
  * `seaReliefGlsl` (same constants and formulas, double here, single precision there): tested here, drawn there.
@@ -26,20 +26,22 @@ export interface SeaOctave {
 export const SEA_SWELL: SeaOctave = { wavelengthM: 9000, amplitudeM: 35 }
 /** Cumulus billows, largest first (amplitudes in metres, not exaggerated: like the thickness of the volumetric layer). */
 export const SEA_BILLOWS: readonly SeaOctave[] = [
-  { wavelengthM: 2200, amplitudeM: 55 },
-  { wavelengthM: 1050, amplitudeM: 42 },
-  { wavelengthM: 500, amplitudeM: 28 },
-  { wavelengthM: 240, amplitudeM: 15 },
+  { wavelengthM: 2200, amplitudeM: 75 },
+  { wavelengthM: 1050, amplitudeM: 50 },
+  { wavelengthM: 500, amplitudeM: 30 },
+  { wavelengthM: 240, amplitudeM: 16 },
   { wavelengthM: 110, amplitudeM: 8 },
 ]
 /** Domain warp: the billows are pushed around by up to this many metres, over this wavelength. */
 const WARP: SeaOctave = { wavelengthM: 3200, amplitudeM: 380 }
 /** Highest relief (metres): the tops reach the top of the sea, the creases go down to the top minus this. */
 export const SEA_RELIEF_M = SEA_SWELL.amplitudeM + SEA_BILLOWS.reduce((sum, o) => sum + o.amplitudeM, 0)
-/** Gain of |noise| before the puff (gradient noise rarely leaves ±0.5). */
-const BILLOW_GAIN = 2
+/** Radius of a billow (cells): gaps between the domes go down to the bottom of the octave. */
+const DOME_RADIUS = 0.75
+/** Width of the smooth maximum between two domes (rounded rather than knife-edged creases). */
+const DOME_BLEND = 0.25
 /** Mean of a billow octave (`billow` over the plane), the value of an octave faded out. */
-export const BILLOW_MEAN = 0.44
+export const BILLOW_MEAN = 0.81
 /** An octave is fully drawn above LOD_SAMPLES pixels (or cells) per wavelength, gone below half of that. */
 export const LOD_SAMPLES = 6
 /** Each octave is turned by this angle from the previous one and offset (no lattice alignment between octaves). */
@@ -86,10 +88,29 @@ export function gradientNoise(px: number, py: number): number {
   return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy
 }
 
-/** One billow, [0, 1]: |noise| puffed into a rounded dome with a sharp crease where the noise crosses zero. */
-export function billow(n: number): number {
-  const b = Math.min(1, Math.abs(n) * BILLOW_GAIN)
-  return 1 - (1 - b) * (1 - b)
+/**
+ * Billows of one octave at (px, py) (in cells), [0, 1]: a rounded dome of DOME_RADIUS cells over a point jittered
+ * in each cell (t (2 − t), t = 1 − (d / radius)²: round top, finite slope at its foot), the highest of the 3 × 3
+ * cells around wins (smooth maximum: rounded creases).
+ */
+export function billow(px: number, py: number): number {
+  const ix = Math.floor(px)
+  const iy = Math.floor(py)
+  let best = 0
+  for (let cy = -1; cy <= 1; cy++) {
+    for (let cx = -1; cx <= 1; cx++) {
+      const g = gradient(ix + cx, iy + cy)
+      const dx = cx + 0.5 + 0.4 * g[0] - (px - ix)
+      const dy = cy + 0.5 + 0.4 * g[1] - (py - iy)
+      const t = 1 - Math.min(1, (dx * dx + dy * dy) / (DOME_RADIUS * DOME_RADIUS))
+      // smooth maximum, rounded creases where two domes meet (narrower at a foot: nothing between the domes)
+      const w = Math.min(DOME_BLEND, t)
+      const k = w > 0 ? Math.max(w - Math.abs(best - t), 0) / w : 0
+      best = Math.max(best, t) + k * k * w * 0.25
+    }
+  }
+  best = Math.min(best, 1)
+  return best * (2 - best)
 }
 
 /** Part of an octave drawn for a footprint (metres per pixel or per cell); 0 = no footprint, fully drawn. */
@@ -118,8 +139,7 @@ export function seaRelief(x: number, z: number, footprintM = 0): number {
       const angle = i * OCTAVE_TURN_RAD
       const c = Math.cos(angle) / octave.wavelengthM
       const s = Math.sin(angle) / octave.wavelengthM
-      const n = gradientNoise(c * wx - s * wz + OCTAVE_SHIFT[0] * i, s * wx + c * wz + OCTAVE_SHIFT[1] * i)
-      b = w * billow(n) + (1 - w) * BILLOW_MEAN
+      b = w * billow(c * wx - s * wz + OCTAVE_SHIFT[0] * i, s * wx + c * wz + OCTAVE_SHIFT[1] * i) + (1 - w) * BILLOW_MEAN
     }
     h += octave.amplitudeM * b
   })
@@ -255,8 +275,11 @@ export function sampleTerrainGrid(
 // GLSL
 // ---------------------------------------------------------------------------
 
-/** GLSL float literal. */
-const f = (x: number) => (Number.isInteger(x) ? `${x}.0` : `${x}`)
+/** GLSL float literal of a number. */
+export function glslFloat(x: number): string {
+  return Number.isInteger(x) ? `${x}.0` : `${x}`
+}
+const f = glslFloat
 
 /**
  * GLSL of `seaRelief` (`float seaRelief(vec2 p, float footprint)`) and of the constants the shaders share with this
@@ -270,7 +293,7 @@ export function seaReliefGlsl(): string {
   w = seaOctaveWeight(${f(octave.wavelengthM)}, footprint);
   b = SEA_BILLOW_MEAN;
   if (w > 0.0) {
-    b = mix(SEA_BILLOW_MEAN, seaBillow(seaNoise(vec2(${f(c)} * q.x - ${f(s)} * q.y + ${f(OCTAVE_SHIFT[0] * i)}, ${f(s)} * q.x + ${f(c)} * q.y + ${f(OCTAVE_SHIFT[1] * i)}))), w);
+    b = mix(SEA_BILLOW_MEAN, seaBillow(vec2(${f(c)} * q.x - ${f(s)} * q.y + ${f(OCTAVE_SHIFT[0] * i)}, ${f(s)} * q.x + ${f(c)} * q.y + ${f(OCTAVE_SHIFT[1] * i)})), w);
   }
   h += ${f(octave.amplitudeM)} * b;`
   }).join('')
@@ -297,9 +320,22 @@ float seaNoise(vec2 p) {
   return a + (b - a) * u.x + (c - a) * u.y + (a - b - c + d) * u.x * u.y;
 }
 
-float seaBillow(float n) {
-  float b = min(1.0, abs(n) * ${f(BILLOW_GAIN)});
-  return 1.0 - (1.0 - b) * (1.0 - b);
+float seaBillow(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  float best = 0.0;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 c = vec2(float(x), float(y));
+      vec2 d = c + 0.5 + 0.4 * seaGradient(i + c) - f;
+      float t = 1.0 - min(1.0, dot(d, d) * ${f(1 / (DOME_RADIUS * DOME_RADIUS))});
+      float w = min(${f(DOME_BLEND)}, t);
+      float k = w > 0.0 ? max(w - abs(best - t), 0.0) / w : 0.0;
+      best = max(best, t) + k * k * w * 0.25;
+    }
+  }
+  best = min(best, 1.0);
+  return best * (2.0 - best);
 }
 
 float seaOctaveWeight(float wavelength, float footprint) {
