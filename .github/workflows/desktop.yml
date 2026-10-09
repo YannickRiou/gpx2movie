@@ -1,5 +1,6 @@
 # Desktop installers (Tauri) for Windows, macOS and Linux.
-# Manual run: installers as workflow artifacts. Tag v*: the same, plus a draft GitHub Release.
+# Manual run: installers as workflow artifacts. Tag v*: the same, plus a GitHub Release published once the three
+# systems are built (created as a draft first, so the jobs upload to one release and it never shows half empty).
 # Signing is optional: without the secrets (see docs/installers.md) the installers are built unsigned.
 name: Desktop installers
 
@@ -9,10 +10,29 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # needed to create the draft release
+  contents: write # needed to create and publish the release
 
 jobs:
+  # tag only: one draft release for the three build jobs to upload to
+  release:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    outputs:
+      id: ${{ steps.create.outputs.id }}
+    steps:
+      - id: create
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$GITHUB_REF_NAME" \
+            -f name="OpenFlyover $GITHUB_REF_NAME" -f body='Desktop installers. See docs/installers.md to install them.' \
+            -F draft=true --jq .id)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: release
+    # also runs when `release` is skipped (manual run)
+    if: ${{ !cancelled() && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
@@ -112,9 +132,16 @@ jobs:
           tauriScript: npx tauri
           args: ${{ matrix.args }}
           uploadWorkflowArtifacts: true
-          # tag push only: empty values build without a release
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: ${{ github.ref_type == 'tag' && format('OpenFlyover {0}', github.ref_name) || '' }}
-          releaseBody: 'Desktop installers. See docs/installers.md to install them.'
-          releaseDraft: true
-          prerelease: false
+          # tag push only: empty on a manual run, which builds without a release
+          releaseId: ${{ needs.release.outputs.id }}
+
+  # tag only: publish the release once every system uploaded its installers (a failed build leaves it as a draft)
+  publish:
+    needs: [release, build]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.release.outputs.id }}
+        run: gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false --silent
