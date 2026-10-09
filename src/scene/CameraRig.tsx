@@ -4,16 +4,22 @@
  * A fit is performed when the store's `fitRequest` counter changes, and once when bounds first appear
  * while the rig is mounted. The first fit snaps (no fly-in from the default camera spot); later fits
  * animate position and target over ~800 ms with ease-in-out. Any user interaction cancels the animation.
+ *
+ * Whenever the controls move the camera (orbit, pan, zoom, damping, fit), it is lifted to stay
+ * FREE_CAMERA_CLEARANCE_M above the draped relief, so it never looks at the tiles from below. Nothing is sampled
+ * while the view sits still, nor while the film plays or a video is exported (FlyoverRig drives the camera then).
  */
-import { useCallback, useEffect, useRef, type ComponentRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type ComponentRef } from 'react'
 import { invalidate, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Box3, Vector3 } from 'three'
 import type { LocalFrame, LonLatBounds, Track } from '../core/types'
+import { isExportBusy, useExportStore } from '../export/store'
 import { centroid } from '../geo/ellipsoid'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
 import { frameDelta } from './renderOnDemand'
+import type { HeightSampler } from './TrackLines'
 
 type OrbitControlsImpl = ComponentRef<typeof OrbitControls>
 
@@ -34,6 +40,14 @@ export const FIT_DISTANCE_FACTOR = 1.4
 export const FIT_PITCH_RAD = (40 * Math.PI) / 180
 /** Ground height assumed when neither the terrain nor the tracks give one (metres). */
 export const DEFAULT_GROUND_HEIGHT_M = 1_000
+/**
+ * Height the free camera keeps above the (exaggerated) ground right under it (metres). The engine always has its
+ * finest tiles under the camera, but their mesh (`segments` cells per tile) cuts the corners of the elevation grid
+ * the height is sampled from, by a few tens of metres on steep relief: this margin keeps the camera above the drawn
+ * surface. Constant, since the ground under the camera is never the coarse distant one; below the flyover's
+ * MIN_GROUND_CLEARANCE_M (80 m), so a view placed by the flyover is never moved.
+ */
+export const FREE_CAMERA_CLEARANCE_M = 30
 
 // ---------------------------------------------------------------------------
 // Pure helpers (unit-tested)
@@ -91,6 +105,28 @@ export function meanTrackElevation(tracks: readonly Track[]): number | undefined
     n++
   }
   return n > 0 ? sum / n : undefined
+}
+
+const _floor = new Vector3()
+
+/**
+ * Raise `position` (local frame, changed in place) to `clearanceM` above the (exaggerated) ground under it; true
+ * when it moved. Left as is where the terrain is not known.
+ */
+export function liftAboveGround(
+  position: Vector3,
+  frame: LocalFrame,
+  sample: HeightSampler,
+  exaggeration: number,
+  clearanceM = FREE_CAMERA_CLEARANCE_M,
+): boolean {
+  const at = frame.toLonLat(position)
+  const ground = sample(at.lon, at.lat)
+  if (ground === undefined) return false
+  const floorY = frame.toLocal(at.lon, at.lat, ground * exaggeration + clearanceM, _floor).y
+  if (position.y >= floorY) return false
+  position.y = floorY
+  return true
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +204,17 @@ export function CameraRig() {
     animationRef.current = null
   }, [])
 
+  const sampler = useMemo<HeightSampler | null>(() => (engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null), [engine])
+  // fired by the controls only when they moved the camera, damping and fit included
+  const keepAboveGround = useCallback(() => {
+    const controls = controlsRef.current
+    if (!controls || !sampler || !frame) return
+    const { playback, settings } = useAppStore.getState()
+    if (playback.playing || isExportBusy(useExportStore.getState().phase)) return
+    const camera = controls.object
+    if (liftAboveGround(camera.position, frame, sampler, settings.exaggeration)) camera.lookAt(controls.target)
+  }, [sampler, frame])
+
   return (
     <OrbitControls
       ref={controlsRef}
@@ -179,6 +226,7 @@ export function CameraRig() {
       maxDistance={MAX_DISTANCE_M}
       screenSpacePanning={false}
       onStart={cancelAnimation}
+      onChange={keepAboveGround}
     />
   )
 }

@@ -187,6 +187,9 @@ Cloud preview: lightened "bas" (low) preset (`PREVIEW_MARCH`: 120 steps of at le
      Start (moss `#3F6B4A`) and finish (ink `#1C2A33`) spheres.
    - `CameraRig`: `OrbitControls` (drei) with damping, `maxPolarAngle = 85°`, `minDistance = 30`, `maxDistance = 400 km`;
      `computeFitView(bounds, frame, groundHeightM)` (`scene/CameraRig.tsx`): target = center, camera to the south-east, pitch 40°, distance = 1.4 × box diagonal (min 2 km).
+     On each `change` of the controls (orbit, pan, zoom, damping, fit; not while playing or exporting), `liftAboveGround` raises the
+     camera to `FREE_CAMERA_CLEARANCE_M` = 30 m above the exaggerated terrain under it (`engine.sampleHeight`): the tile mesh cuts the
+     corners of the elevation grid by a few tens of metres on steep relief; below the flyover's 80 m, so a flyover view is never moved.
 8. **State** (`store.ts`): `tracks: Track[]`, `addTracks`, `removeTrack`, `clearTracks`, `settings { terrainSourceId, imagerySourceId,
    imageryZoomOffset, exaggeration, wireframe }`, `setSetting`, `terrainStats`, `bounds` (union of the tracks) and `frameOrigin` (centroid of the
    first batch rounded to 0.01°, fixed as long as a track remains); the engine `area` is derived in the scene (`TerrainLayer`).

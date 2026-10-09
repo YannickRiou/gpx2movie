@@ -12,7 +12,9 @@ const {
   easeInOutCubic,
   fitViewDirection,
   meanTrackElevation,
+  liftAboveGround,
   FIT_MIN_DISTANCE_M,
+  FREE_CAMERA_CLEARANCE_M,
   FIT_DISTANCE_FACTOR,
   FIT_PITCH_RAD,
   MAX_POLAR_ANGLE_RAD,
@@ -115,5 +117,30 @@ describe('meanTrackElevation', () => {
     expect(meanTrackElevation([track(), track(100, 300)])).toBe(200)
     expect(meanTrackElevation([track()])).toBeUndefined()
     expect(meanTrackElevation([])).toBeUndefined()
+  })
+})
+
+describe('liftAboveGround', () => {
+  const frame = createLocalFrame(6.5, 45.5)
+  const flat = () => 1_000
+
+  it('raises a camera under the exaggerated ground to the clearance above it, keeping its lon / lat', () => {
+    const position = frame.toLocal(6.51, 45.51, 1_500)
+    expect(liftAboveGround(position, frame, flat, 2)).toBe(true)
+    const at = frame.toLonLat(position)
+    expect(at.height).toBeCloseTo(2_000 + FREE_CAMERA_CLEARANCE_M, 3)
+    expect(at.lon).toBeCloseTo(6.51, 5)
+    expect(at.lat).toBeCloseTo(45.51, 5)
+  })
+
+  it('leaves a camera high enough, or above unknown terrain, where it is', () => {
+    const high = frame.toLocal(6.51, 45.51, 1_000 + FREE_CAMERA_CLEARANCE_M + 1)
+    const before = high.clone()
+    expect(liftAboveGround(high, frame, flat, 1)).toBe(false)
+    expect(high.equals(before)).toBe(true)
+    const low = frame.toLocal(6.51, 45.51, 0)
+    expect(liftAboveGround(low, frame, () => undefined, 1)).toBe(false)
+    expect(liftAboveGround(low, frame, flat, 1, 0)).toBe(true)
+    expect(frame.toLonLat(low).height).toBeCloseTo(1_000, 3)
   })
 })

@@ -55,5 +55,5 @@ Reported by the user while testing the Windows desktop application.
 
 | Issue | Cause | Status |
 |---|---|---|
-| The free camera (orbit / pan / zoom, when paused or without a track) can go under the terrain; the tile edges then show as vertical walls | the flyover camera keeps `MIN_GROUND_CLEARANCE_M` above the relief (`src/flyover/camera.ts`), the orbit controls of `src/scene/CameraRig.tsx` do not | to do |
+| The free camera (orbit / pan / zoom, when paused or without a track) can go under the terrain; the tile edges then show as vertical walls | the flyover camera keeps `MIN_GROUND_CLEARANCE_M` above the relief (`src/flyover/camera.ts`), the orbit controls of `src/scene/CameraRig.tsx` do not | done: after each move of the orbit controls the camera is lifted to 30 m above the relief under it (`liftAboveGround`) |
 | A large dark green ball at the start of the track | the start marker, a 12 m sphere at true scale (`MARKER_RADIUS_M`, `START_COLOR` in `src/scene/TrackLines.tsx`): seen from close up it covers the path and reads as an unexplained object | to do (user's choice): remove the spheres and mark the start and the finish like a landmark, a small pin with a flag icon in the label style (constant screen size), "Départ" / "Arrivée" text when the start and finish labels are on |
