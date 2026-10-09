@@ -2,10 +2,10 @@
  * CloudsLayer — volumetric clouds (`@takram/three-clouds`), inside the EffectComposer of AtmosphereLayer and before
  * its aerial perspective, which composites them over the scene.
  *
- * Every frame, at the sun date under the marker: cover per layer from the weather of the outing or the manual
- * setting, then coverage, altitudes and thinning of the three layers, or the single layer of the sea of clouds
- * (weather/sceneClouds.ts); the clouds drift with the wind of the outing × film time (offsets set directly, no
- * velocity integrated over frames).
+ * Every frame, at the sun date under the marker: cover per layer from the weather of the outing (« À la suite », of
+ * the stage under the marker) or the manual setting, then coverage, altitudes and thinning of the three layers, or the
+ * single layer of the sea of clouds (weather/sceneClouds.ts); the clouds drift with the wind of the outing × film time
+ * (offsets set directly, no velocity integrated over frames).
  *
  * Preview: cheapest preset, full resolution, temporal upscaling while the view changes; once it is still, every pixel
  * is marched and the frames are averaged until the noise of the march is gone (`previewCloudPass`). Export:
@@ -22,7 +22,7 @@ import { Vector3, type Camera, type Data3DTexture } from 'three'
 import { CloudLayers, type CloudsEffect } from '@takram/three-clouds'
 import { Clouds, type CloudsProps } from '@takram/three-clouds/r3f'
 import { isExportBusy, useExportStore } from '../export/store'
-import { samplePath, type TrackPath } from '../flyover/path'
+import { samplePath } from '../flyover/path'
 import { geoidUndulation } from '../geo/geoid'
 import { useAppStore } from '../state/store'
 import {
@@ -35,7 +35,7 @@ import {
   type CloudQuality,
 } from '../weather/sceneClouds'
 import { sceneConditionsAt } from '../weather/sceneWeather'
-import { useWeatherStore } from '../weather/store'
+import type { MarkerTrack } from './AtmosphereLayer'
 import { shutterSubFrame, subFrameSlices } from './lens'
 import { previewCloudPass } from './renderOnDemand'
 import { useFilmClock } from './usePacing'
@@ -112,12 +112,16 @@ function cloudInputs(effect: CloudsEffect, camera: Camera): number[] {
   ]
 }
 
-export function CloudsLayer({ date, path, noise }: { date: RefObject<Date | null>; path: TrackPath | null; noise: Data3DTexture }) {
+interface CloudsLayerProps {
+  date: RefObject<Date | null>
+  marker: RefObject<MarkerTrack | null>
+  noise: Data3DTexture
+}
+
+export function CloudsLayer({ date, marker, noise }: CloudsLayerProps) {
   const { frame } = useTerrainContext()
-  const track = useAppStore((s) => s.tracks[0])
   const quality = useAppStore((s) => s.settings.clouds.quality)
   const exporting = useExportStore((s) => isExportBusy(s.phase))
-  const series = useWeatherStore((s) => (track && s.trackId === track.id ? s.series : null))
   const clock = useFilmClock()
   const ref = useRef<CloudsEffect>(null)
   /** preview: inputs of the last frame and number of frames since they last changed */
@@ -125,12 +129,6 @@ export function CloudsLayer({ date, path, noise }: { date: RefObject<Date | null
   const still = useRef(0)
   /** cloud altitudes are above the ellipsoid, the scene heights above sea level (geo/geoid.ts) */
   const undulation = useMemo(() => (frame ? geoidUndulation(frame.origin.lon, frame.origin.lat) : 0), [frame])
-  const startTime = track?.stats.startTime
-  const start = path && path.count > 0 ? samplePath(path, 0) : null
-  const wind = useMemo(
-    () => filmWind(series, startTime ?? 0, start?.lon ?? 0, start?.lat ?? 0),
-    [series, startTime, start?.lon, start?.lat],
-  )
 
   useLayoutEffect(() => {
     if (ref.current) guardResolve(ref.current)
@@ -176,16 +174,19 @@ export function CloudsLayer({ date, path, noise }: { date: RefObject<Date | null
     if (!effect || !frame) return
     const { playback, settings } = useAppStore.getState()
     const now = date.current
+    const under = marker.current
+    const path = under?.path
+    const series = under?.series ?? null
     let conditions
     if (settings.clouds.mode === 'meteo' && series && path && path.count > 0 && now) {
-      const marker = samplePath(path, Math.min(1, Math.max(0, playback.progress)) * path.lengthM)
-      conditions = sceneConditionsAt(series, now.getTime(), marker.lon, marker.lat)
+      const at = samplePath(path, Math.min(1, Math.max(0, under.progress)) * path.lengthM)
+      conditions = sceneConditionsAt(series, now.getTime(), at.lon, at.lat)
     }
     const clouds =
       settings.clouds.mode === 'mer'
         ? seaOfClouds(settings.clouds.seaTopM, settings.exaggeration)
         : sceneCloudsFrom(cloudCoversAt(settings.clouds, conditions), {
-            groundM: track?.stats.minEle ?? 0,
+            groundM: under?.track.stats.minEle ?? 0,
             altitudeM: settings.clouds.altitudeM,
             exaggeration: settings.exaggeration,
           })
@@ -208,6 +209,8 @@ export function CloudsLayer({ date, path, noise }: { date: RefObject<Date | null
 
     // drift with the wind, a function of the film time only
     const timeS = playback.timeS ?? clock.timeAtProgress(playback.progress)
+    const start = path && path.count > 0 ? samplePath(path, 0) : null
+    const wind = filmWind(series, under?.track.stats.startTime ?? 0, start?.lon ?? 0, start?.lat ?? 0)
     const drift = cloudDrift(wind, timeS)
     _origin.setFromMatrixPosition(frame.localToEcef)
     _east.setFromMatrixColumn(frame.localToEcef, 0).normalize()

@@ -1,9 +1,10 @@
 import { useEffect, useId, useMemo } from 'react'
 import { buildTrackPath } from '../flyover/path'
+import { playsInSequence } from '../flyover/sequence'
 import { useAppStore } from '../state/store'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import { summarizeOuting, weatherWidgetData } from '../weather/series'
-import { syncWeather, useWeatherStore } from '../weather/store'
+import { syncStageWeather, syncWeather, useWeatherStore } from '../weather/store'
 import { ModifiedMarker } from './ModifiedMarker'
 import { formatClock, formatNumber } from './format'
 import { Icon } from './icons'
@@ -17,7 +18,8 @@ const PROGRESS_STEPS = 1000
 
 /**
  * "Météo de la sortie": weather of the first track (Open-Meteo archive, or forecast for a planned outing), outing
- * summary and the conditions under the flyover marker. Also drives the weather store (`syncWeather`).
+ * summary and the conditions under the flyover marker. Also drives the weather store (`syncWeather`, and « À la suite »
+ * `syncStageWeather` for the later stages).
  */
 export function WeatherPanel() {
   const id = useId()
@@ -29,10 +31,16 @@ export function WeatherPanel() {
   const message = useWeatherStore((s) => s.message)
   const series = useWeatherStore((s) => s.series)
   const weatherTrackId = useWeatherStore((s) => s.trackId)
+  const tracks = useAppStore((s) => s.tracks)
+  const sequence = useAppStore((s) => playsInSequence(s.settings.race, s.tracks.length))
 
   useEffect(() => {
     syncWeather(track, enabled)
   }, [track, enabled])
+
+  useEffect(() => {
+    syncStageWeather(sequence ? tracks.slice(1) : [], enabled)
+  }, [sequence, tracks, enabled])
 
   const path = useMemo(() => (track ? buildTrackPath(track) : null), [track])
   const ready = status === 'ready' && series !== null && path !== null && weatherTrackId === track?.id

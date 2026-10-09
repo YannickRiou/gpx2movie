@@ -18,7 +18,7 @@ import type { ExportVideos } from '../film/video'
 import { useRegionStore } from '../osm/region'
 import { useLandmarkStore, useWaterStore } from '../osm/store'
 import { useAppStore } from '../state/store'
-import { useWeatherStore } from '../weather/store'
+import { useWeatherStore, weatherShown, type StageWeather } from '../weather/store'
 import type { WeatherSeries } from '../weather/series'
 import { trackPathOf } from '../flyover/path'
 import { buildRace, raceAt, raceTrackOf } from '../flyover/race'
@@ -73,7 +73,7 @@ export function overlayExtras(time: OverlayTime, progress: number): OverlayExtra
     credits: overlayCredits({
       terrainSourceId: settings.terrainSourceId,
       imagerySourceId: settings.imagerySourceId,
-      weather: useWeatherStore.getState().status === 'ready',
+      weather: weatherShown(useWeatherStore.getState()),
       landmarks:
         Object.values(useLandmarkStore.getState().landmarks).some((list) => list.length > 0) ||
         useWaterStore.getState().polygons > 0 ||
@@ -126,18 +126,20 @@ export function createOverlayFilmCache(): () => OverlayFilm | null {
   let track: Track | undefined
   let sequence: Sequence | null = null
   let series: WeatherSeries | null = null
+  let stageSeries: Readonly<Record<string, StageWeather>> = {}
   let data: OverlayFilm | null = null
   return () => {
     const { tracks, settings } = useAppStore.getState()
     const nextSequence = filmSequenceOf(tracks, settings.race)
     const next = nextSequence?.track ?? tracks[0]
     if (!next) return null
-    const weather = useWeatherStore.getState().series
-    if (next !== track || nextSequence !== sequence || weather !== series || !data) {
+    const { series: weather, stages } = useWeatherStore.getState()
+    if (next !== track || nextSequence !== sequence || weather !== series || stages !== stageSeries || !data) {
       track = next
       sequence = nextSequence
       series = weather
-      data = prepareOverlayFilm(next, nextSequence, weather)
+      stageSeries = stages
+      data = prepareOverlayFilm(next, nextSequence, weather, stages)
     }
     return data
   }

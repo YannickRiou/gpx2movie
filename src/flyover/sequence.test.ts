@@ -5,7 +5,17 @@ import type { Landmark } from '../osm/landmarks'
 import { filmFollowOf } from './follow'
 import { trackPathOf } from './path'
 import { DEFAULT_RACE, isValidRace } from './race'
-import { buildSequence, filmSequenceOf, filmTrackOf, playsInSequence, sequenceLandmarks, sequenceOf, stageAt } from './sequence'
+import {
+  buildSequence,
+  filmSequenceOf,
+  filmTrackOf,
+  playsInSequence,
+  sequenceLandmarks,
+  sequenceOf,
+  stageAt,
+  trackUnderMarker,
+} from './sequence'
+import { sunDateAt } from './sun'
 
 const DAY1 = Date.UTC(2026, 6, 1, 8)
 const HOUR = 3600 * 1000
@@ -87,6 +97,36 @@ describe('stageAt', () => {
     expect(stageAt(sequence, cut - 1e-9).stage.index).toBe(0)
     expect(stageAt(sequence, cut)).toEqual({ stage: sequence.stages[1], progress: 0 })
     expect(stageAt(sequence, 1)).toEqual({ stage: sequence.stages[1], progress: 1 })
+  })
+})
+
+describe('trackUnderMarker', () => {
+  const day1 = track('J1', 45, DAY1)
+  const day2 = track('J2', 45.1, DAY1 + 24 * HOUR, 5)
+  const sun = { sunFromTrack: true, solarHour: 12, lon: 6.8, dayMs: DAY1 }
+
+  it('is the first track at the film progress unless the tracks play « À la suite »', () => {
+    expect(trackUnderMarker([day1, day2], DEFAULT_RACE, 0.7)).toEqual({ track: day1, progress: 0.7 })
+    expect(trackUnderMarker([day1, day2], { ...SUITE, enabled: true }, 0.7)).toEqual({ track: day1, progress: 0.7 })
+    expect(trackUnderMarker([day1], SUITE, 0.7)).toEqual({ track: day1, progress: 0.7 })
+    expect(trackUnderMarker([], SUITE, 0.7)).toBeUndefined()
+  })
+
+  it('« À la suite », the stage under the marker as the store holds it, and its own sun time', () => {
+    const recoloured = { ...day2, color: '#123456' }
+    const tracks = [day1, recoloured]
+    const cut = sequenceOf([day1, day2]).stages[1].from
+    expect(trackUnderMarker(tracks, SUITE, cut / 2)?.track).toBe(day1)
+    const second = trackUnderMarker(tracks, SUITE, cut)
+    expect(second).toEqual({ track: recoloured, progress: 0 })
+    // the sun follows each stage's own day, with a jump on the cut
+    const sunAt = (progress: number) => {
+      const at = trackUnderMarker(tracks, SUITE, progress)
+      return at ? sunDateAt(trackPathOf(at.track), at.progress, sun).getTime() : NaN
+    }
+    expect(sunAt(cut - 1e-9)).toBeCloseTo(DAY1 + 20 * 60 * 1000, -1)
+    expect(sunAt(cut)).toBe(DAY1 + 24 * HOUR)
+    expect(sunAt(1)).toBe(DAY1 + 24 * HOUR + 40 * 60 * 1000)
   })
 })
 
