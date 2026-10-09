@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (98 files, 1,606 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (100 files, 1,643 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (12). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -306,8 +306,9 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
 1. Volumetric clouds: done on the work branch (still views and exported frames averaged over 32 / 16–32 renders,
    sea of clouds with a dense base and wispy tops, lit at a low sun; ARCHITECTURE.md, clouds). The edge against the
    relief can only be softened through density (three-clouds has no option). To judge on a GPU (`docs/tests-gpu.md`).
-2. « Mer de nuages » as a surface (« Nappe »): noise-free mesh layer as an alternative to the volumetric one, to
-   compare on a real GPU; keep the better one (or both).
+2. « Mer de nuages » as a surface (« Nappe »): done on the work branch (« Rendu de la mer de nuages » › « Nappe »,
+   `CloudSeaSurface`, noise-free billows, soft edges against the summits). Compare it with the volumetric sea on a
+   real GPU (look, fps) and keep the better one as the default.
 3. On the work branch, not yet merged: « Lissage de la trace » out of « Plus de réglages », « Plan de situation à
    l'ouverture / à la clôture » switches in the « Survol » tab (nothing on by default), WebGL context asking for the
    high-performance GPU.
