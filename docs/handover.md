@@ -349,20 +349,19 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    generalised ghost race (camera on the lead, on a chosen track or framing all of them; leaderboard optional;
    same sync modes).
 8. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
-9. Extensions not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
+9. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
+   the current lots): thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
    Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop.
-10. Commit `32a3818` message mentions the `CLAUDE.md` file name; `CLAUDE.md` and `.claude/` are in the repository
-   (configuration files). Rewriting history or removing them only on the user's request.
 
 **In the user's hands**
-11. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
+10. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
    steady camera, free camera, start / finish pins, export.
-12. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
+11. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
    remove them; delete the old branches (`lot-suites`, `landmarks-hide`, `track-style`, `ui-polish`,
    `timeline-polish`, `export-stream`, `timeline-videos`, `water`): the session cannot delete remote branches.
-13. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
+12. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
    application); signing certificates if wanted; then a first `v0.1.0` tag (release published by `desktop.yml`).
-14. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+13. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.
