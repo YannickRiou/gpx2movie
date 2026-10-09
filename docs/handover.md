@@ -351,7 +351,10 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   Run the full checks and `npm run e2e`; list what only a GPU can confirm in `docs/tests-gpu.md`.
   Maintainability (user's requirement): code easy for a human to maintain and understand, kept to the essentials;
   remove needless complexity (indirections, options and abstractions used once, speculative code, duplicated logic),
-  split or simplify modules and functions that are too long, comments that explain the why where it is not obvious.
+  split or simplify modules and functions that are too long. Comments (user's rule): short and relevant, never a
+  substitute for the documentation; the code should explain itself (names, structure), a comment only states a why
+  the code cannot show, and anything longer belongs in ARCHITECTURE.md or docs/. Trim the long header and block
+  comments accordingly.
 - **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
   and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
   lens effects), memory (tile and DEM caches, textures, long sessions), export speed (cloud renders per frame,
