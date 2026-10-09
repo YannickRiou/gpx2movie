@@ -350,8 +350,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    same sync modes).
 8. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
 9. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
-   the current lots): thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
-   Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop.
+   the current lots): thumbnails in "Mes projets", overlay-only export on the
+   Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop. Dropped by the user: GoPro GPS time (GPMF).
 
 **Later, once the desktop and web versions are finished and working**
 - **Web app highly usable on mobile** (large lot, user's request). Today the interface is built for a desktop screen,
