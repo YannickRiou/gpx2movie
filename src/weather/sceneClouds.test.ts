@@ -36,6 +36,8 @@ describe('settings', () => {
     expect(isValidClouds({ ...DEFAULT_CLOUDS, altitudeM: 50 })).toBe(false)
     expect(isValidClouds({ ...DEFAULT_CLOUDS, mode: 'mer', seaTopM: 2400 })).toBe(true)
     expect(isValidClouds({ ...DEFAULT_CLOUDS, seaTopM: 100 })).toBe(false)
+    expect(isValidClouds({ ...DEFAULT_CLOUDS, mode: 'mer', seaRender: 'surface' })).toBe(true)
+    expect(isValidClouds({ ...DEFAULT_CLOUDS, seaRender: 'nappe' as never })).toBe(false)
   })
 
   it('proposes a sea of clouds three quarters of the way up the track', () => {

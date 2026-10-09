@@ -21,6 +21,10 @@ export type CloudMode = (typeof CLOUD_MODES)[number]
 export const CLOUD_QUALITIES = ['low', 'medium', 'high'] as const
 export type CloudQuality = (typeof CLOUD_QUALITIES)[number]
 
+/** Rendering of the sea of clouds: volumetric clouds, or a lit surface (scene/CloudSeaSurface.tsx). */
+export const SEA_RENDERS = ['volume', 'surface'] as const
+export type SeaRender = (typeof SEA_RENDERS)[number]
+
 /** The user setting (`settings.clouds`, atmosphere only). */
 export interface CloudSettings {
   /**
@@ -34,16 +38,18 @@ export interface CloudSettings {
   altitudeM: number
   /** top of the sea of clouds ('mer'), above sea level before the exaggeration (metres) */
   seaTopM: number
+  /** rendering of the sea of clouds ('mer') */
+  seaRender: SeaRender
   /** quality of the exported frames */
   quality: CloudQuality
 }
 
-export const DEFAULT_CLOUDS: CloudSettings = { mode: 'meteo', coverage: 0.4, altitudeM: 1200, seaTopM: 2000, quality: 'medium' }
+export const DEFAULT_CLOUDS: CloudSettings = { mode: 'meteo', coverage: 0.4, altitudeM: 1200, seaTopM: 2000, seaRender: 'volume', quality: 'medium' }
 
 export const CLOUD_ALTITUDE_RANGE = { min: 200, max: 4000, step: 100 } as const
 export const SEA_TOP_RANGE = { min: 300, max: 5000, step: 50 } as const
 
-/** Settings saved before the sea of clouds get its top by default. */
+/** Settings saved before the sea of clouds get its top and rendering by default. */
 export const withCloudDefaults = withDefaults(DEFAULT_CLOUDS)
 
 /** Part of the climb of the track, from its lowest point, below the proposed top of the sea of clouds. */
@@ -65,6 +71,7 @@ export function isValidClouds(v: CloudSettings): boolean {
   return (
     (CLOUD_MODES as readonly string[]).includes(v.mode) &&
     (CLOUD_QUALITIES as readonly string[]).includes(v.quality) &&
+    (SEA_RENDERS as readonly string[]).includes(v.seaRender) &&
     v.coverage >= 0 &&
     v.coverage <= 1 &&
     v.altitudeM >= CLOUD_ALTITUDE_RANGE.min &&

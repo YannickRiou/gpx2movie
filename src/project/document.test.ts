@@ -216,6 +216,15 @@ describe('serializeProject / parseProject', () => {
     expect(sanitizeSettings({ clouds: { ...DEFAULT_SETTINGS.clouds, mode: 'mer', seaTopM: 9000 } }).invalid).toEqual(['clouds'])
   })
 
+  it('loads the sea of clouds of older projects as volumetric and validates its rendering', () => {
+    const { seaRender: _ignored, ...older } = DEFAULT_SETTINGS.clouds
+    const { settings, invalid } = sanitizeSettings({ clouds: { ...older, mode: 'mer', seaTopM: 2400 } })
+    expect(invalid).toEqual([])
+    expect(settings.clouds).toEqual({ ...DEFAULT_SETTINGS.clouds, mode: 'mer', seaTopM: 2400, seaRender: 'volume' })
+    expect(sanitizeSettings({ clouds: { ...DEFAULT_SETTINGS.clouds, seaRender: 'surface' } }).settings.clouds.seaRender).toBe('surface')
+    expect(sanitizeSettings({ clouds: { ...DEFAULT_SETTINGS.clouds, seaRender: 'plat' } }).invalid).toEqual(['clouds'])
+  })
+
   it('rejects an unknown track colour mode and an out-of-range exposure', () => {
     const { settings, invalid } = sanitizeSettings({ trackColorBy: 'rainbow', exposureEv: 12 })
     expect(settings.trackColorBy).toBe(DEFAULT_SETTINGS.trackColorBy)
