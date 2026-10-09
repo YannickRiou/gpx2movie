@@ -124,6 +124,12 @@ describe('roadbookLandmarks', () => {
     ]
     expect(roadbookLandmarks(features, track).map((l) => l.name)).toEqual(['Refuge proche', 'Col du Test', 'Source'])
   })
+
+  it('skips the landmarks hidden one by one', () => {
+    const track = profileTrack(5000, climbProfile)
+    const features = [feature('pass', 'Col du Test', 3000, 0), feature('hut', 'Refuge proche', 500, 150)]
+    expect(roadbookLandmarks(features, track, ['node/Col du Test']).map((l) => l.name)).toEqual(['Refuge proche'])
+  })
 })
 
 describe('buildRoadbook', () => {

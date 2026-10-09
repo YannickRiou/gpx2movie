@@ -18,12 +18,13 @@ export function RoadbookPanel() {
   const track = useAppStore((s) => s.tracks[0])
   const pois = useAppStore((s) => s.settings.film.pois)
   const landmarksOn = useAppStore((s) => s.settings.landmarks.enabled)
+  const hiddenIds = useAppStore((s) => s.settings.landmarks.hiddenIds)
   const setProgress = useAppStore((s) => s.setProgress)
   const features = useLandmarkStore((s) => (track ? s.features[track.id] : undefined))
   const landmarkStatus = useLandmarkStore((s) => s.status)
   const roadbook = useMemo(
-    () => (track ? buildRoadbook(track, features ? roadbookLandmarks(features, track) : [], pois) : null),
-    [track, features, pois],
+    () => (track ? buildRoadbook(track, features ? roadbookLandmarks(features, track, hiddenIds) : [], pois) : null),
+    [track, features, hiddenIds, pois],
   )
 
   if (!track || !roadbook) return null
