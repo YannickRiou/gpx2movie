@@ -4,7 +4,8 @@ import { getPlatform } from '../platform'
 import type { ProjectEntry } from '../platform'
 import { applySettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
-import { getPresetStore, normalizePresetName, presetSettings } from '../project/presets'
+import { PRESET_SCOPE_LABELS, PRESET_SCOPES, getPresetStore, normalizePresetName, presetSettings } from '../project/presets'
+import type { PresetScope } from '../project/presets'
 import { useAppStore } from '../state/store'
 import { deleteEntry, formatProjectSize, keepOpenProject, libraryFile, refreshLibrary, renameEntry, useLibraryStore } from './library'
 import { openProject } from './projectActions'
@@ -158,6 +159,7 @@ function PresetSection() {
   const [presets, setPresets] = useState(() => presetStore.list())
   const [selectedPreset, setSelectedPreset] = useState('')
   const [presetName, setPresetName] = useState('')
+  const [presetScope, setPresetScope] = useState<PresetScope>('tout')
   const id = useId()
 
   const selected = presets.find((p) => p.name === selectedPreset)
@@ -170,7 +172,7 @@ function PresetSection() {
 
   const savePreset = () => {
     try {
-      const stored = presetStore.save(presetName, useAppStore.getState().settings)
+      const stored = presetStore.save(presetName, useAppStore.getState().settings, presetScope)
       const name = normalizePresetName(presetName)
       setPresets(presetStore.list())
       setSelectedPreset(name)
@@ -199,7 +201,7 @@ function PresetSection() {
       </h2>
 
       <p className="field__hint">
-        Tous les réglages, sans traces, arrêts, textes ni photos. Gardés {getPlatform().capabilities.isDesktop ? 'sur cet ordinateur' : 'dans ce navigateur'}.
+        Tous les réglages, ou une seule famille (style de carte, trace, habillage, prise de vue) à appliquer sans toucher au reste ; jamais les traces, arrêts, textes ni photos. Gardés {getPlatform().capabilities.isDesktop ? 'sur cet ordinateur' : 'dans ce navigateur'}.
       </p>
 
       {presets.length === 0 ? (
@@ -214,7 +216,7 @@ function PresetSection() {
               <option value="">Choisir…</option>
               {presets.map((preset) => (
                 <option key={preset.name} value={preset.name}>
-                  {preset.name}
+                  {preset.scope && preset.scope !== 'tout' ? `${preset.name} · ${PRESET_SCOPE_LABELS[preset.scope]}` : preset.name}
                 </option>
               ))}
             </select>
@@ -237,12 +239,26 @@ function PresetSection() {
           savePreset()
         }}
       >
-        <label className="field__label" htmlFor={`${id}-preset-name`}>
+        <label className="field__label" htmlFor={`${id}-preset-scope`}>
           Nouveau préréglage
         </label>
+        <select
+          id={`${id}-preset-scope`}
+          className="select project__scope"
+          aria-label="Ce que garde le préréglage"
+          value={presetScope}
+          onChange={(e) => setPresetScope(e.currentTarget.value as PresetScope)}
+        >
+          {PRESET_SCOPES.map((scope) => (
+            <option key={scope} value={scope}>
+              {PRESET_SCOPE_LABELS[scope]}
+            </option>
+          ))}
+        </select>
         <div className="project__row">
           <input
             id={`${id}-preset-name`}
+            aria-label="Nom du préréglage"
             className="input"
             type="text"
             value={presetName}
