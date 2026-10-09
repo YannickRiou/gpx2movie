@@ -1701,7 +1701,7 @@ differs goes through `src/platform/`.
   thumbprint written to `src-tauri/tauri.windows.conf.json` (generated, never versioned; timestamping and SHA-256 in
   `tauri.conf.json`); macOS, Tauri's `APPLE_*` variables exported only if present (empty, they would make
   the build fail), ad hoc signing (`signingIdentity: "-"`) otherwise. No updater plugin.
-  `.github/workflows/ci.yml`: types, lint, unit tests, build and `cargo test` on every push.
+  `.github/workflows/ci.yml`, on pull requests and on master: types, lint, unit tests and build (`web` job); `cargo test` only when `src-tauri/` or the workflow changed (`rust` job, against a placeholder `dist/`).
 
 ### Video export without WebCodecs (Linux)
 

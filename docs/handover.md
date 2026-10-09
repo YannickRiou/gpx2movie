@@ -26,7 +26,7 @@ then run `git status` and `npm run typecheck`.
   shared helpers; and two work items left unfinished there (locator map from very high up with the region
   highlighted, Strava import; see "Work merged from `lot-suites`"). **Merged into this branch** (`merge-lot-suites`,
   started from `ai-dev/confident-darwin-83rxik`) on 9 October 2026, its documentation translated to English during the
-  merge. The GitHub CI (`ci.yml`) runs on each push.
+  merge. The GitHub CI (`ci.yml`) runs on pull requests and on master (Rust tests only when `src-tauri/` changed).
 - Method: one branch per batch, one PR with a manual test procedure, merge (`gh pr merge N --merge`), then a new
   branch from `origin/master`.
 - **Push**: just `git push`. The `origin` remote is `git@github-yannickriou:YannickRiou/gpx2movie.git`, an SSH alias

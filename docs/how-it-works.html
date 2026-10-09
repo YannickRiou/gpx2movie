@@ -552,7 +552,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
       <article class="term">
         <h4>Continuous integration (CI)</h4>
         <p>CI is a service that runs the checks on a fresh machine every time code is pushed, so a mistake is caught even if someone forgot to run the tests.</p>
-        <p class="here"><b>Here:</b> GitHub Actions. <code>.github/workflows/ci.yml</code> runs install, type check, lint, unit tests, build and <code>cargo test</code> on every push. <code>desktop.yml</code> builds the installers on demand or on a version tag.</p>
+        <p class="here"><b>Here:</b> GitHub Actions. <code>.github/workflows/ci.yml</code> runs install, type check, lint, unit tests and build on every pull request and on master, and <code>cargo test</code> only when the desktop code (<code>src-tauri/</code>) changed. <code>desktop.yml</code> builds the installers on demand or on a version tag.</p>
       </article>
     </div>
   </div>
