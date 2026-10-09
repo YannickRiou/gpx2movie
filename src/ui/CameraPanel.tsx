@@ -8,7 +8,8 @@ import {
   FLYOVER_DURATION_RANGE,
 } from '../flyover/cameraSettings'
 import type { CameraSettings, CameraStyle } from '../flyover/cameraSettings'
-import { addCameraKey } from '../film/timeline'
+import { DEFAULT_FILM, SITUATION_DURATION_S } from '../film/model'
+import { addCameraKey, updateShot } from '../film/timeline'
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { PACING_RANGES } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
@@ -17,6 +18,7 @@ import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber, formatPercent, formatSecondsShort } from './format'
 import { Icon } from './icons'
 import type { IconName } from './icons'
+import { RegionHint } from './FilmInspector'
 import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
 import { TrackMarkerSection } from './TrackMarkerSection'
 
@@ -86,9 +88,52 @@ const STYLE_HINTS: Record<CameraStyle, string> = {
   cinematic: 'Plus loin et plus bas, avec un lent mouvement latéral.',
 }
 
+/** Tips of the « Plan de situation » switches. */
+const SITUATION_TIPS = {
+  opening: 'Vue de très haut sur la région, alentours assombris et nom affiché, puis plongée vers la trace.',
+  closing: 'À la fin, la caméra remonte jusqu’à la vue de très haut sur la région, alentours assombris et nom affiché.',
+}
+
+/**
+ * « Plan de situation » of the opening and the closing, on: style 'situation' with the region highlighted (as in the
+ * inspector); off: the default style back (and its duration, when the shot still has the one 'situation' gave it).
+ */
+function SituationShotSwitches() {
+  const film = useAppStore((s) => s.settings.film)
+  const id = useId()
+  const isOn = (key: 'opening' | 'closing') => film[key].style === 'situation' && film[key].highlight === true
+  const toggle = (key: 'opening' | 'closing', on: boolean) =>
+    editFilm((f) => {
+      if (on) return { film: updateShot(f, key, { style: 'situation', highlight: true }) }
+      const back = f[key].durationS === SITUATION_DURATION_S ? { durationS: DEFAULT_FILM[key].durationS } : {}
+      return { film: updateShot(f, key, { style: DEFAULT_FILM[key].style, ...back }) }
+    })
+  const any = isOn('opening') || isOn('closing')
+  return (
+    <>
+      {(['opening', 'closing'] as const).map((key) => (
+        <div key={key} className="field__label-row">
+          <label className="checkbox checkbox--switch">
+            <input
+              type="checkbox"
+              checked={isOn(key)}
+              aria-describedby={any ? `${id}-region-hint` : undefined}
+              onChange={(e) => toggle(key, e.currentTarget.checked)}
+            />
+            {key === 'opening' ? 'Plan de situation à l’ouverture' : 'Plan de situation à la clôture'}
+          </label>
+          <InfoTip text={SITUATION_TIPS[key]} />
+        </div>
+      ))}
+      {any && <RegionHint id={`${id}-region-hint`} highlight />}
+    </>
+  )
+}
+
 /**
  * « Survol » tab: sections Caméra (preset, style tiles; fine parameters under « Plus de réglages ») and Durée et rythme
- * (flyover duration, slow-downs on/off; their details under « Plus de réglages »).
+ * (flyover duration, situation shots of the opening and closing, slow-downs on/off; their details under « Plus de
+ * réglages »).
  */
 export function CameraPanel() {
   const camera = useAppStore((s) => s.settings.camera)
@@ -243,6 +288,8 @@ export function CameraPanel() {
             {stopCount === 0 ? 'aucun arrêt' : `${stopCount} arrêt${stopCount > 1 ? 's' : ''}`}
           </p>
         </div>
+
+        <SituationShotSwitches />
 
         <div className="field__label-row">
           <label className="checkbox checkbox--switch">

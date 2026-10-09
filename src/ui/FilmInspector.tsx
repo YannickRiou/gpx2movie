@@ -82,6 +82,17 @@ const REGION_HINTS: Record<RegionStatus, string> = {
   none: 'Aucune région administrative ne contient toute la trace : le plan reste sans mise en avant.',
   error: 'Région indisponible pour le moment (hors ligne ?) : le plan reste sans mise en avant.',
 }
+/** Hint under « Mettre en avant la région » (`highlight` on: how the search for the region went). */
+export function RegionHint({ id, highlight }: { id: string; highlight: boolean }) {
+  const regionStatus = useRegionStore((s) => s.status)
+  const regionName = useRegionStore((s) => s.region?.name)
+  return (
+    <p id={id} className="field__hint">
+      {highlight && regionStatus === 'ready' && regionName ? `${regionName} : ` : ''}
+      {REGION_HINTS[highlight ? regionStatus : 'idle']}
+    </p>
+  )
+}
 const STOP_CAMERA_HINTS: Record<StopCamera, string> = {
   film: 'La caméra du survol continue, sans mouvement ajouté.',
   orbite: 'La caméra tourne lentement autour du point, puis revient.',
@@ -153,8 +164,6 @@ export function FilmInspector() {
   const item = useAppStore((s) => s.filmSelection)
   const { track, film, pacing } = useFilmSource()
   const clock = useFilmClock()
-  const regionStatus = useRegionStore((s) => s.status)
-  const regionName = useRegionStore((s) => s.region?.name)
   const path = useMemo(() => (track ? buildTrackPath(track) : null), [track])
   if (!item || !track || !path) return null
   const lengthM = track.stats.distanceM
@@ -324,10 +333,7 @@ export function FilmInspector() {
               />
               Mettre en avant la région
             </label>
-            <p id={`${id}-highlight-hint`} className="field__hint">
-              {shot.highlight && regionStatus === 'ready' && regionName ? `${regionName} : ` : ''}
-              {REGION_HINTS[shot.highlight ? regionStatus : 'idle']}
-            </p>
+            <RegionHint id={`${id}-highlight-hint`} highlight={shot.highlight === true} />
           </>
         )}
         {range(
