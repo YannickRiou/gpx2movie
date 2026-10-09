@@ -1,22 +1,17 @@
 /**
  * Batch export (« Plusieurs formats »): the same film in several formats in one go, plus optionally a still image and
- * the poster. The jobs run one after the other through the export store and its controller (one export at a time,
- * the view restored after each, the tile cache shared by them), in the order of the format list.
+ * the poster. The jobs run one after the other through the export store (one export at a time, the view restored
+ * after each, the tile cache shared). « Un film par trace »: the same films for each GPX / FIT file of a folder
+ * (`trackFilms.ts`). See ARCHITECTURE.md "Video export".
  *
- * Destination: a folder picked once (`pickFolder`) receives every file, named « <projet> – 16x9-1080p.mp4 »; without
- * it, each file kept in memory is saved as soon as it is ready (`save`) and its URL kept for « Enregistrer à nouveau ».
- *
- * « Un film par trace »: the same films for each GPX / FIT file of a folder, each track shown alone with its automatic
- * film (`trackFilms.ts`), files named « <fichier> – 16x9-1080p.mp4 », the tracks and film of before put back at the end.
- *
- * Pure (tested): the job list, the names, the estimate, the progress lines, `runBatch` and `runTrackFilms`
- * (sequencing with an injected runner). `exportJob` drives the real export store; the batch store keeps the
- * selection and the last run.
+ * Pure (tested): the job list, the names, the estimate, the progress lines, `runBatch` and `runTrackFilms` (sequencing
+ * with an injected runner). `exportJob` drives the real export store; the batch store keeps the selection and last run.
  */
 import { errorMessage } from '../core/errors'
 import { create } from 'zustand'
 import { supportedExtension } from '../import'
 import type { FolderFile, WritableFolder } from '../platform/folder'
+import { showToast } from '../ui/toast'
 import { VIDEO_ASPECTS, VIDEO_RESOLUTIONS, videoSize } from './schedule'
 import type { VideoAspect, VideoResolution } from './schedule'
 import { isExportBusy, useExportStore, videoFileName } from './store'
@@ -406,6 +401,7 @@ export async function exportJob(job: BatchJob, ctx: BatchContext): Promise<JobOu
     } catch (error) {
       // the image is not lost: saved like a file kept in memory
       console.warn("[export] écriture dans le dossier impossible, image enregistrée autrement :", error)
+      showToast({ kind: 'info', text: 'Écriture dans le dossier impossible : le fichier sera téléchargé.' })
     }
   }
   ctx.save(result)

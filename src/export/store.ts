@@ -1,18 +1,16 @@
 /**
- * Export state (zustand), separate from the app store: the panel requests an export, the controller mounted
- * in the 3D scene runs it and reports its progress here.
+ * Export state (zustand), separate from the app store: the panel requests an export, the controller mounted in the 3D
+ * scene runs it and reports its progress here. phase: idle > starting > rendering > finalizing > done | error | canceled.
  *
- * phase: idle → starting (requested, waiting for the controller) → rendering → finalizing → done | error | canceled
- *
- * Also shared with the scene during an export: the render scale (pixel-sized elements grow with the video) and
- * the drape-flush registry (the track and the labels re-drape synchronously instead of after their debounce).
- *
- * A film goes straight to disk when the platform can stream (`chooseVideoDestination`, asked from the click that
- * starts the export), else it is kept in memory and downloaded at the end.
+ * Also shared with the scene during an export: the render scale (pixel-sized elements grow with the video) and the
+ * drape-flush registry (the track and the labels re-drape synchronously instead of after their debounce).
+ * A film goes straight to disk when the platform can stream (`chooseVideoDestination`, asked from the click that starts
+ * the export), else it is kept in memory and downloaded at the end.
  */
 import { create } from 'zustand'
 import type { TrackPath } from '../flyover/path'
 import type { Platform, WritableFile } from '../platform'
+import { showToast } from '../ui/toast'
 import type { VideoQuality } from './schedule'
 
 export type ExportPhase = 'idle' | 'starting' | 'rendering' | 'finalizing' | 'done' | 'error' | 'canceled'
@@ -208,6 +206,7 @@ export async function chooseVideoDestination(
     return destination ? { start: true, destination } : { start: false }
   } catch (error) {
     console.warn("[export] écriture directe impossible, film gardé en mémoire :", error)
+    showToast({ kind: 'info', text: 'Écriture directe impossible : le film sera téléchargé à la fin.' })
     return { start: true }
   }
 }

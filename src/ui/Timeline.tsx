@@ -1,18 +1,7 @@
 /**
- * Film timeline under the 3D view, in film time (opening and closing included).
- *
- * Bar (icon buttons with tooltips): play / pause, stop (back to the first frame), film time, distance, altitude and
- * recorded time at the marker, add a stop (at the playhead or at a highlight), a text or media, speed, zoom (− / slider
- * / + / « Ajuster »), « Options » menu (automatic stops, « modifié » marker of the film), fold. Ruler: click or drag to
- * scrub (also a keyboard slider). Lanes « Plans » (opening, flight with its elevation profile, its stops and its camera
- * keys as diamonds, closing),
- * « Vitesse » (portions of the track flown faster or slower, added at the marker), « Arrêts », « Textes », « Médias » (photos and video clips, also dropped onto the timeline; photos taken along the
- * track can then be placed where they were taken, clips filmed during the outing synced with it), « Musique » (sound files with their waveform, added from the
- * « Options » menu or dropped; played along by the preview, muted by the bar's button, mixed into the export): drag a block to move it, an edge to stretch it, snapping to the other edges, the
- * highlights and the playhead (Alt: no snapping); Ctrl+wheel zooms; zoomed, a drag near an edge scrolls the lanes;
- * texts and media attached to a stop follow it. Keyboard on a block: arrows nudge (Shift:
- * finer), Delete removes (Escape deselects: `App`); Space plays / pauses anywhere outside a control. The selection
- * lives in the store (`filmSelection`): the inspector of the selected block is in the right dock (`FilmInspector`).
+ * Film timeline under the 3D view, in film time (opening and closing included): bar, ruler, and the lanes « Plans »,
+ * « Vitesse », « Arrêts », « Textes », « Médias », « Musique » (ARCHITECTURE.md "Film and timeline"). The inspector of
+ * the selected block (`filmSelection` in the store) is in the right dock (`FilmInspector`).
  *
  * A gesture is previewed on the timeline only and committed on release as one undo step. Edits are the pure
  * functions of `film/timeline.ts`; editing a stop writes the generated stops out first (`materializeStops`).
@@ -55,7 +44,6 @@ import {
 } from '../film/timeline'
 import type { DragContext, Grip, TimelineItem } from '../film/timeline'
 import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath, type ElevationProfile } from '../flyover/path'
-import { getPlatform } from '../platform'
 import { modifiedSettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
 import { editFilm, getFilmSource, useFilmClock, useFilmSequence, useFilmSource } from '../scene/usePacing'
@@ -64,6 +52,7 @@ import { formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
 import type { IconName } from './icons'
 import { ModifiedMarker } from './ModifiedMarker'
+import { pickFiles } from './projectActions'
 import { withShortcut } from './shortcuts'
 import { showToast } from './toast'
 
@@ -529,9 +518,7 @@ export function Timeline() {
     })
   }
   const pickMusic = () =>
-    void getPlatform()
-      .openFiles({ filters: MUSIC_FILTERS, multiple: true })
-      .then((files) => (files.length > 0 ? addMusicFiles(files) : undefined))
+    void pickFiles({ filters: MUSIC_FILTERS, multiple: true }).then((files) => (files.length > 0 ? addMusicFiles(files) : undefined))
   const toggleAutoStops = (on: boolean) =>
     commit(on ? { ...film, autoStops: true, autoMode: 'temps-forts', stops: [] } : withOwnStops(film))
 
@@ -815,9 +802,7 @@ export function Timeline() {
           name={reading ? 'Lecture des fichiers…' : 'Ajouter des photos ou des vidéos à la tête de lecture'}
           tip="Ajouter des photos ou des vidéos (MP4, WebM, MOV ; sans le son) à la tête de lecture, ou les glisser sur la timeline"
           onClick={() =>
-            void getPlatform()
-              .openFiles({ filters: MEDIA_FILTERS, multiple: true })
-              .then((files) => (files.length > 0 ? addMediaFiles(files) : undefined))
+            void pickFiles({ filters: MEDIA_FILTERS, multiple: true }).then((files) => (files.length > 0 ? addMediaFiles(files) : undefined))
           }
           disabled={reading}
         />
