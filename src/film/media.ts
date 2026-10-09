@@ -50,6 +50,9 @@ export interface MediaAsset {
   recordedMs?: number
   /** video: `recordedMs` is only guessed from the date of the file (its last change minus its length) */
   recordedApprox?: boolean
+  /** photo: where it was taken (EXIF GPS, degrees), to pin it on the relief */
+  lon?: number
+  lat?: number
 }
 
 export type MediaTable = Record<string, MediaAsset>
@@ -96,9 +99,12 @@ export function isValidMediaAsset(v: unknown): v is MediaAsset {
     isImageDataUrl(a.thumb) &&
     isSide(a.width) &&
     isSide(a.height) &&
-    (a.name === undefined || typeof a.name === 'string')
+    (a.name === undefined || typeof a.name === 'string') &&
+    ((a.lon === undefined && a.lat === undefined) || (isDegrees(a.lon, 180) && isDegrees(a.lat, 90)))
   )
 }
+
+const isDegrees = (v: unknown, max: number) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= max
 
 /** The entry is a video clip (else a picture). */
 export function isVideoAsset(asset: Pick<MediaAsset, 'data'>): boolean {
@@ -224,7 +230,9 @@ export async function readPhoto(file: Blob, name?: string): Promise<{ asset: Med
   try {
     const photo = encodeJpeg(bitmap, bitmap.width, bitmap.height, PHOTO_MAX_SIDE_PX, PHOTO_JPEG_QUALITY)
     const thumb = encodeJpeg(bitmap, bitmap.width, bitmap.height, THUMB_MAX_SIDE_PX, THUMB_JPEG_QUALITY)
-    return { asset: { data: photo.data, thumb: thumb.data, width: photo.width, height: photo.height, name }, exif }
+    const asset: MediaAsset = { data: photo.data, thumb: thumb.data, width: photo.width, height: photo.height, name }
+    if (exif.lon !== undefined && exif.lat !== undefined) Object.assign(asset, { lon: exif.lon, lat: exif.lat })
+    return { asset, exif }
   } finally {
     bitmap.close()
   }

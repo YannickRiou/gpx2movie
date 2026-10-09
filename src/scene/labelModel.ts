@@ -5,7 +5,8 @@
  * No React, no renderer: everything here is unit-tested.
  */
 import type { Track } from '../core/types'
-import type { FilmPoi, PoiIcon } from '../film/model'
+import type { MediaTable } from '../film/media'
+import type { FilmMedia, FilmPoi, PoiIcon } from '../film/model'
 import type { Climb, ClimbCategory } from '../flyover/climbs'
 import { samplePath, trackPathOf } from '../flyover/path'
 import { haversineM } from '../geo/lonLat'
@@ -126,7 +127,7 @@ export function endpointLabels(track: Track): LandmarkLabel[] {
 /** Labels settings of an older project: no kilometre markers nor start and finish, the usual size and range. */
 export function withLabelDefaults(raw: unknown): unknown {
   return raw !== null && typeof raw === 'object' && !Array.isArray(raw)
-    ? { kmStep: 0, endpoints: false, size: 1, rangeKm: LABEL_FADE_END_M / 1000, ...raw }
+    ? { kmStep: 0, endpoints: false, photos: false, size: 1, rangeKm: LABEL_FADE_END_M / 1000, ...raw }
     : raw
 }
 
@@ -154,6 +155,19 @@ export function waypointLabels(tracks: readonly Track[]): LandmarkLabel[] {
     })
   }
   return out
+}
+
+/** Photos of the film pinned where they were taken (EXIF GPS), just below the points of interest. */
+export const PHOTO_PRIORITY = 190
+
+/** One pin per photo of the film whose file gives its position: its caption, else « Photo ». */
+export function photoLabels(media: readonly FilmMedia[], table: MediaTable): LandmarkLabel[] {
+  return media.flatMap((item) => {
+    const asset = table[item.src]
+    if (item.kind !== 'image' || asset?.lon === undefined || asset.lat === undefined) return []
+    const text = item.caption?.trim() || 'Photo'
+    return [{ id: `photo:${item.id}`, lon: asset.lon, lat: asset.lat, text, kind: 'poi', priority: PHOTO_PRIORITY, icon: 'photo' } satisfies LandmarkLabel]
+  })
 }
 
 /** One label per point of interest placed by hand, except those whose name is blank. */
