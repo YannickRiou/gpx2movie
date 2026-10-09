@@ -74,7 +74,34 @@ export interface FilmShot {
    * closing) within `durationS`; the rest is the move (« Plongée »). Default 0: one move over the whole shot.
    */
   holdS?: number
+  /** 'situation', framing of the region view (« Cadrage », `SituationFraming`): all absent = the automatic framing */
+  tiltDeg?: number
+  distanceKm?: number
+  heading?: SituationHeading
+  bearingDeg?: number
+  headroomPct?: number
 }
+
+export const SITUATION_HEADINGS = ['libre', 'boussole'] as const
+/**
+ * Heading of the region view: 'libre', from the side the flight camera looks from where the shot joins it (no turn
+ * during the move); 'boussole', looking toward `bearingDeg` (0: north up).
+ */
+export type SituationHeading = (typeof SITUATION_HEADINGS)[number]
+export const SITUATION_HEADING_LABELS: Record<SituationHeading, string> = { libre: 'Libre', boussole: 'Boussole' }
+/**
+ * Framing of the region view of a 'situation' shot (flyover/filmCamera.ts `regionView`): tilt from the vertical
+ * (default 90° − REGION_PITCH_DEG), distance in km (default: fitted to the region or the track, see « Hauteur »),
+ * heading and its bearing, headroom (share of the frame height the region's centre sits below the middle).
+ */
+export type SituationFraming = Pick<FilmShot, 'tiltDeg' | 'distanceKm' | 'heading' | 'bearingDeg' | 'headroomPct'>
+/** Ranges of the framing fields (also their validity in a loaded project). */
+export const SITUATION_TILT_RANGE = { min: 1, max: 60, step: 1 } as const
+/** Tilt of the region view without a framing (flyover/filmCamera.ts `REGION_PITCH_DEG` = 90° − this above the horizon). */
+export const SITUATION_TILT_DEFAULT_DEG = 25
+export const SITUATION_DISTANCE_KM_RANGE = { min: 5, max: 400, step: 5 } as const
+export const SITUATION_BEARING_RANGE = { min: 0, max: 359, step: 1 } as const
+export const SITUATION_HEADROOM_RANGE = { min: 0, max: 30, step: 1 } as const
 
 export const START_HEIGHTS = ['region', 'pays'] as const
 /** Height of the region view of a 'situation' shot (flyover/filmCamera.ts `regionDistanceM`). */
@@ -465,7 +492,12 @@ export function isValidShot(shot: unknown): shot is FilmShot {
     (shot.startHeight === undefined || oneOf(START_HEIGHTS, shot.startHeight)) &&
     (shot.highlight === undefined || typeof shot.highlight === 'boolean') &&
     (shot.regionId === undefined || isRegionId(shot.regionId)) &&
-    (shot.holdS === undefined || within(shot.holdS, SITUATION_HOLD_RANGE.min, SITUATION_HOLD_RANGE.max))
+    (shot.holdS === undefined || within(shot.holdS, SITUATION_HOLD_RANGE.min, SITUATION_HOLD_RANGE.max)) &&
+    (shot.tiltDeg === undefined || within(shot.tiltDeg, SITUATION_TILT_RANGE.min, SITUATION_TILT_RANGE.max)) &&
+    (shot.distanceKm === undefined || within(shot.distanceKm, SITUATION_DISTANCE_KM_RANGE.min, SITUATION_DISTANCE_KM_RANGE.max)) &&
+    (shot.heading === undefined || oneOf(SITUATION_HEADINGS, shot.heading)) &&
+    (shot.bearingDeg === undefined || within(shot.bearingDeg, SITUATION_BEARING_RANGE.min, SITUATION_BEARING_RANGE.max)) &&
+    (shot.headroomPct === undefined || within(shot.headroomPct, SITUATION_HEADROOM_RANGE.min, SITUATION_HEADROOM_RANGE.max))
   )
 }
 

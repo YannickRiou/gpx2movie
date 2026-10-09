@@ -276,6 +276,32 @@ const NO_REGION: Omit<RegionState, 'key'> = { status: 'idle', region: null, fram
 
 export const useRegionStore = create<RegionState>()(() => ({ key: null, ...NO_REGION }))
 
+/** Tilt from the vertical, distance and bearing of the region view seen from the 3D camera (flyover/filmCamera.ts `situationFramingOf`). */
+export interface CapturedFraming {
+  tiltDeg: number
+  distanceKm: number
+  bearingDeg: number
+}
+type FramingCapture = (highlighted: boolean) => CapturedFraming | null
+let framingCapture: FramingCapture | null = null
+
+/**
+ * « Capturer la vue actuelle »: the scene (scene/FlyoverRig.tsx) registers how to read the framing of its camera
+ * around the target of the region view (the highlighted region's centre when `highlighted` and loaded, else the
+ * track's); returns the unregistration.
+ */
+export function registerFramingCapture(capture: FramingCapture): () => void {
+  framingCapture = capture
+  return () => {
+    if (framingCapture === capture) framingCapture = null
+  }
+}
+
+/** Framing of the 3D view as it is now, null while the scene is not there. */
+export function captureFraming(highlighted: boolean): CapturedFraming | null {
+  return framingCapture?.(highlighted) ?? null
+}
+
 let controller: AbortController | null = null
 /** `holdRegion`: an answer arriving meanwhile waits in `heldAnswer` */
 let holding = false

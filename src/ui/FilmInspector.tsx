@@ -13,7 +13,14 @@ import {
   SHOT_STYLES,
   SHOT_TRANSITIONS,
   SHOT_TRANSITION_LABELS,
+  SITUATION_BEARING_RANGE,
+  SITUATION_DISTANCE_KM_RANGE,
+  SITUATION_HEADINGS,
+  SITUATION_HEADING_LABELS,
+  SITUATION_HEADROOM_RANGE,
   SITUATION_HOLD_RANGE,
+  SITUATION_TILT_DEFAULT_DEG,
+  SITUATION_TILT_RANGE,
   START_HEIGHTS,
   START_HEIGHT_LABELS,
   STOP_CAMERAS,
@@ -23,7 +30,7 @@ import {
   shotDipColor,
   situationTiming,
 } from '../film/model'
-import type { Film, MediaLayout, MediaSync, ShotStyle, ShotTransition, StartHeight, StopCamera } from '../film/model'
+import type { Film, FilmShot, MediaLayout, MediaSync, ShotStyle, ShotTransition, StartHeight, StopCamera } from '../film/model'
 import {
   addItemCamera,
   attachToStop,
@@ -45,7 +52,7 @@ import {
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { buildTrackPath } from '../flyover/path'
-import { REGION_KIND_LABELS, candidateId, useRegionStore, type RegionStatus } from '../osm/region'
+import { REGION_KIND_LABELS, candidateId, captureFraming, useRegionStore, type RegionStatus } from '../osm/region'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
@@ -53,7 +60,7 @@ import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber, formatPercent } from './format'
 import { Icon } from './icons'
 import { FilmTextStyleFields } from './OverlayPanel'
-import { InfoTip, RangeField } from './PanelSection'
+import { InfoTip, MoreSettings, RangeField } from './PanelSection'
 import { nextGridIndex } from './shell'
 import { showToast } from './toast'
 
@@ -162,6 +169,113 @@ function SituationTimings({
         }
       />
       <p className="field__hint">Durée du plan : {seconds(durationS)}</p>
+    </InspectorGroup>
+  )
+}
+
+/**
+ * « Cadrage » of the region view of a 'situation' shot: start (end) height, distance (« Auto » at the left of its
+ * slider), tilt, heading free or north up with its bearing, « Capturer la vue actuelle »; the headroom in « Plus de
+ * réglages ». Every field left at its default keeps the automatic framing.
+ */
+function SituationFramingFields({
+  phase,
+  shot,
+  onChange,
+}: {
+  phase: 'opening' | 'closing'
+  shot: FilmShot
+  onChange(patch: Partial<FilmShot>): void
+}) {
+  const id = useId()
+  const heading = shot.heading ?? 'libre'
+  const capture = () => {
+    const framing = captureFraming(shot.highlight === true)
+    if (!framing) return void showToast({ kind: 'error', text: 'Vue 3D indisponible : rien à capturer.' })
+    onChange({ ...framing, heading: 'boussole' })
+    showToast({ kind: 'success', text: 'Cadrage repris de la vue 3D' })
+  }
+  return (
+    <InspectorGroup title="Cadrage">
+      <div className="field">
+        <label className="field__label" htmlFor={`${id}-height`}>
+          {phase === 'opening' ? 'Hauteur de départ' : 'Hauteur de fin'}
+        </label>
+        <select
+          id={`${id}-height`}
+          className="select"
+          value={shot.startHeight ?? 'region'}
+          disabled={shot.distanceKm !== undefined}
+          onChange={(e) => onChange({ startHeight: e.currentTarget.value as StartHeight })}
+        >
+          {START_HEIGHTS.map((height) => (
+            <option key={height} value={height}>
+              {START_HEIGHT_LABELS[height]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <RangeField
+        label="Distance"
+        min={0}
+        max={SITUATION_DISTANCE_KM_RANGE.max}
+        step={SITUATION_DISTANCE_KM_RANGE.step}
+        value={shot.distanceKm ?? 0}
+        format={(km) => (km === 0 ? 'Auto' : `${formatNumber(km)} km`)}
+        onChange={(km) => onChange({ distanceKm: km === 0 ? undefined : Math.max(km, SITUATION_DISTANCE_KM_RANGE.min) })}
+        tip="Distance de la caméra au centre de la vue. Tout à gauche : automatique (la région entière, ou selon la hauteur de départ)."
+      />
+      <RangeField
+        label="Inclinaison"
+        {...SITUATION_TILT_RANGE}
+        value={shot.tiltDeg ?? SITUATION_TILT_DEFAULT_DEG}
+        format={formatDegrees}
+        onChange={(tiltDeg) => onChange({ tiltDeg })}
+        wide={false}
+        tip="Écart de la caméra par rapport à la verticale : petit, la carte vue d’au-dessus ; grand, la vue rasante."
+      />
+      <div className="field">
+        <div className="field__label-row">
+          <span id={`${id}-heading`} className="field__label">
+            Cap
+          </span>
+          <InfoTip text="Libre : la vue de la région regarde dans le sens du survol, sans tourner pendant le mouvement. Boussole : le nord en haut, tourné de l’orientation." />
+        </div>
+        <div className="segmented" role="radiogroup" aria-labelledby={`${id}-heading`}>
+          {SITUATION_HEADINGS.map((h) => (
+            <label key={h} className="segmented__option">
+              <input type="radio" name={`${id}-heading`} value={h} checked={heading === h} onChange={() => onChange({ heading: h === 'libre' ? undefined : h })} />
+              {SITUATION_HEADING_LABELS[h]}
+            </label>
+          ))}
+        </div>
+      </div>
+      {heading === 'boussole' && (
+        <RangeField
+          label="Orientation"
+          {...SITUATION_BEARING_RANGE}
+          value={shot.bearingDeg ?? 0}
+          format={formatDegrees}
+          onChange={(bearingDeg) => onChange({ bearingDeg: bearingDeg === 0 ? undefined : bearingDeg })}
+          wide={false}
+          tip="Direction regardée par la caméra : 0° le nord en haut, 90° l’est en haut."
+        />
+      )}
+      <MoreSettings paths={[]}>
+        <RangeField
+          label="Marge"
+          {...SITUATION_HEADROOM_RANGE}
+          value={shot.headroomPct ?? 0}
+          format={(pct) => `${formatNumber(pct)} %`}
+          onChange={(pct) => onChange({ headroomPct: pct === 0 ? undefined : pct })}
+          wide={false}
+          tip="Place laissée au-dessus du centre de la vue (titre, ciel) : le centre descend de cette part de la hauteur de l’image."
+        />
+      </MoreSettings>
+      <button type="button" className="btn btn--secondary" onClick={capture} data-tip="Reprend l’inclinaison, la distance et l’orientation de la vue 3D actuelle (cap Boussole)">
+        <Icon name="crosshair" size={16} />
+        Capturer la vue actuelle
+      </button>
     </InspectorGroup>
   )
 }
@@ -412,23 +526,6 @@ export function FilmInspector() {
         </div>
         {shot.style === 'situation' && (
           <>
-            <div className="field">
-              <label className="field__label" htmlFor={`${id}-height`}>
-                {item === 'opening' ? 'Hauteur de départ' : 'Hauteur de fin'}
-              </label>
-              <select
-                id={`${id}-height`}
-                className="select"
-                value={shot.startHeight ?? 'region'}
-                onChange={(e) => change((f) => updateShot(f, item, { startHeight: e.currentTarget.value as StartHeight }), false)}
-              >
-                {START_HEIGHTS.map((height) => (
-                  <option key={height} value={height}>
-                    {START_HEIGHT_LABELS[height]}
-                  </option>
-                ))}
-              </select>
-            </div>
             <InspectorGroup title="Lieu">
               <label className="checkbox checkbox--switch">
                 <input
@@ -450,6 +547,7 @@ export function FilmInspector() {
               holdS={shot.holdS}
               onChange={(patch) => change((f) => updateShot(f, item, patch), false)}
             />
+            <SituationFramingFields phase={item} shot={shot} onChange={(patch) => change((f) => updateShot(f, item, patch), false)} />
           </>
         )}
         {shot.style !== 'situation' &&

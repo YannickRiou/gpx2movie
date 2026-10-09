@@ -57,7 +57,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/labelModel.ts` + `labelSources.ts` | 3D labels | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`…; `setLabelSource(id, labels)` (prefixed, unique ids), `useLabelSources` |
 | `src/flyover/pacing.ts` | flyover pacing | `buildPacing({ track, durationS, settings, landmarks })` → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance`; `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses given by the film); `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
 | `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha`, `START_HEIGHTS`, `START_HEIGHT_LABELS`, `highlightsRegion`; `autoStops`, `stopCandidates`, `materializeStops`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `attachToStop`, `followStops`, `edgeScrollSpeed`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
-| `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `regionDistanceM`, `regionHighlightOpacity`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
+| `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)`, `overviewView`, `regionView`, `situationTarget`, `situationFramingOf`, `regionDistanceM`, `regionHighlightOpacity`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | sun date, sunrise / sunset | `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | track colored by a metric | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (label, unit, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposure under the atmosphere | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
@@ -563,7 +563,9 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   `'fondu-noir'`, `'fondu-blanc'`, `dipS` 0.3–2 s, 1 s by default: optional, an old film stays continuous;
   `startHeight` `'region'` (default) or `'pays'`, `highlight` (default off) and `regionId` (« Lieu », OSM area
   `relation/<id>` or `way/<id>`, absent = automatic) and `holdS` (« Maintien », 0–10 s, `SITUATION_HOLD_RANGE`,
-  absent = 0) for a `situation` shot, see below);
+  absent = 0) and its framing, `tiltDeg` (1–60°), `distanceKm` (5–400 km), `heading` (`'libre'` / `'boussole'`),
+  `bearingDeg` (0–359°), `headroomPct` (0–30 %), all absent by default (`SituationFraming`) for a `situation` shot,
+  see below);
   `autoStops` (generated stops) and `autoMode`: `'temps-forts'` (default for new projects) or `'rythme'` (earlier
   projects);
   `stops[]` `{ id, atM, durationS (0.5–60 s), camera: 'film' | 'orbite' | 'large' | 'fixe', label?, source?: { kind, ref? } }`
@@ -658,7 +660,19 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   is spent still on the region view (`situationTiming`: hold + move = duration, so the clock and the timeline keep
   reading `durationS`; a move made longer than 30 s in all shortens the hold), the smootherstep move takes the rest
   (`shotBlend(…, holdS)`). Without a hold (every film saved before), the move takes the whole shot: exactly the
-  curve of before. The camera far plane (5,000 km) limits nothing; seen from above,
+  curve of before. **Framing** (« Cadrage », `regionView(…, { framing })`, pure): « Inclinaison » `tiltDeg` from the
+  vertical (default 25°, `SITUATION_TILT_DEFAULT_DEG`, = `REGION_PITCH_DEG` 65° above the horizon); « Distance »
+  `distanceKm` used as is instead of the automatic distance (« Auto » at the left of the slider; no « Pays » or
+  portrait factor, « Hauteur » greyed out), still within the reach of the terrain for that tilt and never nearer
+  than the overview; « Cap » « Libre » (the overview's side, as before) or « Boussole » (looking toward
+  `bearingDeg`, « Orientation », 0° = north up: camera on the opposite side of the target); « Marge » (`headroomPct`,
+  in « Plus de réglages »): view and target moved up along the frame's vertical by 2 · h · distance · tan(25°), so the
+  target sits h of the frame height below the middle. « Capturer la vue actuelle »: `FlyoverRig` registers
+  (`registerFramingCapture`, `src/osm/region.ts`, so the UI does not import three.js) a reader of its camera around
+  `situationTarget` (region centre when the shot highlights and it is loaded, else the track's), and
+  `situationFramingOf` turns it into tilt, distance and bearing, rounded and clamped (heading set to « Boussole »).
+  A compass bearing opposite to the flight's direction makes the camera turn quickly during the push-in (directions
+  are nlerped, as for every shot). The camera far plane (5,000 km) limits nothing; seen from above,
   the engine picks coarse tiles (loading in time: `docs/tests-gpu.md`). **Region highlight** ("Mettre en avant la
   région" (highlight the region) in the shot inspector, under "Hauteur de départ" (start height), "Hauteur de fin" for
   the closing; `highlight`, off by default: no Overpass request and an unchanged framing for every film saved before,

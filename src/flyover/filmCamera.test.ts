@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { buildFilmClock } from '../film/clock'
 import type { FilmClockInput } from '../film/clock'
-import type { FilmCameraKey, FilmShot, FilmStop } from '../film/model'
+import type { FilmCameraKey, FilmShot, FilmStop, SituationFraming } from '../film/model'
 import { situationTiming } from '../film/model'
 import { createLocalFrame } from '../geo/ellipsoid'
 import { buildTrack } from '../import/stats'
@@ -35,6 +35,7 @@ import {
   regionView,
   shotBlend,
   shotWeight,
+  situationFramingOf,
   smootherstep,
   stopOrbitRad,
   STOP_WIDE_DISTANCE_FACTOR,
@@ -294,6 +295,61 @@ describe('situation timing', () => {
     expect(shotBlend('situation', 'opening', 5, 5, 9)).toBe(1)
     expect(situationTiming({ durationS: 9, holdS: 3 })).toEqual({ holdS: 3, moveS: 6 })
     expect(situationTiming({ durationS: 9 })).toEqual({ holdS: 0, moveS: 9 })
+  })
+})
+
+describe('situation framing', () => {
+  const joined = flightAt(0, 0)
+  const view = (framing: SituationFraming) => regionView(path, frame, flat, 1, 16 / 9, joined, { framing })
+  const back = (v: { position: Vector3; target: Vector3 }) => v.position.clone().sub(v.target)
+
+  it('no field set: the automatic framing', () => {
+    expectSameView(view({}), regionView(path, frame, flat, 1, 16 / 9, joined), 1e-9)
+    expectSameView(view({ heading: 'libre' }), view({}), 1e-9)
+  })
+
+  it('tilt from the vertical, distance as chosen, compass bearing', () => {
+    const v = view({ tiltDeg: 10, distanceKm: 30, heading: 'boussole', bearingDeg: 0 })
+    const b = back(v)
+    expect(b.length()).toBeCloseTo(30_000, 3)
+    expect((Math.acos(b.y / b.length()) * 180) / Math.PI).toBeCloseTo(10, 6)
+    // north up: the camera south of its target (+Z south), looking north
+    expect(b.x).toBeCloseTo(0, 6)
+    expect(b.z).toBeGreaterThan(0)
+    // 90°: looking east, from the west
+    const east = back(view({ heading: 'boussole', bearingDeg: 90 }))
+    expect(east.x).toBeLessThan(0)
+    expect(east.z).toBeCloseTo(0, 6)
+    // the chosen distance stays within the reach of the terrain and above the overview
+    const steep = back(view({ tiltDeg: 60, distanceKm: 400 })).length()
+    expect(steep * groundReach(30, 16 / 9)).toBeCloseTo(REGION_REACH_M, -2)
+    expect(back(view({ distanceKm: 5 })).length()).toBeCloseTo(overviewDistanceM(path.lengthM, 16 / 9), -1)
+  })
+
+  it('headroom: the target of the automatic view sits that share of the frame height below the middle', () => {
+    const plain = view({ heading: 'boussole', bearingDeg: 30 })
+    const v = view({ heading: 'boussole', bearingDeg: 30, headroomPct: 20 })
+    const camera = new PerspectiveCamera(50, 16 / 9)
+    camera.position.copy(v.position)
+    camera.lookAt(v.target)
+    camera.updateMatrixWorld()
+    const ndc = plain.target.clone().project(camera)
+    expect(ndc.x).toBeCloseTo(0, 6)
+    expect(ndc.y).toBeCloseTo(-0.4, 6)
+  })
+
+  it('captured from a view: tilt, distance and bearing back', () => {
+    const v = view({ tiltDeg: 30, distanceKm: 40, heading: 'boussole', bearingDeg: 120 })
+    expect(situationFramingOf(v.position, v.target)).toEqual({ tiltDeg: 30, distanceKm: 40, bearingDeg: 120 })
+    // straight above: tilt at its minimum; far: distance at its maximum
+    const above = situationFramingOf(new Vector3(0, 1e6, 0), new Vector3())
+    expect(above).toMatchObject({ tiltDeg: 1, distanceKm: 400 })
+  })
+
+  it('the film view frames the shot’s region view', () => {
+    const shot = { style: 'situation', durationS: 8, tiltDeg: 20, heading: 'boussole', bearingDeg: 45 } as const
+    const clock = clockOf(shot, { style: 'aucune', durationS: 5 })
+    expectSameView(computeFilmView(path, clock, 0, 0, frame, flat, options), view(shot))
   })
 })
 

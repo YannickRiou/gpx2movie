@@ -19,7 +19,7 @@ import {
   situationTiming,
   transitionDipAt,
 } from './model'
-import type { Film, FilmAudio, FilmCameraKey, FilmMedia, FilmSpeed, FilmStop, FilmText } from './model'
+import type { Film, FilmAudio, FilmCameraKey, FilmMedia, FilmShot, FilmSpeed, FilmStop, FilmText } from './model'
 
 const stop = (id: string, patch: Partial<FilmStop> = {}): FilmStop => ({ id, atM: 1000, durationS: 3, camera: 'orbite', ...patch })
 const text = (id: string, patch: Partial<FilmText> = {}): FilmText => ({
@@ -114,6 +114,22 @@ describe('film model', () => {
     }
     expect(situationTiming({ durationS: 9 })).toEqual({ holdS: 0, moveS: 9 })
     expect(situationTiming({ durationS: 4, holdS: 6 })).toEqual({ holdS: 4, moveS: 0 })
+  })
+
+  it('region shot: framing optional (automatic by default), each field within its range', () => {
+    const framed = { style: 'situation', durationS: 9, tiltDeg: 10, distanceKm: 35, heading: 'boussole', bearingDeg: 0, headroomPct: 10 } as const
+    expect(isValidFilm(film({ opening: framed }))).toBe(true)
+    const bad: Partial<FilmShot>[] = [
+      { tiltDeg: 0 },
+      { tiltDeg: 75 },
+      { distanceKm: 2 },
+      { distanceKm: 500 },
+      { heading: 'nord' as never },
+      { bearingDeg: 360 },
+      { headroomPct: -5 },
+      { headroomPct: 50 },
+    ]
+    for (const patch of bad) expect(isValidFilm(film({ opening: { ...framed, ...patch } }))).toBe(false)
   })
 
   it('dip curve: 0 outside its window, symmetric, 1 at the cut', () => {

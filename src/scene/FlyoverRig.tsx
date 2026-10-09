@@ -12,12 +12,12 @@
  * view that moves with time (shots, orbiting stops, time-based styles: export) or the camera and film settings
  * change while paused (timeline scrubbing, camera panel); otherwise the user orbits freely around the marker.
  */
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { Sprite, Vector3 } from 'three'
-import { computeFilmView, filmViewMovesWithTime } from '../flyover/filmCamera'
+import { computeFilmView, filmViewMovesWithTime, situationFramingOf, situationTarget } from '../flyover/filmCamera'
 import { smoothedTrackPath } from '../flyover/smooth'
-import { useRegionStore } from '../osm/region'
+import { registerFramingCapture, useRegionStore } from '../osm/region'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
 import { frameDelta } from './renderOnDemand'
@@ -59,6 +59,18 @@ export function FlyoverRig() {
   })
   const appliedSettingsRef = useRef(mountSettings)
   const appliedRegionRef = useRef(useRegionStore.getState().frame)
+  const camera = useThree((s) => s.camera)
+
+  // « Capturer la vue actuelle »: the framing of this camera around the target of the region view
+  useEffect(() => {
+    if (!path || path.count === 0 || !frame) return
+    return registerFramingCapture((highlighted) => {
+      const sampler: HeightSampler | null = engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null
+      const { exaggeration } = useAppStore.getState().settings
+      const region = highlighted ? useRegionStore.getState().frame : null
+      return situationFramingOf(camera.position, situationTarget(path, frame, sampler, exaggeration, region))
+    })
+  }, [path, frame, engine, camera])
 
   useFrame(({ camera, size, gl }, delta) => {
     const store = useAppStore.getState()
