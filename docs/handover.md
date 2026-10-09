@@ -134,8 +134,8 @@ features included), `npm run build`,
   alpha checked with ffprobe and a decoded frame in the container, not tried in an editor (`docs/tests-gpu.md`).
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
-  list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept); "Texte libre" drawn like a
-  timeline text (behaviour change, needs the user's OK).
+  list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn
+  like a timeline text.
 
 ## Work merged from `lot-suites`
 
