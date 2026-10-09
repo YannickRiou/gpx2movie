@@ -340,21 +340,29 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    - **framing of the situation view**: tilt, distance (km), heading free or north up (« Boussole »), bearing,
      headroom, and « Capturer la vue actuelle » to set it from the 3D view;
    - **sun moving during the shot** (« Faire bouger le soleil »: time of day animated over the opening).
-7. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
-8. Extensions not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
+7. **Several tracks: « À la suite » or « En parallèle »** (user's request; MapDirector always puts imported GPX one
+   after the other). Today: the first track is flown, the others are only drawn; « Enchaîner en un seul parcours »
+   merges them into one track (sequence, but the stages lose their own colour, name and stats); « Course fantôme »
+   replays them together (sync by elapsed time, clock time or distance, leaderboard, camera on the first track).
+   Proposed: one « Plusieurs traces » choice — « À la suite » without merging (each stage keeps its colour, name and
+   figures; timeline segments per stage, stage cards and transitions between them) and « En parallèle » as a
+   generalised ghost race (camera on the lead, on a chosen track or framing all of them; leaderboard optional;
+   same sync modes).
+8. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
+9. Extensions not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
    Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop.
-9. Commit `32a3818` message mentions the `CLAUDE.md` file name; `CLAUDE.md` and `.claude/` are in the repository
+10. Commit `32a3818` message mentions the `CLAUDE.md` file name; `CLAUDE.md` and `.claude/` are in the repository
    (configuration files). Rewriting history or removing them only on the user's request.
 
 **In the user's hands**
-10. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
+11. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
    steady camera, free camera, start / finish pins, export.
-11. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
+12. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
    remove them; delete the old branches (`lot-suites`, `landmarks-hide`, `track-style`, `ui-polish`,
    `timeline-polish`, `export-stream`, `timeline-videos`, `water`): the session cannot delete remote branches.
-12. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
+13. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
    application); signing certificates if wanted; then a first `v0.1.0` tag (release published by `desktop.yml`).
-13. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+14. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.
