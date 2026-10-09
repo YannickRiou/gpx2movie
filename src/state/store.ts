@@ -125,6 +125,8 @@ export interface AppState {
   setTrackColor(id: string, color: string): void
   /** the track flown over (the first one): `id` moved first, playback back to the start */
   flyTrack(id: string): void
+  /** `id` moved to `index` in the list (« À la suite »: the order of the stages), playback back to the start */
+  moveTrack(id: string, index: number): void
   /** union of track bounds, null when no track */
   bounds: LonLatBounds | null
   /** fixed when the first track is added (its centroid rounded to 0.01°), null when cleared; the 3D local frame origin */
@@ -305,6 +307,16 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const track = state.tracks.find((t) => t.id === id)
     if (!track || state.tracks[0] === track) return
     state.replaceTracks([track, ...state.tracks.filter((t) => t !== track)])
+  },
+
+  moveTrack(id, index) {
+    const state = get()
+    const from = state.tracks.findIndex((t) => t.id === id)
+    const to = Math.min(state.tracks.length - 1, Math.max(0, index))
+    if (from < 0 || from === to) return
+    const tracks = [...state.tracks]
+    tracks.splice(to, 0, ...tracks.splice(from, 1))
+    state.replaceTracks(tracks)
   },
 
   clearTracks() {

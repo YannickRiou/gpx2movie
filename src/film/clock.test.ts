@@ -86,6 +86,16 @@ describe('film clock — phases', () => {
   })
 })
 
+describe('film clock — cuts between stages « À la suite »', () => {
+  it('places each cut at the film time the marker reaches it, none without a track', () => {
+    const clock = clockOf({ cutsM: [6000, 2500] })
+    expect(clock.cuts.map((c) => c.atM)).toEqual([2500, 6000])
+    for (const cut of clock.cuts) expect(cut.timeS).toBeCloseTo(clock.timeAtProgress(cut.atM / L), 9)
+    expect(clockOf({}).cuts).toEqual([])
+    expect(clockOf({ cutsM: [2500], lengthM: 0 }).cuts).toEqual([])
+  })
+})
+
 describe('film clock — speed portions', () => {
   const speeds = [{ id: 'speed-1', fromM: 6000, toM: 8000, factor: 0.5 }, { id: 'speed-2', fromM: 1000, toM: 3000, factor: 2 }]
   const clock = clockOf({ speeds, stops: [stop('a', 2000, 2)] })

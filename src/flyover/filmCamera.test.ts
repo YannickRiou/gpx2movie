@@ -14,10 +14,13 @@ import {
   cameraKeyEaseM,
   computeFilmView,
   filmViewMovesWithTime,
+  framedGroup,
+  GROUP_FRAMING_MARGIN,
   groundReach,
   heldMotionTimeS,
   JUMP_S,
   keyedCamera,
+  markerAt,
   OVERVIEW_DISTANCE_FACTOR,
   OVERVIEW_PITCH_DEG,
   overviewDistanceM,
@@ -429,6 +432,47 @@ describe('computeFilmView', () => {
     expect(filmViewMovesWithTime(clock.stateAt(fixed.holdStartS), { ...unsmoothed('chase'), endingS: 2 })).toBe(true)
     expect(filmViewMovesWithTime(clock.stateAt(fixed.holdStartS), unsmoothed('orbit'))).toBe(true)
     expect(filmViewMovesWithTime(clock.stateAt(40), { ...DEFAULT_CAMERA, style: 'sway' })).toBe(false)
+  })
+})
+
+describe('computeFilmView — several tracks (follow)', () => {
+  const clock = clockOf({ style: 'descente', durationS: 6 }, { style: 'aucune', durationS: 1 })
+  /** ~2.2 km straight north, 2 km east of `path` */
+  const other = buildTrackPath(
+    buildTrack({
+      name: 'o',
+      source: 'gpx',
+      segments: [{ points: [{ lon: 6.876, lat: 45.88, ele: 1000 }, { lon: 6.876, lat: 45.9, ele: 1000 }] }],
+    }),
+  )
+
+  it('flies the path the follow gives, the marker with it (a stage) or left on the film track (a racer)', () => {
+    const t = clock.openingS + 10
+    const stage = computeFilmView(path, clock, t, 0.3, frame, flat, { ...options, follow: () => ({ path: other, progress: 0.6 }) })
+    const own = computeCameraView(other, 0.6, frame, flat, { ...options, timeS: 10 })
+    expectSameView(stage, own)
+    expect(stage.marker.distanceTo(own.marker)).toBeLessThan(1e-9)
+    const racer = computeFilmView(path, clock, t, 0.3, frame, flat, { ...options, follow: () => ({ path: other, progress: 0.6, markerOnFilm: true }) })
+    expectSameView(racer, own)
+    expect(racer.marker.distanceTo(markerAt(path, 0.3, frame, flat, 1, 3))).toBeLessThan(1e-9)
+    // the opening still starts on the overview of the film track, from the side of the followed view
+    const start = computeFilmView(path, clock, 0, 0, frame, flat, { ...options, follow: () => ({ path: other, progress: 0 }) })
+    expectSameView(start, overviewView(path, frame, flat, 1, 16 / 9, computeCameraView(other, 0, frame, flat, { ...options, timeS: 0 })))
+  })
+
+  it('frames a group: centred on it, far enough for its spread, never nearer than the flight view', () => {
+    const view = flightAt(0.5, 10)
+    const near = [
+      { lon: 6.85, lat: 45.9 },
+      { lon: 6.8501, lat: 45.9 },
+    ]
+    const close = framedGroup(view, near, frame, flat, 1, 16 / 9)
+    expect(close.position.distanceTo(close.target)).toBeCloseTo(view.position.distanceTo(view.target), 6)
+    const far = framedGroup(view, [{ lon: 6.8, lat: 45.9 }, { lon: 6.9, lat: 45.9 }], frame, flat, 1, 16 / 9)
+    const spread = frame.toLocal(6.9, 45.9, 1000).distanceTo(frame.toLocal(6.8, 45.9, 1000)) / 2
+    expect(far.target.distanceTo(frame.toLocal(6.85, 45.9, 1000))).toBeLessThan(50)
+    expect(far.position.distanceTo(far.target)).toBeGreaterThan(spread * GROUP_FRAMING_MARGIN)
+    expect(framedGroup(view, near.slice(0, 1), frame, flat, 1, 16 / 9)).toBe(view)
   })
 })
 

@@ -28,7 +28,7 @@ import type { FilmShot, ShotStyle, SituationFraming, StartHeight } from '../film
 import type { HeightSampler } from '../scene/TrackLines'
 import { MIN_GROUND_CLEARANCE_M, computeCameraView, movesWithTime, type CameraView, type CameraViewOptions } from './camera'
 import { DEFAULT_CAMERA, DEFAULT_FLYOVER_DURATION_S, type CameraSettings } from './cameraSettings'
-import type { TrackPath } from './path'
+import { samplePath, type TrackPath } from './path'
 import { cameraKeyEaseM, keyedCamera } from './cameraKeys'
 import { smoothsInTime, timeSmoothing } from './timeSmoothing'
 
@@ -71,6 +71,8 @@ export const STOP_ORBIT_MAX_DEG = 120
 /** 'large' stop: at the middle of its window, the camera is this much farther and this much higher (degrees of pitch). */
 export const STOP_WIDE_DISTANCE_FACTOR = 2.5
 export const STOP_WIDE_PITCH_DEG = 20
+/** Racers framed together (« Toutes les traces »): their spread around their centre × this fills half the frame height. */
+export const GROUP_FRAMING_MARGIN = 1.4
 const DEG = Math.PI / 180
 const UP = new Vector3(0, 1, 0)
 
@@ -432,15 +434,57 @@ export function blendViews(
   return { target, position: keepAboveGround(position, frame, sample, exaggeration) }
 }
 
+/** Marker position on the draped track at `progress` (as `computeCameraView` places it). */
+export function markerAt(path: TrackPath, progress: number, frame: LocalFrame, sample: HeightSampler | null, exaggeration: number, liftM: number): Vector3 {
+  const at = samplePath(path, clamp(progress, 0, 1) * path.lengthM)
+  return frame.toLocal(at.lon, at.lat, (sample?.(at.lon, at.lat) ?? at.ele ?? 0) * exaggeration + liftM)
+}
+
+/**
+ * `view` moved to the centre of the `group` positions (on the ground), from the same direction, far enough for their
+ * spread to fit the frame (GROUP_FRAMING_MARGIN) and never nearer than `view`: continuous as the racers move.
+ */
+export function framedGroup(
+  view: CameraView,
+  group: readonly { lon: number; lat: number; ele?: number }[],
+  frame: LocalFrame,
+  sample: HeightSampler | null,
+  exaggeration: number,
+  aspect: number,
+): CameraView {
+  if (group.length < 2) return view
+  const points = group.map((g) => frame.toLocal(g.lon, g.lat, (sample?.(g.lon, g.lat) ?? g.ele ?? 0) * exaggeration))
+  const target = points.reduce((sum, p) => sum.add(p), new Vector3()).divideScalar(points.length)
+  const spread = Math.max(...points.map((p) => Math.hypot(p.x - target.x, p.z - target.z)))
+  const back = view.position.clone().sub(view.target)
+  const fit = (GROUP_FRAMING_MARGIN * spread * portraitFactor(aspect)) / Math.tan((CAMERA_FOV_DEG / 2) * DEG)
+  const distance = Math.max(back.length(), fit)
+  if (back.lengthSq() < 1e-12) back.copy(UP)
+  const position = target.clone().addScaledVector(back.normalize(), distance)
+  return { target, position: keepAboveGround(position, frame, sample, exaggeration) }
+}
+
 // ---------------------------------------------------------------------------
 // Film view
 // ---------------------------------------------------------------------------
+
+/** What the flight camera flies instead of the film track at a progress (several tracks, `flyover/follow.ts`). */
+export interface FollowedFlight {
+  path: TrackPath
+  progress: number
+  /** the film's marker stays on the film track (a ghost racer is followed); else it is on `path` (a stage) */
+  markerOnFilm?: boolean
+  /** positions the camera frames together (« Toutes les traces ») */
+  group?: readonly { lon: number; lat: number; ele?: number }[]
+}
 
 export interface FilmViewOptions extends Omit<CameraViewOptions, 'timeS' | 'orbitRad'> {
   /** width / height of the frame (overview framing) */
   aspect: number
   /** administrative region of the outing, framed by a 'situation' shot that highlights it (osm/region.ts) */
   region?: RegionFrame | null
+  /** what the flight camera follows at a film progress (null or absent: the film track itself) */
+  follow?: ((progress: number) => FollowedFlight | null) | null
 }
 
 export interface FilmView extends CameraView {
@@ -452,7 +496,10 @@ export interface FilmView extends CameraView {
  * Camera at film time `timeS` and `progress` (the store's: the export nudges it to re-place the camera). The
  * time-based flight styles follow the flight time, so they start where the opening hands over. The camera keys
  * set the framing along the track, a stop's camera adds its own move. The aim and the camera follow the progress
- * smoothed in film time (`timeSmoothing.ts`; the camera keys and the stops keep the marker's progress and time).
+ * smoothed in film time (`timeSmoothing.ts`; the camera keys and the stops keep the marker's progress and time). With
+ * several tracks, the flight camera flies what `options.follow` gives (a stage, a ghost racer, the racers together);
+ * the shots still frame the film track. The smoothed progresses are carried along the followed path only while it is
+ * the same one (never averaged across a stage cut or a change of leader).
  */
 export function computeFilmView(
   path: TrackPath,
@@ -464,7 +511,7 @@ export function computeFilmView(
   options: FilmViewOptions,
 ): FilmView {
   const state = clock.stateAt(timeS)
-  const { aspect, region, ...flightOptions } = options
+  const { aspect, region, follow, ...flightOptions } = options
   const stop = state.stop
   const easeM = cameraKeyEaseM(path.lengthM, options.durationS ?? DEFAULT_FLYOVER_DURATION_S)
   const keyed = keyedCamera(options.camera ?? DEFAULT_CAMERA, clock.cameraKeys, progress * path.lengthM, easeM)
@@ -472,7 +519,25 @@ export function computeFilmView(
   const orbitRad = stop?.camera === 'orbite' ? stopOrbitRad(stop.addedS, state.localS, state.lengthS) : 0
   const motionS = stop?.camera === 'fixe' ? heldMotionTimeS(stop, state.timeS) - clock.openingS : state.flightTimeS
   const smoothing = timeSmoothing(clock, state.timeS, motionS, camera)
-  const flight = computeCameraView(path, progress, frame, sample, { ...flightOptions, camera, orbitRad, ...smoothing })
+  const followed = follow?.(progress) ?? null
+  const flightPath = followed?.path ?? path
+  // a smoothed progress on the followed path, dropped when it falls on another stage or racer
+  const along = (p: number | undefined) => {
+    if (p === undefined || !followed) return p
+    const other = follow?.(p)
+    return other && other.path === followed.path ? other.progress : undefined
+  }
+  const flown = computeCameraView(flightPath, followed?.progress ?? progress, frame, sample, {
+    ...flightOptions,
+    camera,
+    orbitRad,
+    ...smoothing,
+    aimProgress: along(smoothing.aimProgress),
+    cameraProgress: along(smoothing.cameraProgress),
+  })
+  const marker = followed?.markerOnFilm ? markerAt(path, progress, frame, sample, options.exaggeration, options.liftM) : flown.marker
+  const framed = followed?.group ? framedGroup(flown, followed.group, frame, sample, options.exaggeration, aspect) : flown
+  const flight = followed ? { ...framed, marker } : flown
   if (state.phase !== 'opening' && state.phase !== 'closing') return flight
 
   const shot = state.phase === 'opening' ? clock.opening : clock.closing

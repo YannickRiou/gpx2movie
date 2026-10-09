@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import type { Track } from '../core/types'
 import { isExportBusy, useExportStore } from '../export/store'
 import { useMusicPreview } from '../film/audio'
 import { getMediaBitmaps, mediaToLoad } from '../film/media'
@@ -7,34 +6,35 @@ import { shotDipColor } from '../film/model'
 import type { FilmMedia } from '../film/model'
 import { clipRateAt } from '../film/timeline'
 import { getPreviewVideos } from '../film/video'
+import { playsInSequence } from '../flyover/sequence'
 import { useRegionStore } from '../osm/region'
 import { useLandmarkStore, useWaterStore } from '../osm/store'
 import { useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
-import type { WeatherSeries } from '../weather/series'
 import { loadLogo, loadOverlayFonts } from './assets'
-import { overlayFrameAt, prepareOverlayTrack } from './data'
-import type { OverlayTrack } from './data'
+import { overlayFilmFrameAt } from './data'
 import { drawOverlay, overlayTime } from './draw'
 import type { OverlayAssets } from './draw'
-import { overlayExtras, photoAssets } from './exportOverlay'
+import { createOverlayFilmCache, overlayExtras, photoAssets } from './exportOverlay'
 
 /**
  * Preview of the film overlay: a 2D canvas stacked over the 3D view, redrawn by `drawOverlay` on the next
- * animation frame after the progress or film time, the settings, the film clock, the first track, its weather,
+ * animation frame after the progress or film time, the settings, the film clock, the film track, its weather,
  * the landmarks, a decoded photo, a video frame or the view size change (store subscriptions, no React render per
  * frame). Video clips are video elements playing along during the playback, seeked to the film time when scrubbing
  * (none during an export, which decodes its own frames); their sound is heard while playing at ×1, unless the
  * timeline's speaker button cuts the sound of the preview. Rendered while the overlay or the source credits are
- * enabled, or the film has photos, clips or a dip to black or white between its shots and the flight.
+ * enabled, or the film has photos, clips, a dip to black or white between its shots and the flight, or stages
+ * « À la suite » (their cards and dips).
  */
 export function OverlayCanvas() {
   const enabled = useAppStore(
     (s) => {
       const { overlay, film } = s.settings
       const dips = shotDipColor(film.opening) !== null || shotDipColor(film.closing) !== null
-      return (overlay.enabled || overlay.credits.enabled || film.media.length > 0 || dips) && s.tracks.length > 0
+      const stages = playsInSequence(s.settings.race, s.tracks.length)
+      return (overlay.enabled || overlay.credits.enabled || film.media.length > 0 || dips || stages) && s.tracks.length > 0
     },
   )
   return enabled ? <OverlayPreview /> : null
@@ -60,9 +60,7 @@ function OverlayPreview() {
     let raf = 0
     let disposed = false
     let fontsReady = false
-    let track: Track | undefined
-    let series: WeatherSeries | null = null
-    let data: OverlayTrack | null = null
+    const film = createOverlayFilmCache()
     let logoSource = ''
     let assets: OverlayAssets = {}
     const bitmaps = getMediaBitmaps()
@@ -84,15 +82,10 @@ function OverlayPreview() {
       ctx.setTransform(1, 0, 0, 1, 0, 0)
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       // first frame only once the fonts are there: no flash of fallback faces
-      if (!fontsReady || !tracks[0] || width === 0 || height === 0) return
+      const data = tracks.length > 0 ? film() : null
+      if (!fontsReady || !data || width === 0 || height === 0) return
 
-      const weather = useWeatherStore.getState().series
-      if (tracks[0] !== track || weather !== series || !data) {
-        track = tracks[0]
-        series = weather
-        data = prepareOverlayTrack(track, weather)
-      }
-      const frame = overlayFrameAt(data, playback.progress)
+      const frame = overlayFilmFrameAt(data, playback.progress)
       if (overlay.logo.image !== logoSource) {
         const source = overlay.logo.image
         logoSource = source
@@ -114,7 +107,7 @@ function OverlayPreview() {
       const sound = { ...playback, muted: useMusicPreview.getState().muted }
       const video = isExportBusy(useExportStore.getState().phase)
         ? undefined
-        : (item: FilmMedia, clipS: number) => videos.frame(item, clipS, sound, data ? clipRateAt(item, data.path, clockRef.current, time.timeS) : 1)
+        : (item: FilmMedia, clipS: number) => videos.frame(item, clipS, sound, clipRateAt(item, data.whole.path, clockRef.current, time.timeS))
       drawOverlay(ctx, frame, overlay, { width, height }, { ...assets, ...photoAssets(), video }, overlayExtras(time, playback.progress))
       // clips not drawn by this frame are paused
       videos.settle()

@@ -525,7 +525,7 @@ export function OverlayPanel() {
                 <p className="field__hint">
                   {raceOn
                     ? 'Rang, nom et écart au premier de chaque trace, au marqueur.'
-                    : 'Visible quand la course fantôme est activée (onglet Trace).'}
+                    : 'Visible quand les traces sont rejouées « En parallèle » (onglet Trace, « Plusieurs traces »).'}
                 </p>
               </WidgetGroup>
             )}

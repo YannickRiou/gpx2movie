@@ -23,7 +23,7 @@ import { buildTrackPath, pickProjectedPath, samplePath } from '../flyover/path'
 import { useAppStore } from '../state/store'
 import { useTerrainContext } from './TerrainLayer'
 import { LINE_LIFT_M } from './TrackLines'
-import { editFilm, getFilmSource, useFilmClock } from './usePacing'
+import { editFilm, getFilmSource, useFilmClock, useFilmTrack } from './usePacing'
 
 /** Pointer distance to the line that still picks it (CSS pixels). */
 const PICK_RADIUS_PX = 12
@@ -53,7 +53,7 @@ export function TrackPicker() {
   const camera = useThree((s) => s.camera)
   const canvas = useThree((s) => s.gl.domElement)
   const { engine, frame } = useTerrainContext()
-  const track = useAppStore((s) => s.tracks[0])
+  const track = useFilmTrack()
   const exaggeration = useAppStore((s) => s.settings.exaggeration)
   const clock = useFilmClock()
   const clockRef = useRef(clock)

@@ -70,6 +70,28 @@ describe('createOverlayDrawer', () => {
     drawer.dispose()
   })
 
+  it('« À la suite »: each stage’s own figures, its card and the dip of its cut', () => {
+    const other = buildTrack({ name: 'u', source: 'gpx', segments: [{ points: points.map((p) => ({ ...p, lat: p.lat + 0.01 })) }] })
+    useAppStore.getState().addTracks([track, other])
+    const { settings, setSetting } = useAppStore.getState()
+    setSetting('race', { ...settings.race, sequence: true })
+    const drawer = createOverlayDrawer()
+    // the cut about halfway (two stages of nearly the same length), at film time 5
+    const time = (timeS: number) => ({ timeS, openingS: 0, flightS: 10, totalS: 10, cutsS: [5] })
+    drawer.draw(ctx, { progress: 0.75, time: time(7.5) }, 1920, 1080)
+    const [, frame, , , , extras] = vi.mocked(drawOverlay).mock.lastCall!
+    expect(frame.progress).toBeCloseTo(0.5, 3)
+    expect(frame.track.name).toBe('t → u')
+    expect(extras?.stage).toMatchObject({ name: 'u', index: 1, count: 2, startS: 5 })
+    expect(extras?.dip).toBeNull()
+    drawer.draw(ctx, { progress: 0.5, time: time(5) }, 1920, 1080)
+    expect(vi.mocked(drawOverlay).mock.lastCall?.[5]?.dip).toEqual({ color: 'black', alpha: 1 })
+    setSetting('race', { ...settings.race, sequence: true, stageTransition: 'coupe', stageCards: false })
+    drawer.draw(ctx, { progress: 0.5, time: time(5) }, 1920, 1080)
+    expect(vi.mocked(drawOverlay).mock.lastCall?.[5]).toMatchObject({ dip: null, stage: null })
+    drawer.dispose()
+  })
+
   it('stops following the store once disposed', () => {
     const drawer = createOverlayDrawer()
     drawer.dispose()

@@ -14,7 +14,7 @@ import { addCameraKey, updateShot } from '../film/timeline'
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { PACING_RANGES } from '../flyover/pacing'
 import type { PacingSettings } from '../flyover/pacing'
-import { editFilm, setFlightTiming, useFilmClock } from '../scene/usePacing'
+import { editFilm, setFlightTiming, useFilmClock, useFilmTrack } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber, formatPercent, formatSecondsShort } from './format'
 import { Icon } from './icons'
@@ -174,7 +174,7 @@ export function CameraPanel() {
   const preset = findCameraPreset(camera)
   const update = (patch: Partial<CameraSettings>) => setSetting('camera', { ...camera, ...patch })
   const updatePacing = (patch: Partial<PacingSettings>) => setFlightTiming({ pacing: { ...pacing, ...patch } })
-  const lengthM = useAppStore((s) => s.tracks[0]?.stats.distanceM ?? 0)
+  const lengthM = useFilmTrack()?.stats.distanceM ?? 0
   /** a camera key at the marker with the framing seen there (one undo step, selected for the inspector) */
   const keepFraming = () => {
     const atM = useAppStore.getState().playback.progress * lengthM

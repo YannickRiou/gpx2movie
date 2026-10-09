@@ -46,7 +46,7 @@ import {
   type ScreenRect,
 } from './labelModel'
 import { externalLabels, useLabelSources } from './labelSources'
-import { useFilmClock } from './usePacing'
+import { useFilmClock, useFilmTrack } from './usePacing'
 import { useTerrainContext } from './TerrainLayer'
 import { wakeScene } from './renderOnDemand'
 import {
@@ -275,6 +275,8 @@ function updateLabelSet(
 
 export function Labels() {
   const tracks = useAppStore((s) => s.tracks)
+  // climbs and kilometres along the film: the first track, or the tracks « À la suite »
+  const filmTrack = useFilmTrack()
   const show = useAppStore((s) => s.settings.labels)
   const exaggeration = useAppStore((s) => s.settings.exaggeration)
   const pois = useAppStore((s) => s.settings.film.pois)
@@ -291,16 +293,18 @@ export function Labels() {
 
   const labels = useMemo(() => {
     const out: LandmarkLabel[] = []
-    const first = tracks[0]
+    const first = filmTrack
     if (show.climbs && first) out.push(...climbLabels(first, climbsOf(first)))
     if (show.waypoints) out.push(...waypointLabels(tracks))
     if (first) out.push(...kmLabels(first, show.kmStep))
-    tracks.forEach((track, i) => out.push(...endpointLabels(track, show.endpoints && i === 0)))
+    // « À la suite », every stage is flown: each one's start and finish named
+    const flown = filmTrack !== tracks[0]
+    tracks.forEach((track, i) => out.push(...endpointLabels(track, show.endpoints && (i === 0 || flown))))
     if (show.photos) out.push(...photoLabels(media, table))
     out.push(...poiLabels(pois))
     out.push(...externalLabels(sources))
     return out
-  }, [tracks, show, pois, media, table, sources])
+  }, [tracks, filmTrack, show, pois, media, table, sources])
 
   // Redraw the textures once the web font is available (the first ones may use the fallback font).
   useEffect(() => {

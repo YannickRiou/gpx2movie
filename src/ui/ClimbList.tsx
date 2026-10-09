@@ -1,13 +1,14 @@
 import { useId, useMemo } from 'react'
 import { climbsOf } from '../flyover/climbs'
 import { KM_MARKER_STEPS, LABEL_RANGE_KM, LABEL_SIZE_RANGE } from '../scene/labelModel'
+import { useFilmTrack } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatAscent, formatDistance, formatNumber } from './format'
 import { RangeField } from './PanelSection'
 
-/** « Montées » section: climbs detected on the first track (click = seek the flyover) and the label toggles. */
+/** « Montées » section: climbs detected on the film track (the first one, or the tracks « À la suite »; click = seek the flyover) and the label toggles. */
 export function ClimbList() {
-  const track = useAppStore((s) => s.tracks[0])
+  const track = useFilmTrack()
   const labels = useAppStore((s) => s.settings.labels)
   const setSetting = useAppStore((s) => s.setSetting)
   const setProgress = useAppStore((s) => s.setProgress)

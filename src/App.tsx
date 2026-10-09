@@ -5,7 +5,7 @@ import { isExportBusy, useExportStore } from './export/store'
 import { addStop, addText } from './film/timeline'
 import { getPlatform } from './platform'
 import { getSettingsHistory, installHistoryShortcuts, installSliderGestures } from './project/history'
-import { editFilm, useFilmClock } from './scene/usePacing'
+import { editFilm, getFilmSource, useFilmClock } from './scene/usePacing'
 import { useAppStore } from './state/store'
 import { CameraPanel } from './ui/CameraPanel'
 import { ClimbList } from './ui/ClimbList'
@@ -99,7 +99,7 @@ function SeekShortcuts() {
       if (action === 'add-stop' || action === 'add-text') {
         e.preventDefault()
         if (e.repeat) return
-        if (action === 'add-stop') editFilm((f) => addStop(f, Math.round(store.playback.progress * store.tracks[0].stats.distanceM)), { stops: true })
+        if (action === 'add-stop') editFilm((f) => addStop(f, Math.round(store.playback.progress * (getFilmSource().track ?? store.tracks[0]).stats.distanceM)), { stops: true })
         else editFilm((f) => addText(f, playhead))
         return
       }

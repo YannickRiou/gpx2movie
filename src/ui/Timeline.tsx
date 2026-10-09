@@ -58,7 +58,7 @@ import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath, type Elev
 import { getPlatform } from '../platform'
 import { modifiedSettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
-import { editFilm, getFilmSource, useFilmClock, useFilmSource } from '../scene/usePacing'
+import { editFilm, getFilmSource, useFilmClock, useFilmSequence, useFilmSource } from '../scene/usePacing'
 import { PLAYBACK_SPEEDS, useAppStore } from '../state/store'
 import { formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
@@ -272,6 +272,8 @@ function FilmOptions({
 export function Timeline() {
   const source = useFilmSource()
   const { track, film, durationS, pacing, landmarks } = source
+  const sequence = useFilmSequence()
+  const tracks = useAppStore((s) => s.tracks)
   const clock = useFilmClock()
   const { playing, progress, timeS: storedTimeS, speed } = useAppStore((s) => s.playback)
   const setPlaying = useAppStore((s) => s.setPlaying)
@@ -946,7 +948,27 @@ export function Timeline() {
                       style={{ left: (s.startS - flightStart) * pxPerS, width: (s.endS - s.startS) * pxPerS }}
                     />
                   ))}
-                  <span className="film-tl__label">Survol · {formatDistance(lengthM)}</span>
+                  {sequence ? (
+                    // « À la suite »: one segment per stage, from cut to cut
+                    sequence.stages.map((stage, k) => {
+                      const startS = k === 0 ? flightStart : (shownClock.cuts[k - 1]?.timeS ?? flightStart)
+                      const endS = shownClock.cuts[k]?.timeS ?? flightEnd
+                      const color = tracks.find((t) => t.id === stage.track.id)?.color ?? stage.track.color
+                      const name = `Étape ${k + 1} · ${stage.track.name} · ${formatDistance(stage.endM - stage.startM)}`
+                      return (
+                        <span
+                          key={stage.track.id}
+                          className="film-tl__stage"
+                          style={{ left: (startS - flightStart) * pxPerS, width: (endS - startS) * pxPerS, ['--stage-color' as string]: color }}
+                          title={name}
+                        >
+                          {name}
+                        </span>
+                      )
+                    })
+                  ) : (
+                    <span className="film-tl__label">Survol · {formatDistance(lengthM)}</span>
+                  )}
                 </div>
                 {shownClock.cameraKeys.map((k) => (
                   <div

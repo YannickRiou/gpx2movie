@@ -172,6 +172,16 @@ describe('serializeProject / parseProject', () => {
     expect(invalid).toEqual(['race'])
   })
 
+  it('loads « Plusieurs traces » (à la suite, camera of the race) and rejects unknown values', () => {
+    const d = doc()
+    const settings = d.settings as Record<string, unknown>
+    const race = { enabled: false, sync: 'elapsed', sequence: true, stageCards: false, stageTransition: 'fondu-blanc', camera: 'ensemble' }
+    settings.race = race
+    expect(parseProject(JSON.stringify(d)).settings.race).toEqual(race)
+    expect(sanitizeSettings({ race: { ...race, stageTransition: 'enchaine' } }).invalid).toEqual(['race'])
+    expect(sanitizeSettings({ race: { ...race, camera: 'drone' } }).invalid).toEqual(['race'])
+  })
+
   it('loads the fixed video formats of older projects as aspect × resolution', () => {
     const { settings, invalid } = sanitizeSettings({ video: { format: '1080x1920', fps: 60, quality: 'max' } })
     expect(invalid).toEqual([])

@@ -57,6 +57,8 @@ export interface OverlayTime {
   openingS: number
   flightS: number
   totalS: number
+  /** film times of the cuts between stages « À la suite » (none otherwise) */
+  cutsS?: readonly number[]
 }
 
 /** What the overlay reads from the film clock (`FilmClock`). */
@@ -65,11 +67,14 @@ export interface OverlayClock {
   flightS: number
   totalTime(): number
   timeAtProgress(progress: number): number
+  cuts?: readonly { timeS: number }[]
 }
 
 /** Film time of a frame shown at `progress` and film time `timeS` (null: set from the progress, as the playback does). */
 export function overlayTime(clock: OverlayClock, progress: number, timeS: number | null): OverlayTime {
-  return { timeS: timeS ?? clock.timeAtProgress(progress), openingS: clock.openingS, flightS: clock.flightS, totalS: clock.totalTime() }
+  const time: OverlayTime = { timeS: timeS ?? clock.timeAtProgress(progress), openingS: clock.openingS, flightS: clock.flightS, totalS: clock.totalTime() }
+  if (clock.cuts && clock.cuts.length > 0) time.cutsS = clock.cuts.map((c) => c.timeS)
+  return time
 }
 
 /** A film reduced to its flight, one second long: film time = progress (no clock at hand, tests). */
@@ -91,6 +96,22 @@ export interface OverlayExtras {
   leaderboard?: readonly LeaderboardRow[]
   /** dip to black or white of a shot transition at the frame's time (`transitionDipAt`), drawn even while the overlay is off */
   dip?: TransitionDip | null
+  /** card of the stage starting « À la suite » (`stageCardAt`), drawn inside its window even while the overlay is off */
+  stage?: StageCard | null
+}
+
+/** Card of a stage « À la suite »: name, number, date and figures of its track, shown from `startS` for `durationS`. */
+export interface StageCard {
+  name: string
+  /** 0 for the first stage */
+  index: number
+  count: number
+  /** recorded start (ms since epoch) */
+  startTime?: number
+  distanceM: number
+  ascentM?: number
+  startS: number
+  durationS: number
 }
 
 /** Safe area: 5 % of the frame on each side. */
@@ -1006,6 +1027,19 @@ function titleWidget(p: Painter, frame: OverlayFrame, settings: OverlaySettings,
   return cardWidget(p, { title: t.title.trim() || frame.track.name, subtitle, titleScale: 1, cells: [] }, t.anchor, t.size, opacity)
 }
 
+/** Card of a stage « À la suite »: its name, « Étape 2 sur 3 · date », its distance and D+ (centred, closing-card size). */
+function stageWidget(p: Painter, card: StageCard, opacity: number): Widget {
+  const m = cellMetrics(p, 1)
+  const stats: [string, CounterText | null][] = [
+    ['Distance', splitUnit(formatDistance(card.distanceM))],
+    ['Dénivelé +', card.ascentM === undefined ? null : { value: formatNumber(card.ascentM), unit: 'm' }],
+  ]
+  const cells = stats.flatMap(([label, text]) => (text ? [makeCell(p, m, label, text, text)] : []))
+  const date = card.startTime !== undefined ? formatDateFr(card.startTime) : ''
+  const subtitle = [`Étape ${card.index + 1} sur ${card.count}`, date].filter(Boolean).join(' · ')
+  return cardWidget(p, { title: card.name, subtitle, titleScale: 0.6, cells }, 'center', 1, opacity, m)
+}
+
 function endWidget(p: Painter, frame: OverlayFrame, settings: OverlaySettings, opacity: number): Widget {
   const e = settings.end
   const s = frame.track.stats
@@ -1306,7 +1340,10 @@ export function drawOverlay(
     return image ? [{ item, opacity, image }] : []
   })
   const dip = extras.dip && extras.dip.alpha > 0.001 ? extras.dip : null
-  if (!settings.enabled && credits.length === 0 && photos.length === 0 && !dip) return
+  // the first stage's card gives way to the title card of the film
+  const stage = extras.stage && !(extras.stage.index === 0 && settings.enabled && settings.title.enabled) ? extras.stage : null
+  const stageOpacity = stage ? filmTextOpacity(stage, time.timeS) : 0
+  if (!settings.enabled && credits.length === 0 && photos.length === 0 && !dip && stageOpacity <= 0.001) return
   const transform = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null
   const p: Painter = {
     ctx,
@@ -1337,7 +1374,7 @@ export function drawOverlay(
     const titleOpacity = settings.title.enabled ? titleCardOpacity(time, settings.title.end) : 0
     endOpacity = settings.end.enabled ? endCardOpacity(time, settings.end.start) : 0
     // live widgets give way to the cards and to the full-screen photos
-    const live = 1 - Math.max(cardOpacityAt(time, settings), cover)
+    const live = 1 - Math.max(cardOpacityAt(time, settings), cover, stageOpacity)
 
     // a widget with its own colours or fonts draws with its own theme
     const of = (key: StyledWidget): Painter =>
@@ -1364,6 +1401,7 @@ export function drawOverlay(
       if (opacity > 0.001) texts.push({ item, opacity })
     }
   }
+  if (stage && stageOpacity > 0.001) add(stageWidget(p, stage, stageOpacity))
   // photo cards after the widgets of their anchor; the caption of a full-screen photo is drawn like a text
   for (const { item, opacity, image } of photos) {
     const caption = item.caption?.trim()

@@ -1,32 +1,53 @@
 import { useMemo } from 'react'
+import type { Track } from '../core/types'
 import { freezeLandmarkTitles, materializeStops, sameLandmarkTitles, withLandmarkTitles, withoutLandmarkTitles } from '../film/assemble'
 import type { PassingTimes } from '../film/assemble'
 import { filmClockFor } from '../film/clock'
 import type { FilmClock, FilmClockFor } from '../film/clock'
 import type { Film } from '../film/model'
 import { followStops } from '../film/timeline'
+import { filmSequenceOf, filmTrackOf, sequenceLandmarks } from '../flyover/sequence'
+import type { Sequence } from '../flyover/sequence'
 import type { Landmark } from '../osm/landmarks'
 import { useLandmarkStore } from '../osm/store'
 import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 
-/** What the film clock is computed from: first track, film, flyover duration, pacing, landmarks (from the stores). */
+/** The sequence « À la suite » the film flies, null otherwise (flyover/sequence.ts). */
+export function useFilmSequence(): Sequence | null {
+  return useAppStore((s) => filmSequenceOf(s.tracks, s.settings.race))
+}
+
+/** The track the film flies: the first one, or the sequence of all of them « À la suite ». */
+export function useFilmTrack(): Track | undefined {
+  return useAppStore((s) => filmTrackOf(s.tracks, s.settings.race))
+}
+
+/** Landmarks of the film track: the first track's, or those of every stage along the sequence. */
+function filmLandmarks(track: Track | undefined, sequence: Sequence | null, byTrack: Readonly<Record<string, readonly Landmark[]>>) {
+  if (sequence) return sequenceLandmarks(sequence, byTrack)
+  return track ? byTrack[track.id] : undefined
+}
+
+/** What the film clock is computed from: film track, film, flyover duration, pacing, landmarks (from the stores). */
 export function useFilmSource(): FilmClockFor {
-  const track = useAppStore((s) => s.tracks[0])
+  const sequence = useFilmSequence()
+  const track = useFilmTrack()
   const durationS = useAppStore((s) => s.settings.flyoverDurationS)
   const pacing = useAppStore((s) => s.settings.pacing)
   const film = useAppStore((s) => s.settings.film)
-  const landmarks = useLandmarkStore((s) => (track ? s.landmarks[track.id] : undefined))
-  return { track, film, durationS, pacing, landmarks }
+  const landmarks = useLandmarkStore((s) => filmLandmarks(track, sequence, s.landmarks))
+  return { track, film, durationS, pacing, landmarks, cutsM: sequence?.cutsM }
 }
 
 /** The film source read from the stores outside React (event handlers, shortcuts). */
 export function getFilmSource(): FilmClockFor {
   const { tracks, settings } = useAppStore.getState()
-  const track = tracks[0]
-  const landmarks = track ? useLandmarkStore.getState().landmarks[track.id] : undefined
-  return { track, film: settings.film, durationS: settings.flyoverDurationS, pacing: settings.pacing, landmarks }
+  const sequence = filmSequenceOf(tracks, settings.race)
+  const track = sequence?.track ?? tracks[0]
+  const landmarks = filmLandmarks(track, sequence, useLandmarkStore.getState().landmarks)
+  return { track, film: settings.film, durationS: settings.flyoverDurationS, pacing: settings.pacing, landmarks, cutsM: sequence?.cutsM }
 }
 
 /**
@@ -141,10 +162,14 @@ function passingTimes(source: FilmClockFor): PassingTimes {
 }
 
 /**
- * Film clock of the first track for the current settings and OpenStreetMap landmarks (memoised), shared by the
- * playback (FlyoverRig), the export (ExportController), the timeline and the panels (film duration, highlights).
+ * Film clock of the film track (the first track, or the sequence « À la suite ») for the current settings and
+ * OpenStreetMap landmarks (memoised), shared by the playback (FlyoverRig), the export (ExportController), the timeline
+ * and the panels (film duration, highlights).
  */
 export function useFilmClock(): FilmClock {
-  const { track, film, durationS, pacing, landmarks } = useFilmSource()
-  return useMemo(() => filmClockFor({ track, film, durationS, pacing, landmarks }), [track, film, durationS, pacing, landmarks])
+  const { track, film, durationS, pacing, landmarks, cutsM } = useFilmSource()
+  return useMemo(
+    () => filmClockFor({ track, film, durationS, pacing, landmarks, cutsM }),
+    [track, film, durationS, pacing, landmarks, cutsM],
+  )
 }

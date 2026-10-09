@@ -4,7 +4,7 @@ import type { FilmPoi, PoiIcon } from '../film/model'
 import { POI_NAME_MAX, addPoi, poiStopAtM, removePoi, renamePoi, setPoiIcon } from '../film/pois'
 import { addStop } from '../film/timeline'
 import { samplePath, trackPathOf } from '../flyover/path'
-import { editFilm } from '../scene/usePacing'
+import { editFilm, useFilmTrack } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { PanelSection } from './PanelSection'
 import { Icon } from './icons'
@@ -16,7 +16,7 @@ import { Icon } from './icons'
  * relief adds one too (`TrackMenu`).
  */
 export function PoiPanel() {
-  const track = useAppStore((s) => s.tracks[0])
+  const track = useFilmTrack()
   const pois = useAppStore((s) => s.settings.film.pois)
   /** the point just added from here, whose name field takes the focus */
   const [added, setAdded] = useState<string | null>(null)

@@ -47,7 +47,7 @@ import { useTerrainContext } from './TerrainLayer'
 import { REDRAPE_DEBOUNCE_MS, REDRAPE_MAX_WAIT_MS, buildDrapeBuffer, computeDrapedPositions } from './TrackLines'
 import { createGlowMaterial } from './trackLineStyle'
 import { useDebouncedCallback } from './useDebouncedCallback'
-import { useFilmClock } from './usePacing'
+import { useFilmClock, useFilmTrack } from './usePacing'
 
 /** Ink over the outside of the region, at this opacity. */
 const DARK = new Color(LABEL_PANEL_COLOR)
@@ -114,7 +114,7 @@ function drawNameTexture(text: string): { texture: CanvasTexture; width: number;
 }
 
 export function RegionHighlight() {
-  const track = useAppStore((s) => s.tracks[0])
+  const track = useFilmTrack()
   const wanted = useAppStore((s) => highlightsRegion(s.settings.film))
   const regionId = useAppStore((s) => filmRegionId(s.settings.film))
   const exaggeration = useAppStore((s) => s.settings.exaggeration)

@@ -3,7 +3,8 @@
  * the film clock (`film/clock.ts`: opening shot, flight over `settings.flyoverDurationS` at speed x1 with the
  * slow-downs of `settings.pacing` and the stops of `settings.film`, closing shot), moves the progress marker on the
  * draped track (a sprite in the look of `settings.marker`, see `markerSprite.ts`) and drives the camera (`flyover/filmCamera.ts`: overview shots, stops, flight in the style of
- * `settings.camera`).
+ * `settings.camera`; with several tracks, the stage or the racers `flyover/follow.ts` gives). « À la suite », the
+ * film track is the sequence of all the tracks (`flyover/sequence.ts`).
  *
  * The view is a pure function of the progress, the film time and the settings (no smoothing state), so they
  * always give the same frame: the video export renders any frame independently by setting both.
@@ -16,6 +17,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { Sprite, Vector3 } from 'three'
 import { computeFilmView, filmViewMovesWithTime, situationFramingOf, situationTarget } from '../flyover/filmCamera'
+import { filmFollowOf } from '../flyover/follow'
 import { smoothedTrackPath } from '../flyover/smooth'
 import { registerFramingCapture, useRegionStore } from '../osm/region'
 import { useAppStore } from '../state/store'
@@ -23,7 +25,7 @@ import { useTerrainContext } from './TerrainLayer'
 import { frameDelta } from './renderOnDemand'
 import { headsLeft, LEAD_MARKER_COLORS, placeMarker, useMarkerImage } from './markerSprite'
 import { figureMotion } from './markerSettings'
-import { useFilmClock } from './usePacing'
+import { useFilmClock, useFilmTrack } from './usePacing'
 import { LINE_LIFT_M, type HeightSampler } from './TrackLines'
 
 // ---------------------------------------------------------------------------
@@ -37,13 +39,16 @@ interface DefaultControls {
 }
 
 export function FlyoverRig() {
-  const track = useAppStore((s) => s.tracks[0])
+  const track = useFilmTrack()
+  const tracks = useAppStore((s) => s.tracks)
+  const race = useAppStore((s) => s.settings.race)
   const smoothingM = useAppStore((s) => s.settings.trackStyle.smoothingM)
   const { engine, frame } = useTerrainContext()
   const controls = useThree((s) => s.controls) as unknown as DefaultControls | null
 
   // the marker and the camera follow the same smoothed positions as the drawn line (TrackLines)
   const path = useMemo(() => (track ? smoothedTrackPath(track, smoothingM) : null), [track, smoothingM])
+  const follow = useMemo(() => filmFollowOf(tracks, race, smoothingM), [tracks, race, smoothingM])
   const clock = useFilmClock()
   /** clock the store's film time was computed with */
   const clockRef = useRef(clock)
@@ -114,6 +119,7 @@ export function FlyoverRig() {
       durationS: settings.flyoverDurationS,
       aspect: size.height > 0 ? size.width / size.height : 1,
       region,
+      follow,
     })
     marker.visible = true
 
@@ -122,6 +128,7 @@ export function FlyoverRig() {
       settings.camera !== applied.camera ||
       settings.flyoverDurationS !== applied.flyoverDurationS ||
       settings.film !== applied.film ||
+      settings.race !== applied.race ||
       region !== appliedRegionRef.current
     const placed = appliedRef.current
     const timed = filmViewMovesWithTime(clock.stateAt(timeS), settings.camera)

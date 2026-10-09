@@ -148,6 +148,18 @@ describe('removeTrack / clearTracks', () => {
     useAppStore.getState().flyTrack('nope')
     expect(useAppStore.getState()).toBe(before)
   })
+
+  it('moveTrack moves a track to a place of the list (clamped); no-op in place or for an unknown one', () => {
+    useAppStore.getState().addTracks([FR, CH, CA])
+    useAppStore.getState().moveTrack('ca', 1)
+    expect(useAppStore.getState().tracks.map((t) => t.id)).toEqual(['fr', 'ca', 'ch'])
+    useAppStore.getState().moveTrack('fr', 9)
+    expect(useAppStore.getState().tracks.map((t) => t.id)).toEqual(['ca', 'ch', 'fr'])
+    const before = useAppStore.getState()
+    useAppStore.getState().moveTrack('ca', 0)
+    useAppStore.getState().moveTrack('nope', 0)
+    expect(useAppStore.getState()).toBe(before)
+  })
 })
 
 describe('settings and misc', () => {

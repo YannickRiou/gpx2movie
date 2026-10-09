@@ -46,6 +46,12 @@ export interface ClockCameraKey extends FilmCameraKey {
   timeS: number
 }
 
+/** A cut between two stages « À la suite » (flyover/sequence.ts): film time at which the marker reaches it. */
+export interface ClockCut {
+  atM: number
+  timeS: number
+}
+
 /** What the film shows at a film time. */
 export interface FilmState {
   phase: FilmPhase
@@ -78,6 +84,8 @@ export interface FilmClock {
   speeds: readonly ClockSpeed[]
   /** camera keys, by position */
   cameraKeys: readonly ClockCameraKey[]
+  /** cuts between stages « À la suite », by position (none otherwise) */
+  cuts: readonly ClockCut[]
   /** film length at ×1 (seconds) */
   totalTime(): number
   /** progress at film time `tS` (0 during the opening, 1 during the closing); continuous and non-decreasing */
@@ -101,6 +109,8 @@ export interface FilmClockInput {
   speeds?: readonly FilmSpeed[]
   /** camera keys (none by default) */
   cameraKeys?: readonly FilmCameraKey[]
+  /** cuts between stages « À la suite » (metres, none by default) */
+  cutsM?: readonly number[]
   /** length of the first track (metres), 0 without track */
   lengthM: number
   /** pacing highlights (metres along the track), slowed down when `pacing.enabled` */
@@ -136,6 +146,7 @@ export function buildFilmClock(input: FilmClockInput): FilmClock {
     input.lengthM > 0 ? speeds.map((s) => ({ ...s, startS: flightTimeOf(s.fromM), endS: flightTimeOf(s.toM) })) : []
   const cameraKeys: ClockCameraKey[] =
     input.lengthM > 0 ? [...(input.cameraKeys ?? [])].sort((a, b) => a.atM - b.atM).map((k) => ({ ...k, timeS: flightTimeOf(k.atM) })) : []
+  const cuts: ClockCut[] = input.lengthM > 0 ? [...(input.cutsM ?? [])].sort((a, b) => a - b).map((atM) => ({ atM, timeS: flightTimeOf(atM) })) : []
 
   const progressAtTime = (tS: number) => flight.progressAtTime(tS - openingS)
   const timeAtProgress = (progress: number) => (progress >= 1 ? total : openingS + flight.timeAtProgress(progress))
@@ -177,6 +188,7 @@ export function buildFilmClock(input: FilmClockInput): FilmClock {
     stops,
     speeds: clockSpeeds,
     cameraKeys,
+    cuts,
     totalTime: () => total,
     progressAtTime,
     timeAtProgress,
@@ -197,16 +209,19 @@ export interface FilmClockFor {
   pacing: PacingSettings
   /** OpenStreetMap landmarks of the track (from the landmark store) */
   landmarks?: readonly Landmark[]
+  /** cuts between stages when the track is a sequence « À la suite » (metres) */
+  cutsM?: readonly number[]
 }
 
 /** Input of the clock of the film of `track`: highlights and generated stops from the pacing settings and the landmarks. */
-export function filmClockInputFor({ track, film, durationS, pacing, landmarks = [] }: FilmClockFor): FilmClockInput {
+export function filmClockInputFor({ track, film, durationS, pacing, landmarks = [], cutsM }: FilmClockFor): FilmClockInput {
   return {
     opening: film.opening,
     closing: film.closing,
     stops: track ? filmStops(film, { track, landmarks, pacing }) : [],
     speeds: track ? film.speeds : [],
     cameraKeys: track ? film.cameraKeys : [],
+    cutsM: track ? cutsM : [],
     lengthM: track?.stats.distanceM ?? 0,
     highlightsM: track && pacing.enabled ? pacingHighlights(track, pacing, landmarks) : [],
     durationS,

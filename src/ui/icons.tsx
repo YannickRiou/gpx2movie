@@ -112,6 +112,7 @@ const PATHS = {
     </>
   ),
   'chevron-down': <path d="m6 9 6 6 6-6" />,
+  'chevron-up': <path d="m18 15-6-6-6 6" />,
   'panel-left-close': (
     <>
       <rect width="18" height="18" x="3" y="3" rx="2" />

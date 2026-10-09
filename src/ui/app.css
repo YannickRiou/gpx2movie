@@ -962,6 +962,26 @@
   opacity: 0.8;
 }
 
+/* stages « À la suite »: each one's name over a band in its track's colour, a line at each cut */
+.film-tl__stage {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  border-bottom: 3px solid var(--stage-color);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.film-tl__stage + .film-tl__stage {
+  border-left: 2px solid var(--color-white);
+}
+
 /* camera keys: small diamonds over the flight */
 .film-tl__key {
   position: absolute;

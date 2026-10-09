@@ -629,6 +629,33 @@ describe('dip of a shot transition', () => {
   })
 })
 
+describe('stage card « À la suite »', () => {
+  const off = { ...DEFAULT_OVERLAY, credits: { ...DEFAULT_OVERLAY.credits, enabled: false } }
+  const stage = { name: 'Jour 2', index: 1, count: 3, startTime: Date.UTC(2026, 6, 2, 8), distanceM: 18_400, ascentM: 1250, startS: 40, durationS: 5 }
+  const render = (settings: OverlaySettings, timeS: number, card = stage) => {
+    const drawn = fakeContext()
+    drawOverlay(drawn.ctx, overlayFrameAt(track, 0.5), settings, SIZE, {}, { time: { timeS, openingS: 0, flightS: 100, totalS: 100 }, stage: card })
+    return drawn.texts.map((t) => t.text).join(' ')
+  }
+
+  it('name, number, date, distance and D+ inside its window, even without the overlay', () => {
+    const shown = render(off, 42)
+    expect(shown).toContain('Jour 2')
+    expect(shown).toMatch(/Étape 2 sur 3/i)
+    expect(shown.toLowerCase()).toContain(formatDateFr(stage.startTime))
+    expect(shown).toContain('18,4')
+    expect(shown).toMatch(/1\s250/)
+    expect(render(off, 39)).toBe('')
+    expect(render(off, 45)).toBe('')
+  })
+
+  it('the first stage gives way to the title card of the film', () => {
+    const first = { ...stage, index: 0, startS: 0 }
+    expect(render(off, 2, first)).toContain('Jour 2')
+    expect(render(enabled({}), 2, first)).not.toMatch(/Étape 1 sur 3/i)
+  })
+})
+
 describe('timeline photos', () => {
   const image = { image: {} as CanvasImageSource, width: 3000, height: 2000 }
   const assets = { photo: (src: string) => (src === 'photo-1' ? image : undefined) }

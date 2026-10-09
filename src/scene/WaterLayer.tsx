@@ -25,7 +25,7 @@ import { useDebouncedCallback } from './useDebouncedCallback'
 import { REDRAPE_DEBOUNCE_MS, REDRAPE_MAX_WAIT_MS } from './TrackLines'
 import { useTerrainContext } from './TerrainLayer'
 import { wakeScene } from './renderOnDemand'
-import { useFilmClock } from './usePacing'
+import { useFilmClock, useFilmTrack } from './usePacing'
 import { buildWaterMesh, type WaterMesh } from './waterMesh'
 
 /** Height of the surface above the draped relief (metres, not exaggerated: like the track). */
@@ -164,7 +164,7 @@ function drapeWater(
 
 export function WaterLayer() {
   const { engine, frame } = useTerrainContext()
-  const track = useAppStore((s) => s.tracks[0])
+  const track = useFilmTrack()
   const enabled = useAppStore((s) => s.settings.water.enabled)
   const exaggeration = useAppStore((s) => s.settings.exaggeration)
   const clock = useFilmClock()

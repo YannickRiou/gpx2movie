@@ -12,6 +12,8 @@ import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath } from '..
 import type { ElevationProfile, TrackPath } from '../flyover/path'
 import { rankRacers } from '../flyover/race'
 import type { Racer } from '../flyover/race'
+import { stageAt } from '../flyover/sequence'
+import type { Sequence } from '../flyover/sequence'
 import { metricValues } from '../flyover/trackColor'
 import { ELEVATION_HYSTERESIS_M, smoothElevations } from '../import/stats'
 import { OSM_ATTRIBUTION } from '../osm/overpass'
@@ -20,6 +22,7 @@ import { formatDistanceGap, formatTimeGap } from '../ui/format'
 import { OPEN_METEO_ATTRIBUTION } from '../weather/openMeteo'
 import { summarizeOuting, weatherWidgetData } from '../weather/series'
 import type { WeatherSeries, WeatherSummary, WeatherWidgetData } from '../weather/series'
+import type { OverlayTime, StageCard } from './draw'
 
 /** Samples of the overlay elevation profile over the track. */
 export const OVERLAY_PROFILE_SAMPLES = 240
@@ -280,6 +283,62 @@ export function overlayFrameAt(data: OverlayTrack, progress: number): OverlayFra
   }
   if (data.weatherSeries) frame.weather = weatherWidgetData(data.weatherSeries, path, p)
   return frame
+}
+
+/** Overlay data of the film: its track, and « À la suite » the sequence and each stage's own data. */
+export interface OverlayFilm {
+  whole: OverlayTrack
+  sequence?: Sequence
+  stages?: readonly OverlayTrack[]
+}
+
+/**
+ * `prepareOverlayTrack` of the film track, and of every stage of a sequence « À la suite ». The weather series is the
+ * first track's (the weather store follows it): « À la suite », only the first stage gets it.
+ */
+export function prepareOverlayFilm(track: Track, sequence: Sequence | null, weather?: WeatherSeries | null): OverlayFilm {
+  if (!sequence) return { whole: prepareOverlayTrack(track, weather) }
+  const stages = sequence.stages.map((s) => prepareOverlayTrack(s.track, s.index === 0 ? weather : null))
+  return { whole: prepareOverlayTrack(track), sequence, stages }
+}
+
+/**
+ * Overlay values at film `progress`: those of the film track, or « À la suite » those of the stage under the marker
+ * (its own distance, D+, time, profile and mini-map) with the name and figures of the whole sequence for the opening
+ * and closing cards.
+ */
+export function overlayFilmFrameAt(film: OverlayFilm, progress: number): OverlayFrame {
+  if (!film.sequence || !film.stages) return overlayFrameAt(film.whole, progress)
+  const at = stageAt(film.sequence, Number.isFinite(progress) ? progress : 0)
+  const frame = overlayFrameAt(film.stages[at.stage.index], at.progress)
+  return { ...frame, track: { ...frame.track, name: film.whole.name, stats: film.whole.stats } }
+}
+
+/** How long the card of a stage stays (seconds at ×1). */
+export const STAGE_CARD_S = 5
+
+/**
+ * Card of the stage starting at film time `time.timeS` « À la suite »: the first one with the flight, each other at
+ * its cut (`time.cutsS`), for STAGE_CARD_S; null outside these windows.
+ */
+export function stageCardAt(sequence: Sequence, time: OverlayTime): StageCard | null {
+  const starts = [time.openingS, ...(time.cutsS ?? [])]
+  let k = starts.length - 1
+  while (k >= 0 && time.timeS < starts[k]) k--
+  const stage = sequence.stages[k]
+  if (!stage || time.timeS >= starts[k] + STAGE_CARD_S) return null
+  const { stats } = stage.track
+  const card: StageCard = {
+    name: stage.track.name,
+    index: k,
+    count: sequence.stages.length,
+    distanceM: stage.endM - stage.startM,
+    startS: starts[k],
+    durationS: STAGE_CARD_S,
+  }
+  if (stats.startTime !== undefined) card.startTime = stats.startTime
+  if (stats.maxEle !== undefined) card.ascentM = stats.ascentM
+  return card
 }
 
 export interface CreditSources {
