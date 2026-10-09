@@ -6,7 +6,7 @@
  * them to the linear working space.
  */
 import type { Track, TrackPoint } from '../core/types'
-import { haversineM } from '../geo/lonLat'
+import { cumulativeDistances } from '../geo/lonLat'
 
 export const TRACK_COLOR_MODES = [
   'none',
@@ -82,12 +82,6 @@ const SENSOR_FIELDS = { heartRate: 'hr', cadence: 'cad', power: 'power', tempera
 
 function finiteOrNaN(value: number | undefined): number {
   return value !== undefined && Number.isFinite(value) ? value : Number.NaN
-}
-
-function cumulativeDistances(points: readonly TrackPoint[]): Float64Array {
-  const d = new Float64Array(points.length)
-  for (let i = 1; i < points.length; i++) d[i] = d[i - 1] + haversineM(points[i - 1], points[i])
-  return d
 }
 
 function speedKmh(points: readonly TrackPoint[]): Float64Array {

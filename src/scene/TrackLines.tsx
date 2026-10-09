@@ -52,12 +52,12 @@ import { densify } from '../import/stats'
 import { useAppStore } from '../state/store'
 import { DEFAULT_TRACK_STYLE } from './markerSettings'
 import type { TrackStyle } from './markerSettings'
+import { cumulativeDistances } from '../geo/lonLat'
 import { useTerrainContext } from './TerrainLayer'
 import { wakeScene } from './renderOnDemand'
 import {
   applyDash,
   createGlowMaterial,
-  cumulativeDistances,
   cutLine,
   lineWidthPx,
   quantizedPixelSize,

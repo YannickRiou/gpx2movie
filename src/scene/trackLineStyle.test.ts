@@ -4,7 +4,8 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 import type { InterleavedBufferAttribute } from 'three'
 import { DEFAULT_TRACK_STYLE } from './markerSettings'
-import { applyDash, cumulativeDistances, cutAt, cutLine, quantizedPixelSize, type CuttableLine } from './trackLineStyle'
+import { cumulativeDistances } from '../geo/lonLat'
+import { applyDash, cutAt, cutLine, quantizedPixelSize, type CuttableLine } from './trackLineStyle'
 
 describe('cutAt', () => {
   const dist = Float64Array.from([100, 110, 120, 130])

@@ -60,7 +60,7 @@ export function isAbortError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'AbortError'
 }
 
-function createAbortError(): DOMException {
+export function createAbortError(): DOMException {
   return new DOMException('The tile request was aborted.', 'AbortError')
 }
 

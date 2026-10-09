@@ -17,16 +17,12 @@
 import type { ImagerySource, LonLat, LonLatBounds, TerrainSource, TileKey } from '../core/types'
 import { expandBounds } from '../geo/lonLat'
 import { childrenOf, tileBounds, tileGroundSizeM, tilesForBounds, zoomForTileBudget } from '../geo/mercator'
-import { DEFAULT_ERROR_TARGET_PX, DEFAULT_SEGMENTS, DEFAULT_TUNING } from '../terrain/engine'
+import { CAMERA_FOV_DEG } from '../flyover/filmCamera'
+import { AREA_MARGIN_M, AREA_MIN_SIZE_M, DEFAULT_ERROR_TARGET_PX, DEFAULT_SEGMENTS, DEFAULT_TUNING } from '../terrain/engine'
 import { planImagerySubtiles } from '../terrain/imagery'
 import { buildTileUrl } from '../terrain/sources'
 import { offlinePolicy } from './policy'
 
-/** Same area as the scene's engine (`AREA_MARGIN_M`, `AREA_MIN_SIZE_M` of scene/TerrainLayer.tsx). */
-export const PLAN_AREA_MARGIN_M = 25_000
-export const PLAN_AREA_MIN_SIZE_M = 40_000
-/** vertical field of view of the scene camera (scene/FlyoverCanvas.tsx) */
-export const PLAN_FOV_DEG = 50
 /** levels below the roots kept over the whole area, whatever the corridor */
 export const LANDSCAPE_LEVELS = 2
 /** corridor widths offered (metres, total width) */
@@ -70,7 +66,7 @@ export interface OfflinePlan {
 /** Distance (metres) under which the engine splits `key`: r = cell · H / (2 · errorTarget · tan(fov / 2)). */
 export function splitDistanceM(key: TileKey, viewportHeightPx: number): number {
   const cell = tileGroundSizeM(key) / DEFAULT_SEGMENTS
-  return (cell * viewportHeightPx) / (2 * DEFAULT_ERROR_TARGET_PX * Math.tan((PLAN_FOV_DEG / 2) * (Math.PI / 180)))
+  return (cell * viewportHeightPx) / (2 * DEFAULT_ERROR_TARGET_PX * Math.tan((CAMERA_FOV_DEG / 2) * (Math.PI / 180)))
 }
 
 /** Track points in local metres (equirectangular around the centre), densified, with a grid for nearby queries. */
@@ -149,7 +145,7 @@ export function planOfflineTiles(input: OfflinePlanInput): OfflinePlan {
   const viewportHeightPx = input.viewportHeightPx ?? 1080
   const h = Math.max(0, input.cameraHeightM)
   const halfCorridor = Math.max(0, input.corridorM / 2)
-  const area = expandBounds(input.bounds, PLAN_AREA_MARGIN_M, PLAN_AREA_MIN_SIZE_M)
+  const area = expandBounds(input.bounds, AREA_MARGIN_M, AREA_MIN_SIZE_M)
   const track = indexTrack(input.points, {
     lon: (input.bounds.west + input.bounds.east) / 2,
     lat: (input.bounds.south + input.bounds.north) / 2,

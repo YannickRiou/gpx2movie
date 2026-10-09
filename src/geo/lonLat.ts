@@ -17,6 +17,20 @@ export function haversineM(a: LonLat, b: LonLat): number {
   return 2 * r * Math.asin(Math.min(1, Math.sqrt(h)))
 }
 
+/**
+ * Distance of every point from the start of its track (metres): `startM` plus the length along `points`, the
+ * jump between two segments adding nothing (as `buildTrackPath`, which places the marker).
+ */
+export function cumulativeDistances(points: readonly LonLat[], startM = 0): Float64Array {
+  const out = new Float64Array(points.length)
+  let total = startM
+  for (let i = 0; i < points.length; i++) {
+    if (i > 0) total += haversineM(points[i - 1], points[i])
+    out[i] = total
+  }
+  return out
+}
+
 /** Centre of a lon/lat box (does not handle the antimeridian). */
 export function centroid(bounds: LonLatBounds): LonLat {
   return { lon: (bounds.west + bounds.east) / 2, lat: (bounds.south + bounds.north) / 2 }

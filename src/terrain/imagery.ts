@@ -15,7 +15,8 @@ import type { Texture } from 'three'
 import type { ImagerySource, LoadImageryOptions, LoadImageryTexture, TileFetcher, TileKey } from '../core/types'
 import { boundsIntersect, tileBounds, tileKeyString } from '../geo/mercator'
 import { buildTileUrl } from './sources'
-import { isAbortError } from './fetch'
+import { createCanvas } from './dem'
+import { createAbortError, isAbortError } from './fetch'
 
 /** Neutral grey drawn where imagery is missing (failed, aborted or out of coverage). */
 export const IMAGERY_FALLBACK_COLOR = '#8a8f94'
@@ -105,18 +106,6 @@ export function planImagerySubtiles(key: TileKey, source: ImagerySource, zoomOff
 type CompositeCanvas = OffscreenCanvas | HTMLCanvasElement
 type Canvas2D = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D
 
-function createCanvas(size: number): CompositeCanvas {
-  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(size, size)
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  return canvas
-}
-
-function createAbortError(): DOMException {
-  return new DOMException('Imagery loading was aborted.', 'AbortError')
-}
-
 function createTexture(canvas: CompositeCanvas, key: TileKey): Texture {
   const texture = new CanvasTexture<CompositeCanvas>(canvas)
   texture.name = `imagery ${tileKeyString(key)}`
@@ -147,7 +136,7 @@ export const loadImageryTexture: LoadImageryTexture = async (
   )
   if (signal?.aborted) throw createAbortError()
 
-  const canvas = createCanvas(plan.canvasSize)
+  const canvas = createCanvas(plan.canvasSize, plan.canvasSize)
   const ctx = canvas.getContext('2d') as Canvas2D | null
   if (!ctx) throw new Error('2D canvas context unavailable: cannot composite imagery.')
 

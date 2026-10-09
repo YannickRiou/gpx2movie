@@ -2,15 +2,18 @@ import { describe, expect, it, vi } from 'vitest'
 import type { LonLatBounds } from '../core/types'
 import { DEFAULT_FILM } from '../film/model'
 import { DEFAULT_OVERLAY } from '../overlay/settings'
+import { AREA_MARGIN_M } from '../terrain/engine'
 import { getImagerySource, getTerrainSource } from '../terrain/sources'
 import { DEFAULT_GRADING } from './grading'
 import { DEFAULT_MARKER, DEFAULT_TRACK_STYLE } from './markerSettings'
 
 vi.mock('@react-three/fiber', () => ({ useFrame: vi.fn(), useThree: vi.fn() }))
-vi.mock('../terrain/engine', () => ({ createTerrainEngine: vi.fn() }))
+vi.mock('../terrain/engine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../terrain/engine')>()),
+  createTerrainEngine: vi.fn(),
+}))
 
 const {
-  AREA_MARGIN_M,
   boundsContain,
   engineAreaFor,
   resolveEngineArea,

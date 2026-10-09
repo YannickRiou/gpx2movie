@@ -107,6 +107,10 @@ export const DEFAULT_TUNING: Readonly<EngineTuning> = {
   minSkirtDepthM: 20,
 }
 
+/** Margin added around the union of the track bounds to define the terrain area of interest. */
+export const AREA_MARGIN_M = 25_000
+/** Minimum size of the terrain area across, so short tracks still get a landscape around them. */
+export const AREA_MIN_SIZE_M = 40_000
 export const DEFAULT_SEGMENTS = 64
 export const DEFAULT_ERROR_TARGET_PX = 3
 export const DEFAULT_IMAGERY_ZOOM_OFFSET = 1
