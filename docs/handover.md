@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (98 files, 1,589 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (98 files, 1,608 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -328,18 +328,10 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    section, same in preview and export (postprocessing effects in the existing composer: `BloomEffect`,
    `DepthOfFieldEffect`; lens flare from the sun position, e.g. a custom effect or a maintained library).
    Adjustable field of view: still to weigh.
-6. **Situation shot, more control** (ideas from MapDirector's « Situate » panel, seen on a Corsica flyover: « Parc
-   naturel régional de Corse » outlined in glowing white, name in large type, green dot at the outing). Already here:
-   automatic administrative region (levels 4–6), « Région » / « Pays » height, highlight, styles « Depuis la région »
-   (dive) and « Balayage » (≈ their Sweep / Hop), « Enchaîné » transition (≈ « Blend intro »). Missing:
-   - **choice of the place** among the areas that contain the track, not only administrative ones: natural and
-     national parks, protected areas, islands, massifs (OpenStreetMap `boundary=protected_area` / `national_park`,
-     `place=island`, `natural=mountain_range`), in a list (« Lieu »);
-   - **separate timings**: hold on the situation view (« Maintien »), then push-in duration (« Plongée »), instead of
-     one shot duration;
-   - **framing of the situation view**: tilt, distance (km), heading free or north up (« Boussole »), bearing,
-     headroom, and « Capturer la vue actuelle » to set it from the 3D view;
-   - **sun moving during the shot** (« Faire bouger le soleil »: time of day animated over the opening).
+6. **Situation shot, more control**: done on the work branch (« Lieu » among the areas containing the track,
+   « Maintien » / « Plongée », « Cadrage » with « Capturer la vue actuelle », « Faire bouger le soleil »; see
+   ARCHITECTURE.md, "Film and timeline", Camera). To check on a GPU (`docs/tests-gpu.md`); the place list was only
+   tested against a mocked Overpass.
 7. **Several tracks: « À la suite » or « En parallèle »** (user's request; MapDirector always puts imported GPX one
    after the other). Today: the first track is flown, the others are only drawn; « Enchaîner en un seul parcours »
    merges them into one track (sequence, but the stages lose their own colour, name and stats); « Course fantôme »
