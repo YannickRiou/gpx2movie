@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { buildFilmClock } from '../film/clock'
+import { DEFAULT_FILM } from '../film/model'
+import { DEFAULT_PACING } from '../flyover/pacing'
 import {
   DEFAULT_VIDEO_SETTINGS,
   VIDEO_ASPECTS,
@@ -126,5 +129,27 @@ describe('buildFrameSchedule', () => {
     expect(() => buildFrameSchedule({ durationS: Number.NaN, fps: 30 })).toThrow(RangeError)
     expect(() => buildFrameSchedule({ durationS: 10, fps: 0 })).toThrow(RangeError)
     expect(() => buildFrameSchedule({ durationS: 10, fps: Number.POSITIVE_INFINITY })).toThrow(RangeError)
+  })
+
+  // the view is a pure function of (progress, film time), the same for the preview and the export (filmViewAt)
+  it('playing the film reaches the progress of every exported frame', () => {
+    const clock = buildFilmClock({
+      opening: DEFAULT_FILM.opening,
+      closing: DEFAULT_FILM.closing,
+      stops: [{ id: 'summit', atM: 4000, durationS: 4, camera: 'orbite' }],
+      speeds: [{ id: 'fast', fromM: 6000, toM: 8000, factor: 2 }],
+      lengthM: 10_000,
+      highlightsM: [],
+      durationS: 60,
+      pacing: { ...DEFAULT_PACING, keepDuration: false },
+    })
+    const options = { durationS: clock.totalTime(), progressAt: clock.progressAtTime, fps: 30, holdStartS: 1, holdEndS: 2 }
+    const schedule = buildFrameSchedule(options)
+    let played = clock.positionAt(0)
+    buildFrameTimes(options).forEach((t, i) => {
+      played = clock.advance(played, t - played.timeS, 1)
+      expect(played.timeS).toBeCloseTo(t, 6)
+      expect(played.progress).toBeCloseTo(schedule[i], 9)
+    })
   })
 })

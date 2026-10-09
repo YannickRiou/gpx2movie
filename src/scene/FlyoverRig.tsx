@@ -16,17 +16,18 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { Sprite, Vector3 } from 'three'
-import { computeFilmView, filmViewMovesWithTime, situationFramingOf, situationTarget } from '../flyover/filmCamera'
+import { filmViewMovesWithTime, situationFramingOf, situationTarget } from '../flyover/filmCamera'
 import { filmFollowOf } from '../flyover/follow'
 import { smoothedTrackPath } from '../flyover/smooth'
 import { registerFramingCapture, useRegionStore } from '../osm/region'
 import { useAppStore } from '../state/store'
+import { filmViewAt } from './filmView'
 import { useTerrainContext } from './TerrainLayer'
 import { frameDelta } from './renderOnDemand'
 import { headsLeft, LEAD_MARKER_COLORS, placeMarker, useMarkerImage } from './markerSprite'
 import { figureMotion } from './markerSettings'
 import { useFilmClock, useFilmTrack } from './usePacing'
-import { LINE_LIFT_M, type HeightSampler } from './TrackLines'
+import type { HeightSampler } from './TrackLines'
 
 // ---------------------------------------------------------------------------
 // Component
@@ -109,18 +110,10 @@ export function FlyoverRig() {
       return
     }
 
-    const sampler: HeightSampler | null = engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null
     // the highlighted region a 'situation' shot frames, once loaded (osm/region.ts)
     const region = useRegionStore.getState().frame
-    const view = computeFilmView(path, clock, timeS, progress, frame, sampler, {
-      exaggeration: settings.exaggeration,
-      liftM: LINE_LIFT_M,
-      camera: settings.camera,
-      durationS: settings.flyoverDurationS,
-      aspect: size.height > 0 ? size.width / size.height : 1,
-      region,
-      follow,
-    })
+    // the export places its camera with the same function
+    const view = filmViewAt(path, clock, progress, timeS, frame, engine, size.height > 0 ? size.width / size.height : 1, follow)
     marker.visible = true
 
     const applied = appliedSettingsRef.current
