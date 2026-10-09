@@ -109,11 +109,12 @@ features included), `npm run build`,
 - **Second simplification pass**: `RangeField` (optional ⓘ tip and spoken value) for the settings sliders;
   `cumulativeDistances` in `geo/lonLat`; shared `createCanvas` / `createAbortError` for DEM and imagery; terrain area
   margins in `terrain/engine`; one `CAMERA_FOV_DEG`; `Fold` merged into `PanelSection`.
-- **Ported from the old branch chain**: landmark hiding (`settings.landmarks.hiddenIds`, eye button in "Repères"; the
-  roadbook still lists hidden landmarks), point smoothing (`trackStyle.smoothingM`, recorded distances kept; ghost
-  racers, labels, picking, mini-map and poster keep the recorded points), texts and media attached to a stop
-  (`stopId`, `followStops`; landmark-title and duration changes do not move attached items yet), timeline edge
-  scrolling (`edgeScrollSpeed`), fold state remembered per section title (`FOLDS_KEY`).
+- **Ported from the old branch chain**: landmark hiding (`settings.landmarks.hiddenIds`, eye button in "Repères",
+  also left out of the roadbook), point smoothing (`trackStyle.smoothingM`, recorded distances kept; ghost racers follow
+  their smoothed lines; labels, picking, mini-map and poster keep the recorded points), texts and media attached to a
+  stop (`stopId`, `followStops`, also on landmark-title, duration and pacing changes through `setLandmarkTitles` and
+  `setFlightTiming`; resetting the "Durée et rythme" section or landmarks arriving later do not move them), timeline
+  edge scrolling (`edgeScrollSpeed`), fold state remembered per section title (`FOLDS_KEY`).
 - **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
   constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
   "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK); a text added with T attached to
