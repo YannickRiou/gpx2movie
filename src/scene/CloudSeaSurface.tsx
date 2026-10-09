@@ -60,7 +60,10 @@ import { REDRAPE_DEBOUNCE_MS, REDRAPE_MAX_WAIT_MS } from './TrackLines'
 import { useDebouncedCallback } from './useDebouncedCallback'
 import { useFilmClock } from './usePacing'
 
-/** Radial grid: first ring, horizon (beyond the loaded terrain, so the sea hides its edge) and sectors. */
+/**
+ * Radial grid: first ring, horizon (beyond the loaded terrain, so the sea hides its edge) and sectors: 436 rings,
+ * ~112k vertices, one draw call; a vertex only evaluates the octaves larger than a few of its cells.
+ */
 const GRID_INNER_M = 8
 const GRID_OUTER_M = 300_000
 const GRID_SEGMENTS = 256
@@ -128,19 +131,24 @@ uniform vec2 seaTerrainSize;
 uniform float seaEdgeFade;
 varying vec3 vSeaWorld;
 
-// Part of the sun reaching the relief h at p: the coarse relief probed toward the sun at a few distances, against
-// the height of the ray there (soft: a billow just grazing the ray dims it).
+// How far the coarse relief at distance s toward the sun rises above the ray from h: 0 lit, 1 shadowed (soft).
+float seaShadowTap(vec2 p, vec2 dir, float rise, float h, float footprint, float s) {
+  return smoothstep(0.0, ${glslFloat(SHADOW_SOFT_M)}, seaRelief(p + dir * s, footprint) - h - rise * s);
+}
+
+// Part of the sun reaching the relief at p: the coarse relief probed toward the sun at a few distances.
 float seaSunVisibility(vec2 p, vec3 L, float footprint) {
+  if (L.y <= 0.0) return 0.0;
   float run = length(L.xz);
   if (run < 1e-4) return 1.0;
   vec2 dir = L.xz / run;
   float rise = L.y / run;
   float f = max(footprint, ${glslFloat(SHADOW_FOOTPRINT_M)});
   float h = seaRelief(p, f);
-  float lit = 1.0 - smoothstep(0.0, ${glslFloat(SHADOW_SOFT_M)}, seaRelief(p + dir * ${glslFloat(SHADOW_STEPS_M[0])}, f) - h - rise * ${glslFloat(SHADOW_STEPS_M[0])});
-  lit = min(lit, 1.0 - smoothstep(0.0, ${glslFloat(SHADOW_SOFT_M)}, seaRelief(p + dir * ${glslFloat(SHADOW_STEPS_M[1])}, f) - h - rise * ${glslFloat(SHADOW_STEPS_M[1])}));
-  lit = min(lit, 1.0 - smoothstep(0.0, ${glslFloat(SHADOW_SOFT_M)}, seaRelief(p + dir * ${glslFloat(SHADOW_STEPS_M[2])}, f) - h - rise * ${glslFloat(SHADOW_STEPS_M[2])}));
-  return lit;
+  float shadow = seaShadowTap(p, dir, rise, h, f, ${glslFloat(SHADOW_STEPS_M[0])});
+  shadow = max(shadow, seaShadowTap(p, dir, rise, h, f, ${glslFloat(SHADOW_STEPS_M[1])}));
+  shadow = max(shadow, seaShadowTap(p, dir, rise, h, f, ${glslFloat(SHADOW_STEPS_M[2])}));
+  return 1.0 - shadow;
 }
 
 // Henyey-Greenstein phase, 1 for an isotropic medium: > 1 looking toward the sun (silver lining)
@@ -155,17 +163,17 @@ void main() {
   float footprint = max(length(fwidth(vSeaWorld.xz)), 0.25);
   float e = max(footprint, 2.0);
   float h = seaRelief(p, footprint);
-  // slope of the relief (steepened for the shading) and of the curved Earth
-  float dx = ${glslFloat(SEA_NORMAL_RELIEF)} * (seaRelief(p + vec2(e, 0.0), footprint) - h) / e - vSeaWorld.x / SEA_EARTH_RADIUS;
-  float dz = ${glslFloat(SEA_NORMAL_RELIEF)} * (seaRelief(p + vec2(0.0, e), footprint) - h) / e - vSeaWorld.z / SEA_EARTH_RADIUS;
-  vec3 n = normalize(vec3(-dx, 1.0, -dz));
   vec3 L = seaSunDirection;
-  vec3 V = normalize(cameraPosition - vSeaWorld);
-  // 0 in the deepest creases, 1 on the highest tops
-  float top = saturate(h / SEA_RELIEF_M);
 
   vec3 radiance;
   if (gl_FrontFacing) {
+    // slope of the relief (steepened for the shading) and of the curved Earth
+    float dx = ${glslFloat(SEA_NORMAL_RELIEF)} * (seaRelief(p + vec2(e, 0.0), footprint) - h) / e - vSeaWorld.x / SEA_EARTH_RADIUS;
+    float dz = ${glslFloat(SEA_NORMAL_RELIEF)} * (seaRelief(p + vec2(0.0, e), footprint) - h) / e - vSeaWorld.z / SEA_EARTH_RADIUS;
+    vec3 n = normalize(vec3(-dx, 1.0, -dz));
+    vec3 V = normalize(cameraPosition - vSeaWorld);
+    // 0 in the deepest creases, 1 on the highest tops
+    float top = saturate(h / SEA_RELIEF_M);
     float sunLit = seaSunVisibility(p, L, footprint);
     // wrap lighting: the light scattered inside the cloud still reaches the slopes turned away from the sun
     float wrapNL = saturate((dot(n, L) + ${glslFloat(SEA_WRAP)}) / (1.0 + ${glslFloat(SEA_WRAP)}));
@@ -272,8 +280,9 @@ export function CloudSeaSurface({ sun, sky, nightFill, path }: CloudSeaSurfacePr
   const clock = useFilmClock()
   const startTime = track?.stats.startTime
   const start = path && path.count > 0 ? samplePath(path, 0) : null
-  const wind = useMemo(
-    () => filmWind(series, startTime ?? 0, start?.lon ?? 0, start?.lat ?? 0),
+  /** drift after one second of film (the drift is linear in the film time: no allocation per frame) */
+  const unitDrift = useMemo(
+    () => cloudDrift(filmWind(series, startTime ?? 0, start?.lon ?? 0, start?.lat ?? 0), 1),
     [series, startTime, start?.lon, start?.lat],
   )
 
@@ -344,9 +353,10 @@ export function CloudSeaSurface({ sun, sky, nightFill, path }: CloudSeaSurfacePr
     const { playback, settings } = useAppStore.getState()
     const u = uniforms
     u.seaCenter.value.set(camera.position.x, camera.position.z)
-    const drift = cloudDrift(wind, playback.timeS ?? clock.timeAtProgress(playback.progress))
+    const timeS = playback.timeS ?? clock.timeAtProgress(playback.progress)
+    const t = Number.isFinite(timeS) ? timeS : 0
     // noise point = position − (east, −north) (cloudSea.ts `seaNoisePoint`, +Z south)
-    u.seaDrift.value.set(drift.east, -drift.north)
+    u.seaDrift.value.set(unitDrift.east * t, -unitDrift.north * t)
     u.seaBase.value = seaBaseAltitude(settings.clouds.seaTopM, settings.exaggeration)
     u.seaEdgeFade.value = EDGE_FADE_M * settings.exaggeration
     const sunIrradiance = u.seaSunIrradiance.value

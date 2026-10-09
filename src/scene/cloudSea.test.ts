@@ -83,6 +83,10 @@ describe('drift', () => {
     // the pattern carried east-north-east is found downwind
     expect(seaRelief(...seaNoisePoint(400 + drift.east, -900 - drift.north, drift))).toBeCloseTo(seaRelief(400, -900), 9)
     expect(seaNoisePoint(10, 20, { east: 0, north: 0 })).toEqual([10, 20])
+    // linear in the film time: CloudSeaSurface scales the drift of one second
+    const wind = { east: 3, north: -2 }
+    expect(cloudDrift(wind, 37.5).east).toBeCloseTo(cloudDrift(wind, 1).east * 37.5, 9)
+    expect(cloudDrift(wind, 37.5).north).toBeCloseTo(cloudDrift(wind, 1).north * 37.5, 9)
   })
 })
 
