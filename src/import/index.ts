@@ -40,7 +40,7 @@ export async function importFile(file: File, colorIndex = 0): Promise<Track[]> {
     case 'gpx':
       return importText(await file.text(), file.name, colorIndex)
     case 'fit': {
-      // the FIT decoder (@garmin/fitsdk, ~650 KB) is loaded on the first .fit file only
+      // the FIT decoder is loaded on the first .fit file only
       const { parseFit } = await import('./fit')
       return assignColors(await parseFit(await file.arrayBuffer(), file.name), colorIndex)
     }

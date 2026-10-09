@@ -313,10 +313,10 @@ version on 9 October 2026); check again at its next release.
 
 ## Limits and open points
 
-- Garmin FIT SDK license (not free, redistribution "except in the cases provided for"): to decide before public release; personal
-  use OK. Esri terms (no key) to re-read for online use. Open-Meteo and EOX non-commercial; OpenTopoMap,
-  Esri and swisstopo allowed in offline packs for personal use, with a low daily limit (`docs/sources.md`,
-  "Attributions, licenses and offline use"). Yale star catalog: license not stated.
+- FIT files are read by an in-house decoder (`src/import/fit.ts`, MIT); the Garmin FIT SDK, whose license forbids
+  redistribution, is no longer a dependency. Esri terms (no key) to re-read for online use. Open-Meteo and EOX
+  non-commercial; OpenTopoMap, Esri and swisstopo allowed in offline packs for personal use, with a low daily limit
+  (`docs/sources.md`, "Attributions, licenses and offline use"). Yale star catalog: license not stated.
 - HEIC photos refused (the browser does not decode them); EXIF read only in JPEG files.
 - Videos: 50 MB at most (the project contains them: ~1.33 × their size in the JSON file), not placed
   by GPS (synced only by time, the track must be timestamped); an old project edited by hand with a video missing from its table keeps it in the film without

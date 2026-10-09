@@ -162,11 +162,10 @@ The OpenFlyover code is under the **MIT license** ([`LICENSE`](LICENSE), © 2026
 | mediabunny | 1.61.3 | MPL-2.0: usable as is; a modification of its files must be published |
 | zustand | 5.0.15 | MIT |
 | react, react-dom | 19.3.0 | MIT |
-| @garmin/fitsdk | 21.217.0 | Garmin FIT license (below) |
 
-**Garmin FIT SDK.** This is not a free license. Garmin allows free use of the FIT format in your software,
-but forbids redistributing the SDK "except as provided". The published site, however, contains the SDK code. This point
-is not settled: it must be checked before a wide release. The SDK is not covered by the MIT license of the project.
+**FIT files.** They are read by a small decoder of the project (`src/import/fit.ts`, MIT), written from the public
+description of the FIT protocol. The Garmin FIT SDK is not used: its license forbids redistributing it, and the published
+site would have contained it.
 
 The development tools are not shipped with the site: Vite, vitest, oxlint and jsdom are under MIT, TypeScript
 under Apache-2.0.
