@@ -49,8 +49,9 @@ export function editFilm(edit: (film: Film) => { film: Film; id?: string | null 
 
 /**
  * « Ralentir et titrer aux repères » on the film of the stores: on, its landmark slow-downs and titles made again from
- * the landmarks loaded for the first track (`withLandmarkTitles`); off, removed. One undo step, none when nothing
- * changes (the landmarks are published again and again with the same content).
+ * the landmarks loaded for the first track (`withLandmarkTitles`); off, removed. The texts and media attached to a
+ * stop follow it (`followStops`). One undo step, none when nothing changes (the landmarks are published again and
+ * again with the same content).
  */
 export function setLandmarkTitles(on: boolean): void {
   const source = getFilmSource()
@@ -60,7 +61,25 @@ export function setLandmarkTitles(on: boolean): void {
       ? withLandmarkTitles({ ...film, landmarkTitles: true }, { track, landmarks, pacing }, passingTimes(source))
       : withoutLandmarkTitles({ ...film, landmarkTitles: on })
   if (next.landmarkTitles === film.landmarkTitles && sameLandmarkTitles(film, next)) return
-  getSettingsHistory().transaction(() => useAppStore.getState().setSetting('film', next))
+  const followed = followStops(film, next, (f) => filmClockFor({ ...source, film: f }))
+  getSettingsHistory().transaction(() => useAppStore.getState().setSetting('film', followed))
+}
+
+/**
+ * Set the flyover duration and / or the pacing of the stores; the texts and media attached to a stop follow it
+ * (`followStops`) in the same change of the settings, so one undo step (coalesced like any slider).
+ */
+export function setFlightTiming(patch: Partial<Pick<FilmClockFor, 'durationS' | 'pacing'>>): void {
+  const source = getFilmSource()
+  const film = followStops(
+    source.film,
+    source.film,
+    (f) => filmClockFor({ ...source, ...patch, film: f }),
+    (f) => filmClockFor({ ...source, film: f }),
+  )
+  const { settings } = useAppStore.getState()
+  const { durationS = settings.flyoverDurationS, pacing = settings.pacing } = patch
+  useAppStore.setState({ settings: { ...settings, flyoverDurationS: durationS, pacing, film } })
 }
 
 /** Film time at which the marker passes a distance along the first track of `source`, in a given film (flight only). */

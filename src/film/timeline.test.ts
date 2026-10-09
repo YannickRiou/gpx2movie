@@ -671,6 +671,29 @@ describe('texts and media attached to a stop', () => {
     expect(slowed.texts[0].startS).toBeCloseTo(attached.texts[0].startS + delay, 1)
   })
 
+  it('follow their stop when the flyover duration or the pacing moves it (clock before the change)', () => {
+    const longer = (f: Film) =>
+      buildFilmClock({
+        opening: f.opening,
+        closing: f.closing,
+        stops: f.stops,
+        speeds: f.speeds,
+        lengthM: L,
+        highlightsM: [],
+        durationS: 2 * D,
+        pacing: { ...DEFAULT_PACING, keepDuration: false },
+      })
+    const next = followStops(attached, attached, longer, clockOfFilm)
+    const before = holdOf(attached, 'stop-1')
+    const after = longer(next).stops.find((s) => s.id === 'stop-1')!
+    expect(after.holdStartS - before.holdStartS).toBeGreaterThan(1)
+    expect(next.texts[0].startS - after.holdStartS).toBeCloseTo(1, 1)
+    expect(next.media[0]).toMatchObject({ startS: round(after.holdStartS), durationS: round(after.holdEndS - after.holdStartS) })
+    expect(next.texts[1]).toBe(attached.texts[1])
+    // same clock: nothing moves
+    expect(followStops(attached, attached, clockOfFilm)).toBe(attached)
+  })
+
   it('an attached item moved by the edit itself keeps its new place (new offset)', () => {
     const moved = dragFilm(attached, 'text-1', 'move', 3, contextOf(attached))
     expect(followStops(attached, moved, clockOfFilm)).toBe(moved)

@@ -719,8 +719,10 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   since the press, sub-pixel remainder carried over), stopped on release or cancel; a mere press near the edge does not scroll.
 - **Attached to a stop** (`stopId`, pure in `timeline.ts`): `attachToStop` attaches a text or a video (moved to the start
   of the stop's hold, duration kept) or a photo (fitted to the hold: shown while the marker holds), or frees it (time
-  kept). `followStops(before, after, clockOf)` runs on every edit of the film (`editFilm`, the timeline's `commit` and
-  `change`, the draft of a gesture): an item the edit did not move itself keeps its offset to the start of the hold (an
+  kept). `followStops(before, after, clockOf, clockBefore?)` runs on every edit of the film (`editFilm`, the timeline's
+  `commit` and `change`, the draft of a gesture), on "Ralentir et titrer aux repères" (`setLandmarkTitles`) and on
+  the flyover duration and pacing (`setFlightTiming`: the setting and the film in one change, `clockBefore` = the clock
+  before it): an item the edit did not move itself keeps its offset to the start of the hold (an
   item fitted to the hold stays fitted, stretched with the stop) when the stop moves in film time (drag, position,
   duration, other stop, speed portions, shots); an item whose stop is no longer one of the film's own stops (deleted,
   "Arrêts automatiques" checked again) becomes free where it is; moving the attached item changes its offset.
