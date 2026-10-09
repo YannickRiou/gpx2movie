@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react'
 import { errorMessage } from '../core/errors'
-import { buildTrackPath } from '../flyover/path'
+import { trackPathOf } from '../flyover/path'
 import { autoDistanceM } from '../flyover/camera'
 import { offlinePolicy } from '../offline/policy'
 import { CORRIDOR_WIDTHS_M, MAX_PACK_TILES, planOfflineTiles } from '../offline/plan'
@@ -37,7 +37,7 @@ export function OfflinePanel() {
   const plan = useMemo(() => {
     if (!bounds || tracks.length === 0 || !terrainPolicy.allowed) return null
     // the follow camera at its lowest: distance of the shortest track × setting × sin(pitch)
-    const distanceM = Math.min(...tracks.map((t) => autoDistanceM(buildTrackPath(t)))) * camera.distance
+    const distanceM = Math.min(...tracks.map((t) => autoDistanceM(trackPathOf(t)))) * camera.distance
     return planOfflineTiles({
       points: tracks.flatMap((t) => t.segments.flatMap((s) => s.points)),
       bounds,
@@ -47,7 +47,7 @@ export function OfflinePanel() {
       imageryZoomOffset,
       cameraHeightM: distanceM * Math.sin((camera.pitchDeg * Math.PI) / 180),
     })
-  }, [tracks, bounds, corridorM, terrain, imagery, imageryZoomOffset, camera, terrainPolicy.allowed, imageryPolicy.allowed])
+  }, [tracks, bounds, corridorM, terrain, imagery, imageryZoomOffset, camera.distance, camera.pitchDeg, terrainPolicy.allowed, imageryPolicy.allowed])
 
   const tooBig = plan !== null && plan.tiles.length > MAX_PACK_TILES
 

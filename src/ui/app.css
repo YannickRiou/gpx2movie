@@ -523,7 +523,7 @@
   border-left: 1px solid var(--color-ink);
 }
 
-.overlay-widget__tabs .segmented__option[aria-selected='true'] {
+.overlay-widget__tabs .segmented__option[aria-pressed='true'] {
   background: var(--color-ink);
   color: var(--color-white);
 }

@@ -66,14 +66,15 @@ export function buildTrackPath(track: Track): TrackPath {
   return path
 }
 
-const paths = new WeakMap<Track, TrackPath>()
+/** keyed by the points: a track only recoloured or renamed keeps its path */
+const paths = new WeakMap<Track['segments'], TrackPath>()
 
-/** `buildTrackPath`, cached per track object (tracks are immutable in the store; the path must not be mutated). */
+/** `buildTrackPath`, cached per list of points (tracks are immutable in the store; the path must not be mutated). */
 export function trackPathOf(track: Track): TrackPath {
-  let path = paths.get(track)
+  let path = paths.get(track.segments)
   if (!path) {
     path = buildTrackPath(track)
-    paths.set(track, path)
+    paths.set(track.segments, path)
   }
   return path
 }

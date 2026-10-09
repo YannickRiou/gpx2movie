@@ -4,7 +4,7 @@ import { getPlatform } from '../platform'
 import type { ProjectEntry } from '../platform'
 import { applySettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
-import { PRESET_SCOPE_LABELS, PRESET_SCOPES, getPresetStore, normalizePresetName, presetSettings } from '../project/presets'
+import { PRESET_NAME_MAX, PRESET_SCOPE_LABELS, PRESET_SCOPES, getPresetStore, normalizePresetName, presetSettings } from '../project/presets'
 import type { PresetScope } from '../project/presets'
 import { useAppStore } from '../state/store'
 import { deleteEntry, formatProjectSize, keepOpenProject, libraryFile, refreshLibrary, renameEntry, useLibraryStore } from './library'
@@ -245,7 +245,6 @@ function PresetSection() {
         <select
           id={`${id}-preset-scope`}
           className="select project__scope"
-          aria-label="Ce que garde le préréglage"
           value={presetScope}
           onChange={(e) => setPresetScope(e.currentTarget.value as PresetScope)}
         >
@@ -263,7 +262,7 @@ function PresetSection() {
             type="text"
             value={presetName}
             placeholder="Nom du préréglage"
-            maxLength={60}
+            maxLength={PRESET_NAME_MAX}
             onChange={(e) => setPresetName(e.currentTarget.value)}
           />
           <button type="submit" className="btn btn--secondary" disabled={!presetName.trim()}>

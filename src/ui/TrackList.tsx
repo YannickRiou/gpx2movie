@@ -203,6 +203,7 @@ export function TrackList() {
                 aria-label={`Supprimer la trace ${track.name}`}
                 data-tip="Supprimer"
                 data-tip-side="left"
+                disabled={busy}
                 onClick={() => removeTrack(track.id)}
               >
                 <Icon name="x" size={16} />

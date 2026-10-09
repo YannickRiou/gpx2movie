@@ -6,10 +6,11 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::{Mutex, MutexGuard};
+use std::thread::JoinHandle;
 
 use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, State};
@@ -38,6 +39,8 @@ struct Session {
     frame_bytes: usize,
     output: PathBuf,
     sound: Option<PathBuf>,
+    /// ffmpeg's error output, read as it comes: a full pipe would block it, and the frame writes with it
+    errors: JoinHandle<Vec<u8>>,
 }
 
 impl Videos {
@@ -125,21 +128,22 @@ fn error_tail(stderr: &[u8]) -> String {
 impl Session {
     /// Wait for ffmpeg (killed first unless `complete`); the file is kept only when it succeeded.
     fn end(self, complete: bool) -> Result<u64, String> {
-        let Session { mut ffmpeg, input, output, sound, .. } = self;
+        let Session { mut ffmpeg, input, output, sound, errors, .. } = self;
         // end of the frames: ffmpeg finishes the file
         drop(input);
         if !complete {
             let _ = ffmpeg.kill();
         }
-        let result = ffmpeg.wait_with_output();
+        let result = ffmpeg.wait();
+        let stderr = errors.join().unwrap_or_default();
         remove_sound(&sound);
         match result {
-            Ok(done) if complete && done.status.success() => fs::metadata(&output).map(|m| m.len()).map_err(|e| e.to_string()),
+            Ok(status) if complete && status.success() => fs::metadata(&output).map(|m| m.len()).map_err(|e| e.to_string()),
             failed => {
                 let _ = fs::remove_file(&output);
                 Err(match failed {
-                    Ok(done) if !done.stderr.is_empty() => format!("ffmpeg a échoué : {}", error_tail(&done.stderr)),
-                    Ok(done) => format!("ffmpeg s'est arrêté ({}).", done.status),
+                    Ok(_) if !stderr.is_empty() => format!("ffmpeg a échoué : {}", error_tail(&stderr)),
+                    Ok(status) => format!("ffmpeg s'est arrêté ({status})."),
                     Err(error) => format!("ffmpeg ne répond plus : {error}"),
                 })
             }
@@ -185,8 +189,14 @@ fn start(app: &AppHandle, output: PathBuf, width: u32, height: u32, fps: u32, qu
         .spawn()
         .map_err(|e| format!("Impossible de lancer ffmpeg : {e}"))?;
     let input = ffmpeg.stdin.take().ok_or("Entrée de ffmpeg indisponible.")?;
+    let mut stderr = ffmpeg.stderr.take().ok_or("Sortie d'erreur de ffmpeg indisponible.")?;
+    let errors = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = stderr.read_to_end(&mut bytes);
+        bytes
+    });
     let frame_bytes = width as usize * height as usize * 4;
-    Ok(Session { ffmpeg, input, frame_bytes, output, sound })
+    Ok(Session { ffmpeg, input, frame_bytes, output, sound, errors })
 }
 
 /// Start ffmpeg writing `path` (picked in the save dialog) and return the id of the session.

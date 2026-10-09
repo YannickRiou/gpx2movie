@@ -509,7 +509,7 @@ export function SettingsPanel() {
 
         <div className="field">
           <label className="field__label" htmlFor={trackColorId}>
-            Couleur de la trace
+            Colorer selon
           </label>
           <select
             id={trackColorId}

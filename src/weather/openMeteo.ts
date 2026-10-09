@@ -269,6 +269,8 @@ export function createWeatherCache(storage: CacheStorage | null = platformStorag
       const entry = load()[key]
       if (!entry?.day) return undefined
       memory.set(key, entry.day)
+      // last use, for the eviction (written with the next save)
+      entry.at = Date.now()
       return entry.day
     },
     set(key, day, persist) {

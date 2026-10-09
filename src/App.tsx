@@ -387,13 +387,14 @@ export default function App() {
         </nav>
 
         {/* every tab stays mounted: weather, landmarks and export have side effects */}
-        <aside id="side-panel" className="panel" aria-label="Réglages" hidden={shell.collapsed}>
+        {/* no change to the tracks or the settings while a film is being made: the export reads them live */}
+        <aside id="side-panel" className="panel" aria-label="Réglages" hidden={shell.collapsed} inert={exporting}>
           {panel(
             'trace',
             <>
               <TrackList />
               <RoutePanel />
-              <Fold title="Montées" hidden={!hasTracks}>
+              <Fold title="Montées et étiquettes" keys={['labels']} hidden={!hasTracks}>
                 <ClimbList />
               </Fold>
               <Fold title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
@@ -433,7 +434,7 @@ export default function App() {
           </Suspense>
         </aside>
         {/* the export drawer goes first */}
-        <aside className="dock" aria-label="Inspecteur" hidden={shell.dockOpen || !shell.inspecting}>
+        <aside className="dock" aria-label="Inspecteur" hidden={shell.dockOpen || !shell.inspecting} inert={exporting}>
           {shell.inspecting && !shell.dockOpen && <FilmInspector />}
         </aside>
       </div>

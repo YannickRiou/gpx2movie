@@ -6,7 +6,7 @@ import { getMediaBitmaps, mediaToLoad } from '../film/media'
 import type { FilmMedia } from '../film/model'
 import { clipRateAt } from '../film/timeline'
 import { getPreviewVideos } from '../film/video'
-import { useLandmarkStore } from '../osm/store'
+import { useLandmarkStore, useWaterStore } from '../osm/store'
 import { useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
@@ -137,6 +137,10 @@ function OverlayPreview() {
     const unsubscribeLandmarks = useLandmarkStore.subscribe((state, prev) => {
       if (state.landmarks !== prev.landmarks) schedule()
     })
+    // the OpenStreetMap credit also follows the water polygons
+    const unsubscribeWater = useWaterStore.subscribe((state, prev) => {
+      if (state.polygons !== prev.polygons) schedule()
+    })
     const unsubscribeSound = useMusicPreview.subscribe(schedule)
     const unsubscribePhotos = bitmaps.subscribe(schedule)
     const unsubscribeVideos = videos.subscribe(schedule)
@@ -157,6 +161,7 @@ function OverlayPreview() {
       unsubscribe()
       unsubscribeWeather()
       unsubscribeLandmarks()
+      unsubscribeWater()
       unsubscribeSound()
       unsubscribePhotos()
       unsubscribeVideos()

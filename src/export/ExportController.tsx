@@ -32,6 +32,7 @@ import { loadFrameMedia, releaseFrameMedia } from '../overlay/exportOverlay'
 import { useTerrainContext } from '../scene/TerrainLayer'
 import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
 import { useFilmClock } from '../scene/usePacing'
+import { useWaterStore } from '../osm/store'
 import { useAppStore } from '../state/store'
 import { REPLACE_EPSILON, composeFrame, composeOverlayFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
 import { ExportCanceledError, createVideoEncoder, type VideoEncodeSession } from './encoder'
@@ -377,14 +378,19 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
         ? overlayTimedState(settings.overlay, settings.film.texts, overlayTime(filmClock, progress, timeS), settings.film.media).join()
         : ''
     let previous = Number.NaN
+    const sceneMovesWithTime =
+      (settings.marker.kind === 'figurine' && settings.marker.animated) ||
+      (settings.atmosphere && settings.clouds.mode !== 'aucun') ||
+      (settings.water.enabled && useWaterStore.getState().polygons > 0)
     /** the view of the last rendered frame moved with time */
     let previousTimed = false
     let previousOverlay = ''
     for (let i = 0; i < schedule.length; i++) {
       if (isCanceled()) throw new ExportCanceledError()
       const progress = schedule[i]
-      // held frames (holds, stops) repeat the composed image as is, unless the view or the overlay moves with time
-      const timed = filmViewMovesWithTime(filmClock.stateAt(times[i]), settings.camera.style)
+      // held frames (holds, stops) repeat the composed image as is, unless the view, the scene (animated figurine,
+      // drifting clouds, rippling water) or the overlay moves with time
+      const timed = sceneMovesWithTime || filmViewMovesWithTime(filmClock.stateAt(times[i]), settings.camera.style)
       const overlayNow = overlayKey(progress, times[i])
       if (progress !== previous || ((timed || previousTimed) && times[i] !== frameTimeS) || overlayNow !== previousOverlay) {
         frameTimeS = times[i]

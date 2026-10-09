@@ -13,7 +13,8 @@ import { OVERLAY_FONTS } from './themes'
  */
 export async function loadOverlayFonts(fonts: FontFaceSet | undefined = globalThis.document?.fonts): Promise<void> {
   if (!fonts) return
-  await Promise.all(OVERLAY_FONTS.map((font) => fonts.load(font).catch(() => [])))
+  // with a Latin Extended letter: the latin-ext files too (Ł, ő, Č…), not only the face of a space
+  await Promise.all(OVERLAY_FONTS.map((font) => fonts.load(font, 'AĀ').catch(() => [])))
   await fonts.ready
 }
 

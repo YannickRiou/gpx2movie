@@ -95,7 +95,7 @@ export function TopBar({ onOpen, exportOpen, onToggleExport, onHelp }: TopBarPro
           <Icon name="folder-open" />
           <span className="icon-btn__text">Ouvrir</span>
         </button>
-        <button type="button" className="icon-btn icon-btn--label" onClick={saveProject} data-tip={withShortcut('Enregistrer le projet', 'save')}>
+        <button type="button" className="icon-btn icon-btn--label" onClick={saveProject} disabled={busy} data-tip={withShortcut('Enregistrer le projet', 'save')}>
           <Icon name="save" />
           <span className="icon-btn__text">Enregistrer</span>
         </button>
@@ -111,7 +111,8 @@ export function TopBar({ onOpen, exportOpen, onToggleExport, onHelp }: TopBarPro
           <button
             type="button"
             className="btn btn--primary topbar__export"
-            onClick={() => useExportStore.getState().cancel()}
+            // between two films of a batch the export store is idle: the batch takes the cancel
+            onClick={() => (batchRunning ? useBatchStore.getState().cancel() : useExportStore.getState().cancel())}
             disabled={phase === 'finalizing'}
             aria-label={phase === 'finalizing' ? 'Finalisation du fichier' : `Annuler l'export (${percent} %)`}
           >
