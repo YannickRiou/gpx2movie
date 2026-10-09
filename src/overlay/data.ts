@@ -293,12 +293,17 @@ export interface OverlayFilm {
 }
 
 /**
- * `prepareOverlayTrack` of the film track, and of every stage of a sequence « À la suite ». The weather series is the
- * first track's (the weather store follows it): « À la suite », only the first stage gets it.
+ * `prepareOverlayTrack` of the film track, and of every stage of a sequence « À la suite ». `weather` is the first
+ * track's series, `stageWeather` those of the later stages by track id (weather store).
  */
-export function prepareOverlayFilm(track: Track, sequence: Sequence | null, weather?: WeatherSeries | null): OverlayFilm {
+export function prepareOverlayFilm(
+  track: Track,
+  sequence: Sequence | null,
+  weather?: WeatherSeries | null,
+  stageWeather?: Readonly<Record<string, { series: WeatherSeries | null }>>,
+): OverlayFilm {
   if (!sequence) return { whole: prepareOverlayTrack(track, weather) }
-  const stages = sequence.stages.map((s) => prepareOverlayTrack(s.track, s.index === 0 ? weather : null))
+  const stages = sequence.stages.map((s) => prepareOverlayTrack(s.track, s.index === 0 ? weather : stageWeather?.[s.track.id]?.series))
   return { whole: prepareOverlayTrack(track), sequence, stages }
 }
 

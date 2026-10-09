@@ -3,7 +3,7 @@ import { useRegionStore } from '../osm/region'
 import { useLandmarkStore, useWaterStore } from '../osm/store'
 import { overlayCredits } from '../overlay/data'
 import { useAppStore } from '../state/store'
-import { useWeatherStore } from '../weather/store'
+import { useWeatherStore, weatherShown } from '../weather/store'
 import { Icon } from './icons'
 
 /** French plural: zero and one take the singular. */
@@ -22,7 +22,7 @@ export function StatusBar() {
   const loading = useAppStore((s) => s.loading)
   const terrainSourceId = useAppStore((s) => s.settings.terrainSourceId)
   const imagerySourceId = useAppStore((s) => s.settings.imagerySourceId)
-  const weather = useWeatherStore((s) => s.status === 'ready')
+  const weather = useWeatherStore(weatherShown)
   const landmarks = useLandmarkStore((s) => Object.values(s.landmarks).some((list) => list.length > 0))
   // OpenStreetMap is credited for the water and the highlighted region as well as for the landmarks
   const water = useWaterStore((s) => s.polygons > 0)

@@ -31,12 +31,13 @@ function textBoxes(l: PosterLayout): Box[] {
 const cases = POSTER_FORMATS.flatMap((f) => POSTER_STYLES.flatMap((style) => ROWS.map((rows) => ({ f, style, rows }))))
 
 describe('posterLayout', () => {
-  it.each(cases)('$f.id $style: rows inside the page and its margins, never on each other nor on the view', ({ f, style, rows }) => {
+  it.each(cases)('$f.id $style: rows inside the page and its margins, never on each other nor on the view, which keeps most of the poster', ({ f, style, rows }) => {
     const l = posterLayout(f.width, f.height, style, rows)
     const page = { x: 0, y: 0, w: f.width, h: f.height }
     const margin = 3 * l.u
     const safe = { x: margin, y: margin, w: f.width - 2 * margin, h: f.height - 2 * margin }
     expect(inside(l.view, page)).toBe(true)
+    expect((l.view.w * l.view.h) / (f.width * f.height)).toBeGreaterThan(0.38)
     for (const v of [l.view.x, l.view.y, l.view.w, l.view.h]) expect(Number.isInteger(v)).toBe(true)
     const boxes = textBoxes(l)
     expect(l.figures).toHaveLength(rows.figures)
@@ -55,11 +56,6 @@ describe('posterLayout', () => {
     for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) expect(overlap(boxes[i], boxes[j])).toBe(false)
     if (l.panel) expect(inside(l.panel, page)).toBe(true)
     if (l.accentBar && l.panel) expect(inside(l.accentBar, l.panel)).toBe(true)
-  })
-
-  it.each(cases)('$f.id $style: the view keeps most of the poster', ({ f, style, rows }) => {
-    const l = posterLayout(f.width, f.height, style, rows)
-    expect((l.view.w * l.view.h) / (f.width * f.height)).toBeGreaterThan(0.38)
   })
 
   it('stacks the text under the view in portrait and square, beside it in landscape', () => {

@@ -108,7 +108,22 @@ export function stageAt(sequence: Sequence, progress: number): { stage: Stage; p
   return { stage, progress: span > 0 ? Math.min(1, Math.max(0, (progress - stage.from) / span)) : 0 }
 }
 
-type LandmarkEntry = { inputs: (readonly Landmark[] | undefined)[]; out: Landmark[] | undefined }
+/**
+ * Track under the marker at film `progress` and the progress along it: « À la suite » the stage there (as the store
+ * holds it), else the first track at `progress`. What the sun, the clouds and the weather follow.
+ */
+export function trackUnderMarker(
+  tracks: readonly Track[],
+  race: Pick<RaceSettings, 'enabled' | 'sequence'>,
+  progress: number,
+): { track: Track; progress: number } | undefined {
+  const sequence = filmSequenceOf(tracks, race)
+  if (!sequence) return tracks[0] && { track: tracks[0], progress }
+  const at = stageAt(sequence, progress)
+  return { track: tracks[at.stage.index], progress: at.progress }
+}
+
+type LandmarkEntry ={ inputs: (readonly Landmark[] | undefined)[]; out: Landmark[] | undefined }
 /** last results per sequence: the shown and the hidden landmarks each keep theirs */
 const landmarkCache = new WeakMap<Sequence, LandmarkEntry[]>()
 const LANDMARK_CACHE_SIZE = 2

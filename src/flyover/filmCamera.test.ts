@@ -10,8 +10,6 @@ import { computeCameraView, MIN_GROUND_CLEARANCE_M } from './camera'
 import { DEFAULT_CAMERA, type CameraStyle } from './cameraSettings'
 import {
   blendViews,
-  CAMERA_KEY_EASE_S,
-  cameraKeyEaseM,
   computeFilmView,
   filmViewMovesWithTime,
   framedGroup,
@@ -513,10 +511,6 @@ describe('camera keys', () => {
   it('heading: the shorter way round', () => {
     const turn = [key('a', 0, 1, 30, 170), key('b', 1000, 1, 30, -170)]
     expect(keyedCamera(DEFAULT_CAMERA, turn, 500, 500).headingOffsetDeg).toBeCloseTo(180, 9)
-  })
-
-  it('ease: CAMERA_KEY_EASE_S of flight at the base speed', () => {
-    expect(cameraKeyEaseM(6000, 60)).toBeCloseTo((6000 * CAMERA_KEY_EASE_S) / 60, 9)
   })
 
   it('the film view follows the keys (placed on the clock by position), a film without keys is unchanged', () => {

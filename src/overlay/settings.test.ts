@@ -40,28 +40,23 @@ describe('overlay settings', () => {
     expect(invalid).toEqual(['overlay'])
   })
 
-  it('loads an overlay saved before the mini-map with the mini-map off', () => {
+  it('loads an overlay saved before the mini-map, credits and leaderboard with their defaults', () => {
     const custom = withPatch((o) => {
       o.enabled = true
       o.style = 'app'
     })
-    const { minimap: _minimap, ...old } = custom
+    const { minimap: _minimap, credits: _credits, leaderboard: _leaderboard, ...old } = custom
     const { settings, invalid } = sanitizeSettings({ overlay: old })
     expect(invalid).toEqual([])
-    expect(settings.overlay).toEqual({ ...custom, minimap: DEFAULT_OVERLAY.minimap })
+    expect(settings.overlay).toEqual({ ...custom, minimap: DEFAULT_OVERLAY.minimap, credits: DEFAULT_OVERLAY.credits, leaderboard: DEFAULT_OVERLAY.leaderboard })
     expect(settings.overlay.minimap.enabled).toBe(false)
+    expect(settings.overlay.credits).toEqual({ enabled: true, position: 'bottom-right' })
+    expect(settings.overlay.leaderboard).toEqual({ enabled: false, anchor: 'middle-right', size: 1 })
     // only the widgets added since are filled in
     expect(withOverlayDefaults(custom)).toBe(custom)
     expect(withOverlayDefaults('x')).toBe('x')
     const { counters: _counters, ...missingCounters } = old
     expect(sanitizeSettings({ overlay: missingCounters }).invalid).toEqual(['overlay'])
-  })
-
-  it('loads an overlay saved before the credits with the credits on', () => {
-    const { credits: _credits, ...old } = withPatch((o) => (o.enabled = true))
-    const { settings, invalid } = sanitizeSettings({ overlay: old })
-    expect(invalid).toEqual([])
-    expect(settings.overlay.credits).toEqual({ enabled: true, position: 'bottom-right' })
   })
 
   it('validates the credits', () => {
@@ -77,11 +72,8 @@ describe('overlay settings', () => {
     expect(sanitizeSettings({ overlay: broken }).invalid).toEqual(['overlay'])
   })
 
-  it('loads an overlay saved before the leaderboard with the leaderboard off', () => {
-    const { leaderboard: _leaderboard, ...old } = withPatch((o) => (o.enabled = true))
-    const { settings, invalid } = sanitizeSettings({ overlay: old })
-    expect(invalid).toEqual([])
-    expect(settings.overlay.leaderboard).toEqual({ enabled: false, anchor: 'middle-right', size: 1 })
+
+  it('validates the leaderboard', () => {
     expect(isValidOverlay(withPatch((o) => (o.leaderboard.size = 9)))).toBe(false)
   })
 })

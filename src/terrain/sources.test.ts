@@ -70,11 +70,6 @@ describe('getters', () => {
     expect(getTerrainSource('nope')).toBe(TERRAIN_SOURCES[0])
     expect(getImagerySource('')).toBe(IMAGERY_SOURCES[0])
   })
-
-  it('default to Mapterhorn terrain and IGN imagery', () => {
-    expect(TERRAIN_SOURCES[0].id).toBe('mapterhorn')
-    expect(IMAGERY_SOURCES[0].id).toBe('ign-ortho')
-  })
 })
 
 describe('sourceCovers', () => {

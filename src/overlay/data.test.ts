@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import sampleGpx from '../../public/samples/tour-du-mont-blanc-j1.gpx?raw'
 import type { TrackPoint } from '../core/types'
@@ -255,6 +256,14 @@ describe('« À la suite »', () => {
     // one track: as before
     const alone = prepareOverlayFilm(a, null)
     expect(overlayFilmFrameAt(alone, 0.5)).toEqual(overlayFrameAt(alone.whole, 0.5))
+  })
+
+  it('each stage its own weather series, the first one that of the first track', () => {
+    const first = { time: [T0], stations: [] }
+    const second = { time: [T0 + 86_400_000], stations: [] }
+    const withWeather = prepareOverlayFilm(sequence.track, sequence, first, { [b.id]: { series: second } })
+    expect(withWeather.stages?.map((s) => s.weatherSeries)).toEqual([first, second])
+    expect(prepareOverlayFilm(sequence.track, sequence, first).stages?.[1].weatherSeries).toBeUndefined()
   })
 
   it('a card for each stage as it starts: the first with the flight, the others at their cut', () => {

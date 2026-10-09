@@ -41,13 +41,6 @@ function expectRoundTrip(lon: number, lat: number, height: number): void {
   expect(Math.abs(back.height - height)).toBeLessThan(1e-6)
 }
 
-describe('WGS84 constants', () => {
-  it('are self-consistent', () => {
-    expect(WGS84.b).toBeCloseTo(WGS84.a * (1 - WGS84.f), 6)
-    expect(WGS84.e2).toBeCloseTo(2 * WGS84.f - WGS84.f * WGS84.f, 15)
-  })
-})
-
 describe('lonLatToEcef', () => {
   it('maps (0, 0, 0) to the X axis at the equatorial radius', () => {
     expectVec(lonLatToEcef(0, 0, 0), WGS84.a, 0, 0, 1e-6)

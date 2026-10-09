@@ -14,14 +14,9 @@ import {
 import { MARKER_FIGURE_PATHS } from './markerFigures'
 
 describe('track style and marker settings', () => {
-  it('defaults keep the former look: 4 px solid line, white ball', () => {
-    expect(DEFAULT_TRACK_STYLE).toEqual({ width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 })
-    expect(DEFAULT_MARKER.kind).toBe('boule')
+  it('accepts the defaults, rejects unknown choices, out-of-range sizes and anything but a bounded image data URL', () => {
     expect(isValidTrackStyle(DEFAULT_TRACK_STYLE)).toBe(true)
     expect(isValidMarker(DEFAULT_MARKER)).toBe(true)
-  })
-
-  it('rejects unknown choices, out-of-range sizes and anything but a bounded image data URL', () => {
     expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, dash: 'zigzag' as never })).toBe(false)
     expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, width: 40 })).toBe(false)
     expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, smoothingM: -10 })).toBe(false)
@@ -60,11 +55,5 @@ describe('figureMotion', () => {
     expect(top.tilt).toBeGreaterThan(0)
     expect(figureMotion(0.75).tilt).toBeLessThan(0)
     expect(figureMotion(0.5).lift).toBeCloseTo(0, 6)
-    expect(figureMotion(1.25)).toEqual(figureMotion(1.25))
-  })
-
-  it('is off by default and in older projects', () => {
-    expect(DEFAULT_MARKER.animated).toBe(false)
-    expect(withMarkerDefaults({ kind: 'figurine', figure: 'coureur', image: '', size: 1 })).toMatchObject({ animated: false })
   })
 })

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '../state/store'
 import { PRESETS_STORAGE_KEY, PRESET_SCOPE_KEYS, createPresetStore, getPresetStore, presetSettings } from './presets'

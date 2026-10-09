@@ -3,7 +3,7 @@ import type { Track } from '../core/types'
 import { buildTrack } from '../import/stats'
 import { WeatherError } from './openMeteo'
 import type { WeatherSeries } from './series'
-import { resetWeatherStore, syncWeather, useWeatherStore } from './store'
+import { resetWeatherStore, syncStageWeather, syncWeather, useWeatherStore, weatherSeriesOf, weatherShown } from './store'
 
 const T0 = Date.UTC(2025, 6, 12, 7)
 
@@ -102,5 +102,49 @@ describe('syncWeather', () => {
     calls[1].resolve(SERIES)
     await Promise.resolve()
     expect(useWeatherStore.getState()).toMatchObject({ status: 'idle', series: null })
+  })
+})
+
+describe('syncStageWeather (« À la suite »)', () => {
+  const SERIES_B: WeatherSeries = { time: [T0 + 86_400_000], stations: [] }
+
+  it('fetches each timed later stage once, apart from the first track, and drops the stages no longer listed', async () => {
+    const { calls, deps } = deferredFetcher()
+    const a = makeTrack('a', true)
+    const b = makeTrack('b', true)
+    syncWeather(a, true, { deps })
+    syncStageWeather([b, makeTrack('u', false)], true, { deps })
+    syncStageWeather([b], true, { deps })
+    expect(deps.fetchWeather).toHaveBeenCalledTimes(2)
+    calls[0].resolve(SERIES)
+    calls[1].resolve(SERIES_B)
+    await Promise.resolve()
+    const state = useWeatherStore.getState()
+    expect(weatherSeriesOf(state, a)).toBe(SERIES)
+    expect(weatherSeriesOf(state, b)).toBe(SERIES_B)
+    expect(weatherSeriesOf(state, makeTrack('u', false))).toBeNull()
+    expect(weatherShown(state)).toBe(true)
+    // the first track's sync leaves the stages alone
+    syncWeather(a, false, { deps })
+    expect(weatherSeriesOf(useWeatherStore.getState(), b)).toBe(SERIES_B)
+    syncStageWeather([], true, { deps })
+    expect(useWeatherStore.getState().stages).toEqual({})
+  })
+
+  it('cancels a stage removed or disabled while loading, fetches a failed one again', async () => {
+    const { calls, deps } = deferredFetcher()
+    const b = makeTrack('b', true)
+    syncStageWeather([b], true, { deps })
+    syncStageWeather([b], false, { deps })
+    expect(calls[0].signal?.aborted).toBe(true)
+    calls[0].resolve(SERIES_B)
+    await Promise.resolve()
+    expect(useWeatherStore.getState().stages).toEqual({})
+    syncStageWeather([b], true, { deps })
+    calls[1].reject(new WeatherError('error', 'hors ligne'))
+    await Promise.resolve()
+    expect(weatherSeriesOf(useWeatherStore.getState(), b)).toBeNull()
+    syncStageWeather([b], true, { deps })
+    expect(deps.fetchWeather).toHaveBeenCalledTimes(3)
   })
 })

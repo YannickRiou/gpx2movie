@@ -8,8 +8,8 @@
  * Neutral, which keeps the hues of the orthophotos and the track).
  *
  * Every frame: the sun date follows the playback (recorded time under the marker, else the solar hour, see
- * flyover/sun.ts), then the exposure opens up as the sun goes down and a faint night fill keeps the relief
- * readable (scene/exposure.ts).
+ * flyover/sun.ts; « À la suite » those of the stage under the marker, as its weather and clouds), then the exposure
+ * opens up as the sun goes down and a faint night fill keeps the relief readable (scene/exposure.ts).
  * The weather of the outing under the marker at that date (weather/sceneWeather.ts, `settings.weatherScene`)
  * then dims the sun and sky lights, fades the shadows, adds exposure, and drives the weather post-effect
  * (extra haze near the ground, veiled sky, desaturation: scene/weatherEffect.ts).
@@ -31,13 +31,16 @@ import { EffectComposer, ToneMapping, disposePassWithoutEffects } from '@react-t
 import { EffectPass, SMAAEffect, ToneMappingMode } from 'postprocessing'
 import type { AerialPerspectiveEffect, SkyLightProbe, SunDirectionalLight } from '@takram/three-atmosphere'
 import { AerialPerspective, Atmosphere, Sky, SkyLight, Stars, SunLight, type AtmosphereApi } from '@takram/three-atmosphere/r3f'
-import { samplePath, trackPathOf } from '../flyover/path'
+import type { Track } from '../core/types'
+import { samplePath, trackPathOf, type TrackPath } from '../flyover/path'
+import { trackUnderMarker } from '../flyover/sequence'
 import { mslLocalToEcef } from '../geo/geoid'
 import { shotSunShiftMs, sunDateAt, sunDayMs } from '../flyover/sun'
 import { useAppStore } from '../state/store'
 import { CLEAR_SCENE_WEATHER, hazeExtinction, sceneWeatherAt } from '../weather/sceneWeather'
 import type { SceneWeather } from '../weather/sceneWeather'
-import { useWeatherStore } from '../weather/store'
+import type { WeatherSeries } from '../weather/series'
+import { useWeatherStore, weatherSeriesOf } from '../weather/store'
 import { createCloudNoiseTexture } from './cloudNoise'
 import { CloudSeaSurface } from './CloudSeaSurface'
 import { CloudsLayer } from './CloudsLayer'
@@ -65,6 +68,14 @@ const _marker = new Vector3()
 const _irradiance = new Vector3()
 const _grey = new Color()
 
+/** Track under the marker for the current frame (`trackUnderMarker`), its path and weather, read by the clouds. */
+export interface MarkerTrack {
+  track: Track
+  path: TrackPath
+  progress: number
+  series: WeatherSeries | null
+}
+
 export function AtmosphereLayer() {
   const { engine, frame } = useTerrainContext()
   const shadows = useAppStore((s) => s.settings.shadows)
@@ -80,16 +91,17 @@ export function AtmosphereLayer() {
   const [today] = useState(() => Date.now())
   /** film clock: a 'situation' shot may move the sun (`shotSunShiftMs`) */
   const clock = useFilmClock()
-  /** sun date, weather under the marker and the ground there for its haze */
-  const path = track ? trackPathOf(track) : null
   const weatherEffect = useMemo(() => new WeatherEffect({ logarithmicDepth: gl.capabilities.logarithmicDepthBuffer }), [gl])
   useEffect(() => () => weatherEffect.dispose(), [weatherEffect])
   /** weather applied to the current frame, kept for the haze colour (after the lights are updated) */
   const weatherRef = useRef<SceneWeather>(CLEAR_SCENE_WEATHER)
   /** sun date of the current frame, read by the clouds */
   const dateRef = useRef<Date | null>(null)
+  /** track under the marker for the current frame, read by the clouds */
+  const markerRef = useRef<MarkerTrack | null>(null)
   const cloudMode = useAppStore((s) => s.settings.clouds.mode)
-  const weatherLoaded = useWeatherStore((s) => s.series !== null && s.trackId !== null && s.trackId === track?.id)
+  // « À la suite »: some stage's weather (a stage without any gets no clouds)
+  const weatherLoaded = useWeatherStore((s) => weatherSeriesOf(s, track) !== null || Object.values(s.stages).some((w) => w.series))
   const seaSurface = useAppStore((s) => s.settings.clouds.mode === 'mer' && s.settings.clouds.seaRender === 'surface')
   const cloudsOn = !seaSurface && (cloudMode === 'manuel' || cloudMode === 'mer' || (cloudMode === 'meteo' && weatherLoaded))
   const noise = useMemo(() => createCloudNoiseTexture(), [])
@@ -121,12 +133,15 @@ export function AtmosphereLayer() {
   useFrame(() => {
     const atmosphere = atmosphereRef.current
     if (!frame || !up || !atmosphere) return
-    const { playback, settings } = useAppStore.getState()
-    const sunDate = sunDateAt(path, playback.progress, {
+    const { playback, settings, tracks } = useAppStore.getState()
+    const at = trackUnderMarker(tracks, settings.race, playback.progress)
+    const under = at && { ...at, path: trackPathOf(at.track), series: weatherSeriesOf(useWeatherStore.getState(), at.track) }
+    markerRef.current = under ?? null
+    const sunDate = sunDateAt(under?.path ?? null, under?.progress ?? playback.progress, {
       sunFromTrack: settings.sunFromTrack,
       solarHour: settings.sunHour,
       lon: frame.origin.lon,
-      dayMs: sunDayMs(settings.sunDate, track?.stats.startTime, today),
+      dayMs: sunDayMs(settings.sunDate, under?.track.stats.startTime, today),
     })
     const date = new Date(sunDate.getTime() + shotSunShiftMs(clock, playback.timeS ?? clock.timeAtProgress(playback.progress)))
     atmosphere.updateByDate(date)
@@ -136,11 +151,10 @@ export function AtmosphereLayer() {
     // weather under the marker at the sun date; the haze starts from the ground there
     let weather: SceneWeather = CLEAR_SCENE_WEATHER
     let hazeBaseY = 0
-    const { series, trackId } = useWeatherStore.getState()
-    const weatherOn = series && trackId === track?.id && settings.weatherScene.enabled
-    if (path && path.count > 0 && weatherOn) {
-      const marker = samplePath(path, Math.min(1, Math.max(0, playback.progress)) * path.lengthM)
-      weather = sceneWeatherAt(series, date.getTime(), marker.lon, marker.lat, settings.weatherScene)
+    if (under && under.path.count > 0 && under.series && settings.weatherScene.enabled) {
+      const { path } = under
+      const marker = samplePath(path, Math.min(1, Math.max(0, under.progress)) * path.lengthM)
+      weather = sceneWeatherAt(under.series, date.getTime(), marker.lon, marker.lat, settings.weatherScene)
       const ground = engine?.sampleHeight(marker.lon, marker.lat) ?? marker.ele ?? 0
       hazeBaseY = frame.toLocal(marker.lon, marker.lat, ground * settings.exaggeration, _marker).y
     }
@@ -232,9 +246,9 @@ export function AtmosphereLayer() {
         <SkyLight ref={skyLightRef} />
         <SunLight ref={setSun} />
       </group>
-      {seaSurface && <CloudSeaSurface sun={sun} sky={skyLightRef} nightFill={nightFillRef} path={path} />}
+      {seaSurface && <CloudSeaSurface sun={sun} sky={skyLightRef} nightFill={nightFillRef} marker={markerRef} />}
       <EffectComposer multisampling={0}>
-        {cloudsOn && <CloudsLayer date={dateRef} path={path} noise={noise} />}
+        {cloudsOn && <CloudsLayer date={dateRef} marker={markerRef} noise={noise} />}
         <AerialPerspective ref={aerialRef} stbnTexture={noise} />
         <primitive object={weatherEffect} mainCamera={camera} />
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />

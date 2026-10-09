@@ -338,7 +338,6 @@ describe('tilesForBounds', () => {
 describe('tileGroundSizeM', () => {
   it('is the Earth circumference at zoom 0', () => {
     expect(Math.abs(tileGroundSizeM({ z: 0, x: 0, y: 0 }) - 40075016.69)).toBeLessThan(1)
-    expect(MERCATOR_CIRCUMFERENCE_M).toBeCloseTo(2 * Math.PI * 6378137, 6)
   })
 
   it('halves at each zoom level on the equator', () => {

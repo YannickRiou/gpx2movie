@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import routeOnlyGpx from './__fixtures__/route-only.gpx?raw'
 import twoSegmentsGpx from './__fixtures__/two-segments.gpx?raw'

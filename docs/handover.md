@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (101 files, 1,658 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (103 files, 1,577 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (12). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -331,9 +331,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    tracks"). « Plusieurs traces » in the track list: « La première » (default, unchanged), « À la suite » (stages
    with their own colour, name and figures, one timeline segment each, stage card, cut or dip between stages, order
    of the list) and « En parallèle » (the ghost race, camera on the first track, the one ahead or all of them,
-   leaderboard toggle). Left: the sun, the clouds and the weather of a later stage still follow the first track (a
-   one-line change in `AtmosphereLayer` / `CloudsLayer` / the weather store, owned by the clouds work); no hold or
-   camera move between stages (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
+   leaderboard toggle); each stage with its own sun, clouds and weather. Left: no hold or camera move between stages
+   (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
 8. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
    the current lots): a built-in openh264 encoder (patents checked: recommended to drop). Dropped by the user: GoPro GPS time (GPMF).
 
@@ -351,13 +350,12 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   the code cannot show, and anything longer belongs in ARCHITECTURE.md or docs/. Trim the long header and block
   comments accordingly.
   Tests (audit of 9 October 2026: relevant overall, 66 % of lines covered, 90 % outside UI components; details in
-  the session notes): merge `poster/layout.test.ts:60` into `:34` (−90 generated cases); drop the ~20 low-value tests
-  (constants, a pure function called twice, formulas copied from the code, duplicates across files); rewrite the
-  `TrackLines.test.tsx` buffer-layout tests on observable results. Add, by priority: the export loop (`runExport` with
-  fakes: frame count, cancel deletes the file, error path) and preview == export (`FlyoverRig` vs `viewAt` at N
-  times); frozen v1 / v2 projects with their expected values written out; 2–3 real FIT files (Garmin, Wahoo, Coros;
-  from the user); `projectActions` open / save; audio mixing. Run time: default environment `node`, jsdom only in the
-  files that need it (`// @vitest-environment jsdom`), about half of the 61 s.
+  the session notes). Done: poster layout cases merged (−90), low-value tests dropped, `TrackLines` tests on
+  observable results, frozen v1 / v2 projects (`project/legacy.test.ts`), `projectActions` open / save, audio mix and
+  `readAudio` (Web Audio fake), environment `node` with jsdom only where needed (run time ~41 s → ~18 s; 1,556 tests,
+  lines 66.9 %, branches 61.9 %). Left: the export loop (`runExport` with fakes: frame count, cancel deletes the file,
+  error path) and preview == export (`FlyoverRig` vs `viewAt` at N times); 2–3 real FIT files (Garmin, Wahoo, Coros;
+  from the user).
 - **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
   and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
   lens effects), memory (tile and DEM caches, textures, long sessions), export speed (cloud renders per frame,

@@ -131,7 +131,7 @@ function OverlayPreview() {
       }
     })
     const unsubscribeWeather = useWeatherStore.subscribe((state, prev) => {
-      if (state.series !== prev.series || state.status !== prev.status) schedule()
+      if (state.series !== prev.series || state.status !== prev.status || state.stages !== prev.stages) schedule()
     })
     const unsubscribeLandmarks = useLandmarkStore.subscribe((state, prev) => {
       if (state.landmarks !== prev.landmarks) schedule()

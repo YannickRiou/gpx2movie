@@ -37,12 +37,12 @@ import {
 import type { SkyLightProbe, SunDirectionalLight } from '@takram/three-atmosphere'
 import type { LocalFrame, LonLatBounds, TerrainEngine } from '../core/types'
 import { registerDrapeFlush } from '../export/store'
-import { samplePath, type TrackPath } from '../flyover/path'
+import { samplePath } from '../flyover/path'
 import { expandBounds } from '../geo/lonLat'
 import { useAppStore } from '../state/store'
 import { AREA_MARGIN_M, AREA_MIN_SIZE_M } from '../terrain/engine'
 import { cloudDrift, filmWind } from '../weather/sceneClouds'
-import { useWeatherStore } from '../weather/store'
+import type { MarkerTrack } from './AtmosphereLayer'
 import {
   EDGE_FADE_M,
   NO_TERRAIN_M,
@@ -268,23 +268,14 @@ interface CloudSeaSurfaceProps {
   sun: SunDirectionalLight | null
   sky: RefObject<SkyLightProbe | null>
   nightFill: RefObject<HemisphereLight | null>
-  path: TrackPath | null
+  marker: RefObject<MarkerTrack | null>
 }
 
-export function CloudSeaSurface({ sun, sky, nightFill, path }: CloudSeaSurfaceProps) {
+export function CloudSeaSurface({ sun, sky, nightFill, marker }: CloudSeaSurfaceProps) {
   const { engine, frame } = useTerrainContext()
-  const track = useAppStore((s) => s.tracks[0])
   const bounds = useAppStore((s) => s.bounds)
   const exaggeration = useAppStore((s) => s.settings.exaggeration)
-  const series = useWeatherStore((s) => (track && s.trackId === track.id ? s.series : null))
   const clock = useFilmClock()
-  const startTime = track?.stats.startTime
-  const start = path && path.count > 0 ? samplePath(path, 0) : null
-  /** drift after one second of film (the drift is linear in the film time: no allocation per frame) */
-  const unitDrift = useMemo(
-    () => cloudDrift(filmWind(series, startTime ?? 0, start?.lon ?? 0, start?.lat ?? 0), 1),
-    [series, startTime, start?.lon, start?.lat],
-  )
 
   const sea = useMemo(() => createSeaMesh(), [])
   const { mesh, uniforms } = sea
@@ -355,6 +346,10 @@ export function CloudSeaSurface({ sun, sky, nightFill, path }: CloudSeaSurfacePr
     u.seaCenter.value.set(camera.position.x, camera.position.z)
     const timeS = playback.timeS ?? clock.timeAtProgress(playback.progress)
     const t = Number.isFinite(timeS) ? timeS : 0
+    // wind of the track under the marker, at its start
+    const under = marker.current
+    const start = under && under.path.count > 0 ? samplePath(under.path, 0) : null
+    const unitDrift = cloudDrift(filmWind(under?.series ?? null, under?.track.stats.startTime ?? 0, start?.lon ?? 0, start?.lat ?? 0), 1)
     // noise point = position − (east, −north) (cloudSea.ts `seaNoisePoint`, +Z south)
     u.seaDrift.value.set(unitDrift.east * t, -unitDrift.north * t)
     u.seaBase.value = seaBaseAltitude(settings.clouds.seaTopM, settings.exaggeration)

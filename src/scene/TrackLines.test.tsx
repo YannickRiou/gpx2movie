@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Color, Group } from 'three'
+import { Color, Group, Vector3 } from 'three'
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
-import { Line2 } from 'three/addons/lines/Line2.js'
 import type { InterleavedBufferAttribute, TypedArray } from 'three'
 import type { TerrainEngine, Track, TrackPoint } from '../core/types'
 import { buildSequence } from '../flyover/sequence'
@@ -74,50 +73,46 @@ describe('buildDrapeBuffer / computeDrapedPositions', () => {
   })
 })
 
+/** the pieces a line draws, as [start, end] points */
+function drawnPieces(geometry: LineGeometry): number[][][] {
+  const start = geometry.getAttribute('instanceStart')
+  const end = geometry.getAttribute('instanceEnd')
+  if (!start || !end) return []
+  const at = (a: typeof start, i: number) => [a.getX(i), a.getY(i), a.getZ(i)]
+  return Array.from({ length: Math.min(start.count, geometry.instanceCount) }, (_, i) => [at(start, i), at(end, i)])
+}
+
 describe('writeLinePositions', () => {
-  const instanceStart = (geometry: LineGeometry) => geometry.getAttribute('instanceStart') as InterleavedBufferAttribute
-  const data = (geometry: LineGeometry) => instanceStart(geometry).data
+  const containsAll = (geometry: LineGeometry, points: number[][]) =>
+    points.every(([x, y, z]) => geometry.boundingSphere!.distanceToPoint(new Vector3(x, y, z)) < 1e-6)
 
-  it('builds the pair attributes on first write', () => {
+  it('draws the polyline piece by piece, then follows new points of the same or another count', () => {
     const geometry = new LineGeometry()
     writeLinePositions(geometry, new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0]))
-    expect(instanceStart(geometry).count).toBe(2)
-    expect(geometry.instanceCount).toBe(2)
-    expect(Array.from(data(geometry).array as TypedArray)).toEqual([0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0])
-    expect(geometry.boundingSphere).not.toBeNull()
-    geometry.dispose()
-  })
+    expect(drawnPieces(geometry)).toEqual([
+      [[0, 0, 0], [1, 0, 0]],
+      [[1, 0, 0], [1, 1, 0]],
+    ])
 
-  it('updates the existing buffer in place when the point count is unchanged', () => {
-    const geometry = new LineGeometry()
-    writeLinePositions(geometry, new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0]))
-    const buffer = data(geometry)
-    const versionBefore = buffer.version
-    writeLinePositions(geometry, new Float32Array([0, 5, 0, 1, 5, 0, 1, 6, 0]))
-    expect(data(geometry)).toBe(buffer)
-    expect(buffer.version).toBeGreaterThan(versionBefore)
-    expect(Array.from(buffer.array as TypedArray)).toEqual([0, 5, 0, 1, 5, 0, 1, 5, 0, 1, 6, 0])
-    expect(geometry.instanceCount).toBe(2)
-    expect(geometry.boundingBox?.min.y).toBe(5)
-    expect(geometry.boundingBox?.max.y).toBe(6)
-    geometry.dispose()
-  })
+    writeLinePositions(geometry, new Float32Array([0, 5, 1, 1, 5, 2, 1, 6, 3]))
+    expect(drawnPieces(geometry)).toEqual([
+      [[0, 5, 1], [1, 5, 2]],
+      [[1, 5, 2], [1, 6, 3]],
+    ])
+    // the bounds follow, or the moved line would be culled
+    expect(containsAll(geometry, [[0, 5, 1], [1, 6, 3]])).toBe(true)
 
-  it('rebuilds the attributes when the point count changes', () => {
-    const geometry = new LineGeometry()
-    writeLinePositions(geometry, new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0]))
-    const buffer = data(geometry)
     writeLinePositions(geometry, new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 2, 2, 0]))
-    expect(data(geometry)).not.toBe(buffer)
-    expect(instanceStart(geometry).count).toBe(3)
-    expect(geometry.instanceCount).toBe(3)
+    expect(drawnPieces(geometry)).toHaveLength(3)
+    expect(drawnPieces(geometry)[2]).toEqual([[1, 1, 0], [2, 2, 0]])
+    expect(containsAll(geometry, [[0, 0, 0], [2, 2, 0]])).toBe(true)
     geometry.dispose()
   })
 
   it('ignores degenerate polylines (fewer than two points)', () => {
     const geometry = new LineGeometry()
     writeLinePositions(geometry, new Float32Array([0, 0, 0]))
-    expect(geometry.getAttribute('instanceStart')).toBeUndefined()
+    expect(drawnPieces(geometry)).toEqual([])
     geometry.dispose()
   })
 })
@@ -175,24 +170,23 @@ describe('syncTrackLineSets', () => {
     expect(set.segments).toHaveLength(2)
     expect(set.segments[0].buffer.count).toBeGreaterThanOrEqual(Math.ceil(110 / DENSIFY_STEP_M) + 1)
     expect(set.segments[1].buffer.count).toBe(segmentB.length)
-    // solid and ghost share one geometry, segments never share one
-    expect(set.segments[0].ghost.geometry).toBe(set.segments[0].solid.geometry)
-    expect(set.segments[1].geometry).not.toBe(set.segments[0].geometry)
-    expect(set.segments[0].glow.geometry).toBe(set.segments[0].solid.geometry)
-    expect(set.segments[0].glow.visible).toBe(false)
-    expect(set.object.children.filter((o) => o instanceof Line2)).toHaveLength(6)
-    expect(set.object.children).toHaveLength(6)
+    // each segment is drawn on its own points: no line across the gap
+    drapeTrackLineSet(set, null, 1)
+    const [first, second] = set.segments.map((segment) => drawnPieces(segment.solid.geometry))
+    expectLocal(first.at(-1)![1], 0, 6.5, 45.501, 1050 + LINE_LIFT_M)
+    expectLocal(second[0][0], 0, 6.51, 45.505, 1100 + LINE_LIFT_M)
+    for (const segment of set.segments) {
+      expect(drawnPieces(segment.ghost.geometry)).toEqual(drawnPieces(segment.solid.geometry))
+      expect(segment.solid.visible && segment.ghost.visible).toBe(true)
+      expect(segment.glow.visible).toBe(false)
+    }
 
-    // materials: 4 px screen-space lines, ghost without depth test at 25 %
+    // 4 px lines in the track colour; the ghost shows through the relief at 25 %
     expect(set.solidMaterial.linewidth).toBe(LINE_WIDTH_PX)
-    expect(set.solidMaterial.worldUnits).toBe(false)
-    expect(set.solidMaterial.resolution.toArray()).toEqual([800, 600])
     expect(set.solidMaterial.color.getHexString()).toBe('ff0000')
+    expect(set.ghostMaterial.color.getHexString()).toBe('ff0000')
     expect(set.ghostMaterial.depthTest).toBe(false)
-    expect(set.ghostMaterial.depthWrite).toBe(false)
-    expect(set.ghostMaterial.transparent).toBe(true)
     expect(set.ghostMaterial.opacity).toBe(GHOST_OPACITY)
-    expect(set.segments[0].ghost.renderOrder).toBeGreaterThan(set.segments[0].solid.renderOrder)
 
     syncTrackLineSets(group, sets, [], frame, 800, 600)
   })

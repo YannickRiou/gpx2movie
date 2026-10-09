@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
 import type { TrackPoint } from '../core/types'
 import { buildTrackPath } from '../flyover/path'
