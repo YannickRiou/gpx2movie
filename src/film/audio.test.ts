@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CLIP_EDGE_FADE_S,
   DUCK_GAIN,
@@ -18,15 +18,24 @@ import {
   musicEnvelope,
   musicGainAt,
   musicLengthS,
+  mixFilmAudio,
   musicMixPlan,
   peakCount,
+  readAudio,
   waveformPath,
 } from './audio'
 import type { MusicElement } from './audio'
-import { MAX_PEAKS } from './media'
+import { MAX_AUDIO_BYTES, MAX_PEAKS } from './media'
 import type { MediaAsset } from './media'
 import { AUDIO_DEFAULTS, MEDIA_DEFAULTS, VIDEO_SOUND_DEFAULTS } from './model'
 import type { FilmAudio, FilmMedia } from './model'
+
+const decodeClipSound = vi.hoisted(() => vi.fn())
+vi.mock('./video', async (original) => ({
+  ...(await original<object>()),
+  decodeClipSound,
+  blobToDataUrl: async (blob: Blob, type: string) => `data:${type};base64,${btoa(await blob.text())}`,
+}))
 
 const clip = (patch: Partial<FilmAudio> = {}): FilmAudio => ({ id: 'music-1', src: 'audio-1', startS: 10, durationS: 20, inS: 0, ...AUDIO_DEFAULTS, ...patch })
 /** a video clip with sound, from film time 5 s for 10 s */
@@ -335,5 +344,167 @@ describe('music of the preview', () => {
     expect(made[1].released).toBe(true)
     preview.dispose()
     expect(made[2].released).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Web Audio fake: synthetic files, gains automated and mixed sample by sample
+// ---------------------------------------------------------------------------
+
+/** a decoded sound at 1 kHz: `level` throughout ('flat:<level>:<s>'), or its own file time / 100 ('ramp:<s>') */
+function synthetic(text: string): AudioBuffer {
+  const [kind, a, b] = text.split(':')
+  const seconds = Number(kind === 'flat' ? b : a)
+  if ((kind !== 'flat' && kind !== 'ramp') || !(seconds >= 0)) throw new Error('not a sound')
+  const data = Float32Array.from({ length: Math.round(seconds * 1000) }, (_, k) => (kind === 'flat' ? Number(a) : k / 1000 / 100))
+  return { sampleRate: 1000, duration: seconds, length: data.length, numberOfChannels: 1, getChannelData: () => data } as unknown as AudioBuffer
+}
+const soundUrl = (text: string) => `data:audio/mpeg;base64,${btoa(text)}`
+
+class FakeParam {
+  value = 1
+  events: { t: number; v: number; ramp: boolean }[] = []
+  setValueAtTime(v: number, t: number) {
+    this.events.push({ t, v, ramp: false })
+  }
+  linearRampToValueAtTime(v: number, t: number) {
+    this.events.push({ t, v, ramp: true })
+  }
+  at(t: number): number {
+    let value = this.value
+    for (let i = 0; i < this.events.length; i++) {
+      const e = this.events[i]
+      if (e.t <= t) value = e.v
+      else return e.ramp && i > 0 ? value + ((e.v - value) * (t - this.events[i - 1].t)) / (e.t - this.events[i - 1].t) : value
+    }
+    return value
+  }
+}
+type FakeNode = { gain?: FakeParam; out?: FakeNode; connect(next: FakeNode): FakeNode }
+const node = (gain?: FakeParam): FakeNode => ({
+  gain,
+  connect(next) {
+    this.out = next
+    return next
+  },
+})
+
+const decoded: string[] = []
+class FakeContext {
+  sampleRate: number
+  length: number
+  channels: number
+  destination = node()
+  sources: { buffer: AudioBuffer; out?: FakeNode; at: number; from: number; len: number }[] = []
+  constructor(options: { numberOfChannels: number; length: number; sampleRate: number } | number, length?: number, sampleRate?: number) {
+    const o = typeof options === 'number' ? { numberOfChannels: options, length: length!, sampleRate: sampleRate! } : options
+    this.channels = o.numberOfChannels
+    this.length = o.length
+    this.sampleRate = o.sampleRate
+  }
+  async decodeAudioData(bytes: ArrayBuffer) {
+    const text = new TextDecoder().decode(bytes)
+    decoded.push(text)
+    return synthetic(text)
+  }
+  createGain() {
+    return node(new FakeParam())
+  }
+  createBufferSource() {
+    const source = { ...node(), buffer: null as unknown as AudioBuffer, start: (at: number, from: number, len: number) => this.sources.push({ ...source, at, from, len }) }
+    return source
+  }
+  async startRendering() {
+    const sr = this.sampleRate
+    const out = Array.from({ length: this.channels }, () => new Float32Array(this.length))
+    for (const s of this.sources) {
+      for (let i = Math.ceil(s.at * sr); i < Math.min(this.length, Math.ceil((s.at + s.len) * sr)); i++) {
+        const t = i / sr
+        const k = Math.floor((s.from + t - s.at) * s.buffer.sampleRate)
+        if (k >= s.buffer.length) continue
+        let gain = 1
+        for (let n = s.out; n && n !== this.destination; n = n.out) gain *= n.gain!.at(t)
+        for (let c = 0; c < this.channels; c++) out[c][i] += s.buffer.getChannelData(Math.min(c, s.buffer.numberOfChannels - 1))[k] * gain
+      }
+    }
+    return { sampleRate: sr, numberOfChannels: this.channels, getChannelData: (c: number) => out[c] }
+  }
+}
+
+describe('export mix (Web Audio fake)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('OfflineAudioContext', FakeContext)
+    decoded.length = 0
+    decodeClipSound.mockReset()
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  const at = (mix: { sampleRate: number; channels: Float32Array[] }, t: number) => mix.channels.map((c) => c[Math.round(t * mix.sampleRate)])
+  const music = (text: string, durationS: number): MediaAsset => ({ data: soundUrl(text), name: 'piste.mp3', durationS })
+  const film = (patch: Partial<Parameters<typeof mixFilmAudio>[0]> = {}) => ({ audio: [], media: [], duckMusic: false, ...patch })
+
+  it('the music from its trim, at its volume with its fades, after the frames held before the film', async () => {
+    const audio = [clip({ startS: 2, durationS: 6, inS: 1, volume: 0.8, fadeInS: 1, fadeOutS: 1 })]
+    const mix = (await mixFilmAudio(film({ audio }), () => music('ramp:10', 10), { offsetS: 1, lengthS: 12 }))!
+    expect(mix.sampleRate).toBe(48000)
+    expect(mix.channels.map((c) => c.length)).toEqual([12 * 48000, 12 * 48000])
+    // output 3 s = film 2 s = file 1 s
+    expect(at(mix, 2.5)).toEqual([0, 0])
+    for (const v of at(mix, 3.5)) expect(v).toBeCloseTo(0.015 * 0.8 * 0.5, 5)
+    for (const v of at(mix, 6)) expect(v).toBeCloseTo(0.04 * 0.8, 5)
+    for (const v of at(mix, 8.5)) expect(v).toBeCloseTo(0.065 * 0.8 * 0.5, 5)
+    expect(at(mix, 9.5)).toEqual([0, 0])
+  })
+
+  it('the sound of the video clips added, the music lowered under them when asked; each file decoded once', async () => {
+    const audio = [clip({ startS: 0, durationS: 10, fadeInS: 0, fadeOutS: 0 }), clip({ id: 'music-2', startS: 10, durationS: 5, fadeInS: 0, fadeOutS: 0 })]
+    const media = [video({ startS: 4, durationS: 3 })]
+    const assets: Record<string, MediaAsset> = { 'audio-1': music('flat:0.5:20', 20), 'video-1': { data: 'data:video/mp4;base64,', name: 'v.mp4', durationS: 30 } }
+    decodeClipSound.mockImplementation(async () => synthetic('flat:0.2:3'))
+
+    const ducked = (await mixFilmAudio(film({ audio, media, duckMusic: true }), (src) => assets[src], { offsetS: 0, lengthS: 15 }))!
+    expect(decoded).toEqual(['flat:0.5:20'])
+    expect(decodeClipSound).toHaveBeenCalledWith(assets['video-1'], 0, 3)
+    expect(at(ducked, 2)[0]).toBeCloseTo(0.5, 5)
+    expect(at(ducked, 5)[0]).toBeCloseTo(0.5 * DUCK_GAIN + 0.2, 5)
+    expect(at(ducked, 8)[0]).toBeCloseTo(0.5, 5)
+    expect(at(ducked, 12)[0]).toBeCloseTo(0.5, 5)
+
+    const plain = (await mixFilmAudio(film({ audio, media }), (src) => assets[src], { offsetS: 0, lengthS: 15 }))!
+    expect(at(plain, 5)[0]).toBeCloseTo(0.7, 5)
+  })
+
+  it('null when nothing is heard: no music, or clips without a sound track', async () => {
+    expect(await mixFilmAudio(film(), () => undefined, { offsetS: 0, lengthS: 10 })).toBeNull()
+    decodeClipSound.mockResolvedValue(null)
+    const asset: MediaAsset = { data: 'data:video/mp4;base64,', durationS: 30 }
+    expect(await mixFilmAudio(film({ media: [video()] }), () => asset, { offsetS: 0, lengthS: 20 })).toBeNull()
+  })
+
+  it('names the file that cannot be decoded', async () => {
+    await expect(mixFilmAudio(film({ audio: [clip()] }), () => music('bruit', 30), { offsetS: 0, lengthS: 40 })).rejects.toThrow(
+      "Musique « piste.mp3 » illisible pendant l'export.",
+    )
+    decodeClipSound.mockRejectedValue(new Error('codec'))
+    const asset: MediaAsset = { data: 'data:video/mp4;base64,', name: 'v.mp4', durationS: 30 }
+    await expect(mixFilmAudio(film({ media: [video()] }), () => asset, { offsetS: 0, lengthS: 20 })).rejects.toThrow(
+      "Son de la vidéo « v.mp4 » illisible pendant l'export : coupez-le dans l'inspecteur de la vidéo.",
+    )
+  })
+
+  it('readAudio: the file kept as it is, with its length, waveform and beats', async () => {
+    const { asset } = await readAudio(new File(['flat:0.5:2.5'], 'piste.mp3', { type: 'audio/mpeg' }))
+    expect(asset).toMatchObject({ data: soundUrl('flat:0.5:2.5'), name: 'piste.mp3', durationS: 2.5 })
+    expect(asset.peaks).toEqual(new Array(peakCount(2.5)).fill(0.5))
+    // a flat sound has no tempo
+    expect(asset.beats?.times).toEqual([])
+  })
+
+  it('readAudio: other formats, files too large, undecodable or empty are refused with a reason', async () => {
+    await expect(readAudio(new File(['x'], 'carte.pdf', { type: 'application/pdf' }))).rejects.toThrow('format non pris en charge')
+    const heavy = Object.defineProperty(new Blob(['x'], { type: 'audio/wav' }), 'size', { value: MAX_AUDIO_BYTES + 1 })
+    await expect(readAudio(heavy, 'long.wav')).rejects.toThrow('fichier audio trop lourd (31 Mo) : 30 Mo au plus')
+    await expect(readAudio(new File(['bruit'], 'a.mp3', { type: 'audio/mpeg' }))).rejects.toThrow('ce navigateur ne sait pas lire ce fichier audio')
+    await expect(readAudio(new File(['flat:0.5:0'], 'a.mp3', { type: 'audio/mpeg' }))).rejects.toThrow('fichier audio vide.')
   })
 })
