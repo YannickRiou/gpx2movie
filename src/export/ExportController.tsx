@@ -179,7 +179,8 @@ async function runOverlayOnly(request: ExportRequest, deps: RunDeps, schedule: n
   }
 }
 
-async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
+// oxlint-disable-next-line react/only-export-components -- exported for its tests
+export async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
   const exportStore = useExportStore.getState
   let schedule: number[]
   try {
