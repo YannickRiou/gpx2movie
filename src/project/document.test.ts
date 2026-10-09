@@ -179,6 +179,16 @@ describe('serializeProject / parseProject', () => {
     expect(sanitizeSettings({ video: { aspect: '1:1', resolution: '8k', fps: 30, quality: 'high' } }).invalid).toEqual(['video'])
   })
 
+  it('loads the landmarks of older projects without hidden ids and rejects ids that are not strings', () => {
+    const { hiddenIds: _ignored, ...older } = DEFAULT_SETTINGS.landmarks
+    const { settings, invalid } = sanitizeSettings({ landmarks: older })
+    expect(invalid).toEqual([])
+    expect(settings.landmarks).toEqual({ ...older, hiddenIds: [] })
+    const kept = sanitizeSettings({ landmarks: { ...DEFAULT_SETTINGS.landmarks, hiddenIds: ['node/1'] } })
+    expect(kept.settings.landmarks.hiddenIds).toEqual(['node/1'])
+    expect(sanitizeSettings({ landmarks: { ...DEFAULT_SETTINGS.landmarks, hiddenIds: [1] } }).invalid).toEqual(['landmarks'])
+  })
+
   it('rejects an unknown track colour mode and an out-of-range exposure', () => {
     const { settings, invalid } = sanitizeSettings({ trackColorBy: 'rainbow', exposureEv: 12 })
     expect(settings.trackColorBy).toBe(DEFAULT_SETTINGS.trackColorBy)

@@ -237,6 +237,7 @@ describe('settings and misc', () => {
         enabled: true,
         kinds: { peak: true, pass: true, hut: true, lake: true, waterfall: false, place: false, viewpoint: false, glacier: false, waterPoint: false },
         maxDistanceM: 1500,
+        hiddenIds: [],
       },
       race: { enabled: false, sync: 'elapsed' },
     })

@@ -125,7 +125,10 @@ export const SETTING_CHECKS: { [K in keyof Settings]?: (value: Settings[K]) => b
   overlay: isValidOverlay,
   video: isValidVideoSettings,
   poster: isValidPoster,
-  landmarks: (v) => v.maxDistanceM >= LANDMARK_DISTANCE_RANGE.min && v.maxDistanceM <= LANDMARK_DISTANCE_RANGE.max,
+  landmarks: (v) =>
+    v.maxDistanceM >= LANDMARK_DISTANCE_RANGE.min &&
+    v.maxDistanceM <= LANDMARK_DISTANCE_RANGE.max &&
+    v.hiddenIds.every((id) => typeof id === 'string'),
   race: isValidRace,
   trackStyle: isValidTrackStyle,
   marker: isValidMarker,

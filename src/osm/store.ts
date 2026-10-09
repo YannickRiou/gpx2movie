@@ -10,7 +10,7 @@ import { create } from 'zustand'
 import type { Track } from '../core/types'
 import { trackPathOf } from '../flyover/path'
 import { setLabelSource, useLabelSources } from '../scene/labelSources'
-import { DEFAULT_LANDMARK_SETTINGS, buildLandmarks, landmarkLabels } from './landmarks'
+import { DEFAULT_LANDMARK_SETTINGS, buildLandmarks, landmarkLabels, splitHidden } from './landmarks'
 import type { Landmark, LandmarkSettings } from './landmarks'
 import { OverpassError, fetchTrackFeatures } from './overpass'
 import type { OsmFeature } from './overpass'
@@ -23,11 +23,13 @@ export interface LandmarkState {
   message: string | null
   /** corridor features per track id (every kind), as fetched */
   features: Readonly<Record<string, readonly OsmFeature[]>>
-  /** landmarks per track id after the setting is applied, ordered along the track */
+  /** landmarks per track id after the setting is applied, ordered along the track (hidden ones excluded) */
   landmarks: Readonly<Record<string, readonly Landmark[]>>
+  /** landmarks hidden one by one by the user (`settings.hiddenIds`), per track id, ordered along the track */
+  hidden: Readonly<Record<string, readonly Landmark[]>>
 }
 
-const INITIAL: LandmarkState = { status: 'idle', message: null, features: {}, landmarks: {} }
+const INITIAL: LandmarkState = { status: 'idle', message: null, features: {}, landmarks: {}, hidden: {} }
 
 export const useLandmarkStore = create<LandmarkState>()(() => ({ ...INITIAL }))
 
@@ -53,12 +55,16 @@ function errorMessage(e: unknown): string {
 function publish(tracks: readonly Track[], settings: LandmarkSettings, message: string | null): void {
   const features = useLandmarkStore.getState().features
   const landmarks: Record<string, Landmark[]> = {}
+  const hidden: Record<string, Landmark[]> = {}
   for (const track of tracks) {
     const list = features[track.id]
-    if (list) landmarks[track.id] = buildLandmarks(list, trackPathOf(track), settings)
+    if (!list) continue
+    const split = splitHidden(buildLandmarks(list, trackPathOf(track), settings), settings.hiddenIds)
+    landmarks[track.id] = split.shown
+    hidden[track.id] = split.hidden
   }
   const status: LandmarkStatus = pending.size > 0 ? 'loading' : failed.size > 0 ? 'error' : 'ready'
-  useLandmarkStore.setState({ status, message: status === 'error' ? message : null, landmarks })
+  useLandmarkStore.setState({ status, message: status === 'error' ? message : null, landmarks, hidden })
   setLabelSource('osm', landmarkLabels(Object.values(landmarks)))
 }
 
