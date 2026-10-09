@@ -77,6 +77,15 @@ reproduce it next to the box.
       low sun (reflections, ripples), no gray patches on the imagery.
 - [ ] Color grading ("Carte" tab › "Couleurs" (colors)): presets "Naturel" → "Noir et blanc" (natural → black and white), with and without atmosphere; no
       cost with "Naturel"; without atmosphere, graded sky with no visible seam with the terrain; vignette in 16:9 and 9:16.
+- [ ] "Objectif" ("Carte" tab), with and without atmosphere: "Halo lumineux" glows on snow and the sun, radius
+      changes it; "Profondeur de champ" keeps the marker sharp and blurs the far ridges and the foreground, same share
+      of the frame in a 4K export; "Reflet d'objectif" (atmosphere only) appears with the sun in the frame, disappears
+      behind a summit or a cloud deck, no flicker as the sun nears an edge; "Flou de bougé": edges streaked towards the
+      direction of travel and centre sharp in fast passages, nothing during stops and held shots, same in a paused
+      preview and the exported frame; trail while playing; an exported film (with and without clouds, WebCodecs and desktop ffmpeg) shows a smooth
+      blur in fast passages and sharp held frames and texts, no ghosting across the cut of an opening shot; export
+      time × ~8 without clouds, much less with clouds (the cloud renders are shared). Frames per second of the
+      preview with every effect on.
 - [ ] Edge smoothing (atmosphere enabled): no light fringe and no staircase on the ridges and the track.
 - [ ] Track and marker ("Survol" tab): width, dashes and dots during the flight, halo over forest and over snow, track
       drawn stuck to the marker, figures readable and flipped in turns, round avatar; default "Boule" (ball)

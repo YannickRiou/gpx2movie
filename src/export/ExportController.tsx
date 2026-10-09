@@ -13,6 +13,9 @@
  * image to its `compose` function; a still with `drawView` (flat map poster) skips the scene. Everything is restored
  * afterwards, on success, error or cancel.
  *
+ * With the motion blur (`settings.lens.shutter`), each film frame is rendered once per sub-frame of the open shutter
+ * and the shutter effect of the composer averages them (scene/lens.ts, scene/shutterEffect.ts).
+ *
  * The overlay alone (`overlayOnly`) skips the scene: the same frames, each overlay drawn on a cleared canvas and encoded
  * with its transparency, so the file lines up frame for frame with the film.
  */
@@ -24,18 +27,18 @@ import type { LocalFrame, TerrainEngine } from '../core/types'
 import { mixFilmAudio } from '../film/audio'
 import type { FilmClock } from '../film/clock'
 import { useMediaStore } from '../film/media'
-import { computeFilmView, filmViewMovesWithTime, overviewView, type FilmView } from '../flyover/filmCamera'
-import { filmFollowOf } from '../flyover/follow'
-import type { TrackPath } from '../flyover/path'
+import { filmViewMovesWithTime, overviewView } from '../flyover/filmCamera'
 import { filmTrackOf } from '../flyover/sequence'
 import { smoothedTrackPath } from '../flyover/smooth'
 import { loadOverlayFonts } from '../overlay/assets'
 import { filmTextOpacity, overlayTime, overlayTimedState } from '../overlay/draw'
 import { loadFrameMedia, overlayExtras, releaseFrameMedia } from '../overlay/exportOverlay'
+import { filmViewAt } from '../scene/filmView'
+import { SHUTTER_SUBFRAMES, sameShot, setShutterSubFrame, shutterSamples } from '../scene/lens'
 import { useTerrainContext } from '../scene/TerrainLayer'
-import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
+import type { HeightSampler } from '../scene/TrackLines'
 import { useFilmClock } from '../scene/usePacing'
-import { holdRegion, useRegionStore } from '../osm/region'
+import { holdRegion } from '../osm/region'
 import { useWaterStore } from '../osm/store'
 import { useAppStore } from '../state/store'
 import { REPLACE_EPSILON, composeFrame, composeOverlayFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
@@ -75,29 +78,6 @@ interface RunDeps {
   /** film clock of the preview (the request's schedule was built from it) */
   clock: () => FilmClock
   signal: AbortSignal
-}
-
-/** Camera placement of FlyoverRig at `progress` and film time `timeS` with the terrain loaded now (same inputs as the rig). */
-function viewAt(
-  path: TrackPath,
-  clock: FilmClock,
-  progress: number,
-  timeS: number | null,
-  frame: LocalFrame,
-  engine: TerrainEngine | null,
-  aspect: number,
-): FilmView {
-  const { settings, tracks } = useAppStore.getState()
-  const sampler: HeightSampler | null = engine ? (lon, lat) => engine.sampleHeight(lon, lat) : null
-  return computeFilmView(path, clock, timeS ?? clock.timeAtProgress(progress), progress, frame, sampler, {
-    exaggeration: settings.exaggeration,
-    liftM: LINE_LIFT_M,
-    camera: settings.camera,
-    durationS: settings.flyoverDurationS,
-    aspect,
-    region: useRegionStore.getState().frame,
-    follow: filmFollowOf(tracks, settings.race, settings.trackStyle.smoothingM),
-  })
 }
 
 const direction = new Vector3()
@@ -300,7 +280,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     if (!path || path.count === 0 || !frame) return 0
     const camera = deps.get().camera
     const { progress, timeS } = useAppStore.getState().playback
-    const view = viewAt(path, filmClock, progress, timeS, frame, deps.engine(), width / height)
+    const view = filmViewAt(path, filmClock, progress, timeS, frame, deps.engine(), width / height)
     camera.getWorldDirection(direction)
     toTarget.subVectors(view.target, camera.position)
     const offAxis = toTarget.addScaledVector(direction, -toTarget.dot(direction)).length()
@@ -318,7 +298,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     for (const ahead of PREFETCH_AHEAD) {
       const j = i + ahead
       if (j >= schedule.length) break
-      const view = viewAt(path, filmClock, schedule[j], times[j], frame, engine, width / height)
+      const view = filmViewAt(path, filmClock, schedule[j], times[j], frame, engine, width / height)
       prefetchCamera.position.copy(view.position)
       prefetchCamera.lookAt(view.target)
       engine.prefetch(prefetchCamera, height)
@@ -390,7 +370,9 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
       const card = stage ? filmTextOpacity(stage, timeS) : 0
       return [...overlayTimedState(settings.overlay, settings.film.texts, time, settings.film.media, dip?.alpha), card].join()
     }
-    let previous = Number.NaN
+    /** progress of the renders of the last rendered frame (one, or one per sub-frame of the open shutter) */
+    let previous = ''
+    const shutter = settings.lens.shutter
     const sceneMovesWithTime =
       (settings.marker.kind === 'figurine' && settings.marker.animated) ||
       (settings.atmosphere && settings.clouds.mode !== 'aucun') ||
@@ -401,17 +383,27 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     for (let i = 0; i < schedule.length; i++) {
       if (isCanceled()) throw new ExportCanceledError()
       const progress = schedule[i]
+      const state = filmClock.stateAt(times[i])
+      // the renders of an open shutter stay in the shot of the frame: no blend across a cut
+      const renders = shutterSamples(times, schedule, i, shutter, SHUTTER_SUBFRAMES, (t) => sameShot(filmClock, t, times[i]))
+      const rendered = renders.map((r) => r.progress).join()
       // held frames (holds, stops) repeat the composed image as is, unless the view, the scene (animated figurine,
       // drifting clouds, rippling water) or the overlay moves with time
-      const timed = sceneMovesWithTime || filmViewMovesWithTime(filmClock.stateAt(times[i]), settings.camera)
+      const timed = sceneMovesWithTime || filmViewMovesWithTime(state, settings.camera)
       const overlayNow = overlayKey(progress, times[i])
-      if (progress !== previous || ((timed || previousTimed) && times[i] !== frameTimeS) || overlayNow !== previousOverlay) {
+      if (rendered !== previous || ((timed || previousTimed) && times[i] !== frameTimeS) || overlayNow !== previousOverlay) {
         frameTimeS = times[i]
         previousTimed = timed
         previousOverlay = overlayNow
         // pictures and video frames decoded before the render: composing must follow it in the same task
         await loadFrameMedia(frameTimeS, progress)
-        const complete = await renderSettledFrame(progress, frameDeps)
+        let complete = true
+        for (let j = 0; j < renders.length; j++) {
+          setShutterSubFrame(j, renders.length)
+          frameTimeS = renders[j].timeS
+          if (!(await renderSettledFrame(renders[j].progress, frameDeps))) complete = false
+        }
+        frameTimeS = times[i]
         // same task as the last render: the drawing buffer still holds the frame
         const t0 = performance.now()
         composeFrame(ctx, canvas, { progress, time: overlayTime(filmClock, progress, frameTimeS) }, width, height, deps.overlay())
@@ -419,7 +411,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
         timings.rendered++
         if (!complete) timings.timeouts++
         if ((timings.rendered - 1) % PREFETCH_EVERY === 0) prefetchAhead(i)
-        previous = progress
+        previous = rendered
       }
       const t0 = performance.now()
       await session.addFrame(i)
@@ -450,6 +442,7 @@ async function runExport(request: ExportRequest, deps: RunDeps): Promise<void> {
     await abandon(error, request, session, isCanceled())
   } finally {
     releaseFrameMedia()
+    setShutterSubFrame(0, 1)
     holdRegion(false)
     // the layout size may have changed meanwhile: measure the canvas container again
     const box = canvas.parentElement?.getBoundingClientRect()

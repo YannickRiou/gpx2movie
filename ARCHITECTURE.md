@@ -77,6 +77,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | volumetric clouds | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `withCloudDefaults`, `seaTopFor`, `cloudCoversAt`, `sceneCloudsFrom`, `seaOfClouds`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor`; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
 | `src/scene/cloudSea.ts` + `src/scene/CloudSeaSurface.tsx` | surface sea of clouds | `seaRelief`, `billow`, `gradientNoise`, `octaveWeight`, `seaNoisePoint`, `seaBaseAltitude`, `curvatureDropM`, `edgeFade`, `rimFade`, `buildRadialGrid`, `terrainBoxOf`, `terrainGridCentres`, `seaReliefGlsl`, `glslFloat`; `CloudSeaSurface` |
 | `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | color grading | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms`; `GradingEffect`; `useGradingEffect`, `GradingComposer` |
+| `src/scene/lens.ts` + `useLensEffects.ts` + `flareEffect.ts` + `shutterEffect.ts` | « Objectif » lens effects (see "Lens") | pure, tested: `LensSettings`, `DEFAULT_LENS`, `LENS_RANGES`, `isValidLens`, `withLensDefaults`, `lensActive`, `bloomParams`, `depthOfFieldParams`, `SHUTTER_SUBFRAMES`, `shutterSamples`, `previewShutterWeight`, `radialBlurLength`, `setShutterSubFrame`, `shutterSubFrame`, `subFrameSlices`; `useLensEffects`, `FlareEffect`, `ShutterEffect`; `filmViewAt` (`filmView.ts`: the camera placement of `FlyoverRig` at a progress and film time, shared with the export); `LensPanel` (`src/ui`) |
 | `src/project/*` | project document, history, presets | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`, `isProjectThumbnail`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import") |
 | `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefix` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
@@ -518,6 +519,69 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   pass. Without atmosphere, switching from "Naturel" to a preset replaces the canvas's native MSAA with SMAA.
 - **Interface**: "Couleurs" section of the Carte tab (`src/ui/GradingPanel.tsx`): preset chips (one
   undo step each), the four sliders under "Plus de réglages".
+
+## Lens (« Objectif »)
+
+- **Setting** `settings.lens` (`src/scene/lens.ts`, pure and tested): `shutter`, `bloom`, `bloomRadius`, `flare`,
+  `depthOfField`, all 0..1 and off (0) by default (`bloomRadius` 0.6). `SETTING_CHECKS`: `isValidLens`;
+  `SETTING_UPGRADES`: `withLensDefaults`; projects saved before it load with every effect off. In the "carte" preset
+  family. "Objectif" section of the Carte tab after "Couleurs" (`src/ui/LensPanel.tsx`; "Non" at 0, the bloom radius
+  under "Plus de réglages"). The vignette stays in "Couleurs" (it is part of the grading presets).
+- **Chain** (`useLensEffects`): an effect exists only while its amount is above 0 (switching it on or off rebuilds the
+  pass; a slider only sets uniforms). With the atmosphere, bloom, depth of field and flare are merged into the pass
+  of the SMAA and the grading (after the SMAA, before the grading; `EffectPass` sorts depth effects first), on
+  tone-mapped linear colours. Without the atmosphere, `GradingComposer` mounts its composer as soon as an effect is
+  on (`lensActive`), grading effect included even at "Naturel" so the output is laid over the sky gradient and opaque.
+  The motion blur is a last `EffectPass` of its own: it averages the finished image. Updated every frame at priority
+  0.75 (after the sun, the camera and the marker, before the composer); priority 0 while every effect is off, since
+  a positive priority takes the rendering over from R3F.
+- **Bloom**: `BloomEffect` of postprocessing (mipmap blur), threshold 0.6 linear luminance (sun, snow, glittering
+  water after tone mapping), intensity 2.5 × amount, radius 0.2–0.95. Without and with the atmosphere.
+- **Depth of field**: `DepthOfFieldEffect` of postprocessing (handles the logarithmic depth buffer). Focus distance =
+  camera to the progress marker (`flyover-marker`), so a function of the film time like the camera; the orbit target,
+  else 1 km, without a marker. Full blur at 2× (amount 0) to 0.5× (amount 1) the focus distance from it; bokeh
+  6 px × amount at 1080p, scaled with the frame height (same look at 4K). The marker sprite writes no depth: it
+  takes the depth of the ground behind it, sharp.
+- **Lens flare** (atmosphere only, the slider is disabled without it): `FlareEffect`, custom, no dependency. The sun
+  direction of the atmosphere (ECEF) is brought into the scene frame and projected; the effect reads five taps of
+  its pass input over the sun disc: the disc saturates the tone mapping unless the relief or a volumetric cloud
+  (which writes no depth) hides it, so occlusion needs no extra pass. Glare, a horizontal streak, a faint ring and six
+  ghosts along the line from the sun through the centre (tinted with the palette's periwinkle, water green and
+  chartreuse), faded over the last 5% of the frame; none when the sun is off screen. Five texture reads per pixel.
+- **Motion blur**, export (exact and deterministic): each film frame is rendered `SHUTTER_SUBFRAMES` = 8 times at
+  instants stratified over ± shutter / 2 frame intervals around it (`shutterSamples`, progress and film time
+  interpolated between neighbouring frames of the schedule; an instant in another clock phase, i.e. across the cut of
+  an opening or closing shot, is replaced by the frame itself). `ExportController` sets the sub-frame
+  (`setShutterSubFrame`) and renders each with `renderSettledFrame`; `ShutterEffect` keeps the running mean in half
+  floats (weight 1/(k+1); a sub-frame rendered again while tiles load restarts from the previous mean); the canvas
+  then holds the mean and is composed as usual (overlay sharp, on top). Same capture for WebCodecs and the desktop's
+  native encoder. Held frames are reused when the progress of every sub-frame is unchanged. The volumetric clouds do
+  not average their 16/24/32 noise slices on every sub-frame: `subFrameSlices` gives each sub-frame its own share
+  (2/3/4), so a frame still averages all of them, now spread over the shutter. Cost: × 8 for the scene and the other
+  passes, the clouds unchanged. Stills and posters are never blurred.
+- **Radial speed blur** (same "Flou de bougé" slider, preview and export alike): the speed effect of the user's
+  request, edges streaked and centre sharp. The shutter blur alone only gives it for a camera flying straight towards
+  its aim (focus of expansion on the aim point); in chase it mostly shifts the whole frame. So `ShutterEffect` first
+  blurs each render along the ray to a centre, in the same blend draw (10 fixed taps). Centre: the direction of
+  travel projected on the frame (camera placements of the film at t and t − 1/fps, `filmViewAt`) when it lies ahead
+  and inside the central 70%, else the frame centre (the aim). Profile: streak = length × smoothstep(0.3, 1, r), r
+  the distance to the centre in frame units over the distance to the farthest corner (sharp inside 0.3, full in the
+  corners); taps from the pixel towards the centre. Length = shutter × min(0.15, 0.1 s × relative speed), relative
+  speed = distance the camera moved / aim distance / interval (1/s), 0 below 0.02/s: nothing during stops and held
+  shots (a default 60 s flight in chase: about 0.6/s, length 0.06; a 15 s one reaches the cap). A pure function of the
+  film time, so a paused preview shows the blur of its frame like the export does; none when the camera is farther
+  than 5% of the aim distance from the film's placement (moved by hand, poster overview; the rig's own camera drifts
+  by metres from a placement recomputed later, ground lift and finer tiles). Cost: two
+  `computeFilmView` per frame on the CPU, 10 texture reads per pixel outside the central zone.
+- **Motion blur**, preview: no motion vectors; while the film plays, `ShutterEffect` keeps a weight w of the previous
+  output (`previewShutterWeight`: the lag Δt·w/(1−w) of the trail equals half the exported shutter time, at any
+  preview frame rate). Paused or scrubbing: the image as is. An approximation (a trailing smear, not the centred
+  blur of the export). Cost: one blend per frame.
+- **Field of view**: left fixed (`CAMERA_FOV_DEG` = 50°). It enters the framing of the film camera (situation
+  distances, region fit, headroom), the overview of the poster, the offline tile plan and the LOD; making it a setting
+  means threading it through all of these and through the export, not a small change.
+- Verified: unit tests (setting, sub-frame instants, trail weight, slice sharing) and SwiftShader screenshots;
+  inferred: the cost and the look on a real GPU (`docs/tests-gpu.md`).
 
 ## Track color
 
@@ -1398,6 +1462,8 @@ it, know at what time you will pass each point, where the sun will be and what t
   `OffscreenCanvas.convertToBlob` (JPEG quality 0.92; extension based on the type obtained). Name: `<trace> <progression> %`.
   Restoration identical to the film.
 - Overview still image (poster): `still.overview` and `still.compose` (see "Poster").
+- Motion blur (`settings.lens.shutter`): 8 renders per frame across the open shutter, averaged by the composer
+  (see "Lens").
 - **Overlay only** ("Habillage seul (fond transparent)" (overlay only, transparent background) checkbox in the drawer, drawer state, not saved): to lay
   the overlay over your own footage in editing software. `overlayOnly` request: same `buildFrameSchedule` /
   `buildFrameTimes` as the film, hence the same frames, at the same instants, frame for frame; `runOverlayOnly`
@@ -1616,7 +1682,8 @@ it, know at what time you will pass each point, where the sun will be and what t
   high; 2 / 4 / 6 before) with the frame counter set to k (noise slice) and `temporalAlpha` = 1/(k+1) — the first
   discards the history, the following ones average (still camera, zero velocity). An exported frame therefore never
   depends on the previous ones, whatever the number of `settle` renders. The export cost of the clouds grows in
-  proportion (×6 for "Moyenne").
+  proportion (×6 for "Moyenne"). With the motion blur, the slices are shared among the sub-frames of the shutter
+  (see "Lens").
 - Grain, measured with SwiftShader (sea of clouds at 1,800 m, noon, still view 681 × 383, no terrain; mean absolute
   difference between neighbouring pixels in a cloud-only crop, 8-bit, 0.6 on a smooth sky): before (upsampled, never
   averaged) 5.9; still view averaged over 32 frames 0.7–0.9 at half resolution, 1.0 at full resolution (sharper); exported frame

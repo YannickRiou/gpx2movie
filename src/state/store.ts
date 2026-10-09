@@ -31,6 +31,8 @@ import { DEFAULT_POSTER } from '../poster/settings'
 import type { PosterSettings } from '../poster/settings'
 import { DEFAULT_GRADING } from '../scene/grading'
 import type { GradingSettings } from '../scene/grading'
+import { DEFAULT_LENS } from '../scene/lens'
+import type { LensSettings } from '../scene/lens'
 import { IMAGERY_SOURCES, sourceCovers } from '../terrain/sources'
 import { DEFAULT_CLOUDS } from '../weather/sceneClouds'
 import type { CloudSettings } from '../weather/sceneClouds'
@@ -57,6 +59,8 @@ export interface Settings {
   exposureEv: number
   /** colour grading of the final image (« Couleurs »): preset, contrast, saturation, warmth, vignette (scene/grading.ts) */
   grading: GradingSettings
+  /** « Objectif »: motion blur, bloom, lens flare and depth of field, all off by default (scene/lens.ts) */
+  lens: LensSettings
   /** colour the tracks by a recorded quantity ('none' = each track's own colour) */
   trackColorBy: TrackColorBy
   /** width, dashes, glow and « trace qui se dessine » of every track (see scene/markerSettings.ts) */
@@ -176,6 +180,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sunFromTrack: true,
   exposureEv: 0,
   grading: DEFAULT_GRADING,
+  lens: DEFAULT_LENS,
   trackColorBy: 'none',
   trackStyle: DEFAULT_TRACK_STYLE,
   marker: DEFAULT_MARKER,

@@ -10,7 +10,8 @@
  * Preview: cheapest preset, full resolution, temporal upscaling while the view changes; once it is still, every pixel
  * is marched and the frames are averaged until the noise of the march is gone (`previewCloudPass`). Export:
  * `settings.clouds.quality`, full resolution, no reprojection: each render averages a fixed number of noise slices
- * from scratch (history discarded by the first one), so a frame never depends on the frames rendered before it.
+ * from scratch (history discarded by the first one), so a frame never depends on the frames rendered before it; with
+ * the motion blur the slices are shared among the sub-frames of the shutter (scene/lens.ts).
  * The textures ship with the package and are served locally at /clouds/ (vite.config.ts); the blue noise of the
  * Takram examples is replaced by a generated noise (cloudNoise.ts), nothing is downloaded from GitHub.
  * Limit: the terrain is lit by light sources (SunLight), so the cloud shadows do not reach it (the weather dims the sun).
@@ -35,6 +36,7 @@ import {
 } from '../weather/sceneClouds'
 import { sceneConditionsAt } from '../weather/sceneWeather'
 import { useWeatherStore } from '../weather/store'
+import { shutterSubFrame, subFrameSlices } from './lens'
 import { previewCloudPass } from './renderOnDemand'
 import { useFilmClock } from './usePacing'
 import { useTerrainContext } from './TerrainLayer'
@@ -154,9 +156,11 @@ export function CloudsLayer({ date, path, noise }: { date: RefObject<Date | null
     effect.update = function (renderer, inputBuffer) {
       const alpha = this.cloudsPass.resolveMaterial.uniforms.temporalAlpha
       const previous = alpha.value
-      for (let k = 0; k < samples; k++) {
+      // motion blur: this sub-frame's share of the slices, the other sub-frames average the rest
+      const slices = subFrameSlices(samples, shutterSubFrame())
+      for (let k = 0; k < slices.count; k++) {
         // the frame counter picks the noise slice: fixed per sample, never carried over from the previous frame
-        Reflect.set(this, 'frame', k)
+        Reflect.set(this, 'frame', slices.first + k)
         alpha.value = 1 / (k + 1)
         update.call(this, renderer, inputBuffer, 0)
       }

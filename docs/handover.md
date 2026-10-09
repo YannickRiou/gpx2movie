@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (100 files, 1,642 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (101 files, 1,658 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (12). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -134,8 +134,8 @@ features included), `npm run build`,
   alpha checked with ffprobe and a decoded frame in the container, not tried in an editor (`docs/tests-gpu.md`).
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
-  list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept); "Texte libre" drawn like a
-  timeline text (behaviour change, needs the user's OK).
+  list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn
+  like a timeline text.
 
 ## Work merged from `lot-suites`
 
@@ -319,17 +319,10 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
 **Proposed, waiting for the user's go**
 4. **Camera smoothing in time**: done on the work branch (« Lissage de la visée », « Lissage de la caméra » 3 s by
    default, « Fin en douceur », « Lissage des virages » in metres; see ARCHITECTURE.md, "Flyover"). To check on a GPU.
-5. **Motion blur** (« Flou de bougé », speed effect; idea from MapDirector's « Lens » panel: field of view 60°, lens
-   flare, vignette, bloom, bloom radius, depth of field, motion blur 0.6). Export: render several sub-frames across the
-   shutter interval of each video frame and average them (exact, deterministic, also helps the clouds converge; cost:
-   × the sub-frame count). Preview: a cheaper velocity-based blur, or none. Setting: shutter amount 0–1 (0 = off by
-   default). Same « Lens » panel, already there: vignette (« Couleurs » › « Plus de réglages »); fixed field of view
-   (`CAMERA_FOV_DEG` = 50°). Requested by the user, with the motion blur: **bloom** (glow of the bright areas: sun,
-   snow, water; amount and radius), **lens flare** (« Reflet d'objectif » when the sun is in or near the frame),
-   **depth of field** (sharp on the marker, distance blur; amount). All three off by default, in a « Objectif »
-   section, same in preview and export (postprocessing effects in the existing composer: `BloomEffect`,
-   `DepthOfFieldEffect`; lens flare from the sun position, e.g. a custom effect or a maintained library).
-   Adjustable field of view: still to weigh.
+5. **« Objectif »**: done on the work branch (« Flou de bougé »: radial speed blur from the film's camera speed, plus
+   the exact shutter blur of the export, 8 sub-frames sharing the cloud renders, and a trail in the preview; « Halo lumineux », « Reflet d'objectif » (atmosphere only), « Profondeur de champ »
+   on the marker; all off by default; ARCHITECTURE.md, "Lens"). Field of view kept fixed (too many framing
+   computations depend on it). To check on a GPU (`docs/tests-gpu.md`).
 6. **Situation shot, more control**: done on the work branch (« Lieu » among the areas containing the track,
    « Maintien » / « Plongée », « Cadrage » with « Capturer la vue actuelle », « Faire bouger le soleil »; see
    ARCHITECTURE.md, "Film and timeline", Camera). To check on a GPU (`docs/tests-gpu.md`); the place list was only
@@ -357,6 +350,14 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   substitute for the documentation; the code should explain itself (names, structure), a comment only states a why
   the code cannot show, and anything longer belongs in ARCHITECTURE.md or docs/. Trim the long header and block
   comments accordingly.
+  Tests (audit of 9 October 2026: relevant overall, 66 % of lines covered, 90 % outside UI components; details in
+  the session notes): merge `poster/layout.test.ts:60` into `:34` (−90 generated cases); drop the ~20 low-value tests
+  (constants, a pure function called twice, formulas copied from the code, duplicates across files); rewrite the
+  `TrackLines.test.tsx` buffer-layout tests on observable results. Add, by priority: the export loop (`runExport` with
+  fakes: frame count, cancel deletes the file, error path) and preview == export (`FlyoverRig` vs `viewAt` at N
+  times); frozen v1 / v2 projects with their expected values written out; 2–3 real FIT files (Garmin, Wahoo, Coros;
+  from the user); `projectActions` open / save; audio mixing. Run time: default environment `node`, jsdom only in the
+  files that need it (`// @vitest-environment jsdom`), about half of the 61 s.
 - **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
   and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
   lens effects), memory (tile and DEM caches, textures, long sessions), export speed (cloud renders per frame,

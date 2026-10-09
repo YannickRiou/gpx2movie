@@ -15,7 +15,8 @@
  * (extra haze near the ground, veiled sky, desaturation: scene/weatherEffect.ts).
  * The SMAA runs in a pass of its own, after the tone mapping: on the edges it blends the pass input, so merged into
  * the pass of the other effects it would put back the raw HDR image (no haze, no tone mapping) along the ridges.
- * The colour grading (`settings.grading`, scene/GradingComposer.tsx) closes the chain, in the same pass after the SMAA.
+ * The colour grading (`settings.grading`, scene/GradingComposer.tsx) closes the chain, in the same pass after the SMAA
+ * and the « Objectif » effects (`settings.lens`, scene/useLensEffects.ts); the motion blur adds a last pass.
  * Volumetric clouds (`settings.clouds`, scene/CloudsLayer.tsx) are composited by the aerial perspective; while they
  * are shown, the veil over the sky pixels is lighter (the clouds themselves cover it). A sea of clouds rendered as a
  * surface (scene/CloudSeaSurface.tsx) is a mesh of the scene instead, hazed by the aerial perspective like the terrain.
@@ -42,6 +43,7 @@ import { CloudSeaSurface } from './CloudSeaSurface'
 import { CloudsLayer } from './CloudsLayer'
 import { DEFAULT_GROUND_HEIGHT_M } from './CameraRig'
 import { useGradingEffect } from './GradingComposer'
+import { useLensEffects } from './useLensEffects'
 import { nightFillIntensity, sceneExposure, sunElevation } from './exposure'
 import { useTerrainContext } from './TerrainLayer'
 import { useFilmClock } from './usePacing'
@@ -95,11 +97,12 @@ export function AtmosphereLayer() {
   /** local vertical in ECEF, for the sun elevation */
   const up = useMemo(() => (frame ? new Vector3().setFromMatrixColumn(frame.localToEcef, 1).normalize() : null), [frame])
   const grading = useGradingEffect()
+  const lens = useLensEffects(atmosphereRef)
   const smaa = useMemo(() => new SMAAEffect(), [])
   useEffect(() => () => smaa.dispose(), [smaa])
   const antialiasPass = useMemo(
-    () => new EffectPass(camera, ...(grading.active ? [smaa, grading.effect] : [smaa])),
-    [camera, smaa, grading.active, grading.effect],
+    () => new EffectPass(camera, smaa, ...lens.effects, ...(grading.active ? [grading.effect] : [])),
+    [camera, smaa, lens.effects, grading.active, grading.effect],
   )
   // the effects are owned above: dispose only the pass
   useEffect(() => () => disposePassWithoutEffects(antialiasPass), [antialiasPass])
@@ -236,6 +239,7 @@ export function AtmosphereLayer() {
         <primitive object={weatherEffect} mainCamera={camera} />
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />
         <primitive object={antialiasPass} />
+        {lens.shutter && <primitive object={lens.shutter} />}
       </EffectComposer>
     </Atmosphere>
   )
