@@ -1,28 +1,20 @@
 /**
- * FlyoverCanvas — the React Three Fiber root of the viewer.
+ * FlyoverCanvas — the React Three Fiber root of the viewer (layers and lighting: ARCHITECTURE.md "Atmosphere").
  *
- * With the atmosphere setting on (default), AtmosphereLayer draws the sky, lights the terrain from the
- * real sun position and tone-maps the frame. Without it, the canvas is transparent (alpha) over a CSS sky
- * gradient (glacier blue at the top, map paper at the horizon) and lit by a fixed hemisphere + a sun from
- * the south-east. With no track loaded the scene is left empty; otherwise the terrain layer provides the
- * engine to the track lines, the camera rigs and the atmosphere. `TrackPicker` makes the first track clickable (playhead,
- * right-click menu drawn by `TrackMenu` over the canvas). Frames are drawn on demand only (`renderOnDemand.ts`).
+ * Without the atmosphere the canvas is transparent over a CSS sky gradient, lit by a fixed hemisphere + a sun from
+ * the south-east, and tone mapping is disabled (`flat`): orthophotos are display-referred already, a filmic curve
+ * would only remap their colours. The intensities keep the lit terrain close to the texture brightness: three.js
+ * shades Lambert as albedo x irradiance / pi, so a flat tile gets (1.2 + 2.0 x 0.79) / pi = 0.88 of its albedo and a
+ * slope facing the sun peaks just under 1.0 (nothing clips).
  *
- * Shadow maps are enabled (PCF) but only the atmosphere's sun casts them (terrainShadow.ts); the fixed lights do not.
- *
- * Without the atmosphere, tone mapping is disabled (`flat`): orthophotos are display-referred images already, a filmic curve
- * would only remap their colours. The light intensities are chosen so the lit terrain stays close to the
- * texture brightness: three.js shades a Lambert surface as albedo x irradiance / pi, so a flat tile facing
- * the sky receives (hemisphere + sun x sin(sun elevation)) / pi = (1.2 + 2.0 x 0.79) / pi = 0.88 of its
- * albedo and a slope facing the sun peaks just under 1.0 (nothing clips).
- *
- * The colour grading (`settings.grading`) closes the post-processing of the atmosphere; without it, `GradingComposer`
- * grades the image over the same sky gradient, only while the grading is not « Naturel » or an « Objectif » effect is on
- * (scene/GradingComposer.tsx).
+ * Shadow maps are enabled (PCF) but only the atmosphere's sun casts them (terrainShadow.ts). Frames are drawn on
+ * demand only (`renderOnDemand.ts`).
  */
 import { Suspense, lazy, useEffect, useMemo, type CSSProperties } from 'react'
 import { Canvas } from '@react-three/fiber'
+import type { RootState } from '@react-three/fiber'
 import { useAppStore } from '../state/store'
+import { dismissToast, showToast } from '../ui/toast'
 import { ExportController } from '../export/ExportController'
 import { CAMERA_FOV_DEG } from '../flyover/filmCamera'
 import { createOverlayDrawer } from '../overlay/exportOverlay'
@@ -80,6 +72,27 @@ function RenderOnDemand() {
   return null
 }
 
+let webgl2: boolean | undefined
+
+/** Whether a WebGL 2 context can be created here (checked once). */
+function webgl2Supported(): boolean {
+  webgl2 ??= !!document.createElement('canvas').getContext('webgl2')
+  return webgl2
+}
+
+/** The GPU context can be lost (driver reset, too many contexts): keep the page, say so, redraw once it is back. */
+function watchContextLoss({ gl, invalidate }: RootState) {
+  let toast = 0
+  gl.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault() // lets the browser restore it
+    toast = showToast({ kind: 'info', text: 'Affichage 3D interrompu (carte graphique). Il reprendra automatiquement…' })
+  })
+  gl.domElement.addEventListener('webglcontextrestored', () => {
+    dismissToast(toast)
+    invalidate()
+  })
+}
+
 export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
   const hasTracks = useAppStore((s) => s.tracks.length > 0)
   const atmosphere = useAppStore((s) => s.settings.atmosphere)
@@ -88,9 +101,19 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
   const overlayDrawer = useMemo(createOverlayDrawer, [])
   useEffect(() => () => overlayDrawer.dispose(), [overlayDrawer])
 
+  if (!webgl2Supported()) {
+    return (
+      <div className={className} style={style ? { ...wrapperStyle, ...style } : wrapperStyle} role="alert">
+        <p style={{ margin: 0, padding: 24, textAlign: 'center', color: 'var(--text-1)' }}>
+          La 3D n’est pas disponible : la carte graphique ou le navigateur ne prend pas en charge WebGL 2.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className={className} style={style ? { ...wrapperStyle, ...style } : wrapperStyle}>
-      <Canvas gl={GL} camera={CAMERA} dpr={[1, 2]} frameloop="demand" flat shadows="percentage" style={canvasStyle}>
+      <Canvas gl={GL} camera={CAMERA} dpr={[1, 2]} frameloop="demand" flat shadows="percentage" style={canvasStyle} onCreated={watchContextLoss}>
         {!atmosphere && (
           <>
             <hemisphereLight color={HEMISPHERE_SKY} groundColor={HEMISPHERE_GROUND} intensity={HEMISPHERE_INTENSITY} />

@@ -1,11 +1,7 @@
 /**
  * What the flight camera follows when several tracks are played (`FilmViewOptions.follow`, flyover/filmCamera.ts):
- *
- * - « À la suite »: the stage under the marker, on its own smoothed path at its own progress, so the camera never
- *   flies across the jump from the end of one stage to the start of the next: it cuts there.
- * - « En parallèle »: the racer ahead (`tete`; once it has finished, the first one still racing) or all the racers
- *   framed together (`ensemble`); the film's marker stays on the first track. 'premiere': the first track, as before.
- *
+ * « À la suite » the stage under the marker, on its own path (a cut at each stage change); « En parallèle » the racer
+ * ahead (`tete`) or all the racers framed together (`ensemble`); 'premiere': the first track.
  * A function of the film progress only (`raceAt` is), so the preview and the export place the camera alike.
  */
 import type { Track } from '../core/types'

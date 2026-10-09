@@ -41,10 +41,11 @@ Linux **desktop application** (Tauri), from the same code.
 |---|---|
 | Import | GPX and FIT, several tracks at once, or Strava activities; heart rate, cadence, power and temperature when present; distance, elevation gain / loss (D+ / D−), duration, elevations |
 | Terrain and imagery | Mapterhorn or AWS Terrain Tiles terrain; IGN orthophotos in France and swisstopo in Switzerland, chosen automatically; Esri and Sentinel-2 elsewhere; topographic maps; historical IGN photos (1950–2005); terrain exaggeration; OpenStreetMap lakes and rivers rendered as water that reflects the sky and the sun, with ripples |
-| Flyover | five camera styles (chase, sway, orbit, top-down view, cinematic shot), six presets, duration from 15 s to 10 min, clickable elevation profile |
+| Flyover | five camera styles (chase, sway, orbit, top-down view, cinematic shot), six presets, duration from 15 s to 10 min, camera smoothing, opening and closing shots (including one that dives from the highlighted region onto the track), clickable elevation profile |
 | Pacing | slow-motion and pauses at highlights: tops of climbs, passes, nearby summits |
 | Light | physically based sky and haze, sun at the actual time of the outing, terrain shadows, starry night, automatic exposure |
-| Weather | historical weather for the day of the outing (Open-Meteo), or the forecast for an upcoming outing (up to 16 days), shown in a panel and in the scene; volumetric clouds derived from low, mid and high cloud cover (or set by hand), pushed by the wind |
+| Weather | historical weather for the day of the outing (Open-Meteo), or the forecast for an upcoming outing (up to 16 days), shown in a panel and in the scene; volumetric clouds derived from low, mid and high cloud cover (or set by hand), pushed by the wind; a sea of clouds filling the valleys, as volumetric clouds or as a lit surface |
+| Look | color grading presets; lens effects, all off by default: speed blur, bloom, lens flare, depth of field |
 | Landmarks | summits, passes, huts, lakes… from OpenStreetMap; climbs detected and categorized (cat. 4 to HC); 3D labels; the movie slows down at passes, summits and huts on the track and shows their name; any landmark can be hidden one by one |
 | Planned outing | for a route without times (Komoot, Visorando, IGNrando…): date, start time, activity and pace give the estimated passing time at each point, the sun and the weather forecast of the day |
 | Roadbook | before setting off: the steep sections (up and down), the passes, summits, huts and water points on the way, with the km, elevation, D+ and passing time; to copy or save as text |
@@ -52,10 +53,12 @@ Linux **desktop application** (Tauri), from the same code.
 | Track | colored by speed, slope, elevation, heart rate, cadence, power or temperature; width, dashes or dots, glow, track that draws itself as the marker passes; smoothing of GPS jitter |
 | Marker | ball, figurine (hiker, mountaineer, runner, cyclist, bikepacking, mountain bike, skier, paraglider, motorbike, car, light aircraft) facing the direction of travel, or your photo in a circle; adjustable size |
 | Ghost race | several tracks replayed together, with a live leaderboard |
+| Stages | several tracks flown one after the other, each stage with its own color, name, figures, sun and weather |
 | Chaining | several tracks (one per day, or one outing recorded in two files) merged into a single route, flown over in one go |
 | Overlay | titles, counters, profile, mini-map, weather, logo, text, ghost race leaderboard, texts, photos and videos from the timeline burned into the movie, source credits; three styles whose colors and fonts can be changed, for the whole overlay or element by element |
 | Music | one or more music tracks on the timeline (MP3, M4A, OGG, WAV, FLAC), with volume and fades; played during playback and mixed into the exported video, with the sound of the videos; music optionally lowered under the videos |
-| Export | MP4 or WebM video in 16:9, 9:16, 1:1, 4:5 or 21:9, from 720p to 4K, at 24, 30 or 60 frames per second, with the music and the sound of the videos; PNG or JPEG still image |
+| Export | MP4 or WebM video in 16:9, 9:16, 1:1, 4:5 or 21:9, from 720p to 4K, at 24, 30 or 60 frames per second, with the music and the sound of the videos; PNG or JPEG still image; the overlay alone on a transparent background (WebM); several formats in one go; on the desktop, one film per track of a folder, also from the command line |
+| Offline | tiles of the track downloaded once, along a corridor of 2, 5 or 10 km: the view and the export then work without a connection |
 | Poster | printable poster of the outing in A4 or A3 (300 dpi, portrait or landscape) or square: 3D view of the whole track, title, date, key figures, profile, weather of the day, credits; three styles; several tracks on the same poster, each in its color, with their list or their total; "Carte à plat" (flat map) for a map seen from above |
 | Project | project file to save and reopen, undo / redo, presets |
 
@@ -85,9 +88,8 @@ To test the production build: `npm run build`, then `npm run preview` (<http://l
 ### Notes for the development machine
 
 - **WSL**: run `source ~/.nvm/nvm.sh && nvm use 24` before `npm`.
-- **Windows**: Node is installed by fnm, outside the PATH. Add it before `npm`:
-  - PowerShell: `$env:Path = "C:\Users\MadCreator\AppData\Roaming\fnm\node-versions\v24.21.0\installation;" + $env:Path`
-  - Git Bash: `export PATH="/c/Users/MadCreator/AppData/Roaming/fnm/node-versions/v24.21.0/installation:$PATH"`
+- **Windows**: Node 24 installed with fnm may not be in the PATH. Run `fnm use 24` before `npm`, or prepend the fnm
+  installation folder of Node 24 to PATH.
 
 ## Documentation
 
@@ -126,7 +128,7 @@ application is built with `npm run tauri:build`; installers for the three system
 | `npm run lint` | code analysis (oxlint) |
 | `npm run e2e` | end-to-end tests in a real browser (see below) |
 
-The suite has **about 1,570 tests** (9 October 2026), each file next to its module (`src/**/*.test.ts`); network calls
+The suite has **about 1,580 tests** (9 October 2026), each file next to its module (`src/**/*.test.ts`); network calls
 and the video encoder are mocked. `npm run e2e` drives the app in a headless Chromium through five scenarios (home,
 tabs, timeline, project, export); its options are documented at the top of `e2e/run.mjs`. The rendering
 quality is checked by eye ([`docs/tests-gpu.md`](docs/tests-gpu.md)).
@@ -140,7 +142,7 @@ All sources are open and keyless; the code declares them in `src/terrain/sources
 | Mapterhorn, AWS Terrain Tiles | terrain | open data (CC BY 4.0, OGL, public domain…) |
 | IGN Géoplateforme | orthophotos, Plan IGN and historical photos in France | Licence Ouverte Etalab 2.0 |
 | swisstopo | orthophotos and national map in Switzerland | open data (OGD) |
-| Esri World Imagery | world orthophotos (default imagery) | Esri terms, **to be reviewed** before commercial use |
+| Esri World Imagery | world orthophotos (optional, sharpest outside France and Switzerland) | Esri terms: credited "Powered by Esri", never in offline packs; keyless use not covered by Esri, hence not the default ([details](docs/sources.md)) |
 | EOX Sentinel-2 cloudless | world satellite images | CC BY-NC-SA 4.0, **no commercial use** |
 | OpenTopoMap | world topographic map | CC BY-SA |
 | Open-Meteo | historical weather and forecast | CC BY 4.0, **non-commercial** API |
@@ -152,7 +154,9 @@ verification log: [`docs/sources.md`](docs/sources.md).
 
 ## Licenses
 
-The OpenFlyover code is under the **MIT license** ([`LICENSE`](LICENSE), © 2026 Yannick Riou).
+The OpenFlyover code is under the **MIT license** ([`LICENSE`](LICENSE), © 2026 Yannick Riou). The licenses of everything it
+redistributes (npm packages, Rust crates, fonts, icons, data) are in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md),
+generated by `npm run notices`.
 
 | Dependency | Version | License |
 |---|---|---|
@@ -208,7 +212,7 @@ Conventions:
 | 3 — Atmosphere | done |
 | 4 — Customization | done |
 | 5 — Video export | in progress: speed measurement on a machine with a GPU |
-| 6 — Desktop application | in progress: first run of the workflows, signing |
+| 6 — Desktop application | in progress: command-line rendering and macOS / Linux installers to run on a real machine, signing |
 | 7 — Beyond the flyover | done |
 
 Content of each phase: [`docs/roadmap.md`](docs/roadmap.md).

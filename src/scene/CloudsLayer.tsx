@@ -1,20 +1,15 @@
 /**
  * CloudsLayer — volumetric clouds (`@takram/three-clouds`), inside the EffectComposer of AtmosphereLayer and before
- * its aerial perspective, which composites them over the scene.
+ * its aerial perspective, which composites them over the scene (ARCHITECTURE.md "Volumetric clouds").
  *
- * Every frame, at the sun date under the marker: cover per layer from the weather of the outing (« À la suite », of
- * the stage under the marker) or the manual setting, then coverage, altitudes and thinning of the three layers, or the
- * single layer of the sea of clouds (weather/sceneClouds.ts); the clouds drift with the wind of the outing × film time
- * (offsets set directly, no velocity integrated over frames).
+ * Every frame, at the sun date under the marker: coverage, altitudes and thinning from the weather of the outing or the
+ * manual setting (weather/sceneClouds.ts); the clouds drift with the wind x film time (offsets set directly, no
+ * velocity integrated over frames).
  *
- * Preview: cheapest preset, full resolution, temporal upscaling while the view changes; once it is still, every pixel
- * is marched and the frames are averaged until the noise of the march is gone (`previewCloudPass`). Export:
- * `settings.clouds.quality`, full resolution, no reprojection: each render averages a fixed number of noise slices
- * from scratch (history discarded by the first one), so a frame never depends on the frames rendered before it; with
- * the motion blur the slices are shared among the sub-frames of the shutter (scene/lens.ts).
- * The textures ship with the package and are served locally at /clouds/ (vite.config.ts); the blue noise of the
- * Takram examples is replaced by a generated noise (cloudNoise.ts), nothing is downloaded from GitHub.
- * Limit: the terrain is lit by light sources (SunLight), so the cloud shadows do not reach it (the weather dims the sun).
+ * Export: full resolution, no reprojection: each render averages a fixed number of noise slices from scratch, so a
+ * frame never depends on the frames rendered before it. The textures are served locally at /clouds/ (vite.config.ts),
+ * with a generated noise instead of the Takram blue noise (cloudNoise.ts): nothing is downloaded from GitHub.
+ * Limit: the terrain is lit by light sources (SunLight), so the cloud shadows do not reach it.
  */
 import { useLayoutEffect, useMemo, useRef, type RefObject } from 'react'
 import { useFrame } from '@react-three/fiber'

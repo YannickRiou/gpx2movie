@@ -357,6 +357,14 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   error path); preview == export (`FlyoverRig` and the export both place the camera with `filmViewAt`, and playing
   the film reaches the progress of every exported frame, `schedule.test.ts`). Left: 2–3 real FIT files (Garmin, Wahoo, Coros;
   from the user).
+- **Review done** (branch `final-review`, 9 October 2026): docs checked against the code, ~450 comment lines cut,
+  French messages for browser / system errors, error screen, WebGL 2 missing or context lost, file dialog failures
+  shown, camera presets as a tile grid (12 presets), initial JS −16 kB gzip (overlay canvas and film inspector lazy).
+  No unused dependency; every export flagged by knip is used in its module or its tests. Then fixed on the same
+  branch: Windows command line prints to the calling terminal (`AttachConsole`), atomic project writes, external links
+  in the system browser, `'wasm-unsafe-eval'` removed from the CSP, Esri optional (never default nor offline, « Powered
+  by Esri »), Strava attribution and « Déconnecter Strava », `THIRD_PARTY_NOTICES.md` (npm packages, Rust crates, assets;
+  no GPL / LGPL / AGPL). Open: frozen old projects with media / POIs / camera keys (a test).
 - **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
   and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
   lens effects), memory (tile and DEM caches, textures, long sessions), export speed (cloud renders per frame,

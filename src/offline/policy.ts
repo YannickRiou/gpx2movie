@@ -58,10 +58,8 @@ export const OFFLINE_POLICIES: Readonly<Record<string, OfflinePolicy>> = {
   'swisstopo-carte': { ...SWISSTOPO, typicalTileBytes: 30_000 },
   'arcgis-world-imagery': {
     provider: 'esri',
-    allowed: true,
-    personalUse: true,
-    reason: 'Usage personnel : Esri réserve normalement le hors ligne à ses applications, gardez un couloir court.',
-    dailyLimit: 10_000,
+    allowed: false,
+    reason: 'Les conditions d’Esri interdisent de télécharger ses tuiles en dehors de ses propres outils.',
     typicalTileBytes: 14_000,
   },
   opentopomap: {

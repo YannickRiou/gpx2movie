@@ -1,19 +1,8 @@
 /**
- * Beats of the music, and the film edited onto them (« Caler sur le rythme »).
- *
- * - Detection (`detectBeats`), once per sound file when it is read (`readAudio`), kept in its entry of the media
- *   table (`MediaAsset.beats`; a file read before is analysed on demand): the decoded file, downmixed, in frames of
- *   about 10 ms; its onsets are the rises of the loudness of its low band and of the rest (`onsetEnvelope`); the
- *   tempo, 60–180 BPM, is the lag at which that envelope best matches itself (autocorrelation, a tempo near 120 BPM
- *   preferred to its half or its double, `tempoOf`); the beats are the onsets that best follow that tempo, found by
- *   dynamic programming (`trackBeats`, after D. Ellis, 2007: on the strongest onsets, free to drift a little with the
- *   music); a bar starts every 4th beat, from the one whose beats are the strongest. On silence or a barely periodic
- *   sound the tempo is not confident (`MIN_TEMPO_CONFIDENCE`): no beats then.
- * - Snapping (`snapFilmToBeats`): the start of each title card (film time) and of each stop's hold (a stop is placed
- *   in metres: moved along the track through the film clock, `stopPositionAt`) onto the nearest bar start within
- *   `BEAT_SNAP_S`, else the nearest beat; never over another text, never past another stop. The start of each speed
- *   portion (slow motion or fast forward, placed in metres like the stops) is moved first, its length kept, never
- *   past a neighbouring portion: it shifts the times of what follows it.
+ * Beats of the music, and the film edited onto them (« Caler sur le rythme »): `detectBeats` (onsets, tempo,
+ * beat tracking after D. Ellis, 2007) runs once per sound file when it is read; `snapFilmToBeats` moves title cards,
+ * stops and speed portions onto the beats. See ARCHITECTURE.md "Film and timeline", Music.
+ * On silence or a barely periodic sound the tempo is not confident (`MIN_TEMPO_CONFIDENCE`): no beats.
  *
  * Pure module.
  */

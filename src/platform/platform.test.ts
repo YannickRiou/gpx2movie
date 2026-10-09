@@ -16,6 +16,7 @@ import {
   videoEncoderMissingHint,
 } from './index'
 import type { VideoEncoderKind } from './index'
+import { externalLinkOf } from './externalLinks'
 import {
   DESKTOP_PROJECT_ROOT,
   MAX_THUMBNAIL_LENGTH,
@@ -48,6 +49,17 @@ describe('detection', () => {
     expect(isTauriRuntime({ __TAURI_INTERNALS__: {} })).toBe(true)
     expect(isTauriRuntime({})).toBe(false)
     expect(isTauriRuntime({ isTauri: 'yes' })).toBe(false)
+  })
+
+  it('picks the https links that open in a new tab, nothing else', () => {
+    const click = (html: string, init: Partial<MouseEvent> = {}) => {
+      document.body.innerHTML = html
+      return externalLinkOf({ target: document.querySelector('b'), defaultPrevented: false, button: 0, ...init })
+    }
+    expect(click('<a href="https://open-meteo.com/" target="_blank"><b>x</b></a>')).toBe('https://open-meteo.com/')
+    expect(click('<a href="http://a.fr" target="_blank"><b>x</b></a>')).toBeNull()
+    expect(click('<a href="https://a.fr"><b>x</b></a>')).toBeNull()
+    expect(click('<a href="https://a.fr" target="_blank"><b>x</b></a>', { button: 1 })).toBeNull()
   })
 
   it('encodes with WebCodecs, else with the native encoder of the desktop app', () => {
@@ -446,6 +458,12 @@ describe('offline tile cache', () => {
         return bytes
       }),
       writeFile: vi.fn(async (path: string, data: Uint8Array) => void files.set(path, data)),
+      rename: vi.fn(async (from: string, to: string) => {
+        const bytes = files.get(from)
+        if (!bytes) throw new Error('missing')
+        files.delete(from)
+        files.set(to, bytes)
+      }),
       mkdir: vi.fn(async (path: string) => {
         dirs.add(DESKTOP_TILE_ROOT)
         dirs.add(path)
@@ -522,8 +540,14 @@ describe('offline tile cache', () => {
     expect(first).toEqual({ id: 'p1', name: 'Mont Blanc', updatedAt: 1000, summary: 'Jour 1 · 12,4 km', sizeBytes: 8 })
     expect(fs.mkdir).toHaveBeenCalledWith(DESKTOP_PROJECT_ROOT, { baseDir: 14, recursive: true })
     // TextEncoder's bytes come from another realm than jsdom's Uint8Array
-    expect(fs.writeFile).toHaveBeenCalledWith(`${DESKTOP_PROJECT_ROOT}/p1.openflyover.json`, expect.anything(), { baseDir: 14 })
+    // written beside the target, then renamed over it
+    expect(fs.writeFile).toHaveBeenCalledWith(`${DESKTOP_PROJECT_ROOT}/p1.openflyover.json.tmp`, expect.anything(), { baseDir: 14 })
+    expect(fs.rename).toHaveBeenCalledWith(`${DESKTOP_PROJECT_ROOT}/p1.openflyover.json.tmp`, `${DESKTOP_PROJECT_ROOT}/p1.openflyover.json`, {
+      oldPathBaseDir: 14,
+      newPathBaseDir: 14,
+    })
     expect(fs.files.has(`${DESKTOP_PROJECT_ROOT}/p1.entry.json`)).toBe(true)
+    expect([...fs.files.keys()].some((k) => k.endsWith('.tmp'))).toBe(false)
     await library.save(null, { name: 'Écrins', summary: '', text: '{}' })
     // a damaged entry is left out of the list
     fs.files.set(`${DESKTOP_PROJECT_ROOT}/p9.entry.json`, new TextEncoder().encode('{'))

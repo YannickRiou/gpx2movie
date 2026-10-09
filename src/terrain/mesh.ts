@@ -1,15 +1,13 @@
 /**
- * Tile geometry builder: turns a decoded elevation grid into a THREE.BufferGeometry expressed
- * in the local tangent frame (X east, Y up, Z south).
+ * Tile geometry builder: turns a decoded elevation grid into a THREE.BufferGeometry in the local tangent frame
+ * (X east, Y up, Z south). Pure CPU code (no WebGL, no DOM): runs and is tested under jsdom.
  *
- * Pure CPU code: no WebGL, no DOM, so it runs (and is tested) under jsdom.
- *
- * Layout of the produced geometry (segments = S, edge = S + 1):
- *   - vertices [0, edge²)             : the grid, row-major, row 0 = north edge, column 0 = west edge
- *   - vertices [edge², edge² + 4·edge): skirts, one run of `edge` vertices per side in the order
- *                                       north, south, west, east (copies of the border lowered by skirtDepthM)
- *   - indices  [0, 6·S²)              : grid triangles, counter-clockwise seen from +Y
- *   - indices  [6·S², 6·S² + 24·S)    : skirt triangles, front face pointing away from the tile
+ * Layout (segments = S, edge = S + 1):
+ *   - vertices [0, edge²): the grid, row-major, row 0 = north edge, column 0 = west edge
+ *   - vertices [edge², edge² + 4·edge): skirts, `edge` vertices per side in the order north, south, west, east
+ *     (copies of the border lowered by skirtDepthM)
+ *   - indices [0, 6·S²): grid triangles, counter-clockwise seen from +Y
+ *   - indices [6·S², 6·S² + 24·S): skirt triangles, front face pointing away from the tile
  */
 import { BufferAttribute, BufferGeometry, Vector3 } from 'three'
 import type { BuildTileGeometryOptions, HeightGrid, LocalFrame, TileGeometryResult, TileKey } from '../core/types'

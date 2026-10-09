@@ -1,22 +1,10 @@
 /**
- * Climb detection from the recorded elevation profile of a track.
+ * Climb detection from the recorded elevation profile of a track: resampling, smoothing, turning points with
+ * hysteresis, merging of close climbs, trimming of flat ends, minimum thresholds, then a category from the score
+ * length (m) x average gradient (%) (thresholds in `CATEGORY_THRESHOLDS`; ARCHITECTURE.md "Climbs and labels").
+ * The category depends on the terrain only, not on the sport.
  *
- * 1. The recorded elevations are resampled every `RESAMPLE_STEP_M` of ground distance (points without an
- *    elevation are bridged linearly) and smoothed by a centred moving average over `SMOOTHING_WINDOW_M`.
- * 2. Turning points: zig-zag with hysteresis — a low or high point is only confirmed once the profile has
- *    moved back by `HYSTERESIS_M`, so GPS / barometer jitter never splits a climb.
- * 3. Each low → high pair is a candidate climb. Consecutive candidates are merged when the dip between them
- *    is small (≤ `MERGE_MAX_DIP_M` and ≤ `MERGE_MAX_DIP_FRACTION` of the gain so far, over at most
- *    `MERGE_MAX_GAP_M`) and the second one ends higher: a short false flat does not end a col.
- * 4. Flat approaches and plateaus are trimmed (gradient below `TRIM_MIN_GRADIENT` over `TRIM_WINDOW_M`).
- * 5. Climbs shorter than `MIN_CLIMB_LENGTH_M`, gaining less than `MIN_CLIMB_GAIN_M` or flatter than
- *    `MIN_CLIMB_GRADIENT` on average are dropped.
- *
- * Category: the usual cycling "climb score" = length (m) × average gradient (%) — i.e. 100 × gain, the
- * scale used by Strava — mapped to catégorie 4 / 3 / 2 / 1 / HC by `CATEGORY_THRESHOLDS`. It depends on
- * the terrain only (not on the sport); climbs below catégorie 4 are kept but not classified.
- *
- * Pure functions (no DOM, no React, no Three). `climbsOf` caches the result per track object.
+ * Pure functions (no DOM, React or Three). `climbsOf` caches the result per track object.
  */
 import type { Track } from '../core/types'
 import { samplePath, trackPathOf, type TrackPath } from './path'

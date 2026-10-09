@@ -1,14 +1,12 @@
 /**
- * Style of the track lines (`settings.trackStyle`) for TrackLines: the glow material, the dash pattern and its
- * scale, and the « trace qui se dessine » cut. Three.js only, no React.
+ * Style of the track lines (`settings.trackStyle`) for TrackLines: the glow material, the dash pattern and its scale,
+ * and the « trace qui se dessine » cut. Three.js only, no React.
  *
- * Dashes: LineMaterial measures them along the line in world units. To keep them a few pixels long whatever the
- * zoom, the scale follows the distance from the camera to what it looks at, rounded to a power of two: the dashes
- * stay put on the ground while the camera flies, and only change length when the zoom doubles.
- *
- * Draw-on: each segment draws its instances (polyline pieces) up to the marker (`instanceCount`) and the last one
- * is shortened to end exactly at the marker by moving its end vertex in the shared buffer (restored afterwards).
- * The distance comes from the playback progress, so the preview and the export draw the same line.
+ * Dashes: LineMaterial measures them in world units. To keep them a few pixels long whatever the zoom, the scale
+ * follows the camera distance rounded to a power of two: the dashes stay put on the ground while the camera flies.
+ * Draw-on: each segment draws its pieces up to the marker (`instanceCount`) and the last one is shortened by moving its
+ * end vertex in the shared buffer (restored afterwards). The distance comes from the playback progress, so the preview
+ * and the export draw the same line.
  */
 import { CustomBlending, MaxEquation } from 'three'
 import type { Camera, Color, InterleavedBufferAttribute, Vector3 } from 'three'

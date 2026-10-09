@@ -1,16 +1,12 @@
 /**
  * OpenStreetMap landmarks along a track: pure post-processing of the features returned by `overpass.ts`.
+ * Each feature is projected on the track (distance and position along it, on the scale of `buildTrackPath`, so
+ * `alongM / lengthM` is a playback progress), filtered by kind and `maxDistanceM`, deduplicated by name within
+ * `DEDUPE_RADIUS_M` and the best `maxCount` kept by `landmarkPriority`, ordered along the track.
+ * See ARCHITECTURE.md "OpenStreetMap landmarks".
  *
- * 1. Each feature is projected on the track: distance to the nearest point of the polyline and position
- *    along it (same distance scale as `buildTrackPath`, so `alongM / lengthM` is a playback progress).
- * 2. Kinds switched off and features farther than `maxDistanceM` are dropped.
- * 3. Duplicates (same name, accents and case ignored, within `DEDUPE_RADIUS_M`) keep the most important.
- * 4. Priority (`landmarkPriority`): passes crossed by the track first, then peaks by elevation (a proxy
- *    for prominence) and closeness, passes nearby, huts, lakes, waterfalls / viewpoints / glaciers, water points, places.
- *    Range [0, 50), below the GPX waypoints and the climbs of the 3D labels.
- * 5. At most `maxCount` landmarks are kept (highest priorities), returned ordered along the track.
- *
- * No React, no DOM, no network.
+ * Priority range [0, 50): below the GPX waypoints and the climbs of the 3D labels. Peaks rank by elevation (a proxy for
+ * prominence) and closeness. No React, no DOM, no network.
  */
 import type { TrackPath } from '../flyover/path'
 import type { LandmarkKind as LabelKind, LandmarkLabel } from '../scene/labelModel'

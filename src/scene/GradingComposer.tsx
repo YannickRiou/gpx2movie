@@ -1,12 +1,9 @@
 /**
  * Colour grading in the scene (`settings.grading`): the same post-effect in both render paths.
- *
- * - With the atmosphere, `AtmosphereLayer` appends the effect of `useGradingEffect` at the end of its composer
- *   (after the tone mapping and the SMAA, which reads the pass input and would skip an effect placed before it).
- * - Without the atmosphere there is no composer: `GradingComposer` adds a minimal one (render, SMAA, grading) only
- *   while the grading changes something or an « Objectif » effect is on (scene/useLensEffects.ts, the lens flare
- *   excepted: it needs the sun of the atmosphere). The grading then also lays the image over the CSS sky gradient, so
- *   that the sky is graded and the export, which draws the same gradient under the canvas, gets the same image.
+ * With the atmosphere, `AtmosphereLayer` appends the effect of `useGradingEffect` to its composer. Without it there is
+ * no composer: `GradingComposer` adds a minimal one (render, SMAA, grading) only while the grading changes something
+ * or an « Objectif » effect is on (the lens flare excepted: it needs the sun of the atmosphere), and the grading lays
+ * the image over the CSS sky gradient so the export, which draws the same gradient under the canvas, gets the same image.
  *
  * « Naturel » (identity) mounts nothing: no extra pass, no shader, no render target.
  */

@@ -2,16 +2,12 @@
  * Weather post-effect, after the aerial perspective and before the tone mapping (HDR radiances): extra haze
  * that thickens towards the ground, a cloud veil over the sky and a slight desaturation (src/weather/sceneWeather.ts).
  *
- * Why a post-effect: Takram's AerialPerspectiveEffect has no knob for the density of its haze (its
- * transmittance and inscatter come from the precomputed clear atmosphere), so the extra extinction is
- * applied here, from the same depth buffer, in the same EffectPass (a few ALU per pixel, no extra texture).
+ * Why a post-effect: Takram's AerialPerspectiveEffect has no knob for the density of its haze (its transmittance and
+ * inscatter come from the precomputed clear atmosphere), so the extra extinction is applied here, from the same depth
+ * buffer, in the same EffectPass (a few ALU per pixel, no extra texture).
  *
- * Haze: extinction β(y) = β0 · exp(−(y − baseY) / H) (exponential height fog above the ground under the
- * marker), integrated analytically along the view ray:
- *   τ = β0 · d · H · (a(yc) − a(yp)) / (yp − yc),  a(y) = exp(−(y − baseY) / H)
- * then colour = mix(hazeColor, colour, e^−τ). Sky pixels (depth cleared to 1) see the haze up to infinity
- * (τ = β0 · H · a(yc) / dir.y) after the cloud veil: mix(sky, hazeColor, skyVeil). Under that veil the clear-sky
- * blue of distant terrain also fades to grey: mix(colour, luminance, skyVeil · (1 − e^(−d / 20 km))).
+ * Haze: exponential height fog beta(y) = beta0 * exp(-(y - baseY) / H) above the ground under the marker, integrated
+ * analytically along the view ray; sky pixels (depth cleared to 1) see it up to infinity, after the cloud veil.
  * hazeColor is the radiance of a white diffuser lit by the (dimmed) sun and sky lights, set every frame.
  */
 import { BlendFunction, Effect, EffectAttribute } from 'postprocessing'

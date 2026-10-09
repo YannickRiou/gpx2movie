@@ -1,16 +1,11 @@
 /**
- * Film overlay drawing: one pure, synchronous function of (frame values, settings, frame size) onto a 2D
- * canvas context. The preview and the video export call the same `drawOverlay`, so the film shows exactly
- * what the preview shows.
+ * Film overlay drawing: one pure, synchronous function of (frame values, settings, frame size) onto a 2D canvas
+ * context. The preview and the video export call the same `drawOverlay`, so the film shows what the preview shows.
  *
- * Every dimension derives from the frame size: 1 u = 1 % of its shorter side, safe margins = 5 % of each
- * side. Widgets sharing an anchor are stacked. No DOM access: fonts and the logo image are loaded
- * beforehand (see `assets.ts`).
- *
- * What is timed in film seconds (the opening and closing cards, the texts and photos of the timeline) reads the
- * film time of the frame (`OverlayTime`, from the film clock); the live values follow the progress (`OverlayFrame`).
- * The photos and video clips of the timeline are drawn even while the rest of the overlay is off: full-screen ones
- * under everything, framed cards at their anchor (a clip shows its frame at its time in the file, without Ken Burns).
+ * Every dimension derives from the frame size: 1 u = 1 % of its shorter side, safe margins = 5 % of each side.
+ * No DOM access: fonts and the logo image are loaded beforehand (`assets.ts`). What is timed in film seconds reads
+ * the film time of the frame (`OverlayTime`); the live values follow the progress (`OverlayFrame`).
+ * Photos and video clips of the timeline are drawn even while the rest of the overlay is off.
  */
 import { clipTimeS } from '../film/model'
 import type { FilmMedia, FilmText, TransitionDip } from '../film/model'

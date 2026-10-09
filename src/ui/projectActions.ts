@@ -9,7 +9,7 @@ import { useMediaStore } from '../film/media'
 import { importFile, importText } from '../import'
 import { chainTracks, followEachOther, replaceByChain } from '../import/chain'
 import { getPlatform } from '../platform'
-import type { ProjectEntry } from '../platform'
+import type { OpenFilesOptions, ProjectEntry } from '../platform'
 import { applyProject } from '../project/apply'
 import { parseProject, projectFileName, serializeProject } from '../project/document'
 import { getSettingsHistory } from '../project/history'
@@ -86,20 +86,30 @@ export async function openFiles(files: readonly File[]): Promise<void> {
   }
 }
 
+/** File dialog; a failure (unreadable file, refused access) is shown as a toast and gives no file. */
+export async function pickFiles(options: OpenFilesOptions): Promise<File[]> {
+  try {
+    return await getPlatform().openFiles(options)
+  } catch (err) {
+    showToast({ kind: 'error', text: `Impossible de lire le fichier choisi : ${errorMessage(err)}` })
+    return []
+  }
+}
+
 /** « Choisir un fichier », « Ajouter » : GPX / FIT files to import (dialog on the desktop). */
 export async function chooseTracksToImport(): Promise<void> {
-  importTrackFiles(await getPlatform().openFiles({ filters: [{ name: 'Traces GPX ou FIT', extensions: ['gpx', 'fit'] }], multiple: true }))
+  importTrackFiles(await pickFiles({ filters: [{ name: 'Traces GPX ou FIT', extensions: ['gpx', 'fit'] }], multiple: true }))
 }
 
 /** « Ouvrir un projet… » : one project file (dialog on the desktop). */
 export async function chooseProjectToOpen(): Promise<void> {
-  const files = await getPlatform().openFiles({ filters: [{ name: 'Projet OpenFlyover', extensions: ['json'] }] })
+  const files = await pickFiles({ filters: [{ name: 'Projet OpenFlyover', extensions: ['json'] }] })
   if (files.length > 0) await openFiles(files)
 }
 
 /** « Ouvrir » : file picker (dialog on the desktop) for tracks and a project. */
 export async function chooseFilesToOpen(): Promise<void> {
-  const files = await getPlatform().openFiles({
+  const files = await pickFiles({
     filters: [{ name: 'Traces et projets', extensions: ['gpx', 'fit', 'json'] }],
     multiple: true,
   })

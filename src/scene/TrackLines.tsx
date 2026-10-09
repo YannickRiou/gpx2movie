@@ -1,27 +1,14 @@
 /**
- * TrackLines — draws every loaded track draped on the terrain.
+ * TrackLines — draws every loaded track draped on the terrain: one Line2 per segment plus a "ghost" clone without
+ * depth test at 25 % opacity, so the parts hidden by the relief are still hinted (see "Track and marker" in
+ * ARCHITECTURE.md; styles in `trackLineStyle.ts`, colours in `flyover/trackColor.ts`).
  *
- * Per track segment: one Line2 (solid, 4 px) plus a "ghost" clone rendered without depth test at 25 %
- * opacity, so the parts hidden by the relief are still hinted. The start and the finish are pins drawn by `Labels`.
+ * Re-draping is cheap: each densified point stores its local position at height 0 and its local "up" vector, so it is
+ * `base + up * height`. Three.js objects are managed imperatively in one <group>; buffers are updated in place when the
+ * point count is unchanged, and everything is disposed on unmount.
  *
- * Draping is cheap to redo: each densified point stores its local position at height 0 and its local "up"
- * vector (both exact, derived from the ellipsoid), so re-draping is `base + up * height` with no trigonometry.
- * It runs when tracks or the frame change, when the exaggeration changes, and (debounced) whenever the
- * terrain engine reports new tiles.
- *
- * Three.js objects are managed imperatively inside one <group>: buffers are updated in place when the
- * point count is unchanged (no GPU buffer churn), and everything is disposed on unmount.
- *
- * With `settings.trackColorBy` the lines take per-vertex colours (src/flyover/trackColor.ts): values are
- * computed on the recorded points, interpolated onto the densified ones, and mapped through one range
- * shared by every track. Changing the mode only rewrites the colour buffers, never the geometry.
- *
- * `settings.trackStyle` (see `trackLineStyle.ts`): width, dashes, a glow (a third, wider Line2 on the same
- * geometry) and « trace qui se dessine », which draws each track only up to its marker. The cut follows the
- * playback progress through a store subscription, so it is applied in the very frame FlyoverRig moves the marker
- * (this component's frame callback runs before the rig's). `smoothingM` smooths the recorded points before
- * densification (`flyover/smooth.ts`, the marker follows the same positions) and rebuilds the lines; the point
- * distances stay the recorded ones, so the cut stays under the marker.
+ * « Trace qui se dessine » cuts each track at its marker through a store subscription, so it applies in the very frame
+ * FlyoverRig moves the marker (this component's frame callback runs before the rig's).
  */
 import { useCallback, useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'

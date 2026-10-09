@@ -1,22 +1,12 @@
 /**
  * Video encoder — WebCodecs through mediabunny, writing the file in memory or, given a destination, straight to disk.
+ * Codec choice (H.264, else HEVC, else VP9, else VP8: first one the browser can encode at the requested size, rate and
+ * bitrate), soundtrack and disk layout: ARCHITECTURE.md "Video export".
  *
- * Codec choice: MP4 / H.264 (plays everywhere), else MP4 / HEVC, else WebM / VP9, else WebM / VP8, the
- * first one the browser can encode at the requested size, frame rate and bitrate (`canEncodeVideo` asks
- * `VideoEncoder.isConfigSupported`). Frames are captured from a canvas (`CanvasSource`): the caller draws
- * frame i into it, then calls `addFrame(i)`.
- *
- * On disk (`destination`): mediabunny's `StreamTarget`, 4 MiB chunks written at their position. MP4 without fast
- * start (`moov` after the frames, the header size patched at the end): a plain MP4 that every player and editor reads,
- * where a fragmented one is less widely supported. In memory, MP4 keeps its index at the start.
- *
- * Soundtrack (the music of the film, mixed beforehand: `film/audio.ts`): AAC in MP4, else Opus (MP4 or WebM), the first
- * one `AudioEncoder` accepts; none: the film is encoded without it (`audioCodec` null). Its samples are handed to the
- * muxer along the frames, about a second ahead, so that both tracks are interleaved in the file.
- *
- * Transparent film (the overlay alone, `transparent`): WebM / VP9 keeping the alpha of the canvas. mediabunny encodes
- * the alpha itself, as a second VP9 stream stored beside each frame (WebM `BlockAdditional`), so the browser only needs
- * a plain VP9 encoder: that is what `pickCodec` checks.
+ * On disk the MP4 has no fast start (`moov` after the frames, header size patched at the end): a plain MP4 every player
+ * and editor reads, where a fragmented one is less widely supported.
+ * Transparent film (`transparent`): WebM / VP9 whose alpha mediabunny encodes as a second VP9 stream beside each frame
+ * (`BlockAdditional`), so the browser only needs a plain VP9 encoder: that is what `pickCodec` checks.
  */
 import type { MixedAudio } from '../film/audio'
 import type { WritableFile } from '../platform'

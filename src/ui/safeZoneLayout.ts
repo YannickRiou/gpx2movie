@@ -1,12 +1,9 @@
 /**
- * Safe zones of the output formats (« Zones de sécurité », preview only, never exported): pure geometry, as
- * fractions of the frame.
- *
- * - Landscape and square formats: the action-safe (93 %) and title-safe (90 %) margins of EBU R 95, drawn as
- *   outlines.
- * - Vertical formats (9:16, 4:5): the areas covered by the interface of the vertical video feeds (Instagram Reels,
- *   TikTok, YouTube Shorts), drawn as shaded areas. One union of the three, measured on a 1080 × 1920 screen and
- *   rounded up; a 4:5 frame is shown full width in the middle of that screen, so only part of these areas covers it.
+ * Safe zones of the output formats (« Zones de sécurité », preview only, never exported): pure geometry, as fractions
+ * of the frame. Landscape and square formats: the action-safe (93 %) and title-safe (90 %) margins of EBU R 95.
+ * Vertical formats (9:16, 4:5): the areas covered by the interface of the vertical video feeds (Reels, TikTok, Shorts),
+ * one union of the three measured on a 1080 x 1920 screen; a 4:5 frame is shown full width in the middle of that
+ * screen, so only part of these areas covers it.
  */
 import type { VideoAspect } from '../export/schedule'
 import { VIDEO_ASPECTS } from '../export/schedule'

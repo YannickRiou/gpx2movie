@@ -1,16 +1,13 @@
 /**
- * Film clock: the one mapping between the film time (seconds at ×1 from the very first frame) and what the film
- * shows, shared by the preview (`FlyoverRig`, `playback.timeS`) and the export (`ExportController`), so both
- * give the same frame for the same time.
+ * Film clock: the one mapping between the film time (seconds at x1 from the very first frame) and what the film
+ * shows, shared by the preview (`FlyoverRig`, `playback.timeS`) and the export (`ExportController`), so both give the
+ * same frame for the same time.
  *
  *   [0, O)          opening: overview shot, progress 0
- *   [O, O + F)      flight: pacing slow-downs, speed portions of the film, and its stops inserted as eased
- *                   holds (`flightPacing`); inside a stop's window (ease-in, hold, ease-out) the phase is 'stop'
+ *   [O, O + F)      flight: pacing slow-downs, speed portions and stops (`flightPacing`); 'stop' phase in a stop window
  *   [O + F, total]  closing: overview shot, progress 1
  *
- * O and C are the durations of the opening and closing shots (0 for 'aucune'), F the flight (the flyover
- * duration with `keepDuration`, stops included). Everything is a pure function of the film time: any frame can
- * be computed alone.
+ * A pure function of the film time: any frame can be computed alone.
  */
 import { clamp } from '../core/math'
 import type { Track } from '../core/types'

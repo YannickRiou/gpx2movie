@@ -53,7 +53,7 @@ import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { buildTrackPath } from '../flyover/path'
 import { SHOT_SUN_HOURS } from '../flyover/sun'
-import { REGION_KIND_LABELS, candidateId, captureFraming, useRegionStore, type RegionStatus } from '../osm/region'
+import { REGION_KIND_LABELS, candidateId, captureFraming, useRegionStore } from '../osm/region'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
 import { editFilm, useFilmClock, useFilmSource } from '../scene/usePacing'
@@ -61,6 +61,7 @@ import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber, formatPercent } from './format'
 import { Icon } from './icons'
 import { FilmTextStyleFields } from './OverlayPanel'
+import { RegionHint } from './CameraPanel'
 import { InfoTip, MoreSettings, RangeField } from './PanelSection'
 import { nextGridIndex } from './shell'
 import { showToast } from './toast'
@@ -84,25 +85,6 @@ const TRANSITION_HINTS: Record<ShotTransition, string> = {
   coupe: 'Le plan reste fixe ; l’image passe d’un coup entre le plan et le survol.',
   'fondu-noir': 'Le plan reste fixe ; l’image passe par le noir entre le plan et le survol.',
   'fondu-blanc': 'Le plan reste fixe ; l’image passe par le blanc entre le plan et le survol.',
-}
-/** « Mettre en avant la région »: what it does, then how the search for the region went (found: after its name). */
-const REGION_HINTS: Record<RegionStatus, string> = {
-  idle: 'Assombrit les alentours de la région administrative de la sortie (OpenStreetMap) et la cadre en entier.',
-  loading: 'Recherche de la région…',
-  ready: 'les alentours sont assombris, la vue cadre la région entière.',
-  none: 'Aucune région administrative ne contient toute la trace : le plan reste sans mise en avant.',
-  error: 'Région indisponible pour le moment (hors ligne ?) : le plan reste sans mise en avant.',
-}
-/** Hint under « Mettre en avant la région » (`highlight` on: how the search for the region went). */
-export function RegionHint({ id, highlight }: { id: string; highlight: boolean }) {
-  const regionStatus = useRegionStore((s) => s.status)
-  const regionName = useRegionStore((s) => s.region?.name)
-  return (
-    <p id={id} className="field__hint">
-      {highlight && regionStatus === 'ready' && regionName ? `${regionName} : ` : ''}
-      {REGION_HINTS[highlight ? regionStatus : 'idle']}
-    </p>
-  )
 }
 
 /** Titled group of fields of a 'situation' shot (« Lieu », « Durées », « Cadrage », « Soleil »). */

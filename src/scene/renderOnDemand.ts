@@ -1,13 +1,9 @@
 /**
  * Rendering on demand: the canvas (`frameloop="demand"`) draws only while something moves, instead of 60 times a
- * second while the view sits still. A frame is asked for:
- * - every frame while the film plays, while terrain tiles are loading and during a camera fit (their own `useFrame`);
- * - for WAKE_FRAMES frames after any change of the stores the scene reads (settings, film, playback, tracks, weather,
- *   highlighted region, labels, export), after a re-drape or a texture load (`wakeScene`): long enough for the
- *   temporal upscaling of the clouds to fill (~16 frames) and for effects run just after the change;
- * - by the clouds, until a still view has averaged CLOUD_SETTLE_FRAMES frames (`previewCloudPass`);
- * - by the orbit controls themselves (drei invalidates on each change, damping included), on a resize and by R3F on
- *   prop changes.
+ * second while the view sits still (ARCHITECTURE.md "On-demand rendering"). A frame is asked for every frame while the
+ * film plays, tiles load or the camera fits; for WAKE_FRAMES frames after any change of the stores the scene reads
+ * (`wakeScene`), long enough for the temporal upscaling of the clouds to fill (~16 frames); by the clouds until a still
+ * view has averaged CLOUD_SETTLE_FRAMES frames; and by the orbit controls and R3F themselves.
  * The video export drives its frames itself (`frameloop` 'never', see ExportController).
  */
 import { useEffect } from 'react'

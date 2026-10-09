@@ -1,19 +1,14 @@
 /**
  * OpenFlyover — shared contracts between modules.
+ * Do NOT change the shape of an exported interface without updating ARCHITECTURE.md and every consumer.
  *
- * Every module (geo, import, terrain, scene, ui) codes against these types.
- * Do NOT change the shape of an exported interface without updating ARCHITECTURE.md
- * and every consumer: several modules are developed in parallel against this file.
- *
- * Coordinate conventions
- * ----------------------
- * - lon/lat are WGS84 decimal degrees. Scene heights are metres above mean sea level (elevation tiles, GPX / FIT),
- *   placed by the local frame as if they were ellipsoid heights: the whole scene sits N (geoid undulation) too low,
- *   which only matters to what reads it in true ECEF (atmosphere, clouds: `mslLocalToEcef` in src/geo/geoid.ts).
+ * Coordinate conventions (details: ARCHITECTURE.md "Coordinate conventions")
+ * - lon/lat are WGS84 decimal degrees. Scene heights are metres above mean sea level, placed by the local frame as if
+ *   they were ellipsoid heights: the scene sits N (geoid undulation) too low, which only matters to what reads it in
+ *   true ECEF (atmosphere, clouds: `mslLocalToEcef` in src/geo/geoid.ts).
  * - ECEF is Earth-Centred Earth-Fixed (metres), right-handed, X through lon=0/lat=0, Z through the north pole.
- * - The Three.js scene lives in a LOCAL FRAME tangent to the ellipsoid at the trip centroid.
- *   Local axes (Three.js Y-up): +X = east, +Y = up, +Z = south. Origin = frame.origin at height 0.
- *   All ECEF->local conversions happen in JS doubles so float32 GPU buffers keep millimetre precision.
+ * - The Three.js scene lives in a LOCAL FRAME tangent to the ellipsoid at the trip centroid: +X east, +Y up, +Z south,
+ *   origin at height 0. ECEF -> local conversions run in JS doubles so float32 GPU buffers keep millimetre precision.
  * - Tile keys use the Google/XYZ Web Mercator scheme: y = 0 at the north edge.
  */
 import type { BufferGeometry, Group, Matrix4, PerspectiveCamera, Texture, Vector3 } from 'three'

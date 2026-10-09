@@ -1,18 +1,12 @@
 /**
  * Tiles an offline pack needs: the ones the terrain engine loads during a flyover of the tracks, limited to a
- * corridor for the fine levels. Pure (tested).
+ * corridor for the fine levels. Pure (tested). See ARCHITECTURE.md "Offline packs".
  *
- * The engine (quadtree.ts) splits a tile when one grid cell (tile size / 64 segments) looks bigger than 3 px:
- * sse = cell · H / (2 · distance · tan(fov / 2)) > 3, so a tile of ground size G is split when the camera comes
- * closer than r = G / 64 · H / (6 · tan 25°) ≈ 6 G for H = 1080 px. A split loads the four children (even those out
- * of view). Along a flyover the camera stays near the track, `cameraHeightM` above it, so a tile is split when
- * √(d² + h²) < r, with d the distance from the track to the tile. The plan walks the tree from the engine's roots
- * with that rule:
- *   - the first `LANDSCAPE_LEVELS` levels below the roots over the whole engine area (the distant landscape);
- *   - deeper, only the children of tiles that touch the corridor (`corridorM` wide, centred on the track): beyond
- *     it, the engine keeps showing the coarser level the pack holds;
- *   - for each terrain tile, its imagery sub-tiles (`planImagerySubtiles`, same zoom offset as the view).
- * It is the follow camera of the flyover: overview shots and high orbits need coarser tiles, already there.
+ * The engine (quadtree.ts) splits a tile when one grid cell looks bigger than 3 px, i.e. when the camera comes closer
+ * than about 6 x the tile's ground size (H = 1080 px). Along a flyover the camera stays near the track,
+ * `cameraHeightM` above it, so the plan walks the tree from the engine's roots with that rule: the first
+ * `LANDSCAPE_LEVELS` levels over the whole area, deeper only the children of tiles touching the corridor, and for
+ * each terrain tile its imagery sub-tiles (`planImagerySubtiles`). Overview shots and high orbits need coarser tiles.
  */
 import type { ImagerySource, LonLat, LonLatBounds, TerrainSource, TileKey } from '../core/types'
 import { expandBounds } from '../geo/lonLat'

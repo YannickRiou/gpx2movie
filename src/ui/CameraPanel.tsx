@@ -19,12 +19,50 @@ import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber, formatPercent, formatSecondsShort } from './format'
 import { Icon } from './icons'
 import type { IconName } from './icons'
-import { RegionHint } from './FilmInspector'
 import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
 import { TrackMarkerSection } from './TrackMarkerSection'
+import { useRegionStore } from '../osm/region'
+import type { RegionStatus } from '../osm/region'
 
-/** Value of the preset select when the camera matches no preset. */
-const CUSTOM = ''
+/** « Mettre en avant la région »: what it does, then how the search for the region went (found: after its name). */
+const REGION_HINTS: Record<RegionStatus, string> = {
+  idle: 'Assombrit les alentours de la région administrative de la sortie (OpenStreetMap) et la cadre en entier.',
+  loading: 'Recherche de la région…',
+  ready: 'les alentours sont assombris, la vue cadre la région entière.',
+  none: 'Aucune région administrative ne contient toute la trace : le plan reste sans mise en avant.',
+  error: 'Région indisponible pour le moment (hors ligne ?) : le plan reste sans mise en avant.',
+}
+/** Hint under « Mettre en avant la région » (`highlight` on: how the search for the region went). Shared with FilmInspector. */
+export function RegionHint({ id, highlight }: { id: string; highlight: boolean }) {
+  const regionStatus = useRegionStore((s) => s.status)
+  const regionName = useRegionStore((s) => s.region?.name)
+  return (
+    <p id={id} className="field__hint">
+      {highlight && regionStatus === 'ready' && regionName ? `${regionName} : ` : ''}
+      {REGION_HINTS[highlight ? regionStatus : 'idle']}
+    </p>
+  )
+}
+
+const PRESET_ICONS: Record<string, IconName> = {
+  Poursuite: 'navigation',
+  'Drone rapide': 'drone',
+  Oiseau: 'bird',
+  Hélicoptère: 'wind',
+  Orbite: 'orbit',
+  Cinéma: 'clapperboard',
+  'Drone haut': 'eye',
+  Planeur: 'feather',
+  Montgolfière: 'cloud',
+  Avion: 'plane',
+  'Vue du dessus': 'locate-fixed',
+  Satellite: 'satellite',
+}
+
+/** Key figures of a preset tile: distance multiplier and tilt. */
+function presetFigures(camera: CameraSettings): string {
+  return `×${formatNumber(camera.distance, 1)} · ${formatDegrees(camera.pitchDeg)}`
+}
 
 /** 90 -> "1 min 30 s", 45 -> "45 s" */
 function formatSeconds(seconds: number): string {
@@ -186,31 +224,31 @@ export function CameraPanel() {
   return (
     <>
       <PanelSection title="Caméra" keys={['camera']}>
-        <div className="field">
-          <label className="field__label" htmlFor={`${id}-preset`}>
-            Préréglage
-          </label>
-          <select
-            id={`${id}-preset`}
-            className="select"
-            value={preset?.name ?? CUSTOM}
-            onChange={(e) => {
-              const next = CAMERA_PRESETS.find((p) => p.name === e.currentTarget.value)
-              if (next) setSetting('camera', { ...next.camera })
-            }}
-          >
-            {!preset && (
-              <option value={CUSTOM} disabled>
-                Personnalisé
-              </option>
-            )}
+        <fieldset className="field fieldset">
+          <legend className="field__label">Préréglage</legend>
+          <div className="style-tiles">
             {CAMERA_PRESETS.map((p) => (
-              <option key={p.name} value={p.name}>
-                {p.name}
-              </option>
+              <label key={p.name} className="format-tile style-tile" title={CAMERA_STYLE_LABELS[p.camera.style]}>
+                <input
+                  type="radio"
+                  name={`${id}-preset`}
+                  value={p.name}
+                  checked={preset === p}
+                  onChange={() => setSetting('camera', { ...p.camera })}
+                />
+                <Icon name={PRESET_ICONS[p.name]} size={20} />
+                <span className="format-tile__label">{p.name}</span>
+                <span className="preset-tile__figures">{presetFigures(p.camera)}</span>
+              </label>
             ))}
-          </select>
-        </div>
+            <label className="format-tile style-tile" title="Réglages modifiés à la main">
+              <input type="radio" name={`${id}-preset`} checked={!preset} readOnly />
+              <Icon name="sliders-horizontal" size={20} />
+              <span className="format-tile__label">Personnalisé</span>
+              <span className="preset-tile__figures">{preset ? 'vos réglages' : presetFigures(camera)}</span>
+            </label>
+          </div>
+        </fieldset>
 
         <fieldset className="field fieldset">
           <legend className="field__label">Style</legend>

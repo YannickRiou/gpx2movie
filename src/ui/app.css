@@ -1556,6 +1556,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.preset-tile__figures {
+  font-size: 11px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 /* ======================== fin Carte et Survol ============================ */
 
 /* ==========================================================================

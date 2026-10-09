@@ -1,37 +1,8 @@
 /**
  * Variable pacing of the flyover: slow-downs and pauses at the highlights of the first track.
- *
- * The playback progress stays the fraction of the track distance (camera, atmosphere, overlay and labels are
- * still pure functions of it); pacing only changes the mapping between the film time and the progress.
- *
- * Model, with L the track length and D = `settings.flyoverDurationS` (base ground speed v0 = L / D at ×1):
- *
- * 1. Highlights (metres along the track): tops of the detected climbs (`climbsOf`) and, from the landmarks
- *    passed in (the module never reads a store), passes crossed by the track (≤ `CROSSED_PASS_M`) and peaks
- *    within `PEAK_NEAR_M`.
- * 2. Relative speed r(x) = 1 − (1 − slowFactor) · max_h c(|x − h| / windowM), with the raised cosine
- *    c(u) = (1 + cos πu) / 2 for u < 1, else 0: smooth dip down to `slowFactor` at each highlight over
- *    ±`windowM`. Overlapping windows take the deepest dip (never slower than `slowFactor`, no compounding).
- * 3. Moving time u(x) = c · ∫₀ˣ dx / (v0 · r(x)), tabulated on a grid that is regular inside every window
- *    (`WINDOW_SAMPLES` steps) and has the highlights as nodes; the speed is constant on each grid step, so
- *    u ↔ x is piecewise linear and exactly invertible.
- * 4. Pauses (the stops of the film, given to `flightPacing`; `pacingFromHighlights` derives them): highlights
- *    closer than `windowM` form one cluster, paused once at its highlight nearest its middle for `pauseS`. A
- *    pause of length P adds exactly P to the film: in film time, the moving clock du/dτ eases from 1 to 0 over E
- *    (raised cosine), holds 0 for P − E, eases back to 1 over E; E = min(`transitionS`, P, room before / after
- *    the neighbouring pauses and the ends), so the marker never stops abruptly.
- * 5. Duration: `keepDuration` scales the base speed (factor c) so that the film lasts D at ×1 whatever the
- *    highlights; pauses then take at most `MAX_PAUSE_SHARE` of D (shortened in proportion beyond). Without it,
- *    c = 1: slow-downs and pauses lengthen the film.
- * 6. Speed portions (`speeds` of `flightPacing`, set by hand on the timeline): the local speed is also multiplied
- *    by m(x) = factor^w(x) over [fromM, toM], w rising from 0 to 1 as a raised cosine over the first
- *    `transitionS` seconds at the base speed inside the portion (at most half of it) and falling back the same
- *    way at its end, so the speed never jumps; `SPEED_SAMPLES` grid steps across each transition. Applied
- *    whatever `settings.enabled`, combined with the slow-downs (product) and the pauses; `keepDuration` still
- *    keeps D.
- *
- * No highlight (or pacing disabled, or nothing to slow down nor pause) gives the identity pacing, exactly the
- * constant ground speed of `advanceProgress`. Pure functions (no DOM, no React, no Three, no store).
+ * Progress stays the fraction of the track distance; only the film time -> progress mapping changes
+ * (raised-cosine slow-downs, pauses, speed portions, `keepDuration`: ARCHITECTURE.md "Flyover", Pacing).
+ * No highlight (or pacing disabled) gives the identity pacing. Pure functions (no DOM, React, Three or store).
  */
 import { withDefaults } from '../core/guards'
 import { clamp, lastIndexAtOrBelow } from '../core/math'

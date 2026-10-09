@@ -41,14 +41,14 @@ server {
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
-    location /atmosphere/ {
-        types { image/x-exr exr; application/octet-stream bin; }
+    location ~ ^/(atmosphere|clouds)/ {
+        types { image/x-exr exr; application/octet-stream bin; image/png png; }
     }
 }
 ```
 
-Files in `/assets/` have a fingerprint in their name: they can be cached for a year. The `/atmosphere/` folder
-contains the sky textures, as `.exr` and `.bin`, two types that nginx does not know.
+Files in `/assets/` have a fingerprint in their name: they can be cached for a year. The `/atmosphere/` and `/clouds/`
+folders contain the sky and cloud textures, as `.exr`, `.bin` and `.png`; nginx does not know `.exr` and `.bin`.
 
 ### Apache
 
@@ -62,7 +62,8 @@ AddType font/woff2 .woff2
 ### Known limitations
 
 - The site must be served **at the root of the domain**. A few paths are hard-coded: `/samples/` in
-  `src/ui/projectActions.ts`, `/favicon.svg` in `src/ui/TopBar.tsx` and `index.html`, and `/fonts/` in `src/ui/fonts.css`. For a subfolder,
+  `src/ui/projectActions.ts`, `/favicon.svg` in `src/ui/TopBar.tsx` and `index.html`, `/fonts/` in `src/ui/fonts.css`,
+  and `/oauth-callback.html` in `src/platform/oauthRedirect.ts` (Strava import). For a subfolder,
   you must build with `vite build --base=/subfolder/` and prefix these paths with `import.meta.env.BASE_URL`.
 - A public site remains subject to the terms of the sources ([README, "Data sources"](../README.md#data-sources)).
 - A long video takes a lot of memory (about twice its size) where it cannot be written directly to disk (Firefox,
@@ -78,12 +79,12 @@ writes only the files chosen in these dialogs, its offline packs and "Mes projet
 Tiles, weather and landmarks come from the same sources as online: an Internet connection is required, except for a
 track prepared for offline use.
 
-It has not yet been launched or packaged on a real machine.
+It has been run on Windows. The macOS and Linux installers are built on GitHub; they have not been run on a real machine yet.
 
 ### Prerequisites
 
 - Node.js 24 and the website dependencies (`npm ci`);
-- stable Rust (<https://rustup.rs>), 1.77 or later;
+- stable Rust (<https://rustup.rs>), 1.77.2 or later;
 - the system libraries, depending on the platform:
 
 | System | To install | Web engine |
@@ -123,7 +124,7 @@ The icons in `src-tauri/icons/` come from `public/favicon.svg`. To regenerate th
 - **Video export on Linux**: WebKitGTK does not have WebCodecs; the application then encodes the movie with the system
   `ffmpeg`, which must be installed (`sudo apt install ffmpeg`): MP4 H.264, with AAC audio (WebM VP9 and Opus if the
   name ends with ".webm"). Without ffmpeg, the export panel
-  says so and the still image works; overlay only (transparent WebM) is not possible yet
+  says so and the still image works. The overlay alone (transparent WebM) goes through `ffmpeg` too
   ([`ARCHITECTURE.md`](../ARCHITECTURE.md), "Video export without WebCodecs (Linux)"; not verified yet). On Windows (Edge)
   and on macOS (WebKit, WebCodecs since Safari 16.4), video export should go through WebCodecs as in the
   browser (not verified yet).

@@ -2,15 +2,11 @@
  * Region of an outing from OpenStreetMap (Overpass, same client, queue and cache as the landmarks), highlighted by a
  * 'situation' shot (scene/RegionHighlight.tsx) and framed by its region view (flyover/filmCamera.ts).
  *
- * Two small queries, both cached: the areas that contain the centre of the track, with their tags and bounding box
- * only (`is_in`, `out tags bb`): administrative boundaries of levels 4 to 6 (région and département in France, canton
- * and district in Switzerland, Land and Kreis in Germany…), national parks, protected areas and nature reserves
- * (« Parc naturel régional »), islands, mountain ranges mapped as areas; then the full geometry (`out geom`) of the
- * one chosen: the place picked in the shot (« Lieu », `regionId`) while it still contains the track, else the
- * automatic choice (`chooseRegion`: among the administrative ones, the smallest that contains the whole track box and
- * is REGION_MIN_RATIO times larger). Its outer and inner rings are stitched from the member ways (a closed way is a
- * ring of its own) and simplified to at most REGION_MAX_POINTS points; only that compact result is cached. No area
- * found, offline or a failed query: the shot simply has no highlight.
+ * Two small cached queries: the areas that contain the centre of the track (tags and bounding box only), then the full
+ * geometry of the chosen one (the place picked in the shot, `regionId`, else `chooseRegion`: the smallest
+ * administrative area containing the whole track box and REGION_MIN_RATIO times larger). Its rings are stitched from
+ * the member ways and simplified to at most REGION_MAX_POINTS points; only that compact result is cached.
+ * No area found, offline or a failed query: the shot simply has no highlight.
  */
 import { create } from 'zustand'
 import type { LonLat, LonLatBounds } from '../core/types'

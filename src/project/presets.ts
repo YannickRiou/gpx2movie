@@ -1,12 +1,10 @@
 /**
- * Named presets of settings, kept in the platform storage (localStorage).
+ * Named presets of settings, kept in the platform storage (localStorage). Every storage access is wrapped in try/catch:
+ * without storage (private browsing, blocked site data, quota) the presets still work for the session, from memory.
  *
- * Every storage access is wrapped in try/catch: without storage (private browsing, blocked site data,
- * quota) the presets still work for the session, from memory.
- *
- * A preset keeps every setting or one family of them (`PRESET_SCOPES`). A full one keeps the opening and closing
- * shots of the film, not its stops, texts and media: they belong to the track of the project it was saved from. Of
- * the poster it keeps the style, not the format, title and figures.
+ * A preset keeps every setting or one family of them (`PRESET_SCOPES`). A full one keeps the opening and closing shots
+ * of the film, not its stops, texts and media (they belong to the track of the project it was saved from), and of the
+ * poster the style, not the format, title and figures.
  */
 import type { Film } from '../film/model'
 import { getPlatform } from '../platform'

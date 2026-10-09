@@ -89,13 +89,23 @@ export interface CameraPreset {
   camera: CameraSettings
 }
 
+/** The default first, then from the lowest and closest to the highest. */
 export const CAMERA_PRESETS: readonly CameraPreset[] = [
   { name: 'Poursuite', camera: DEFAULT_CAMERA },
+  { name: 'Drone rapide', camera: { ...DEFAULT_CAMERA, distance: 0.5, pitchDeg: 20, smoothing: 0.75, cameraSmoothingS: 1.5 } },
+  { name: 'Oiseau', camera: { ...DEFAULT_CAMERA, style: 'sway', distance: 0.8, pitchDeg: 35, smoothing: 0.5, cameraSmoothingS: 1 } },
   { name: 'Hélicoptère', camera: { ...DEFAULT_CAMERA, style: 'sway', distance: 1.3, pitchDeg: 25, smoothing: 1.5 } },
-  { name: 'Drone haut', camera: { ...DEFAULT_CAMERA, distance: 1.8, pitchDeg: 55, smoothing: 1.5 } },
-  { name: 'Vue du dessus', camera: { ...DEFAULT_CAMERA, style: 'top', distance: 1.5, pitchDeg: 85, smoothing: 2, northUp: true } },
   { name: 'Orbite', camera: { ...DEFAULT_CAMERA, style: 'orbit', distance: 1.2 } },
   { name: 'Cinéma', camera: { ...DEFAULT_CAMERA, style: 'cinematic', smoothing: 2 } },
+  { name: 'Drone haut', camera: { ...DEFAULT_CAMERA, distance: 1.8, pitchDeg: 55, smoothing: 1.5 } },
+  { name: 'Planeur', camera: { ...DEFAULT_CAMERA, style: 'sway', distance: 2, pitchDeg: 15, smoothing: 2.5, cameraSmoothingS: 5 } },
+  {
+    name: 'Montgolfière',
+    camera: { ...DEFAULT_CAMERA, style: 'cinematic', distance: 2.5, pitchDeg: 40, smoothing: 4, aimSmoothingS: 2, cameraSmoothingS: 7.5 },
+  },
+  { name: 'Avion', camera: { ...DEFAULT_CAMERA, distance: 3, pitchDeg: 35, smoothing: 3, cameraSmoothingS: 4 } },
+  { name: 'Vue du dessus', camera: { ...DEFAULT_CAMERA, style: 'top', distance: 1.5, pitchDeg: 85, smoothing: 2, northUp: true } },
+  { name: 'Satellite', camera: { ...DEFAULT_CAMERA, style: 'top', distance: 4, pitchDeg: 85, smoothing: 4, northUp: true, cameraSmoothingS: 5 } },
 ]
 
 /** The preset whose camera equals `camera`, if any. */

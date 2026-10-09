@@ -7,13 +7,10 @@ import { haversineM } from '../geo/lonLat'
 import { buildTrackPath, trackPathOf, type TrackPath } from './path'
 
 /**
- * Moving average of the positions (lon, lat and ele when present) over a window of `windowM` metres of
- * recorded distance centred on each point; the first and last points are kept exactly; every other field
- * (time, hr, cad, power, temp) is kept from the original point. windowM <= 0 or fewer than 3 points → the
- * same array instance is returned. Weights: triangular (tent) over the window, so the result is calm. Near the
- * ends the window shrinks so that it stays centred on the point (no drift along the line, continuous ramp
- * towards the untouched end points). The window bounds only move forward (two pointers): O(n · k) with k the
- * points inside one window.
+ * Moving average of the positions (lon, lat and ele when present) over a window of `windowM` metres of recorded
+ * distance centred on each point, with triangular (tent) weights; the first and last points and every other field
+ * (time, hr, cad, power, temp) are kept. windowM <= 0 or fewer than 3 points: the same array instance is returned.
+ * Near the ends the window shrinks to stay centred (no drift along the line). Two pointers: O(n * k).
  */
 export function smoothPoints(points: readonly TrackPoint[], windowM: number): TrackPoint[] {
   const n = points.length

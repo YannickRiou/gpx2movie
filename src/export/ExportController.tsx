@@ -1,23 +1,14 @@
 /**
  * ExportController — renders the film offline, frame by frame, when the export store receives a request.
- * Mounted inside the R3F canvas, inside TerrainLayer (it needs the terrain engine).
+ * Mounted inside the R3F canvas, inside TerrainLayer (it needs the terrain engine). See ARCHITECTURE.md "Video export".
  *
- * For the duration of an export: playback paused, frameloop 'never' (frames are drawn by `advance` only),
- * renderer and camera at the video size with a pixel ratio of 1 (the canvas is shown letterboxed meanwhile),
- * pointer events off, render scale of the pixel-sized scene elements set for the video size. Each scheduled
- * progress is rendered until the view has its tiles (see capture.ts), composed with the optional overlay (its
- * web fonts loaded first) into an OffscreenCanvas and encoded; meanwhile the tiles of the upcoming frames are
- * prefetched. The music of the film is mixed beforehand over the exact length of the film (held frames included)
- * and encoded along the frames (silent, with a note, when the browser cannot encode sound). A still image request renders its single progress the same way and keeps the composed canvas as
- * PNG / JPEG instead; an overview still (poster) shows the whole track (or its `framing`) from the south and hands the
- * image to its `compose` function; a still with `drawView` (flat map poster) skips the scene. Everything is restored
- * afterwards, on success, error or cancel.
+ * During an export: playback paused, frameloop 'never' (frames are drawn by `advance` only), renderer and camera at
+ * the video size with a pixel ratio of 1, pointer events off. Each frame is rendered until the view has its tiles
+ * (capture.ts), composed with the overlay into an OffscreenCanvas and encoded. Everything is restored afterwards, on
+ * success, error or cancel.
  *
- * With the motion blur (`settings.lens.shutter`), each film frame is rendered once per sub-frame of the open shutter
- * and the shutter effect of the composer averages them (scene/lens.ts, scene/shutterEffect.ts).
- *
- * The overlay alone (`overlayOnly`) skips the scene: the same frames, each overlay drawn on a cleared canvas and encoded
- * with its transparency, so the file lines up frame for frame with the film.
+ * Motion blur (`settings.lens.shutter`): one render per sub-frame of the open shutter, averaged by the composer's
+ * shutter effect. `overlayOnly` skips the scene and encodes the overlay with its transparency, frame for frame.
  */
 import { errorMessage } from '../core/errors'
 import { useEffect, useRef } from 'react'

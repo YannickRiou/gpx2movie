@@ -1,17 +1,14 @@
 /**
- * FlyoverRig — plays the film along the first track: advances the store's playback progress and film time on
- * the film clock (`film/clock.ts`: opening shot, flight over `settings.flyoverDurationS` at speed x1 with the
- * slow-downs of `settings.pacing` and the stops of `settings.film`, closing shot), moves the progress marker on the
- * draped track (a sprite in the look of `settings.marker`, see `markerSprite.ts`) and drives the camera (`flyover/filmCamera.ts`: overview shots, stops, flight in the style of
- * `settings.camera`; with several tracks, the stage or the racers `flyover/follow.ts` gives). « À la suite », the
- * film track is the sequence of all the tracks (`flyover/sequence.ts`).
+ * FlyoverRig — plays the film along the first track: advances the store's playback progress and film time on the film
+ * clock (`film/clock.ts`), moves the marker on the draped track (`markerSprite.ts`) and drives the camera
+ * (`flyover/filmCamera.ts`; with several tracks, `flyover/follow.ts` gives the stage or the racers). See
+ * ARCHITECTURE.md "Flyover".
  *
- * The view is a pure function of the progress, the film time and the settings (no smoothing state), so they
- * always give the same frame: the video export renders any frame independently by setting both.
+ * The view is a pure function of the progress, the film time and the settings (no smoothing state), so the video
+ * export renders any frame independently by setting both.
  *
- * The camera is driven while playing (orbit controls disabled) and whenever the progress, the film time of a
- * view that moves with time (shots, orbiting stops, time-based styles: export) or the camera and film settings
- * change while paused (timeline scrubbing, camera panel); otherwise the user orbits freely around the marker.
+ * The camera is driven while playing (orbit controls disabled) and whenever the progress, the film time of a view that
+ * moves with time, or the camera and film settings change while paused; otherwise the user orbits freely.
  */
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'

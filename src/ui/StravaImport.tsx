@@ -168,8 +168,10 @@ function ConnectForm({ notice, onConnected }: { notice: string | null; onConnect
       </div>
       <p className="field__hint">
         Ils restent sur cet appareil et ne sont envoyés qu’à Strava. Lecture seule de vos activités, privées comprises, trace
-        entière (zones de confidentialité comprises) : pensez-y avant de publier un film.
+        entière (zones de confidentialité comprises). Les conditions de l’API Strava réservent l’affichage de vos données
+        à vous seul : ne diffusez pas un film tiré d’une activité Strava sans y avoir réfléchi.
       </p>
+      <p className="field__hint">Powered by Strava</p>
       {error && (
         <p className="field__hint" role="alert">
           {error}
@@ -269,7 +271,7 @@ function ActivityPicker({ onSignedOut, onImported }: { onSignedOut(message: stri
             onSignedOut(null)
           }}
         >
-          Déconnecter
+          Déconnecter Strava
         </button>
       </div>
       <input
@@ -302,6 +304,7 @@ function ActivityPicker({ onSignedOut, onImported }: { onSignedOut(message: stri
       </ul>
       <p id={`${id}-status`} className="field__hint">
         {busy ? 'Chargement des activités…' : shown.length === 0 ? 'Aucune activité.' : 'Activités lues sur Strava, affichées à vous seul.'}
+        {' '}Powered by Strava
       </p>
       {error && (
         <p className="field__hint" role="alert">

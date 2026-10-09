@@ -1,9 +1,8 @@
 /**
  * Weather of an outing from Open-Meteo (https://open-meteo.com, no key, CC BY 4.0, free tier non commercial; see
- * docs/sources.md): the archive for a past outing, the forecast for one still to come (planned departure, up to 16
- * days ahead). A few places are sampled along the track, the hourly values of its days are fetched in one request
- * and cached per place and UTC day: archive days in memory and in the platform storage (localStorage), so a track
- * is fetched once; forecast days in memory for at most 3 hours.
+ * docs/sources.md): the archive for a past outing, the forecast for one still to come (up to 16 days ahead). A few
+ * places are sampled along the track, the hourly values of its days fetched in one request and cached per place and UTC
+ * day: archive days in memory and in the platform storage, forecast days in memory for at most 3 hours.
  *
  * No DOM beyond `fetch` and an optional `Storage`; no React, no Three.
  */
