@@ -3,8 +3,9 @@
  * its aerial perspective, which composites them over the scene.
  *
  * Every frame, at the sun date under the marker: cover per layer from the weather of the outing or the manual
- * setting, then coverage, altitudes and thinning of the three layers (weather/sceneClouds.ts); the clouds drift with
- * the wind of the outing × film time (offsets set directly, no velocity integrated over frames).
+ * setting, then coverage, altitudes and thinning of the three layers, or the single layer of the sea of clouds
+ * (weather/sceneClouds.ts); the clouds drift with the wind of the outing × film time (offsets set directly, no
+ * velocity integrated over frames).
  *
  * Preview: cheapest preset, half resolution, temporal upscaling (clouds converge over a few frames). Export:
  * `settings.clouds.quality`, full resolution, no reprojection: each render averages a fixed number of noise slices
@@ -22,7 +23,15 @@ import { isExportBusy, useExportStore } from '../export/store'
 import { samplePath, type TrackPath } from '../flyover/path'
 import { geoidUndulation } from '../geo/geoid'
 import { useAppStore } from '../state/store'
-import { cloudCoversAt, cloudDrift, filmWind, sceneCloudsFrom, weatherOffsetFor, type CloudQuality } from '../weather/sceneClouds'
+import {
+  cloudCoversAt,
+  cloudDrift,
+  filmWind,
+  sceneCloudsFrom,
+  seaOfClouds,
+  weatherOffsetFor,
+  type CloudQuality,
+} from '../weather/sceneClouds'
 import { sceneConditionsAt } from '../weather/sceneWeather'
 import { useWeatherStore } from '../weather/store'
 import { useFilmClock } from './usePacing'
@@ -105,11 +114,14 @@ export function CloudsLayer({ date, path, noise }: { date: RefObject<Date | null
       const marker = samplePath(path, Math.min(1, Math.max(0, playback.progress)) * path.lengthM)
       conditions = sceneConditionsAt(series, now.getTime(), marker.lon, marker.lat)
     }
-    const clouds = sceneCloudsFrom(cloudCoversAt(settings.clouds, conditions), {
-      groundM: track?.stats.minEle ?? 0,
-      altitudeM: settings.clouds.altitudeM,
-      exaggeration: settings.exaggeration,
-    })
+    const clouds =
+      settings.clouds.mode === 'mer'
+        ? seaOfClouds(settings.clouds.seaTopM, settings.exaggeration)
+        : sceneCloudsFrom(cloudCoversAt(settings.clouds, conditions), {
+            groundM: track?.stats.minEle ?? 0,
+            altitudeM: settings.clouds.altitudeM,
+            exaggeration: settings.exaggeration,
+          })
     effect.coverage = clouds?.coverage ?? 0
     for (let i = 0; i < 3; i++) {
       const layer = effect.cloudLayers[i]

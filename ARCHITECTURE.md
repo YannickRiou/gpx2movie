@@ -73,7 +73,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/weather/sceneWeather.ts` + `src/scene/weatherEffect.ts` | weather in the scene | `sceneConditionsAt`, `sceneWeatherAt`, `sceneWeatherFrom`, `CLEAR_SCENE_WEATHER`, `hazeExtinction`; `WeatherEffect` |
 | `src/osm/paths.ts` + `src/route/graph.ts` + `src/route/planner.ts` + `src/terrain/heightAt.ts` + `src/osm/geocode.ts` + `src/ui/RoutePanel.tsx` | scouting (future route) | `pathsQuery` (`highway` ways in a box aligned on a 0.02° grid, without motorways or private ways), `parsePaths`, `fetchPaths` (Overpass client, shared queue and cache); `buildGraph` (nodes = points shared by ways, cost = length × way-type factor: trails 1, main roads 3), `nearestNode`, `shortestPath` (A*), `routeThrough` (`RouteError`, point more than `MAX_SNAP_M` = 500 m from a path); `computeRouteTrack` (paths within 2 km of the points, route densified to 20 m, `fetchHeights` elevations at zoom 13, `gpx` track without times, points stored as waypoints "Départ" (start) / "Étape n" (stage n) / "Arrivée" (finish)), `useRouteStore` (draft outside the settings: no presets, no undo; pins `setLabelSource('route', …)`), `planAreaAround`, `isRouteTrack`; `findPlace` / `parseCoordinates` (Nominatim, on submit only, 1 request/s); store `planArea` / `setPlanArea`: terrain without a track (the scene mounts as soon as `bounds` exists; flyover, track, water and export only with a track); "Point de passage ici" (waypoint here) entry in `TrackMenu` |
 | `src/osm/water.ts` + `src/scene/waterMesh.ts` + `src/scene/WaterLayer.tsx` | reflective water | `WaterSettings`, `DEFAULT_WATER`, `WATER_MARGIN_M`, `waterQuery`, `stitchRings`, `ringAreaM2`, `pointInRing`, `parseWater`, `fetchTrackWater`; `clipRing`, `buildWaterMesh`, `DEFAULT_WATER_MESH`; `WaterLayer`, `WATER_LIFT_M`; `useWaterStore` (`osm/store.ts`) |
-| `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | volumetric clouds | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `cloudCoversAt`, `sceneCloudsFrom`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor`; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
+| `src/weather/sceneClouds.ts` + `src/scene/CloudsLayer.tsx` | volumetric clouds | `CloudSettings`, `DEFAULT_CLOUDS`, `isValidClouds`, `withCloudDefaults`, `seaTopFor`, `cloudCoversAt`, `sceneCloudsFrom`, `seaOfClouds`, `filmWind`, `cloudDrift`, `cubeSphereUv`, `weatherOffsetFor`; `CloudsLayer`, `createCloudNoiseTexture` (`cloudNoise.ts`) |
 | `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | color grading | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms`; `GradingEffect`; `useGradingEffect`, `GradingComposer` |
 | `src/project/*` | project document, history, presets | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import") |
@@ -1466,9 +1466,10 @@ and what the weather will be like.
 
 - `@takram/three-clouds` 0.7.6 (MIT, same family and same versions as `three-atmosphere` / `three-geospatial`).
   `CloudsLayer` (in the `AtmosphereLayer` `EffectComposer`, before `AerialPerspective`, which composites them) is mounted only
-  with the atmosphere, in `manuel` mode, or in `meteo` mode once the weather of the first track is loaded.
-- Setting `settings.clouds { mode: 'meteo' | 'manuel' | 'aucun', coverage, altitudeM, quality }` (default `meteo`, 0.4,
-  1,200 m, `medium`; `SETTING_CHECKS`: `isValidClouds`), "Nuages" (clouds) block of the "Atmosphère et météo" section.
+  with the atmosphere, in `manuel` or `mer` mode, or in `meteo` mode once the weather of the first track is loaded.
+- Setting `settings.clouds { mode: 'meteo' | 'manuel' | 'mer' | 'aucun', coverage, altitudeM, seaTopM, quality }` (default
+  `meteo`, 0.4, 1,200 m, 2,000 m, `medium`; `SETTING_CHECKS`: `isValidClouds`; `SETTING_UPGRADES`: `withCloudDefaults`
+  for projects saved before `seaTopM`), "Nuages" (clouds) block of the "Atmosphère et météo" section.
 - Pure (`sceneClouds.ts`, tested): `cloudCoversAt` gives the cover of the three layers (Open-Meteo low / mid / high at
   the sun date under the marker, via `sceneConditionsAt`; missing layer = total; manual: low = `coverage`,
   mid 60%, high 40%). `sceneCloudsFrom`: the library has only one `coverage`; the layer that asks for the most
@@ -1478,6 +1479,17 @@ and what the weather will be like.
   cirrus at max(7 km, ground + 5.5 km), × exaggeration (thicknesses unchanged). Layer "a" (fog) and cloud haze
   turned off: the haze remains that of `WeatherEffect`. Under visible clouds, the `WeatherEffect` sky veil is
   reduced to 30%.
+- Sea of clouds ("Mer de nuages", `mode: 'mer'`, `seaOfClouds`): a single dense low layer (channel r), mid and high
+  layers off, whatever the weather. Its top is `seaTopM`, an altitude above sea level (× exaggeration), the most
+  direct reading for a user who knows the altitudes of the route: the summits above it emerge. Choosing the mode
+  proposes the top three quarters of the way from the lowest to the highest point of the first track (`seaTopFor`,
+  rounded to 50 m; slider « Sommet de la mer de nuages », 300–5,000 m). Thickness 600 m below the top: the base stays
+  above the valley floors, so a camera following the track under the sea sees an overcast ceiling instead of a
+  white-out, and from above the opaque layer hides the valleys anyway. Coverage 1 (cloudy at mid-height even over
+  the empty texels of the weather texture) and exponent 0.5 (texels pulled towards 1): the cloudy threshold of the
+  library rises towards the top of the layer for every texel at nearly the same height, so the top is flat at the
+  scale of the scene and the shape noise erodes it into billows of 100–200 m, with gentle dips over the empty texels;
+  density 0.3 (cumulus 0.2). Same drift with the wind and same export path as the other modes.
 - Wind: the archive's wind at the start of the outing (constant for the film, 4 m/s westerly breeze by default) × 2 at altitude
   × `CLOUD_TIMELAPSE` (20). Drift = wind × film time (`playback.timeS`, otherwise `clock.timeAtProgress`): offsets of
   the weather texture (Jacobian of the shader's cube-sphere UV, `weatherOffsetFor`) and of the shape textures (ECEF
@@ -1493,7 +1505,9 @@ and what the weather will be like.
   `AerialPerspective` (otherwise it downloads it as soon as the clouds provide their shadow map).
 - Limits: the terrain is lit by sources (`SunLight`), so cloud shadows do not reach it (the
   sun stays dimmed by the weather); layers at a fixed altitude for the whole film; in the preview, temporal upsampling
-  trails when the camera moves fast; high cost on a weak GPU ("Aucun" (none) mode).
+  trails when the camera moves fast; high cost on a weak GPU ("Aucun" (none) mode). In software rendering
+  (SwiftShader, headless tests) the clouds turn black once the sun is below ~35° (every mode), because of their
+  shadow map: with `cloudLayers[i].shadow = false` they render; not checked on a GPU.
 
 ## Reflective water (phase 3)
 

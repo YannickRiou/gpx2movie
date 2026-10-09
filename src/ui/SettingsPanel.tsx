@@ -6,7 +6,7 @@ import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
-import { CLOUD_ALTITUDE_RANGE, type CloudMode, type CloudQuality } from '../weather/sceneClouds'
+import { CLOUD_ALTITUDE_RANGE, SEA_TOP_RANGE, seaTopFor, type CloudMode, type CloudQuality } from '../weather/sceneClouds'
 import { HAZE_RANGE } from '../weather/sceneWeather'
 import { useWeatherStore } from '../weather/store'
 import { GradingPanel } from './GradingPanel'
@@ -224,6 +224,7 @@ function SunTimeControl() {
 const CLOUD_MODE_OPTIONS: { value: CloudMode; label: string }[] = [
   { value: 'meteo', label: 'Météo' },
   { value: 'manuel', label: 'Manuel' },
+  { value: 'mer', label: 'Mer de nuages' },
   { value: 'aucun', label: 'Aucun' },
 ]
 const CLOUD_QUALITY_OPTIONS: { value: CloudQuality; label: string }[] = [
@@ -232,10 +233,14 @@ const CLOUD_QUALITY_OPTIONS: { value: CloudQuality; label: string }[] = [
   { value: 'high', label: 'Fine' },
 ]
 
-/** « Nuages » (atmosphere on): volumetric clouds from the weather of the outing, a manual cover, or none. */
+/**
+ * « Nuages » (atmosphere on): volumetric clouds from the weather of the outing, a manual cover, a sea of clouds (its
+ * top proposed from the first track when chosen), or none.
+ */
 function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
   const id = useId()
   const clouds = useAppStore((s) => s.settings.clouds)
+  const stats = useAppStore((s) => s.tracks[0]?.stats)
   const setSetting = useAppStore((s) => s.setSetting)
   const set = (patch: Partial<Settings['clouds']>) => setSetting('clouds', { ...clouds, ...patch })
   return (
@@ -249,7 +254,13 @@ function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
                 type="radio"
                 name={`${id}-clouds-mode`}
                 checked={clouds.mode === option.value}
-                onChange={() => set({ mode: option.value })}
+                onChange={() =>
+                  set(
+                    option.value === 'mer'
+                      ? { mode: 'mer', seaTopM: seaTopFor(stats?.minEle, stats?.maxEle) }
+                      : { mode: option.value },
+                  )
+                }
               />
               {option.label}
             </label>
@@ -260,7 +271,9 @@ function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
             ? 'Pas de nuages en volume.'
             : clouds.mode === 'manuel'
               ? 'Couverture choisie ci-dessous, la même tout le film.'
-              : weatherReady
+              : clouds.mode === 'mer'
+                ? 'Une couche de nuages bas, dense et plate, dont émergent les sommets.'
+                : weatherReady
                 ? 'Nuages bas, moyens et hauts de la météo au marqueur.'
                 : 'Ciel dégagé tant que la météo de la sortie n’est pas chargée.'}
         </p>
@@ -278,16 +291,29 @@ function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
         />
       )}
 
+      {clouds.mode === 'mer' && (
+        <RangeField
+          label="Sommet de la mer de nuages"
+          tip="Altitude du dessus des nuages : les sommets plus hauts en émergent. Proposée aux trois quarts entre le point le plus bas et le plus haut de la trace."
+          {...SEA_TOP_RANGE}
+          value={clouds.seaTopM}
+          format={(v) => `${formatNumber(v)} m`}
+          onChange={(seaTopM) => set({ seaTopM })}
+        />
+      )}
+
       {clouds.mode !== 'aucun' && (
         <MoreSettings paths={['clouds.altitudeM', 'clouds.quality']} label="Réglages des nuages">
-          <RangeField
-            label="Base des nuages bas"
-            tip="Hauteur au-dessus du point le plus bas de la trace. Les nuages moyens sont 2 km plus haut."
-            {...CLOUD_ALTITUDE_RANGE}
-            value={clouds.altitudeM}
-            format={(v) => `${formatNumber(v)} m`}
-            onChange={(altitudeM) => set({ altitudeM })}
-          />
+          {clouds.mode !== 'mer' && (
+            <RangeField
+              label="Base des nuages bas"
+              tip="Hauteur au-dessus du point le plus bas de la trace. Les nuages moyens sont 2 km plus haut."
+              {...CLOUD_ALTITUDE_RANGE}
+              value={clouds.altitudeM}
+              format={(v) => `${formatNumber(v)} m`}
+              onChange={(altitudeM) => set({ altitudeM })}
+            />
+          )}
           <div className="field">
             <div className="field__label-row">
               <label className="field__label" htmlFor={`${id}-clouds-quality`}>

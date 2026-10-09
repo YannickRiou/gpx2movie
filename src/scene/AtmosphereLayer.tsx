@@ -83,7 +83,7 @@ export function AtmosphereLayer() {
   const dateRef = useRef<Date | null>(null)
   const cloudMode = useAppStore((s) => s.settings.clouds.mode)
   const weatherLoaded = useWeatherStore((s) => s.series !== null && s.trackId !== null && s.trackId === track?.id)
-  const cloudsOn = cloudMode === 'manuel' || (cloudMode === 'meteo' && weatherLoaded)
+  const cloudsOn = cloudMode === 'manuel' || cloudMode === 'mer' || (cloudMode === 'meteo' && weatherLoaded)
   const noise = useMemo(() => createCloudNoiseTexture(), [])
   useEffect(() => () => noise.dispose(), [noise])
   /** local vertical in ECEF, for the sun elevation */

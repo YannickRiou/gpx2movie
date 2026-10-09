@@ -120,7 +120,7 @@ describe('engine options from settings', () => {
     weather: { enabled: true },
     weatherScene: { enabled: true, strength: 1 },
     haze: 0,
-    clouds: { mode: 'meteo' as const, coverage: 0.4, altitudeM: 1200, quality: 'medium' as const },
+    clouds: { mode: 'meteo' as const, coverage: 0.4, altitudeM: 1200, seaTopM: 2000, quality: 'medium' as const },
     water: { enabled: true, strength: 1 },
     overlay: DEFAULT_OVERLAY,
     video: { aspect: '16:9' as const, resolution: '1080p' as const, fps: 30 as const, quality: 'high' as const },

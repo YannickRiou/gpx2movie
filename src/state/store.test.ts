@@ -220,7 +220,7 @@ describe('settings and misc', () => {
       weather: { enabled: true },
       weatherScene: { enabled: true, strength: 1 },
       haze: 0,
-      clouds: { mode: 'meteo', coverage: 0.4, altitudeM: 1200, quality: 'medium' },
+      clouds: { mode: 'meteo', coverage: 0.4, altitudeM: 1200, seaTopM: 2000, quality: 'medium' },
       water: { enabled: true, strength: 1 },
       overlay: DEFAULT_OVERLAY,
       video: { aspect: '16:9', resolution: '1080p', fps: 30, quality: 'high' },

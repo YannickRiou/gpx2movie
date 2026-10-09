@@ -1,6 +1,7 @@
 /**
  * Volumetric clouds of the scene (`@takram/three-clouds`): the setting, the cloud cover per layer (weather of the
- * outing or manual), the parameters of the three cloud layers and the drift of the clouds with the wind.
+ * outing or manual), the parameters of the three cloud layers or of the sea of clouds, and the drift of the clouds
+ * with the wind.
  *
  * Everything is a pure function of (setting, conditions, film time): the video export renders the same clouds for
  * the same frame. The wind is the one at the start of the outing, constant for the film, so the drift is a
@@ -8,11 +9,12 @@
  *
  * Pure functions (no DOM, no React, no Three).
  */
+import { withDefaults } from '../core/guards'
 import { clamp } from '../core/math'
 import { weatherAt, type WeatherSeries } from './series'
 import type { SceneConditions } from './sceneWeather'
 
-export const CLOUD_MODES = ['meteo', 'manuel', 'aucun'] as const
+export const CLOUD_MODES = ['meteo', 'manuel', 'mer', 'aucun'] as const
 export type CloudMode = (typeof CLOUD_MODES)[number]
 
 /** Quality of the exported frames (the preview always uses the cheapest one). */
@@ -21,19 +23,43 @@ export type CloudQuality = (typeof CLOUD_QUALITIES)[number]
 
 /** The user setting (`settings.clouds`, atmosphere only). */
 export interface CloudSettings {
-  /** 'meteo': cover of the outing (Open-Meteo, low / mid / high); 'manuel': `coverage`; 'aucun': no clouds */
+  /**
+   * 'meteo': cover of the outing (Open-Meteo, low / mid / high); 'manuel': `coverage`; 'mer': sea of clouds up to
+   * `seaTopM`; 'aucun': no clouds
+   */
   mode: CloudMode
   /** manual cover of the low layer, 0..1 (the mid and high layers follow at 60 % and 40 %) */
   coverage: number
   /** base of the low layer above the lowest point of the first track (metres) */
   altitudeM: number
+  /** top of the sea of clouds ('mer'), above sea level before the exaggeration (metres) */
+  seaTopM: number
   /** quality of the exported frames */
   quality: CloudQuality
 }
 
-export const DEFAULT_CLOUDS: CloudSettings = { mode: 'meteo', coverage: 0.4, altitudeM: 1200, quality: 'medium' }
+export const DEFAULT_CLOUDS: CloudSettings = { mode: 'meteo', coverage: 0.4, altitudeM: 1200, seaTopM: 2000, quality: 'medium' }
 
 export const CLOUD_ALTITUDE_RANGE = { min: 200, max: 4000, step: 100 } as const
+export const SEA_TOP_RANGE = { min: 300, max: 5000, step: 50 } as const
+
+/** Settings saved before the sea of clouds get its top by default. */
+export const withCloudDefaults = withDefaults(DEFAULT_CLOUDS)
+
+/** Part of the climb of the track, from its lowest point, below the proposed top of the sea of clouds. */
+const SEA_TOP_FRACTION = 0.75
+
+/**
+ * Top of the sea of clouds proposed for a track (when 'mer' is chosen): three quarters of the way from its lowest to
+ * its highest point, rounded to the slider step, so the valleys are filled and the passes and summits emerge.
+ */
+export function seaTopFor(minEle: number | undefined, maxEle: number | undefined): number {
+  if (minEle === undefined || maxEle === undefined || !Number.isFinite(minEle) || !Number.isFinite(maxEle)) {
+    return DEFAULT_CLOUDS.seaTopM
+  }
+  const top = minEle + SEA_TOP_FRACTION * (maxEle - minEle)
+  return clamp(Math.round(top / SEA_TOP_RANGE.step) * SEA_TOP_RANGE.step, SEA_TOP_RANGE.min, SEA_TOP_RANGE.max)
+}
 
 export function isValidClouds(v: CloudSettings): boolean {
   return (
@@ -42,7 +68,9 @@ export function isValidClouds(v: CloudSettings): boolean {
     v.coverage >= 0 &&
     v.coverage <= 1 &&
     v.altitudeM >= CLOUD_ALTITUDE_RANGE.min &&
-    v.altitudeM <= CLOUD_ALTITUDE_RANGE.max
+    v.altitudeM <= CLOUD_ALTITUDE_RANGE.max &&
+    v.seaTopM >= SEA_TOP_RANGE.min &&
+    v.seaTopM <= SEA_TOP_RANGE.max
   )
 }
 
@@ -60,11 +88,11 @@ const MANUAL_MID = 0.6
 const MANUAL_HIGH = 0.4
 
 /**
- * Cover of each layer: null for 'aucun', or in 'meteo' without conditions (no weather loaded) or without any
- * cloud value. A missing layer counts as the total cover.
+ * Cover of each layer: null for 'aucun' and 'mer' (its own layer, `seaOfClouds`), or in 'meteo' without conditions
+ * (no weather loaded) or without any cloud value. A missing layer counts as the total cover.
  */
 export function cloudCoversAt(settings: CloudSettings, conditions: SceneConditions | undefined): CloudCovers | null {
-  if (settings.mode === 'aucun') return null
+  if (settings.mode === 'aucun' || settings.mode === 'mer') return null
   if (settings.mode === 'manuel') {
     const c = clamp(settings.coverage, 0, 1)
     return { low: c, mid: MANUAL_MID * c, high: MANUAL_HIGH * c }
@@ -114,6 +142,11 @@ const MAX_EXPONENT = 8
 /** Coverage of three-clouds above which every texel is cloudy (default coverage filter width 0.6). */
 const FULL_COVERAGE = 0.4
 const MAX_COVERAGE = 0.55
+/** Sea of clouds: thickness (metres, not exaggerated), coverage, exponent and density of its layer (`seaOfClouds`). */
+const SEA_THICKNESS_M = 600
+const SEA_COVERAGE = 1
+const SEA_EXPONENT = 0.5
+const SEA_DENSITY = 0.3
 
 /**
  * `coverage` of three-clouds giving a cloudy fraction 0, 0.1, …, 1 of the sky, per channel of its weather texture
@@ -167,6 +200,34 @@ export function sceneCloudsFrom(covers: CloudCovers | null, geometry: CloudGeome
     }
   })
   return { coverage, layers: layers as SceneClouds['layers'] }
+}
+
+/**
+ * Sea of clouds: one dense layer, a quilt over the whole scene, whose top is flat at the scale of the scene and
+ * rolls like the top of cumulus at the scale of a few hundred metres.
+ *
+ * Thickness SEA_THICKNESS_M below the top (base above the valley floors: a camera following the track under the sea
+ * sees an overcast ceiling rather than a white-out; from above the layer is opaque, the valleys are hidden anyway).
+ * In a layer the cloudy threshold rises towards its top for every texel of the weather texture: coverage 1 makes
+ * the layer cloudy everywhere at mid-height, and the exponent < 1 brings the texels closer to 1, so the tops vary by
+ * ~100–200 m only (the shape noise erodes them into billows), with gentle dips over the empty texels.
+ */
+export function seaOfClouds(seaTopM: number, exaggeration: number): SceneClouds {
+  const k = Number.isFinite(exaggeration) && exaggeration > 0 ? exaggeration : 1
+  const off: CloudLayerParams = { altitudeM: 0, heightM: 0, densityScale: 0, weatherExponent: 1 }
+  return {
+    coverage: SEA_COVERAGE,
+    layers: [
+      {
+        altitudeM: seaTopM * k - SEA_THICKNESS_M,
+        heightM: SEA_THICKNESS_M,
+        densityScale: SEA_DENSITY,
+        weatherExponent: SEA_EXPONENT,
+      },
+      off,
+      { ...off },
+    ],
+  }
 }
 
 /** Base of the low, mid and high layers above sea level, before the exaggeration (metres). */
