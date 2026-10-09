@@ -94,7 +94,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (97 files, 1,594 tests, `lot-suites` and the ported
 features included), `npm run build`,
-`cargo test` (9). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
+`cargo test` (12). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
 - **Review fixes**: held export frames re-rendered when the scene moves with time (animated figurine, clouds, water);
   settings panel and inspector `inert` during an export, batch cancel from the top bar; overlay element tabs as
@@ -127,6 +127,8 @@ features included), `npm run build`,
   tiles or the exaggeration change under it while it sits still. Not seen on screen.
 - **Thumbnails in "Mes projets"**: each write keeps a ~10 KB JPEG of the 3D view in the entry (`scene/thumbnail.ts`),
   older entries show an empty frame. Seen in headless Chromium (software GPU), not on a GPU nor in the desktop app.
+- **Linux desktop export on the GPU**: MP4 encoded with `h264_nvenc`, else `h264_vaapi`, else `libx264`, chosen by a
+  real ffmpeg probe once per run (`video.rs`); not tried on a GPU.
 - **Left for later** (proposed, not done): shared "Position" / "Texte" / "Taille" fields, duplicated poster
   constants, test-only pacing and DEM helpers, `diffEngineOptions` in `TerrainLayer` (used and tested, kept);
   "Texte libre" drawn like a timeline text (behaviour change, needs the user's OK); a text added with T attached to
@@ -341,8 +343,7 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    figures; timeline segments per stage, stage cards and transitions between them) and « En parallèle » as a
    generalised ghost race (camera on the lead, on a chosen track or framing all of them; leaderboard optional;
    same sync modes).
-8. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
-9. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
+8. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
    the current lots): overlay-only export on the
    Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop. Dropped by the user: GoPro GPS time (GPMF).
 
@@ -357,12 +358,12 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   each browser's support (Safari iOS, Chrome Android) before choosing, and add a mobile scenario to `npm run e2e`.
 
 **In the user's hands**
-10. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
+9. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
    steady camera, free camera, start / finish pins, export.
-11. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
+10. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
    remove them; delete the old branches (`lot-suites`, `landmarks-hide`, `track-style`, `ui-polish`,
    `timeline-polish`, `export-stream`, `timeline-videos`, `water`): the session cannot delete remote branches.
-12. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
+11. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
    application); signing certificates if wanted; then a first `v0.1.0` tag (release published by `desktop.yml`).
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest

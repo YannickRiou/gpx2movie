@@ -224,3 +224,8 @@ On Linux (Ubuntu 22.04 or later, WebKitGTK without WebCodecs: export through the
 - [ ] Simulated failure (`pkill ffmpeg` during the export): the export stops with a message about ffmpeg, no partial
       file.
 - [ ] From the AppImage and from the deb package: ffmpeg found and launched (AppImage environment variables).
+- [ ] GPU encoder (NVIDIA with its driver, or Intel / AMD with `/dev/dri/renderD128`): start from a terminal, the
+      first MP4 export prints `Encodeur H.264 de ffmpeg : h264_nvenc` (or `h264_vaapi`); export time of a 1080p film
+      clearly shorter than the same export with an earlier build (libx264; note both); file played by VLC and the
+      system player, colors identical; standard / maximum quality give different sizes. Without a usable GPU (or an
+      ffmpeg built without them): `libx264` printed, export as before, its start delayed once by 10 s at most.

@@ -1760,6 +1760,15 @@ JavaScript.
   `nativeCodecFor` on the JavaScript side): `-c:v libvpx-vp9 -crf <qualité> -b:v 0 -deadline good -cpu-used 4 -row-mt 1`,
   sound `-c:a libopus`, `-f webm`; `crf` standard 34, high 31, maximum 26 (tried with the ffmpeg of an Ubuntu install: VP9 +
   Opus read by `ffprobe`, 44.1 kHz WAV resampled automatically).
+- **H.264 on the GPU** (`h264_encoder`): before the first MP4 export of a run (outside the lock), ffmpeg encodes a
+  tenth of a second of black (`probe_args`: `-f lavfi -i color=c=black:s=256x256:d=0.1 … -f null -`, 5 s at most,
+  then killed) with `h264_nvenc`, then `h264_vaapi`; the first that succeeds is kept for the run (`OnceLock`, name
+  written to stderr), `libx264` otherwise (not probed). A real encode, not `ffmpeg -encoders`: an ffmpeg built with
+  NVENC or VAAPI may have no GPU or driver to run it. NVENC: `-c:v h264_nvenc -preset p5 -rc vbr -cq <crf> -b:v 0
+  -pix_fmt yuv420p`; VAAPI: `-vaapi_device /dev/dri/renderD128` before the inputs, `-c:v h264_vaapi -rc_mode CQP
+  -qp <crf>`, filter `scale=out_color_matrix=bt709,format=nv12,hwupload`. Same numbers as the crf of libx264 (same
+  0–51 scale, approximate equivalents: sizes may differ). A failure during an export with a GPU encoder is reported
+  like any other (no retry on the processor in the middle of a file). WebM stays VP9 on the processor.
 - **Path**: the path of the file chosen in the "Enregistrer" dialog at the start of the export (`WritableFile.path`, set
   by `openWritablePath`; batch render folder included). `video_open` refuses a relative path or one outside the fs
   scope (where the dialog plugin adds each chosen file). The handle opened by the dialog writes nothing; it is
@@ -1785,7 +1794,8 @@ JavaScript.
   Rejected: `ffmpeg` as a sidecar (`bundle.externalBin`, 70 to 100 MB per platform, GPL license with x264); `rav1e` (AV1
   in pure Rust, too slow in 4K, less universal playback).
 - **Verified**: `cargo check --target x86_64-pc-windows-msvc`; JavaScript tests with a fake invoke
-  (`nativeEncoder.test.ts`). To be checked on a Linux desktop (`cargo test`, real export): `docs/tests-gpu.md`, section 7.
+  (`nativeEncoder.test.ts`); GPU probe without a GPU (both fail, `libx264` kept). To be checked on a Linux desktop
+  (`cargo test`, real export, NVENC / VAAPI): `docs/tests-gpu.md`, section 7.
 
 ## Offline packs (phase 6)
 
