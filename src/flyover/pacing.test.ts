@@ -13,6 +13,7 @@ import {
   MAX_PAUSE_SHARE,
   PACING_RANGES,
   pacingFromHighlights,
+  withPacingDefaults,
   PAUSE_EASE_S,
   relativeSpeed,
   SPEED_EASE_S,
@@ -473,5 +474,17 @@ describe('highlights', () => {
     expect(buildPacing({ track, durationS: D, settings: { ...ON, climbs: false } }).active).toBe(false)
     expect(buildPacing({ track, durationS: D, settings: DEFAULT_PACING, landmarks }).active).toBe(false)
     expect(both.totalTime()).toBeCloseTo(D, 9)
+  })
+})
+
+describe('transitionS', () => {
+  it('sets the ease into and out of a pause; older projects keep 1.5 s', () => {
+    const at = (transitionS: number) =>
+      pacingFromHighlights(10_000, [5000], 60, { ...DEFAULT_PACING, enabled: true, slowFactor: 1, pauseS: 4, keepDuration: false, transitionS })
+    const pause = (transitionS: number) => at(transitionS).pauses[0]
+    expect(pause(1.5).holdEndS - pause(1.5).holdStartS).toBeCloseTo(4 - 1.5, 9)
+    expect(pause(3).holdEndS - pause(3).holdStartS).toBeCloseTo(4 - 3, 9)
+    expect(withPacingDefaults({ enabled: true })).toMatchObject({ enabled: true, transitionS: PAUSE_EASE_S })
+    expect(isValidPacing({ ...DEFAULT_PACING, transitionS: 10 })).toBe(false)
   })
 })

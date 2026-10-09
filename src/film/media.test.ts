@@ -30,11 +30,14 @@ describe('media table', () => {
   it('checks the pictures of a loaded project, leaving out the bad ones', () => {
     expect(isValidMediaAsset(asset('a.jpg'))).toBe(true)
     expect(isValidMediaAsset(asset('a.jpg', { name: undefined }))).toBe(true)
+    expect(isValidMediaAsset(asset('a.jpg', { lon: 6.86, lat: 45.83 }))).toBe(true)
     for (const bad of [
       asset('a', { data: 'https://example.org/a.jpg' }),
       asset('a', { thumb: '' }),
       asset('a', { width: 0 }),
       asset('a', { height: 1.5 }),
+      asset('a', { lon: 6.86 }),
+      asset('a', { lon: 200, lat: 45 }),
       null,
       [],
     ]) {

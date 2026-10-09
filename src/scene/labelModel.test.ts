@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Track } from '../core/types'
 import type { Climb } from '../flyover/climbs'
 import { buildTrack } from '../import/stats'
+import { MEDIA_DEFAULTS } from '../film/model'
 import { cardOpacityAt, progressTime } from '../overlay/draw'
 import { DEFAULT_OVERLAY } from '../overlay/settings'
 import {
@@ -13,6 +14,10 @@ import {
   distanceFade,
   KM_PRIORITY,
   kmLabels,
+  endpointLabels,
+  photoLabels,
+  PHOTO_PRIORITY,
+  ENDPOINT_PRIORITY,
   withLabelDefaults,
   isValidLabelSettings,
   labelOpacity,
@@ -63,12 +68,40 @@ describe('label texts and sources', () => {
     expect(kmLabels(east, 0)).toEqual([])
   })
 
+  it('labels the start and the finish of the track, or one label for a loop', () => {
+    const east = buildTrack({ name: 'est', source: 'gpx', segments: [{ points: [6.8, 6.85, 6.9].map((lon) => ({ lon, lat: 45.9 })) }] })
+    const ends = endpointLabels(east)
+    expect(ends.map((l) => [l.text, l.icon, l.lon])).toEqual([
+      ['Départ', 'epingle', 6.8],
+      ['Arrivée', 'drapeau', 6.9],
+    ])
+    expect(ends[0]).toMatchObject({ kind: 'endpoint', priority: ENDPOINT_PRIORITY })
+    const loop = buildTrack({ name: 'boucle', source: 'gpx', segments: [{ points: [6.8, 6.85, 6.8].map((lon) => ({ lon, lat: 45.9 })) }] })
+    expect(endpointLabels(loop).map((l) => l.text)).toEqual(['Départ et arrivée'])
+    expect(ENDPOINT_PRIORITY).toBeLessThan(POI_PRIORITY)
+  })
+
+  it('pins the photos of the film whose file gives a position, with their caption', () => {
+    const photo = (id: string, src: string, caption?: string) => ({ ...MEDIA_DEFAULTS, id, kind: 'image' as const, src, startS: 0, durationS: 4, caption })
+    const table = {
+      'photo-1': { data: 'data:image/jpeg;base64,', thumb: 'data:image/jpeg;base64,', width: 10, height: 10, lon: 6.86, lat: 45.83 },
+      'photo-2': { data: 'data:image/jpeg;base64,', thumb: 'data:image/jpeg;base64,', width: 10, height: 10 },
+    }
+    const labels = photoLabels([photo('media-1', 'photo-1', ' Lac Blanc '), photo('media-2', 'photo-2'), photo('media-3', 'photo-1')], table)
+    expect(labels.map((l) => [l.text, l.icon, l.lon])).toEqual([
+      ['Lac Blanc', 'photo', 6.86],
+      ['Photo', 'photo', 6.86],
+    ])
+    expect(labels[0].priority).toBe(PHOTO_PRIORITY)
+    expect(PHOTO_PRIORITY).toBeLessThan(POI_PRIORITY)
+  })
+
   it('older projects get no kilometre markers; size and range stay within their bounds', () => {
     expect(isValidLabelSettings({ kmStep: 5, size: 1.2, rangeKm: 30 })).toBe(true)
     expect(isValidLabelSettings({ kmStep: 3, size: 1, rangeKm: 70 })).toBe(false)
     expect(isValidLabelSettings({ kmStep: 0, size: 3, rangeKm: 70 })).toBe(false)
     expect(isValidLabelSettings({ kmStep: 0, size: 1, rangeKm: 500 })).toBe(false)
-    expect(withLabelDefaults({ climbs: false, waypoints: true })).toEqual({ climbs: false, waypoints: true, kmStep: 0, size: 1, rangeKm: 70 })
+    expect(withLabelDefaults({ climbs: false, waypoints: true })).toEqual({ climbs: false, waypoints: true, kmStep: 0, endpoints: false, photos: false, size: 1, rangeKm: 70 })
     expect(withLabelDefaults({ climbs: true, waypoints: true, kmStep: 5 })).toMatchObject({ kmStep: 5 })
   })
 

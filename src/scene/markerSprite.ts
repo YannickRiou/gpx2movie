@@ -128,13 +128,27 @@ export function headsLeft(path: TrackPath, distanceM: number, at: Vector3, frame
   return aheadLocal.x < behindLocal.x
 }
 
+const NO_MOTION = { lift: 0, tilt: 0 }
+
 /**
  * Put `sprite` at `position` with the badge of `look`, at the constant on-screen size times `marker.size`, its
  * colours divided by the exposure (`gain`) like the track lines.
  */
-export function placeMarker(sprite: Sprite, position: Vector3, camera: Camera, look: MarkerLook, colors: MarkerColors, mirrored: boolean, gain: number): void {
+export function placeMarker(
+  sprite: Sprite,
+  position: Vector3,
+  camera: Camera,
+  look: MarkerLook,
+  colors: MarkerColors,
+  mirrored: boolean,
+  gain: number,
+  motion: { lift: number; tilt: number } = NO_MOTION,
+): void {
   const badge = markerBadge(look, colors, mirrored)
   const material = sprite.material as SpriteMaterial
+  // an animated figure: lifted on screen (the sprite's anchor moves down) and tilted forward, mirrored with it
+  sprite.center.set(0.5, 0.5 - motion.lift)
+  material.rotation = mirrored ? motion.tilt : -motion.tilt
   const texture = badgeTexture(badge)
   if (material.map !== texture) material.map = texture
   material.color.setScalar(gain)

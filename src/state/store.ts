@@ -72,13 +72,15 @@ export interface Settings {
   film: Film
   /**
    * 3D labels on the relief: tops of the detected climbs of the first track, GPX waypoints, a marker every `kmStep` km
-   * (0: none); common size (multiplier) and range (km from the camera) of every label
+   * (0: none), « Départ » / « Arrivée » at the ends of the first track, the photos with a GPS position; common size (multiplier) and range (km from the camera) of every label
    */
-  labels: { climbs: boolean; waypoints: boolean; kmStep: number; size: number; rangeKm: number }
+  labels: { climbs: boolean; waypoints: boolean; kmStep: number; endpoints: boolean; photos: boolean; size: number; rangeKm: number }
   /** historical weather of the first timed track (Open-Meteo archive, network) */
   weather: { enabled: boolean }
   /** the weather of the outing drives the scene (clouds dim the sun, haze, veiled sky), strength 0..1 (atmosphere only) */
   weatherScene: WeatherSceneSettings
+  /** haze set by hand, 0–1, on top of the weather (atmosphere only, see `withManualHaze`) */
+  haze: number
   /** volumetric clouds: from the weather of the outing, manual or none; export quality (atmosphere only) */
   clouds: CloudSettings
   /** lakes and rivers of OpenStreetMap drawn as reflective water (Overpass API, network) */
@@ -187,9 +189,10 @@ export const DEFAULT_SETTINGS: Settings = {
   flyoverDurationS: DEFAULT_FLYOVER_DURATION_S,
   pacing: DEFAULT_PACING,
   film: DEFAULT_FILM,
-  labels: { climbs: true, waypoints: true, kmStep: 0, size: 1, rangeKm: 70 },
+  labels: { climbs: true, waypoints: true, kmStep: 0, endpoints: false, photos: false, size: 1, rangeKm: 70 },
   weather: { enabled: true },
   weatherScene: DEFAULT_WEATHER_SCENE,
+  haze: 0,
   clouds: DEFAULT_CLOUDS,
   water: DEFAULT_WATER,
   overlay: DEFAULT_OVERLAY,

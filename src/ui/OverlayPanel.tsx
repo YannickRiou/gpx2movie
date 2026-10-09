@@ -5,6 +5,7 @@ import { fileToLogoDataUrl } from '../overlay/assets'
 import {
   COUNTER_IDS,
   CREDITS_POSITIONS,
+  END_CREDITS_MAX,
   END_START_MAX,
   END_START_MIN,
   OVERLAY_ANCHORS,
@@ -93,17 +94,27 @@ function WidgetGroup({
   enabled,
   onToggle,
   styled,
+  style,
+  visibility,
   children,
 }: {
   label: string
   enabled: boolean
   onToggle(v: boolean): void
-  /** its own colours and fonts (« Couleurs et polices » at the end of its settings) */
+  /** its own colours and fonts (« Couleurs et polices » at the end of its « Style » tab) */
   styled?: StyledWidget
-  children: ReactNode
+  /** « Style » tab: position, size… */
+  style?: ReactNode
+  /** « Visibilité » tab: when it shows */
+  visibility?: ReactNode
+  /** « Contenu » tab: what it says */
+  children?: ReactNode
 }) {
   const id = useId()
   const overlay = useAppStore((s) => s.settings.overlay)
+  const tabs = WIDGET_TABS.filter((tab) => (tab === 'contenu' ? children : tab === 'style' ? style || styled : visibility))
+  const [tab, setTab] = useState<WidgetTab>(tabs[0] ?? 'contenu')
+  const shown = tabs.includes(tab) ? tab : tabs[0]
   return (
     <div className="overlay-widget" role="group" aria-labelledby={id}>
       <label className="checkbox checkbox--switch" id={id}>
@@ -112,19 +123,46 @@ function WidgetGroup({
       </label>
       {enabled && (
         <div className="overlay-widget__body">
-          {children}
-          {styled && (
-            <StyleOverrides
-              overlay={overlay}
-              widget={styled}
-              onChange={(patch) => useAppStore.getState().setSetting('overlay', withWidgetOverrides(overlay, styled, patch))}
-            />
+          {tabs.length > 1 && (
+            <div className="overlay-widget__tabs segmented" role="tablist" aria-label={`Réglages de ${label}`}>
+              {tabs.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  className="segmented__option"
+                  aria-selected={t === shown}
+                  onClick={() => setTab(t)}
+                >
+                  {WIDGET_TAB_LABELS[t]}
+                </button>
+              ))}
+            </div>
           )}
+          {shown === 'contenu' && children}
+          {shown === 'style' && (
+            <>
+              {style}
+              {styled && (
+                <StyleOverrides
+                  overlay={overlay}
+                  widget={styled}
+                  onChange={(patch) => useAppStore.getState().setSetting('overlay', withWidgetOverrides(overlay, styled, patch))}
+                />
+              )}
+            </>
+          )}
+          {shown === 'visibilite' && visibility}
         </div>
       )}
     </div>
   )
 }
+
+/** Tabs of the settings of an overlay element (only those it has). */
+const WIDGET_TABS = ['contenu', 'style', 'visibilite'] as const
+type WidgetTab = (typeof WIDGET_TABS)[number]
+const WIDGET_TAB_LABELS: Record<WidgetTab, string> = { contenu: 'Contenu', style: 'Style', visibilite: 'Visibilité' }
 
 /** A few colours of the film palette offered beside the colour picker. */
 const SWATCHES: readonly { color: string; label: string }[] = [
@@ -347,7 +385,31 @@ export function OverlayPanel() {
       {overlay.enabled && (
         <>
           <PanelSection title="Titres">
-            <WidgetGroup label="Titre d'ouverture" enabled={overlay.title.enabled} onToggle={(enabled) => setWidget('title', { enabled })} styled="title">
+            <WidgetGroup
+              label="Titre d'ouverture"
+              enabled={overlay.title.enabled}
+              onToggle={(enabled) => setWidget('title', { enabled })}
+              styled="title"
+              style={
+                <>
+                  <AnchorField value={overlay.title.anchor} onChange={(anchor) => setWidget('title', { anchor })} />
+                  <SizeField value={overlay.title.size} onChange={(size) => setWidget('title', { size })} />
+                </>
+              }
+              visibility={
+                <>
+                  <RangeField
+                    label="Durée d'affichage"
+                    min={TITLE_END_MIN}
+                    max={TITLE_END_MAX}
+                    step={0.01}
+                    value={overlay.title.end}
+                    format={(v) => `${percent(v)} du survol`}
+                    onChange={(end) => setWidget('title', { end })}
+                  />
+                </>
+              }
+            >
               <TextField label="Titre" value={overlay.title.title} placeholder={track?.name ?? 'Nom de la trace'} onChange={(title) => setWidget('title', { title })} />
               <TextField label="Sous-titre" value={overlay.title.subtitle} placeholder="Lieu, occasion…" onChange={(subtitle) => setWidget('title', { subtitle })} />
               <label className="checkbox">
@@ -359,20 +421,33 @@ export function OverlayPanel() {
                 />
                 Date de la sortie
               </label>
-              <RangeField
-                label="Durée d'affichage"
-                min={TITLE_END_MIN}
-                max={TITLE_END_MAX}
-                step={0.01}
-                value={overlay.title.end}
-                format={(v) => `${percent(v)} du survol`}
-                onChange={(end) => setWidget('title', { end })}
-              />
-              <AnchorField value={overlay.title.anchor} onChange={(anchor) => setWidget('title', { anchor })} />
-              <SizeField value={overlay.title.size} onChange={(size) => setWidget('title', { size })} />
             </WidgetGroup>
 
-            <WidgetGroup label="Carte de clôture" enabled={overlay.end.enabled} onToggle={(enabled) => setWidget('end', { enabled })} styled="end">
+            <WidgetGroup
+              label="Carte de clôture"
+              enabled={overlay.end.enabled}
+              onToggle={(enabled) => setWidget('end', { enabled })}
+              styled="end"
+              style={
+                <>
+                  <AnchorField value={overlay.end.anchor} onChange={(anchor) => setWidget('end', { anchor })} />
+                  <SizeField value={overlay.end.size} onChange={(size) => setWidget('end', { size })} />
+                </>
+              }
+              visibility={
+                <>
+                  <RangeField
+                    label="Apparition"
+                    min={END_START_MIN}
+                    max={END_START_MAX}
+                    step={0.01}
+                    value={overlay.end.start}
+                    format={(v) => `à ${percent(v)} du survol`}
+                    onChange={(start) => setWidget('end', { start })}
+                  />
+                </>
+              }
+            >
               <TextField label="Titre" value={overlay.end.title} placeholder={track?.name ?? 'Nom de la trace'} onChange={(title) => setWidget('end', { title })} />
               <label className="checkbox">
                 <input
@@ -383,22 +458,37 @@ export function OverlayPanel() {
                 />
                 Météo de la sortie
               </label>
-              <RangeField
-                label="Apparition"
-                min={END_START_MIN}
-                max={END_START_MAX}
-                step={0.01}
-                value={overlay.end.start}
-                format={(v) => `à ${percent(v)} du survol`}
-                onChange={(start) => setWidget('end', { start })}
-              />
-              <AnchorField value={overlay.end.anchor} onChange={(anchor) => setWidget('end', { anchor })} />
-              <SizeField value={overlay.end.size} onChange={(size) => setWidget('end', { size })} />
+              <div className="field">
+                <label className="field__label" htmlFor={`${id}-credits`}>
+                  Générique
+                </label>
+                <textarea
+                  id={`${id}-credits`}
+                  className="input input--multiline"
+                  rows={4}
+                  maxLength={END_CREDITS_MAX}
+                  placeholder={'Une ligne par nom\nMusique : …'}
+                  value={overlay.end.credits ?? ''}
+                  onChange={(e) => setWidget('end', { credits: e.currentTarget.value || undefined })}
+                />
+                <p className="field__hint">Rempli, il défile sous la carte jusqu’à la fin du film, centré.</p>
+              </div>
             </WidgetGroup>
           </PanelSection>
 
           <PanelSection title="Compteurs">
-            <WidgetGroup label="Afficher les compteurs" enabled={overlay.counters.enabled} onToggle={(enabled) => setWidget('counters', { enabled })} styled="counters">
+            <WidgetGroup
+              label="Afficher les compteurs"
+              enabled={overlay.counters.enabled}
+              onToggle={(enabled) => setWidget('counters', { enabled })}
+              styled="counters"
+              style={
+                <>
+                  <AnchorField value={overlay.counters.anchor} onChange={(anchor) => setWidget('counters', { anchor })} />
+                  <SizeField value={overlay.counters.size} onChange={(size) => setWidget('counters', { size })} />
+                </>
+              }
+            >
               <fieldset className="field fieldset">
                 <legend className="field__label">Valeurs</legend>
                 <div className="chips">
@@ -415,48 +505,75 @@ export function OverlayPanel() {
                   ))}
                 </div>
               </fieldset>
-              <AnchorField value={overlay.counters.anchor} onChange={(anchor) => setWidget('counters', { anchor })} />
-              <SizeField value={overlay.counters.size} onChange={(size) => setWidget('counters', { size })} />
             </WidgetGroup>
 
             {severalTracks && (
-              <WidgetGroup label="Classement (course fantôme)" enabled={overlay.leaderboard.enabled} onToggle={(enabled) => setWidget('leaderboard', { enabled })} styled="leaderboard">
+              <WidgetGroup
+                label="Classement (course fantôme)"
+                enabled={overlay.leaderboard.enabled}
+                onToggle={(enabled) => setWidget('leaderboard', { enabled })}
+                styled="leaderboard"
+                style={
+                  <>
+                    <AnchorField value={overlay.leaderboard.anchor} onChange={(anchor) => setWidget('leaderboard', { anchor })} />
+                    <SizeField value={overlay.leaderboard.size} onChange={(size) => setWidget('leaderboard', { size })} />
+                  </>
+                }
+              >
                 <p className="field__hint">
                   {raceOn
                     ? 'Rang, nom et écart au premier de chaque trace, au marqueur.'
                     : 'Visible quand la course fantôme est activée (onglet Trace).'}
                 </p>
-                <AnchorField value={overlay.leaderboard.anchor} onChange={(anchor) => setWidget('leaderboard', { anchor })} />
-                <SizeField value={overlay.leaderboard.size} onChange={(size) => setWidget('leaderboard', { size })} />
               </WidgetGroup>
             )}
           </PanelSection>
 
           <PanelSection title="Profil et mini-carte">
-            <WidgetGroup label="Profil altimétrique" enabled={overlay.profile.enabled} onToggle={(enabled) => setWidget('profile', { enabled })} styled="profile">
+            <WidgetGroup
+              label="Profil altimétrique"
+              enabled={overlay.profile.enabled}
+              onToggle={(enabled) => setWidget('profile', { enabled })}
+              styled="profile"
+              style={
+                <>
+                  <RangeField
+                    label="Largeur (% de l'image)"
+                    min={PROFILE_WIDTH_MIN}
+                    max={PROFILE_WIDTH_MAX}
+                    step={0.01}
+                    value={overlay.profile.width}
+                    format={percent}
+                    onChange={(width) => setWidget('profile', { width })}
+                  />
+                  <RangeField
+                    label="Hauteur (% de l'image)"
+                    min={PROFILE_HEIGHT_MIN}
+                    max={PROFILE_HEIGHT_MAX}
+                    step={0.01}
+                    value={overlay.profile.height}
+                    format={percent}
+                    onChange={(height) => setWidget('profile', { height })}
+                  />
+                  <AnchorField value={overlay.profile.anchor} onChange={(anchor) => setWidget('profile', { anchor })} />
+                </>
+              }
+            >
               {!hasEle && track && <p className="field__hint">Cette trace n'a pas d'altitude enregistrée.</p>}
-              <RangeField
-                label="Largeur (% de l'image)"
-                min={PROFILE_WIDTH_MIN}
-                max={PROFILE_WIDTH_MAX}
-                step={0.01}
-                value={overlay.profile.width}
-                format={percent}
-                onChange={(width) => setWidget('profile', { width })}
-              />
-              <RangeField
-                label="Hauteur (% de l'image)"
-                min={PROFILE_HEIGHT_MIN}
-                max={PROFILE_HEIGHT_MAX}
-                step={0.01}
-                value={overlay.profile.height}
-                format={percent}
-                onChange={(height) => setWidget('profile', { height })}
-              />
-              <AnchorField value={overlay.profile.anchor} onChange={(anchor) => setWidget('profile', { anchor })} />
             </WidgetGroup>
 
-            <WidgetGroup label="Mini-carte" enabled={overlay.minimap.enabled} onToggle={(enabled) => setWidget('minimap', { enabled })} styled="minimap">
+            <WidgetGroup
+              label="Mini-carte"
+              enabled={overlay.minimap.enabled}
+              onToggle={(enabled) => setWidget('minimap', { enabled })}
+              styled="minimap"
+              style={
+                <>
+                  <AnchorField value={overlay.minimap.anchor} onChange={(anchor) => setWidget('minimap', { anchor })} />
+                  <SizeField value={overlay.minimap.size} onChange={(size) => setWidget('minimap', { size })} />
+                </>
+              }
+            >
               <p className="field__hint">Tout le tracé vu de dessus, nord en haut, avec la position.</p>
               <label className="checkbox">
                 <input
@@ -466,23 +583,40 @@ export function OverlayPanel() {
                 />
                 Flèche du nord
               </label>
-              <AnchorField value={overlay.minimap.anchor} onChange={(anchor) => setWidget('minimap', { anchor })} />
-              <SizeField value={overlay.minimap.size} onChange={(size) => setWidget('minimap', { size })} />
             </WidgetGroup>
           </PanelSection>
 
           <PanelSection title="Météo, logo et texte">
-            <WidgetGroup label="Météo" enabled={overlay.weather.enabled} onToggle={(enabled) => setWidget('weather', { enabled })} styled="weather">
+            <WidgetGroup
+              label="Météo"
+              enabled={overlay.weather.enabled}
+              onToggle={(enabled) => setWidget('weather', { enabled })}
+              styled="weather"
+              style={
+                <>
+                  <AnchorField value={overlay.weather.anchor} onChange={(anchor) => setWidget('weather', { anchor })} />
+                  <SizeField value={overlay.weather.size} onChange={(size) => setWidget('weather', { size })} />
+                </>
+              }
+            >
               <p className="field__hint">
                 {hasWeather
                   ? 'Ciel, température et vent au marqueur.'
                   : 'Disponible quand la météo de la sortie est chargée (onglet Trace).'}
               </p>
-              <AnchorField value={overlay.weather.anchor} onChange={(anchor) => setWidget('weather', { anchor })} />
-              <SizeField value={overlay.weather.size} onChange={(size) => setWidget('weather', { size })} />
             </WidgetGroup>
 
-            <WidgetGroup label="Logo" enabled={overlay.logo.enabled} onToggle={(enabled) => setWidget('logo', { enabled })}>
+            <WidgetGroup
+              label="Logo"
+              enabled={overlay.logo.enabled}
+              onToggle={(enabled) => setWidget('logo', { enabled })}
+              style={
+                <>
+                  <AnchorField value={overlay.logo.anchor} onChange={(anchor) => setWidget('logo', { anchor })} />
+                  <SizeField value={overlay.logo.size} onChange={(size) => setWidget('logo', { size })} />
+                </>
+              }
+            >
               <div className="project__row">
                 <button type="button" className="btn btn--secondary" onClick={() => void chooseLogo()}>
                   {overlay.logo.image ? "Changer l'image" : 'Choisir une image'}
@@ -498,14 +632,21 @@ export function OverlayPanel() {
                   {logoError}
                 </p>
               )}
-              <AnchorField value={overlay.logo.anchor} onChange={(anchor) => setWidget('logo', { anchor })} />
-              <SizeField value={overlay.logo.size} onChange={(size) => setWidget('logo', { size })} />
             </WidgetGroup>
 
-            <WidgetGroup label="Texte libre" enabled={overlay.text.enabled} onToggle={(enabled) => setWidget('text', { enabled })} styled="text">
+            <WidgetGroup
+              label="Texte libre"
+              enabled={overlay.text.enabled}
+              onToggle={(enabled) => setWidget('text', { enabled })}
+              styled="text"
+              style={
+                <>
+                  <AnchorField value={overlay.text.anchor} onChange={(anchor) => setWidget('text', { anchor })} />
+                  <SizeField value={overlay.text.size} onChange={(size) => setWidget('text', { size })} />
+                </>
+              }
+            >
               <TextField label="Texte" value={overlay.text.text} placeholder="Ex. : avec Marie et Paul" onChange={(text) => setWidget('text', { text })} />
-              <AnchorField value={overlay.text.anchor} onChange={(anchor) => setWidget('text', { anchor })} />
-              <SizeField value={overlay.text.size} onChange={(size) => setWidget('text', { size })} />
             </WidgetGroup>
           </PanelSection>
         </>

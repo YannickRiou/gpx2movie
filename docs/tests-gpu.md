@@ -128,6 +128,19 @@ reproduce it next to the box.
 - [ ] Point of interest icons (hut, bivouac, summit…) sharp in the view and in the export; color and font
       of a film text (inspector), applied to the preview and to the export.
 - [ ] New figures (mountaineer, bikepacking, motorcycle, light aircraft) readable and turned in the turns.
+- [ ] "Animer la figurine" (animate the figurine): steady bounce and sway during playback, still when paused, identical
+      in the export; off: the figurine as before.
+- [ ] "Départ et arrivée" (start and finish) labels at both ends, a single label on a loop; "Photos, là où elles ont été
+      prises" (photos where they were taken): a phone photo with GPS pinned at the right place, caption as its text.
+- [ ] "Brume" (haze) slider from 0 to 100 %: the distance fades progressively, with and without weather, at sunset
+      too; identical in the export.
+- [ ] "Générique" (credits) of the closing card: the card holds, then card and lines roll up and leave the frame on the
+      last frame, in 16:9 and 9:16, in the 3 overlay styles; readable on snow.
+- [ ] "Transitions" (Survol tab) at 0.5 s then 4 s: easing into a stop, a pause and a "Vitesse" section shorter / longer,
+      never a jump.
+- [ ] Presets by family: save a "Style de carte" preset, change the camera, apply it: only the map changes; same for
+      "Prise de vue" (camera and light only), "Habillage", "Trace, marqueur et étiquettes".
+- [ ] "Contenu / Style / Visibilité" tabs of each overlay element: every former setting found in one of them.
 - [ ] Ghost race (two tracks), mini-map in the 3 overlay styles, labels hidden under the cards.
 - [ ] "Habillage" › "Couleurs et polices" (colors and fonts): swatches in the 320 px panel, accent, text and background applied to
       the preview and to the export, "Revenir au style" (back to the style); a single Ctrl+Z after a drag in the color picker.
