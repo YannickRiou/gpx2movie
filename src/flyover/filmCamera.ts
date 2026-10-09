@@ -108,6 +108,25 @@ export function shotWeight(shot: FilmShot, phase: 'opening' | 'closing', localS:
   return shotBlend(shot.style, phase, localS, lengthS)
 }
 
+/** Share of the region view in a highlighting 'situation' shot below which its highlight is gone, above which it is whole. */
+export const REGION_HIGHLIGHT_FADE = { from: 0.55, to: 0.85 } as const
+
+/**
+ * Opacity of the region highlight (scene/RegionHighlight.tsx) at film time `timeS`: 1 while a 'situation' shot that
+ * highlights the region holds its region view, fading out by smootherstep as the camera dives (closing: back in as it
+ * climbs), 0 anywhere else. It follows the shot's weight, so a shot that cuts keeps it whole until the cut.
+ */
+export function regionHighlightOpacity(clock: Pick<FilmClock, 'stateAt' | 'opening' | 'closing'>, timeS: number): number {
+  const state = clock.stateAt(timeS)
+  if (state.phase !== 'opening' && state.phase !== 'closing') return 0
+  const shot = state.phase === 'opening' ? clock.opening : clock.closing
+  if (shot.style !== 'situation' || shot.highlight !== true) return 0
+  const k = shotWeight(shot, state.phase, state.localS, state.lengthS)
+  const wide = state.phase === 'opening' ? 1 - k : k
+  const { from, to } = REGION_HIGHLIGHT_FADE
+  return smootherstep((wide - from) / (to - from))
+}
+
 /** 0 → 1 → 0 over a stop window `lengthS` long, `localS` seconds into it (raised cosine: still at both ends). */
 export function stopBump(localS: number, lengthS: number): number {
   if (!(lengthS > 0)) return 0

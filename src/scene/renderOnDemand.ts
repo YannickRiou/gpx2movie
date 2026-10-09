@@ -3,8 +3,8 @@
  * second while the view sits still. A frame is asked for:
  * - every frame while the film plays, while terrain tiles are loading and during a camera fit (their own `useFrame`);
  * - for WAKE_FRAMES frames after any change of the stores the scene reads (settings, film, playback, tracks, weather,
- *   labels, export), after a re-drape or a texture load (`wakeScene`): long enough for the temporal upscaling of
- *   the clouds to converge (~16 frames) and for effects run just after the change;
+ *   highlighted region, labels, export), after a re-drape or a texture load (`wakeScene`): long enough for the
+ *   temporal upscaling of the clouds to converge (~16 frames) and for effects run just after the change;
  * - by the orbit controls themselves (drei invalidates on each change, damping included), on a resize and by R3F on
  *   prop changes.
  * The video export drives its frames itself (`frameloop` 'never', see ExportController).
@@ -13,6 +13,7 @@ import { useEffect } from 'react'
 import { invalidate, useFrame, useThree } from '@react-three/fiber'
 import { DefaultLoadingManager } from 'three'
 import { useExportStore } from '../export/store'
+import { useRegionStore } from '../osm/region'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
 import { useLabelSources } from './labelSources'
@@ -77,6 +78,7 @@ export function useRenderOnDemand(): void {
         if (sceneChanged(state, previous)) wake()
       }),
       useWeatherStore.subscribe(wake),
+      useRegionStore.subscribe(wake),
       useLabelSources.subscribe(wake),
       useExportStore.subscribe(wake),
     ]

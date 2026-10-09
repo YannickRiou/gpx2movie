@@ -15,6 +15,7 @@ import type { DrawOverlay } from '../export/capture'
 import { getMediaBitmaps, mediaToLoad, useMediaStore } from '../film/media'
 import { createExportVideos } from '../film/video'
 import type { ExportVideos } from '../film/video'
+import { useRegionStore } from '../osm/region'
 import { useLandmarkStore, useWaterStore } from '../osm/store'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
@@ -41,8 +42,8 @@ function leaderboardAt(progress: number): LeaderboardRow[] | undefined {
 
 /**
  * What the overlay draws beyond the track at film time `time` and `progress`, from the stores: the texts and photos
- * of the timeline, the credits of the sources in use (as the status bar: relief, imagery, weather and landmarks once
- * loaded), the ghost-race leaderboard and the dip of a shot transition.
+ * of the timeline, the credits of the sources in use (as the status bar: relief, imagery, weather and OpenStreetMap
+ * once loaded), the ghost-race leaderboard and the dip of a shot transition.
  */
 export function overlayExtras(time: OverlayTime, progress: number): OverlayExtras {
   const { settings } = useAppStore.getState()
@@ -58,7 +59,8 @@ export function overlayExtras(time: OverlayTime, progress: number): OverlayExtra
       weather: useWeatherStore.getState().status === 'ready',
       landmarks:
         Object.values(useLandmarkStore.getState().landmarks).some((list) => list.length > 0) ||
-        useWaterStore.getState().polygons > 0,
+        useWaterStore.getState().polygons > 0 ||
+        useRegionStore.getState().region !== null,
     }),
   }
 }

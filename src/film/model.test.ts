@@ -10,6 +10,7 @@ import {
   clipHasSound,
   clipTimeS,
   dipAlpha,
+  highlightsRegion,
   isValidFilm,
   nextFilmId,
   shotCuts,
@@ -69,6 +70,23 @@ describe('film model', () => {
       film({ opening: { style: 'descente', durationS: 6, transition: 'fondu' as never } }),
       film({ opening: { style: 'descente', durationS: 6, transition: 'fondu-noir', dipS: 0.2 } }),
       film({ closing: { style: 'descente', durationS: 6, transition: 'fondu-noir', dipS: 2.5 } }),
+    ]
+    for (const f of bad) expect(isValidFilm(f)).toBe(false)
+  })
+
+  it('region shot: start height and highlight optional (off by default, old films unchanged), checked on load', () => {
+    expect(highlightsRegion(DEFAULT_FILM)).toBe(false)
+    const region = film({ opening: { style: 'situation', durationS: 9, startHeight: 'pays', highlight: true } })
+    expect(isValidFilm(region)).toBe(true)
+    expect(isValidSetting('film', region)).toBe(true)
+    expect(highlightsRegion(region)).toBe(true)
+    expect(highlightsRegion(film({ closing: { style: 'situation', durationS: 9, highlight: true } }))).toBe(true)
+    // only a 'situation' shot highlights it, and only when asked
+    expect(highlightsRegion(film({ opening: { style: 'situation', durationS: 9 } }))).toBe(false)
+    expect(highlightsRegion(film({ opening: { style: 'descente', durationS: 9, highlight: true } }))).toBe(false)
+    const bad: Film[] = [
+      film({ opening: { style: 'situation', durationS: 9, startHeight: 'monde' as never } }),
+      film({ opening: { style: 'situation', durationS: 9, highlight: 'oui' as never } }),
     ]
     for (const f of bad) expect(isValidFilm(f)).toBe(false)
   })

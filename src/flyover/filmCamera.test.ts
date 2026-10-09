@@ -27,8 +27,10 @@ import {
   REGION_MAX_DISTANCE_M,
   REGION_MIN_DISTANCE_M,
   REGION_PITCH_DEG,
+  REGION_HIGHLIGHT_FADE,
   REGION_REACH_M,
   regionDistanceM,
+  regionHighlightOpacity,
   regionView,
   shotBlend,
   shotWeight,
@@ -217,6 +219,39 @@ describe('region view (« Depuis la région »)', () => {
       previous = view
       previousStep = step
     }
+  })
+})
+
+describe('region highlight opacity', () => {
+  const highlighted = { style: 'situation', durationS: 8, highlight: true } as const
+
+  it('whole at the region view, gone during the dive, back up at the closing; none elsewhere or without the highlight', () => {
+    const clock = clockOf(highlighted, { ...highlighted, durationS: 6 })
+    const closingS = clock.openingS + clock.flightS
+    expect(regionHighlightOpacity(clock, 0)).toBe(1)
+    expect(regionHighlightOpacity(clock, 8)).toBe(0)
+    expect(regionHighlightOpacity(clock, 30)).toBe(0)
+    expect(regionHighlightOpacity(clock, clock.totalTime())).toBe(1)
+    // fading by the share of the region view left: whole above REGION_HIGHLIGHT_FADE.to, gone below its `from`
+    let previous = 1
+    for (let t = 0; t <= 8; t += 0.1) {
+      const k = shotWeight(clock.opening, 'opening', t, 8)
+      const opacity = regionHighlightOpacity(clock, t)
+      if (1 - k >= REGION_HIGHLIGHT_FADE.to) expect(opacity).toBe(1)
+      if (1 - k <= REGION_HIGHLIGHT_FADE.from) expect(opacity).toBe(0)
+      expect(opacity).toBeLessThanOrEqual(previous)
+      previous = opacity
+    }
+    expect(regionHighlightOpacity(clock, closingS + 3)).toBeCloseTo(regionHighlightOpacity(clock, 8 - (8 * 3) / 6), 9)
+    for (const shot of [{ style: 'situation', durationS: 8 }, { style: 'descente', durationS: 8, highlight: true }] as const) {
+      expect(regionHighlightOpacity(clockOf(shot, shot), 0)).toBe(0)
+    }
+  })
+
+  it('a cut keeps it whole until the cut', () => {
+    const clock = clockOf({ ...highlighted, transition: 'coupe' }, { style: 'aucune', durationS: 5 })
+    expect(regionHighlightOpacity(clock, 8 - 1e-6)).toBe(1)
+    expect(regionHighlightOpacity(clock, 8)).toBe(0)
   })
 })
 

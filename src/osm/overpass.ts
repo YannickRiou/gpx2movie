@@ -90,7 +90,7 @@ export function planarDistanceM(a: LonLat, b: LonLat): number {
 }
 
 /** Perpendicular distance (metres) of p to segment ab, equirectangular around a. */
-function segmentDistanceM(p: LonLat, a: LonLat, b: LonLat): number {
+export function segmentDistanceM(p: LonLat, a: LonLat, b: LonLat): number {
   const k = Math.cos((a.lat * Math.PI) / 180)
   const bx = (b.lon - a.lon) * k
   const by = b.lat - a.lat

@@ -34,6 +34,7 @@ import { loadFrameMedia, releaseFrameMedia } from '../overlay/exportOverlay'
 import { useTerrainContext } from '../scene/TerrainLayer'
 import { LINE_LIFT_M, type HeightSampler } from '../scene/TrackLines'
 import { useFilmClock } from '../scene/usePacing'
+import { useRegionStore } from '../osm/region'
 import { useWaterStore } from '../osm/store'
 import { useAppStore } from '../state/store'
 import { REPLACE_EPSILON, composeFrame, composeOverlayFrame, renderSettledFrame, wait, type DrawOverlay } from './capture'
@@ -93,6 +94,7 @@ function viewAt(
     camera: settings.camera,
     durationS: settings.flyoverDurationS,
     aspect,
+    region: useRegionStore.getState().frame,
   })
 }
 
