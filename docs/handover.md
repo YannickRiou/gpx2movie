@@ -310,21 +310,28 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    high-performance GPU.
 
 **Proposed, waiting for the user's go**
-4. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
-5. Extensions not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
+4. **Camera smoothing in time** (idea from MapDirector's « Smoothing » panel: aim smoothing 2 s, camera smoothing
+   7.5 s, ending 3 s, turn smoothing 1,000 m). Today the flyover camera is smoothed in space only: heading over a chord
+   window (« Lissage des virages », a ×0.25–×4 multiplier), aim height averaged along the track, track points
+   (« Lissage de la trace », metres). Missing: the aim point and the camera position low-passed over a window of film
+   time (seconds), so speed changes, pauses and stops do not jerk the view; an ending ease; the turn smoothing shown in
+   metres instead of a multiplier. Must stay a pure function of film time (a weighted average of the placements at
+   t ± window, a fixed number of samples) so the export matches the preview.
+5. Linux desktop export: hardware video encoder (NVENC, VAAPI) with fallback to `libx264`.
+6. Extensions not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only export on the
    Linux desktop, a built-in openh264 encoder, a text added with T attached to the selected stop.
-6. Commit `32a3818` message mentions the `CLAUDE.md` file name; `CLAUDE.md` and `.claude/` are in the repository
+7. Commit `32a3818` message mentions the `CLAUDE.md` file name; `CLAUDE.md` and `.claude/` are in the repository
    (configuration files). Rewriting history or removing them only on the user's request.
 
 **In the user's hands**
-7. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
+8. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
    steady camera, free camera, start / finish pins, export.
-8. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
+9. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
    remove them; delete the old branches (`lot-suites`, `landmarks-hide`, `track-style`, `ui-polish`,
    `timeline-polish`, `export-stream`, `timeline-videos`, `water`): the session cannot delete remote branches.
-9. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
+10. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
    application); signing certificates if wanted; then a first `v0.1.0` tag (release published by `desktop.yml`).
-10. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+11. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.
