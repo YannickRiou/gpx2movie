@@ -304,7 +304,9 @@ The roadmap is built except one feature. What remains:
 4. Extensions proposed and not adopted for now: thumbnails in "Mes projets", GoPro GPS time (GPMF), overlay-only
    export on the Linux desktop, a built-in openh264 encoder; the ported features' known limits (roadbook lists hidden
    landmarks, smoothing not applied to ghost racers / labels / mini-map / poster).
-5. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
+5. Polish from real use (`docs/roadmap.md`, last section): keep the free camera above the terrain; rethink the
+   start marker sphere.
+6. Reconnaissance: the user doubts its usefulness, do not extend it (bike / MTB profiles dropped); remove it if asked.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.

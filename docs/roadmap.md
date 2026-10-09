@@ -48,3 +48,12 @@ What sets OpenFlyover apart: everything stays local, and the data of the outing 
 | Printable poster | the track on the terrain at very high resolution, with title and figures, for printing | A4 / A3 at 300 dpi (portrait, landscape) and square, 3D overview, title, date, key figures, profile, weather, credits, three styles, several tracks, flat map: done |
 | Music sync | the flyover pacing (slow-motion, transitions) aligned on the beats of a local music file | "Musique" lane (volume, fades, waveform), played in the preview, mixed at export, movie duration fitted to the music, stops, titles and speed sections (slow-motion) synced to the beat: done |
 | Scouting | draw a future route on the terrain (local OSM routing) to fly over it before going | points placed on the terrain, without a track; route computed in the browser on OSM paths, elevations from the terrain: done; profiles (bike, mountain bike) dropped; estimated passing times, forecast weather and roadbook for a route without times: done |
+
+### Polish from real use (October 2026)
+
+Reported by the user while testing the Windows desktop application.
+
+| Issue | Cause | Status |
+|---|---|---|
+| The free camera (orbit / pan / zoom, when paused or without a track) can go under the terrain; the tile edges then show as vertical walls | the flyover camera keeps `MIN_GROUND_CLEARANCE_M` above the relief (`src/flyover/camera.ts`), the orbit controls of `src/scene/CameraRig.tsx` do not | to do |
+| A large dark green ball at the start of the track | the start marker, a 12 m sphere at true scale (`MARKER_RADIUS_M`, `START_COLOR` in `src/scene/TrackLines.tsx`): seen from close up it covers the path and reads as an unexplained object | to do: smaller, constant screen size, or replaced by the "Départ" label when shown |
