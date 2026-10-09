@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (100 files, 1,642 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (101 files, 1,658 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (12). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
