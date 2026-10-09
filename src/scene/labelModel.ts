@@ -15,7 +15,7 @@ import { formatNumber } from '../ui/format'
 
 /**
  * 'poi': a point of interest placed by hand (drawn with a pin instead of the stripe); 'km': a kilometre marker;
- * 'endpoint': the start or the finish of the first track (drawn with its pictogram too).
+ * 'endpoint': the start or the finish of a track (drawn with its pictogram too).
  */
 export type LandmarkKind = 'climb' | 'waypoint' | 'peak' | 'pass' | 'hut' | 'water' | 'place' | 'other' | 'poi' | 'km' | 'endpoint'
 
@@ -105,24 +105,27 @@ export function kmLabels(track: Track, stepKm: number): LandmarkLabel[] {
   return out
 }
 
-/** « Départ » (pin) and « Arrivée » (flag) at both ends of `track`; one « Départ et arrivée » for a loop. */
-export function endpointLabels(track: Track): LandmarkLabel[] {
+/**
+ * A flag pin at both ends of `track`, one for a loop; with `withText`, « Départ », « Arrivée » or « Départ et arrivée »
+ * beside the flag, otherwise the pin alone (empty text).
+ */
+export function endpointLabels(track: Track, withText = true): LandmarkLabel[] {
   const path = trackPathOf(track)
   if (path.count === 0) return []
   const start = samplePath(path, 0)
   const end = samplePath(path, path.lengthM)
-  const label = (id: string, at: typeof start, text: string, icon: PoiIcon): LandmarkLabel => ({
+  const label = (id: string, at: typeof start, text: string): LandmarkLabel => ({
     id: `endpoint:${track.id}:${id}`,
     lon: at.lon,
     lat: at.lat,
     ele: at.ele,
-    text,
+    text: withText ? text : '',
     kind: 'endpoint',
     priority: ENDPOINT_PRIORITY,
-    icon,
+    icon: 'drapeau',
   })
-  if (haversineM(start, end) < LOOP_GAP_M) return [label('loop', start, 'Départ et arrivée', 'drapeau')]
-  return [label('start', start, 'Départ', 'epingle'), label('finish', end, 'Arrivée', 'drapeau')]
+  if (haversineM(start, end) < LOOP_GAP_M) return [label('loop', start, 'Départ et arrivée')]
+  return [label('start', start, 'Départ'), label('finish', end, 'Arrivée')]
 }
 
 /** « Étiquettes dans la vue » (`settings.labels`): climbs and waypoints on, the rest off, size ×1, range 70 km (`LABEL_FADE_END_M`). */

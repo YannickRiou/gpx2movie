@@ -1,7 +1,8 @@
 /**
  * Labels — names anchored on the draped relief, drawn inside WebGL so a canvas capture (video export)
  * includes them: tops of the climbs of the first track, GPX waypoints of every track, points of interest placed by
- * hand (`film.pois`), and every external source registered in `labelSources.ts`.
+ * hand (`film.pois`), and every external source registered in `labelSources.ts`. The start and the finish of every
+ * track always have a flag pin, named on the first track with « Départ et arrivée » (`labels.endpoints`).
  *
  * Each label is a Sprite (sizeAttenuation off, so a constant size on screen) whose canvas texture holds an
  * ink panel with white text, a stem and an anchor dot in the accent of its kind (a point of interest has a pin
@@ -114,7 +115,8 @@ function drawLabelTexture(rawText: string, kind: LandmarkKind, icon: PoiIcon = '
   const pin = kind === 'poi' || kind === 'endpoint'
   // left of the text: the accent stripe and its padding, or a padding, the pin and a gap
   const lead = pin ? PIN_X + PIN_PX + PIN_GAP : STRIPE_W + PAD_X
-  const width = Math.ceil(lead + PAD_X + ctx.measureText(text).width / s)
+  // without text, a square panel around the pin
+  const width = pin && !text ? 2 * PIN_X + PIN_PX : Math.ceil(lead + PAD_X + ctx.measureText(text).width / s)
   const height = PANEL_H + STEM_H + 2 * DOT_R + 2
   canvas.width = width * s
   canvas.height = height * s
@@ -293,7 +295,7 @@ export function Labels() {
     if (show.climbs && first) out.push(...climbLabels(first, climbsOf(first)))
     if (show.waypoints) out.push(...waypointLabels(tracks))
     if (first) out.push(...kmLabels(first, show.kmStep))
-    if (show.endpoints && first) out.push(...endpointLabels(first))
+    tracks.forEach((track, i) => out.push(...endpointLabels(track, show.endpoints && i === 0)))
     if (show.photos) out.push(...photoLabels(media, table))
     out.push(...poiLabels(pois))
     out.push(...externalLabels(sources))

@@ -184,7 +184,7 @@ Cloud preview: lightened "bas" (low) preset (`PREVIEW_MARCH`: 120 steps of at le
    - `TrackLines`: for each track, `Line2` (three/addons/lines) 4 px wide, color `track.color`, densified points (step ≤ 10 m),
      height = `(engine.sampleHeight(lon,lat) ?? pt.ele ?? 0) * exaggeration + 3`. Re-draped on `engine.onChange` (150 ms debounce).
      Second pass with `depthTest: false`, opacity 0.25, to hint at the parts hidden by the terrain.
-     Start (moss `#3F6B4A`) and finish (ink `#1C2A33`) spheres.
+     No start / finish mesh: `Labels` pins them (see "Climbs and labels").
    - `CameraRig`: `OrbitControls` (drei) with damping, `maxPolarAngle = 85°`, `minDistance = 30`, `maxDistance = 400 km`;
      `computeFitView(bounds, frame, groundHeightM)` (`scene/CameraRig.tsx`): target = center, camera to the south-east, pitch 40°, distance = 1.4 × box diagonal (min 2 km).
      On each `change` of the controls (orbit, pan, zoom, damping, fit; not while playing or exporting), `liftAboveGround` raises the
@@ -1061,8 +1061,9 @@ and what the weather will be like.
   `labels.size` (×0.6 to ×1.6); on overlap, the highest priority wins. Opacity is a function of the view alone (no
   temporal smoothing): each export frame is rendered in isolation. With the overlay active: opacity multiplied by
   1 − `cardOpacityAt(progress, settings.overlay)` (`labelOpacity`); labels fade out behind the opening
-  and closing cards. Start and finish (`endpointLabels`, `labels.endpoints`, priority 150; one "Départ et arrivée" label when
-  both ends are less than 100 m apart) and the photos of the film whose file gave a GPS position (`photoLabels`,
+  and closing cards. Start and finish (`endpointLabels`, priority 150): a flag pin at both ends of every track (one when
+  both ends are less than 100 m apart: a loop), always shown; with `labels.endpoints` ("Départ et arrivée") the pins of the
+  first track read "Départ", "Arrivée" or "Départ et arrivée", otherwise the pin alone (a square panel). They and the photos of the film whose file gave a GPS position (`photoLabels`,
   `labels.photos`, priority 190, `MediaAsset.lon` / `lat` read from EXIF when the photo is added) use the pictogram
   panel of the points of interest. Setting `settings.labels { climbs, waypoints, kmStep, endpoints, photos, size, rangeKm }` (old projects completed by
   `withLabelDefaults`, values checked by `isValidLabelSettings`), section
