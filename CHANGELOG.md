@@ -12,6 +12,7 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
 - **Phones, follow-ups**: lower pixel ratio while fingers move the 3D view; offline packs no finer than the phone
   shows; no hover style left on a button after a tap; an open app looks for a new version every hour and when
   shown again.
+- **Home screen**: a calm welcome page with the latest projects; until a track is loaded only « Projet » is in the rail.
 - **Status bar**: the map state is clear: a ring and « Carte · 72 % » while the view loads, then « Carte prête »;
   tiles in error stay visible.
 - **Situation shot**: « Soleil » › « Plein jour » (default) lights the region view in daylight whatever the time of

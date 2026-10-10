@@ -151,6 +151,9 @@ features included), `npm run build`,
   stats. Not done: « Précharger le survol » (engine `prefetch` along the whole film path, with its own progress).
 - **Tabs Météo, Lumière, Objectif** (10 October 2026, user request "pense Apple"): eight tabs in montage order, `SettingRow`
   (name and value, control on a tap) replaces every « Plus de réglages »; phone bar scrolls sideways. Seen in headless Chromium.
+- **Home screen** (10 October 2026, user request): without a track the rail holds « Projet » alone (folded) and « Exporter »
+  is hidden (`home` in `shellReducer`, `shownTabs`); a paper page replaces the card on the sky gradient, with « Récents »
+  from « Mes projets ». Seen in headless Chromium (desktop and phone).
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn

@@ -276,8 +276,10 @@ ink, 7.3:1).
   flag (`freeFraming` in the store, neither saved nor undoable). Outside "Libre", `Stage.tsx` frames the 3D view to the format
   (`frameRect`, ink bars): `.view__stage`, which holds the 3D canvas, the overlay and the legend, takes the framed
   rectangle; the overlay therefore follows the exported area with no change to `src/overlay`. The export renders into this visible canvas.
-  Without a track, no framing: the welcome card (`EmptyState.tsx`) fills the center of the view ("Choisir un fichier" (choose a file),
-  "Essayer avec l'exemple (Tour du Mont-Blanc)" (try the sample), "Ouvrir un projet…" (open a project), a single picker whose `accept` changes).
+  Without a track, no framing: the home screen (`EmptyState.tsx`), a paper page over the whole view (no sky gradient),
+  one centred column: "Choisir un fichier" (choose a file), "Importer depuis Strava", "Essayer avec l'exemple" (try the
+  sample), "Ouvrir un projet…" (open a project; a single picker whose `accept` changes), then "Récents": the three latest
+  entries of « Mes projets » but the open one (`useLibraryStore`, kept fresh by the always-mounted Projet tab).
 - **Rail and panel**: vertical rail of icon + label tabs (64 px; `tablist`, roving focus, arrows / Home / End) and a
   320 px panel, one tab at a time, eight tabs in montage order (`SHELL_TABS`), one question each: **Trace** (track; track list with "+ Ajouter" (add; a menu: « Fichiers GPX ou FIT… », « Activités Strava… »), waiting message without a track),
   **Carte** (map; base map and water, relief, track and marker, climbs and labels, OSM landmarks, points of interest),
@@ -287,6 +289,10 @@ ink, 7.3:1).
   side effects. Flat sections separated by a rule, sticky section header (title + "modifié / Par défaut" (modified / default)). A click
   on the open tab, the button at the bottom of the rail or `[` collapses the panel. Tab and collapsed state are remembered by the browser
   (`getPlatform().storage` `openflyover.shell.v1`, `parseShellPrefs`: an unknown tab id falls back to Trace), not by the project.
+  **Home screen** (no track): the rail holds « Projet » alone, folded, and « Exporter » is hidden (`ShellState.home`,
+  `shownTabs`, `tracks` event sent by `App` when the first track arrives or the last one goes): the other tabs, the
+  export drawer (Ctrl+E) and the keyboard moves cannot reach a hidden tab. The first track brings the tabs back as last
+  left (« Trace » in place of « Projet »); the home screen's state is never remembered.
   The tab list scrolls when it does not fit (short window; phone bar), and `App` scrolls the open tab into view.
 - **Right dock** (300 px): non-modal export drawer (`ExportPanel`: formats as tiles, resolution, estimate, "Exporter
   la vidéo" (export the video), "Image fixe" (still image), rows (`SettingRow`) for frames per second, quality, image type; summary duration · frames · codec ·
@@ -413,8 +419,7 @@ ink, 7.3:1).
   checkbox) to turn on a whole feature (overlay and each of its elements, atmosphere, weather, landmarks, ghost
   race, slow-downs, credits); checkable chips (`chips` / `chip`, hidden native checkbox, check mark and ink background once
   selected, dotted if unavailable) for multiple choices (landmark types, counters); option text at weight 500,
-  labels at 600. Without a track, every tab but Trace and Projet starts with a line "Ajoutez une trace…" (add a track; `tab-hint`,
-  `NO_TRACK_HINT_TABS` in `App`). Météo: weather on two lines (outing; marker instant), tables collapsed under
+  labels at 600. Météo: weather on two lines (outing; marker instant), tables collapsed under
   "Détails" (details); ghost race synchronization and ranking only once it is enabled. Habillage (`OverlayPanel`)
   in `PanelSection`: "Habillage" (switch, style, "Couleurs et polices" (colors and fonts) collapsed; the only "modifié / Par défaut",
   for all of `overlay`), "Titres" (titles), "Compteurs" (counters; and "Classement (course fantôme)" (ghost race ranking) from two tracks), "Profil et mini-carte" (profile and mini-map), "Météo, logo et texte" (weather, logo and text; absent when the overlay is off), "Crédits des

@@ -85,7 +85,7 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:5173> and click "Essayer avec l'exemple (Tour du Mont-Blanc)" (try with the sample).
+Open <http://127.0.0.1:5173> and click "Essayer avec l'exemple" (try with the sample).
 
 To test the production build: `npm run build`, then `npm run preview` (<http://localhost:4173>).
 
