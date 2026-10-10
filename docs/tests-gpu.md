@@ -29,6 +29,10 @@ reproduce it next to the box.
 - [ ] Cancel during the export, or close the "Save" dialog: no file left behind, view and interface restored.
 - [ ] Firefox: in-memory export, warning above an estimated 1.5 GB, download.
 - [ ] Clouds enabled ("Météo" (weather) or "Manuel 50 %" (manual 50%) setting): export cost, same frames from one export to the next.
+- [ ] Long fast track (540 km raid), volumetric sea of clouds and « Objectif » › shutter on, 1080p: export time per frame and
+      `[export]` line against the version before « no rendering while waiting for tiles » (~1 s per frame on a GTX 1060);
+      GPU load (Task Manager) drops while the `[export]` "attente des tuiles" grows instead of staying at 100 %; frames
+      identical (terrain complete, same clouds and blur), no more "incomplète" frames than before.
 - [ ] PNG and JPEG still image, with and without overlay.
 - [ ] Overlay only (transparent background): fast export, no waiting for tiles; WebM played with its transparency (Chrome
       on a colored background, Kdenlive or Shotcut), laid over the normal video of the same film: counters, profile, map,

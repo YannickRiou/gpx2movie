@@ -1494,7 +1494,15 @@ it, know at what time you will pass each point, where the sun will be and what t
 - For each progress value (`renderSettledFrame`, `src/export/capture.ts`), `advance` until the view no longer waits for
   any tile that is actually drawn (`stats.pendingVisibleTiles`, limit 5 s per frame, counted as "incomplète" (incomplete)), then the
   pending re-drapes of the track and labels run right away (`flushDrapes`, instead of their delay) and
-  the frame is rendered once more. The camera is repositioned (progress shifted by 1e-9) only if the final terrain moves it
+  the frame is rendered once more. While tiles load, nothing is rendered: every 16 ms only `engine.update` runs for the
+  camera of the last render (`updateTiles`; the other layers load their data per track, not per view), then the frame
+  is rendered again once the view has its tiles, or at the timeout. A (sub-)frame waiting for tiles costs 2 renders
+  (3 with a re-drape) instead of one every 16 ms + render time, each with the clouds' noise slices (e2e, SwiftShader,
+  tiles answered after 300 ms: 320 → 36 renders for 20 frames; clouds and shutter open, 219 → 58 for 5 frames). During
+  the waits the engine's frame-counted delays (unload after 120 updates, retry after 300) run at the preview's pace:
+  a failed tile is retried after ~5 s and the frame waits for it again (tile hosts unreachable: 20 frames of 20 at
+  the timeout, 5 before, when the slow renders spaced the retries).
+  The camera is repositioned (progress shifted by 1e-9) only if the final terrain moves it
   by more than 1 m, never after a timeout. Every 5 rendered frames, the tiles for frames +5 to +40 are
   requested ahead of time (`engine.prefetch`).
 - The WebGL image is composited in the same task as the render onto an `OffscreenCanvas` (sky gradient, image, then overlay

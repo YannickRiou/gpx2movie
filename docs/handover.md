@@ -156,6 +156,11 @@ features included), `npm run build`,
   from « Mes projets ». Seen in headless Chromium (desktop and phone).
 - **Tooltips and region search** (10 October 2026): `installTipPlacement` (`ui/shell.ts`) shifts or flips a centred
   `data-tip` inside its scrolling column; `fetchRegion` lists the areas before the geometry, `retryRegion` after a failure (e2e `region`).
+- **Export waits for tiles without rendering** (10 October 2026): `settle` only runs `engine.update` (`updateTiles`)
+  while the view's tiles load, then renders (e2e with fake tiles after 300 ms: 320 → 36 renders for 20 frames), not
+  seen on a GPU. Open: failed tiles are now retried after ~5 s during the waits (frame-counted engine delays), so
+  with unreachable tile hosts the e2e export hits the 5 s timeout on 20 frames of 20 (5 before); a time-based retry
+  in the engine would fix it.
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn

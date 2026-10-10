@@ -23,7 +23,7 @@ export interface SettleOptions {
   minAdvances: number
   /** give up waiting for the terrain after this long and capture what is there */
   timeoutMs: number
-  /** wait between renders while tiles are loading */
+  /** wait between tile requests while tiles are loading */
   pollMs: number
 }
 
@@ -37,6 +37,8 @@ export const REPLACE_TOLERANCE_M = 1
 export interface SettleDeps {
   /** render one frame (R3F `advance`) */
   advance(): void
+  /** request the tiles of the current camera without rendering (`engine.update`) */
+  updateTiles(): void
   /** tiles the current view still waits for (`stats.pendingVisibleTiles`) */
   pendingTiles(): number
   /** run the debounced re-drapes of the track and labels now; true when one ran */
@@ -57,21 +59,26 @@ export interface RenderFrameDeps extends SettleDeps {
 
 /**
  * Render until the view waits for no tile (at least `minAdvances` renders), then run the pending re-drapes
- * and render once more if one ran. Resolves true when settled, false on timeout; throws ExportCanceledError
- * when canceled. The last frame is still in the WebGL drawing buffer when the promise settles: capture it
- * right away, without awaiting anything else first.
+ * and render once more if one ran. While tiles load, only their requests follow (`updateTiles`, no render):
+ * the next render comes once the view has them, or at the timeout. Resolves true when settled, false on
+ * timeout; throws ExportCanceledError when canceled. The last frame is still in the WebGL drawing buffer when
+ * the promise settles: capture it right away, without awaiting anything else first.
  */
 export async function settle(deps: SettleDeps, options: SettleOptions = DEFAULT_SETTLE): Promise<boolean> {
   const start = deps.now()
+  const timedOut = () => deps.now() - start >= options.timeoutMs
   for (let n = 1; ; n++) {
     deps.advance()
     const done = n >= options.minAdvances && deps.pendingTiles() === 0
-    if (done || deps.now() - start >= options.timeoutMs) {
+    if (done || timedOut()) {
       if (deps.flushDrapes()) deps.advance()
       return done
     }
-    if (deps.isCanceled()) throw new ExportCanceledError()
-    await deps.wait(deps.pendingTiles() > 0 ? options.pollMs : 0)
+    do {
+      if (deps.isCanceled()) throw new ExportCanceledError()
+      await deps.wait(deps.pendingTiles() > 0 ? options.pollMs : 0)
+      deps.updateTiles()
+    } while (deps.pendingTiles() > 0 && !timedOut())
   }
 }
 

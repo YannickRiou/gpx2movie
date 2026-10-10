@@ -15,6 +15,8 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
 - **Home screen**: a calm welcome page with the latest projects; until a track is loaded only « Projet » is in the rail.
 - **Status bar**: the map state is clear: a ring and « Carte · 72 % » while the view loads, then « Carte prête »;
   tiles in error stay visible.
+- **Video export**: no rendering while a frame waits for its tiles (only the tile requests go on), so clouds and
+  motion blur no longer keep the graphics card busy with frames that are thrown away.
 - **Situation shot**: « Soleil » › « Plein jour » (default) lights the region view in daylight whatever the time of
   the outing, then joins the flight's sun; « Heure du survol » and « Accéléré » (the former « Faire bouger le soleil »).
 - **Timeline**: a narrow block (a 4 s stop on a phone) pressed in its middle is moved, no longer stretched by its edge.
