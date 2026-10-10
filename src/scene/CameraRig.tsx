@@ -7,9 +7,11 @@
  * Whenever the controls move the camera, or the ground changes under a camera sitting still, it is lifted to stay
  * FREE_CAMERA_CLEARANCE_M above the draped relief (one sample, and a frame drawn only if it moved). Nothing is sampled
  * otherwise, nor while the film plays or a video is exported (FlyoverRig drives the camera then).
+ *
+ * Touch: one finger orbits, two pinch to zoom and pan (the controls' own touch handling); a double tap fits, like F.
  */
 import { useCallback, useEffect, useMemo, useRef, type ComponentRef } from 'react'
-import { invalidate, useFrame } from '@react-three/fiber'
+import { invalidate, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Box3, Vector3 } from 'three'
 import type { LocalFrame, LonLatBounds, Track } from '../core/types'
@@ -33,6 +35,9 @@ export const MAX_POLAR_ANGLE_RAD = (85 * Math.PI) / 180
 export const DAMPING_FACTOR = 0.08
 
 export const FIT_DURATION_MS = 800
+/** Two taps closer than this in time (ms) and space (CSS pixels) are a double tap. */
+const DOUBLE_TAP_MS = 300
+const DOUBLE_TAP_PX = 30
 export const FIT_MIN_DISTANCE_M = 2_000
 export const FIT_DISTANCE_FACTOR = 1.4
 /** Camera pitch above the horizon when fitting. */
@@ -140,7 +145,47 @@ interface FitAnimation {
   elapsedMs: number
 }
 
+/** A double tap with one finger on the view fits it to the tracks (touch only: the mouse keeps its double click free). */
+function useDoubleTapFit() {
+  const canvas = useThree((s) => s.gl.domElement)
+  useEffect(() => {
+    let fingers = 0
+    let press: { x: number; y: number } | null = null
+    let lastTap: { t: number; x: number; y: number } | null = null
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return
+      fingers++
+      press = fingers === 1 ? { x: e.clientX, y: e.clientY } : null
+    }
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return
+      fingers = Math.max(0, fingers - 1)
+      const tap = press !== null && Math.hypot(e.clientX - press.x, e.clientY - press.y) < DOUBLE_TAP_PX / 3
+      press = null
+      if (!tap || e.type === 'pointercancel') {
+        lastTap = null
+        return
+      }
+      if (lastTap && e.timeStamp - lastTap.t < DOUBLE_TAP_MS && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX) {
+        lastTap = null
+        if (!isExportBusy(useExportStore.getState().phase)) useAppStore.getState().requestFit()
+      } else {
+        lastTap = { t: e.timeStamp, x: e.clientX, y: e.clientY }
+      }
+    }
+    canvas.addEventListener('pointerdown', onDown)
+    canvas.addEventListener('pointerup', onUp)
+    canvas.addEventListener('pointercancel', onUp)
+    return () => {
+      canvas.removeEventListener('pointerdown', onDown)
+      canvas.removeEventListener('pointerup', onUp)
+      canvas.removeEventListener('pointercancel', onUp)
+    }
+  }, [canvas])
+}
+
 export function CameraRig() {
+  useDoubleTapFit()
   const bounds = useAppStore((s) => s.bounds)
   const fitRequest = useAppStore((s) => s.fitRequest)
   const exaggeration = useAppStore((s) => s.settings.exaggeration)

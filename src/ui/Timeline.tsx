@@ -338,9 +338,42 @@ export function Timeline({ sheetOpen = false, onUnfold }: { sheetOpen?: boolean;
       setZoom(next.zoom)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
+    // two fingers: pinching zooms around their middle, sliding them scrolls; the first finger's press is dropped
+    let pinch: { span: number; mid: number } | null = null
+    const measure = (t: TouchList) => ({ span: Math.max(10, Math.abs(t[0].clientX - t[1].clientX)), mid: (t[0].clientX + t[1].clientX) / 2 })
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return
+      pinch = measure(e.touches)
+      gestureRef.current = null
+      cancelAnimationFrame(edgeRef.current?.frame ?? 0)
+      edgeRef.current = null
+      setDraft(null)
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pinch || e.touches.length !== 2) return
+      e.preventDefault()
+      const now = measure(e.touches)
+      const scroll = (pendingScrollRef.current ?? el.scrollLeft) + pinch.mid - now.mid
+      const next = zoomAt(zoomRef.current, now.span / pinch.span, now.mid - el.getBoundingClientRect().left, scroll)
+      pendingScrollRef.current = next.scrollLeft
+      zoomRef.current = next.zoom
+      setZoom(next.zoom)
+      pinch = now
+    }
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinch = null
+    }
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd)
+    el.addEventListener('touchcancel', onTouchEnd)
     return () => {
       observer.disconnect()
       el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchEnd)
     }
   }, [collapsed, hasTrack])
 
@@ -540,13 +573,14 @@ export function Timeline({ sheetOpen = false, onUnfold }: { sheetOpen?: boolean;
     setProgress(clock.progressAtTime(c), c < end ? c : null)
   }
   const onContentPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return
+    // a second finger is a pinch (touch listeners above)
+    if (e.button !== 0 || !e.isPrimary) return
     e.currentTarget.setPointerCapture(e.pointerId)
     gestureRef.current = { kind: 'scrub' }
     seek(timeAt(e.clientX))
   }
   const startEdit = (e: PointerEvent<HTMLElement>, item: TimelineItem, grip: Grip) => {
-    if (e.button !== 0) return
+    if (e.button !== 0 || !e.isPrimary) return
     e.stopPropagation()
     setSelected(item)
     contentRef.current?.setPointerCapture(e.pointerId)

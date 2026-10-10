@@ -1,7 +1,8 @@
 /**
  * TrackPicker — direct manipulation of the first track in the 3D view: a click on the line moves the playhead there, a
  * right-click opens a small menu (`TrackMenu`, DOM, next to the canvas) to add a stop, a text, a speed portion or a
- * point of interest. A press that travels `CLICK_SLOP_PX` or more is a camera drag (OrbitControls), not a click.
+ * point of interest; on a touch screen a tap is the click and a long press (`LONG_PRESS_MS`, one finger held still) the
+ * right-click. A press that travels `CLICK_SLOP_PX` or more is a camera drag (OrbitControls), not a click.
  * Nothing during an export.
  *
  * Picking is in screen space (`pickProjectedPath`, pure): the path draped like the line, projected with the camera,
@@ -27,6 +28,9 @@ import { editFilm, getFilmSource, useFilmClock, useFilmTrack } from './usePacing
 const PICK_RADIUS_PX = 12
 /** Travel between press and release beyond which the press was a camera drag. */
 const CLICK_SLOP_PX = 4
+/** A finger held this long without moving (beyond `LONG_PRESS_SLOP_PX`) opens the menu. */
+const LONG_PRESS_MS = 500
+const LONG_PRESS_SLOP_PX = 10
 /** Samples of the path projected on screen (evenly spaced along it; between two of them the pick interpolates). */
 const PICK_SAMPLES = 1500
 /** Draped positions are recomputed after this delay (the terrain keeps loading finer tiles). */
@@ -41,6 +45,9 @@ interface TrackMenuState {
    */
   menu: { x: number; y: number; atM?: number; ground?: LonLat; left: boolean; up: boolean; naming?: boolean } | null
 }
+
+/** a pointer position (event or remembered press) */
+type At = Pick<PointerEvent, 'clientX' | 'clientY'>
 
 const useTrackMenu = create<TrackMenuState>(() => ({ menu: null }))
 const closeMenu = () => useTrackMenu.setState({ menu: null })
@@ -103,7 +110,7 @@ export function TrackPicker() {
     }
 
     /** distance along the track under the pointer, undefined when the line is not there */
-    const pick = (e: PointerEvent): number | undefined => {
+    const pick = (e: At): number | undefined => {
       const rect = canvas.getBoundingClientRect()
       const world = drape()
       for (let k = 0; k < samples.distM.length; k++) {
@@ -118,7 +125,7 @@ export function TrackPicker() {
     const raycaster = new Raycaster()
     const pointer = new Vector2()
     /** lon/lat of the relief under the pointer (first tile drawn along the ray), undefined where none is drawn */
-    const pickGround = (e: PointerEvent): LonLat | undefined => {
+    const pickGround = (e: At): LonLat | undefined => {
       if (!engine) return undefined
       const rect = canvas.getBoundingClientRect()
       pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, 1 - ((e.clientY - rect.top) / rect.height) * 2)
@@ -129,14 +136,48 @@ export function TrackPicker() {
       return { lon, lat }
     }
 
+    const openMenu = (e: At, atM = pick(e)) => {
+      const ground = pickGround(e) ?? (atM === undefined ? undefined : samplePath(samples.path, atM))
+      if (atM === undefined && !ground) return
+      const rect = canvas.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      useTrackMenu.setState({ menu: { x, y, atM, ground, left: x > rect.width - MENU_ROOM.width, up: y > rect.height - MENU_ROOM.height } })
+    }
+
     let press: { x: number; y: number; button: number } | null = null
+    /** fingers on the view, and the long press of the first one */
+    let fingers = 0
+    let longPress = 0
+    const cancelLongPress = () => {
+      window.clearTimeout(longPress)
+      longPress = 0
+    }
     const onPointerDown = (e: PointerEvent) => {
       press = { x: e.clientX, y: e.clientY, button: e.button }
+      if (e.pointerType !== 'touch') return
+      fingers++
+      cancelLongPress()
+      // a second finger: a pinch, neither a tap nor a long press
+      if (fingers > 1) {
+        press = null
+        return
+      }
+      const at = { clientX: e.clientX, clientY: e.clientY }
+      longPress = window.setTimeout(() => {
+        longPress = 0
+        press = null
+        if (!exporting()) openMenu(at)
+      }, LONG_PRESS_MS)
     }
     const onPointerUp = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        fingers = Math.max(0, fingers - 1)
+        cancelLongPress()
+      }
       const p = press
       press = null
-      if (!p || p.button !== e.button || exporting() || Math.hypot(e.clientX - p.x, e.clientY - p.y) >= CLICK_SLOP_PX) return
+      if (!p || e.type === 'pointercancel' || p.button !== e.button || exporting() || Math.hypot(e.clientX - p.x, e.clientY - p.y) >= CLICK_SLOP_PX) return
       const atM = pick(e)
       if (e.button === 0 && atM !== undefined) {
         const clock = clockRef.current
@@ -144,15 +185,11 @@ export function TrackPicker() {
         const t = clock.timeAtProgress(progress)
         useAppStore.getState().setProgress(progress, t < clock.totalTime() ? t : null)
       } else if (e.button === 2) {
-        const ground = pickGround(e) ?? (atM === undefined ? undefined : samplePath(samples.path, atM))
-        if (atM === undefined && !ground) return
-        const rect = canvas.getBoundingClientRect()
-        const x = e.clientX - rect.left
-        const y = e.clientY - rect.top
-        useTrackMenu.setState({ menu: { x, y, atM, ground, left: x > rect.width - MENU_ROOM.width, up: y > rect.height - MENU_ROOM.height } })
+        openMenu(e, atM)
       }
     }
     const onPointerMove = (e: PointerEvent) => {
+      if (longPress && press && Math.hypot(e.clientX - press.x, e.clientY - press.y) >= LONG_PRESS_SLOP_PX) cancelLongPress()
       if (e.buttons !== 0) return
       canvas.style.cursor = !exporting() && pick(e) !== undefined ? 'pointer' : ''
     }
@@ -164,12 +201,15 @@ export function TrackPicker() {
 
     canvas.addEventListener('pointerdown', onPointerDown)
     canvas.addEventListener('pointerup', onPointerUp)
+    canvas.addEventListener('pointercancel', onPointerUp)
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('pointerleave', onPointerLeave)
     canvas.addEventListener('contextmenu', onContextMenu)
     return () => {
       canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointerup', onPointerUp)
+      canvas.removeEventListener('pointercancel', onPointerUp)
+      cancelLongPress()
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerleave', onPointerLeave)
       canvas.removeEventListener('contextmenu', onContextMenu)
