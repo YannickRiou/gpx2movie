@@ -1,7 +1,7 @@
 /**
- * TrackLines — draws every loaded track draped on the terrain: one Line2 per segment plus a "ghost" clone without
- * depth test at 25 % opacity, so the parts hidden by the relief are still hinted (see "Track and marker" in
- * ARCHITECTURE.md; styles in `trackLineStyle.ts`, colours in `flyover/trackColor.ts`).
+ * TrackLines — draws every loaded track draped on the terrain: one Line2 per segment (and its glow), depth-tested so
+ * the relief hides the parts behind it (see "Track and marker" in ARCHITECTURE.md; styles in `trackLineStyle.ts`,
+ * colours in `flyover/trackColor.ts`).
  *
  * Re-draping is cheap: each densified point stores its local position at height 0 and its local "up" vector, so it is
  * `base + up * height`. Three.js objects are managed imperatively in one <group>; buffers are updated in place when the
@@ -66,8 +66,6 @@ export const LINE_WIDTH_PX = DEFAULT_TRACK_STYLE.width
 export const DENSIFY_STEP_M = 10
 /** Vertical lift above the (exaggerated) terrain so the line is never z-fighting with it (metres). */
 export const LINE_LIFT_M = 3
-/** Opacity of the depth-test-free pass that hints hidden portions. */
-export const GHOST_OPACITY = 0.25
 /** Delay between a terrain change and the re-drape (milliseconds). */
 export const REDRAPE_DEBOUNCE_MS = 150
 /**
@@ -226,7 +224,6 @@ export interface SegmentLines extends CuttableLine {
   positions: Float32Array
   geometry: LineGeometry
   solid: Line2
-  ghost: Line2
   /** wider soft halo, shown with `trackStyle.glow` */
   glow: Line2
 }
@@ -239,7 +236,6 @@ export interface TrackLineSet {
   object: Group
   segments: SegmentLines[]
   solidMaterial: LineMaterial
-  ghostMaterial: LineMaterial
   glowMaterial: LineMaterial
   /** distance the lines are drawn up to (Infinity = whole), NaN when it must be applied again (after a drape) */
   drawnM: number
@@ -249,24 +245,14 @@ function createLineMaterials(
   color: string,
   width: number,
   height: number,
-): { solid: LineMaterial; ghost: LineMaterial; glow: LineMaterial } {
+): { solid: LineMaterial; glow: LineMaterial } {
   const solid = new LineMaterial({
     color: new Color(color),
     linewidth: LINE_WIDTH_PX,
     worldUnits: false,
   })
   solid.resolution.set(width, height)
-  const ghost = new LineMaterial({
-    color: new Color(color),
-    linewidth: LINE_WIDTH_PX,
-    worldUnits: false,
-    transparent: true,
-    opacity: GHOST_OPACITY,
-    depthTest: false,
-    depthWrite: false,
-  })
-  ghost.resolution.set(width, height)
-  return { solid, ghost, glow: createGlowMaterial(new Color(color), width, height) }
+  return { solid, glow: createGlowMaterial(new Color(color), width, height) }
 }
 
 export function buildTrackLineSet(
@@ -295,14 +281,11 @@ export function buildTrackLineSet(
     const geometry = new LineGeometry()
     const solid = new Line2(geometry, materials.solid)
     solid.name = 'track-line'
-    const ghost = new Line2(geometry, materials.ghost)
-    ghost.name = 'track-line-ghost'
-    ghost.renderOrder = 1
     const glow = new Line2(geometry, materials.glow)
     glow.name = 'track-line-glow'
     glow.visible = false
-    object.add(solid, ghost, glow)
-    segments.push({ index, source, points, buffer, positions, dist, shortened: -1, geometry, solid, ghost, glow })
+    object.add(solid, glow)
+    segments.push({ index, source, points, buffer, positions, dist, shortened: -1, geometry, solid, glow })
   }
 
   return {
@@ -312,14 +295,13 @@ export function buildTrackLineSet(
     object,
     segments,
     solidMaterial: materials.solid,
-    ghostMaterial: materials.ghost,
     glowMaterial: materials.glow,
     drawnM: Number.NaN,
   }
 }
 
 function materialsOf(set: TrackLineSet): LineMaterial[] {
-  return [set.solidMaterial, set.ghostMaterial, set.glowMaterial]
+  return [set.solidMaterial, set.glowMaterial]
 }
 
 export function disposeTrackLineSet(set: TrackLineSet): void {
@@ -349,7 +331,6 @@ export function applyExposure(sets: Iterable<TrackLineSet>, exposure: number): v
     // with vertex colours the material colour is a plain multiplier
     const base = set.solidMaterial.vertexColors ? '#ffffff' : set.track.color
     set.solidMaterial.color.set(base).multiplyScalar(1 / exposure)
-    set.ghostMaterial.color.copy(set.solidMaterial.color)
     set.glowMaterial.color.copy(set.solidMaterial.color)
   }
 }
@@ -409,7 +390,6 @@ function applyResolution(sets: Iterable<TrackLineSet>, width: number, height: nu
 export function applyTrackStyle(sets: Iterable<TrackLineSet>, style: TrackStyle, renderScale: number, pixelSize: number): void {
   for (const set of sets) {
     set.solidMaterial.linewidth = lineWidthPx(style, renderScale)
-    set.ghostMaterial.linewidth = lineWidthPx(style, renderScale)
     set.glowMaterial.linewidth = lineWidthPx(style, renderScale, true)
     for (const material of materialsOf(set)) applyDash(material, style, renderScale, pixelSize)
     for (const segment of set.segments) {

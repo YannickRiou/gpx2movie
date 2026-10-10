@@ -204,7 +204,9 @@ once it is still (see "Volumetric clouds", Quality); the export goes back to the
    - `TrackLines`: for each track, `Line2` (three/addons/lines) 4 px wide, color `track.color`, densified points (step ≤ 10 m),
      height = `(engine.sampleHeight(lon,lat) ?? pt.ele ?? 0) * exaggeration + 3` (the drawn surface, see above). Re-draped on
      `engine.onChange` (150 ms debounce, 600 ms at most while the drawn tiles keep changing).
-     Second pass with `depthTest: false`, opacity 0.25, to hint at the parts hidden by the terrain.
+     Depth-tested only: the relief hides the parts behind it. (A translucent pass without the depth test, meant as a
+     faint hint, was dropped: the round caps of the 10 m pieces overlap by several pixels and its alpha piled up into
+     an opaque line from a few km away.)
      No start / finish mesh: `Labels` pins them (see "Climbs and labels").
    - `CameraRig`: `OrbitControls` (drei) with damping, `maxPolarAngle = 85°`, `minDistance = 30`, `maxDistance = 400 km`;
      `computeFitView(bounds, frame, groundHeightM)` (`scene/CameraRig.tsx`): target = center, camera to the south-east, pitch 40°, distance = 1.4 × box diagonal (min 2 km).
@@ -684,7 +686,7 @@ ink, 7.3:1).
   averaged over ±5 s.
 - **Range** shared by all tracks: 2nd–98th percentile. Perceptually uniform sequential **palettes**: viridis by
   default, magma (from 0.2) for HR, power and temperature. **Missing values**: gray `#55626b`, never interpolated.
-- **TrackLines**: per-vertex colors (`LineGeometry.setColors`, `vertexColors` on the solid and ghost materials); points
+- **TrackLines**: per-vertex colors (`LineGeometry.setColors`, `vertexColors` on the line and glow materials); points
   inserted by `densify` are interpolated (`resampleValues`). Changing the mode only rewrites the color buffer. With
   per-vertex colors, the material color is white divided by the exposure (`applyExposure`).
 - **Legend** `TrackLegend` (bottom left of the 3D view, only if `trackColorBy !== 'none'`): gradient, bounds with units,
@@ -722,7 +724,7 @@ ink, 7.3:1).
   Distance: progress × length for the first track, `racer.distanceM` for the others during a ghost race,
   whole track otherwise. Applied through a store subscription (the progress set by `FlyoverRig` is picked up in the same
   frame, although `TrackLines` runs before it) and on every frame (after a drape); no effect when nothing changes.
-  A function of progress alone: preview = export. The part still to come is hidden (no ghost).
+  A function of progress alone: preview = export. The part still to come is hidden.
 - **Markers** (`markerSprite.ts`): one `Sprite` per marker (head: `FlyoverRig`, name `flyover-marker`; race:
   `RaceMarkers`), badge texture drawn on a canvas (`markerBadge.ts`) and cached by key (48 at most). Ball:
   white disk (head) or track color in an ink halo ×1.35 (race) — same look as before. Figurine: 24 × 24 line
@@ -894,7 +896,7 @@ ink, 7.3:1).
   `labelPoint`, the cell of a 32 × 32 grid inside the region farthest from its border and from the dot, slightly
   pulled to the middle. The border points, the dot and the name are draped like the track (re-drape debounced, flushed
   by the export); everything skips the depth test (seen from almost straight above, the long triangles of the mask
-  cannot be occluded correctly anyway), drawn after the terrain and the track line, under the ghost line, the marker
+  cannot be occluded correctly anyway), drawn after the terrain and the track line, under the marker
   and the labels. Unlit colours divided by the exposure. Opacity `regionHighlightOpacity(clock, timeS)`, pure: from the
   share of the region view in the shot (1 − `shotWeight` at the opening, `shotWeight` at the closing), smootherstep
   between 0.55 and 0.85 (`REGION_HIGHLIGHT_FADE`): whole at the top and during the hold, gone a little before the

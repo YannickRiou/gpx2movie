@@ -104,6 +104,9 @@ reproduce it next to the box.
 - [ ] Track and marker ("Survol" tab): width, dashes and dots during the flight, halo over forest and over snow, track
       drawn stuck to the marker, figures readable and flipped in turns, round avatar; default "Boule" (ball)
       identical to before.
+- [ ] Track behind the relief (mountains, "Poursuite" and the region view): a ridge or a spur between the camera and
+      the track hides it entirely (no red line over the relief, near or far, with and without atmosphere); the marker
+      stays visible; same in the exported video.
 - [ ] On-demand rendering: still view → the GPU drops to almost nothing (task manager, GPU tab); nothing
       frozen after a change: drag a slider, rotate the camera (damping to the end), tiles that
       arrive, clouds that settle (~0.5–1 s), label font, marker image, water, reframing (full

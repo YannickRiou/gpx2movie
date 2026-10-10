@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Color, Group, Vector3 } from 'three'
+import { Line2 } from 'three/addons/lines/Line2.js'
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import type { InterleavedBufferAttribute, TypedArray } from 'three'
 import type { TerrainEngine, Track, TrackPoint } from '../core/types'
@@ -25,7 +26,6 @@ const {
   writeLineColors,
   LINE_LIFT_M,
   LINE_WIDTH_PX,
-  GHOST_OPACITY,
   DENSIFY_STEP_M,
 } = await import('./TrackLines')
 
@@ -157,7 +157,7 @@ function fakeEngine(height: number): TerrainEngine {
 }
 
 describe('syncTrackLineSets', () => {
-  it('builds one solid + one ghost + one glow Line2 per segment (segments are not joined) (no start / end mesh: Labels pins them)', () => {
+  it('builds one solid + one glow Line2 per segment (segments are not joined) (no start / end mesh: Labels pins them)', () => {
     const group = new Group()
     const sets = new Map<string, TrackLineSet>()
     const track = makeTrack('a', [segmentA, [{ lon: 6, lat: 45 }], segmentB])
@@ -176,17 +176,20 @@ describe('syncTrackLineSets', () => {
     expectLocal(first.at(-1)![1], 0, 6.5, 45.501, 1050 + LINE_LIFT_M)
     expectLocal(second[0][0], 0, 6.51, 45.505, 1100 + LINE_LIFT_M)
     for (const segment of set.segments) {
-      expect(drawnPieces(segment.ghost.geometry)).toEqual(drawnPieces(segment.solid.geometry))
-      expect(segment.solid.visible && segment.ghost.visible).toBe(true)
+      expect(drawnPieces(segment.glow.geometry)).toEqual(drawnPieces(segment.solid.geometry))
+      expect(segment.solid.visible).toBe(true)
       expect(segment.glow.visible).toBe(false)
     }
 
-    // 4 px lines in the track colour; the ghost shows through the relief at 25 %
+    // 4 px lines in the track colour
     expect(set.solidMaterial.linewidth).toBe(LINE_WIDTH_PX)
     expect(set.solidMaterial.color.getHexString()).toBe('ff0000')
-    expect(set.ghostMaterial.color.getHexString()).toBe('ff0000')
-    expect(set.ghostMaterial.depthTest).toBe(false)
-    expect(set.ghostMaterial.opacity).toBe(GHOST_OPACITY)
+    // the relief hides the parts behind it: no pass without the depth test (a translucent one piles up its
+    // overlapping round caps into an opaque line far away)
+    set.object.traverse((object) => {
+      if (object instanceof Line2) expect(object.material.depthTest).toBe(true)
+    })
+    expect(set.object.children).toHaveLength(2 * set.segments.length)
 
     syncTrackLineSets(group, sets, [], frame, 800, 600)
   })
@@ -210,14 +213,14 @@ describe('syncTrackLineSets', () => {
     // a replaced by a new object with the same id, b removed
     const geometryDispose = vi.spyOn(setA.segments[0].geometry, 'dispose')
     const solidDispose = vi.spyOn(setA.solidMaterial, 'dispose')
-    const ghostDispose = vi.spyOn(setA.ghostMaterial, 'dispose')
+    const glowDispose = vi.spyOn(setA.glowMaterial, 'dispose')
     const bGeometryDispose = vi.spyOn(setB.segments[0].geometry, 'dispose')
     const a2 = makeTrack('a', [segmentA], '#00ff00')
     syncTrackLineSets(group, sets, [a2], frame, 800, 600)
 
     expect(geometryDispose).toHaveBeenCalledTimes(1)
     expect(solidDispose).toHaveBeenCalledTimes(1)
-    expect(ghostDispose).toHaveBeenCalledTimes(1)
+    expect(glowDispose).toHaveBeenCalledTimes(1)
     expect(bGeometryDispose).toHaveBeenCalledTimes(1)
     expect(sets.has('b')).toBe(false)
     const setA2 = sets.get('a')!
@@ -289,7 +292,7 @@ describe('applyExposure', () => {
 
     applyExposure(sets.values(), 10)
     expect(set.solidMaterial.color.r).toBeCloseTo(0.1, 6)
-    expect(set.ghostMaterial.color.equals(set.solidMaterial.color)).toBe(true)
+    expect(set.glowMaterial.color.equals(set.solidMaterial.color)).toBe(true)
     applyExposure(sets.values(), 1)
     expect(set.solidMaterial.color.getHexString()).toBe('ff0000')
   })
@@ -313,7 +316,7 @@ describe('applyTrackColors', () => {
     applyTrackColors(sets.values(), 'elevation')
     for (const set of [setLow, setHigh]) {
       expect(set.solidMaterial.vertexColors).toBe(true)
-      expect(set.ghostMaterial.vertexColors).toBe(true)
+      expect(set.glowMaterial.vertexColors).toBe(true)
     }
     const colors = colorStart(setLow)!
     expect(colors.count).toBe(setLow.segments[0].buffer.count - 1)
@@ -407,7 +410,6 @@ describe('applyTrackStyle', () => {
 
     applyTrackStyle(sets.values(), { width: 6, dash: 'tirets', glow: true, drawOn: false, smoothingM: 0 }, 2, 0.5)
     expect(set.solidMaterial.linewidth).toBe(12)
-    expect(set.ghostMaterial.linewidth).toBe(12)
     expect(set.glowMaterial.linewidth).toBeGreaterThan(12)
     expect(set.segments[0].glow.visible).toBe(true)
     expect(set.solidMaterial.dashed).toBe(true)
