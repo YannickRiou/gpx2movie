@@ -133,7 +133,7 @@ application is built with `npm run tauri:build`; installers for the three system
 | `npm run lint` | code analysis (oxlint) |
 | `npm run e2e` | end-to-end tests in a real browser (see below) |
 
-The suite has **about 1,580 tests** (9 October 2026), each file next to its module (`src/**/*.test.ts`); network calls
+The suite has **about 1,590 tests** (10 October 2026), each file next to its module (`src/**/*.test.ts`); network calls
 and the video encoder are mocked. `npm run e2e` drives the app in a headless Chromium through five scenarios (home,
 tabs, timeline, project, export); its options are documented at the top of `e2e/run.mjs`. The rendering
 quality is checked by eye ([`docs/tests-gpu.md`](docs/tests-gpu.md)).
