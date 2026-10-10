@@ -8,7 +8,7 @@ import {
   FLYOVER_DURATION_RANGE,
   turnSmoothingM,
 } from '../flyover/cameraSettings'
-import type { CameraSettings, CameraStyle } from '../flyover/cameraSettings'
+import type { CameraPreset, CameraSettings, CameraStyle } from '../flyover/cameraSettings'
 import { DEFAULT_FILM, SITUATION_DURATION_S } from '../film/model'
 import { addCameraKey, updateShot } from '../film/timeline'
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
@@ -58,6 +58,9 @@ const PRESET_ICONS: Record<string, IconName> = {
   'Vue du dessus': 'locate-fixed',
   Satellite: 'satellite',
 }
+
+/** Shown first: one preset per style plus a high view, from close to far; the others under « Plus de préréglages ». */
+const MAIN_PRESETS = new Set(['Poursuite', 'Oiseau', 'Orbite', 'Cinéma', 'Drone haut', 'Satellite'])
 
 /** Key figures of a preset tile: distance multiplier and tilt. */
 function presetFigures(camera: CameraSettings): string {
@@ -201,6 +204,17 @@ export function CameraPanel() {
   const setSetting = useAppStore((s) => s.setSetting)
   const id = useId()
   const preset = findCameraPreset(camera)
+  // the current preset stays in the main grid when it is a folded one
+  const mainPresets = CAMERA_PRESETS.filter((p) => MAIN_PRESETS.has(p.name) || p === preset)
+  const morePresets = CAMERA_PRESETS.filter((p) => !mainPresets.includes(p))
+  const presetTile = (p: CameraPreset) => (
+    <label key={p.name} className="format-tile style-tile" title={CAMERA_STYLE_LABELS[p.camera.style]}>
+      <input type="radio" name={`${id}-preset`} value={p.name} checked={preset === p} onChange={() => setSetting('camera', { ...p.camera })} />
+      <Icon name={PRESET_ICONS[p.name]} size={20} />
+      <span className="format-tile__label">{p.name}</span>
+      <span className="preset-tile__figures">{presetFigures(p.camera)}</span>
+    </label>
+  )
   const update = (patch: Partial<CameraSettings>) => setSetting('camera', { ...camera, ...patch })
   const updatePacing = (patch: Partial<PacingSettings>) => setFlightTiming({ pacing: { ...pacing, ...patch } })
   const lengthM = useFilmTrack()?.stats.distanceM ?? 0
@@ -218,27 +232,23 @@ export function CameraPanel() {
         <fieldset className="field fieldset">
           <legend className="field__label">Préréglage</legend>
           <div className="style-tiles">
-            {CAMERA_PRESETS.map((p) => (
-              <label key={p.name} className="format-tile style-tile" title={CAMERA_STYLE_LABELS[p.camera.style]}>
-                <input
-                  type="radio"
-                  name={`${id}-preset`}
-                  value={p.name}
-                  checked={preset === p}
-                  onChange={() => setSetting('camera', { ...p.camera })}
-                />
-                <Icon name={PRESET_ICONS[p.name]} size={20} />
-                <span className="format-tile__label">{p.name}</span>
-                <span className="preset-tile__figures">{presetFigures(p.camera)}</span>
+            {mainPresets.map(presetTile)}
+            {!preset && (
+              <label className="format-tile style-tile" title="Réglages modifiés à la main">
+                <input type="radio" name={`${id}-preset`} checked readOnly />
+                <Icon name="sliders-horizontal" size={20} />
+                <span className="format-tile__label">Personnalisé</span>
+                <span className="preset-tile__figures">{presetFigures(camera)}</span>
               </label>
-            ))}
-            <label className="format-tile style-tile" title="Réglages modifiés à la main">
-              <input type="radio" name={`${id}-preset`} checked={!preset} readOnly />
-              <Icon name="sliders-horizontal" size={20} />
-              <span className="format-tile__label">Personnalisé</span>
-              <span className="preset-tile__figures">{preset ? 'vos réglages' : presetFigures(camera)}</span>
-            </label>
+            )}
           </div>
+          <details className="more-settings preset-more">
+            <summary className="more-settings__summary">
+              <span className="more-settings__label">Plus de préréglages</span>
+              <Icon name="chevron-down" size={16} />
+            </summary>
+            <div className="style-tiles">{morePresets.map(presetTile)}</div>
+          </details>
           <p id={`${id}-style-hint`} className="field__hint">
             {STYLE_HINTS[camera.style]}
           </p>

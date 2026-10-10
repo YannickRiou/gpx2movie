@@ -1564,6 +1564,23 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* « Plus de préréglages »: the folded presets, right under the main grid */
+.preset-more {
+  border-top: 0;
+}
+
+.preset-more > .more-settings__summary {
+  padding-top: 0;
+}
+
+.preset-more:not([open]) > .more-settings__summary > .icon:last-child {
+  transform: rotate(-90deg);
+}
+
+.preset-more > .style-tiles {
+  margin-top: var(--space-1);
+}
 /* ======================== fin Carte et Survol ============================ */
 
 /* ==========================================================================

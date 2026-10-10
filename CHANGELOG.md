@@ -12,6 +12,8 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
 - **Timeline**: a narrow block (a 4 s stop on a phone) pressed in its middle is moved, no longer stretched by its edge.
 - **OpenStreetMap**: the memory cache of Overpass results keeps the 32 most recently used, no longer every track of the session.
 - **Simpler panels**: camera presets as the one choice, the style under « Plus de réglages ».
+- **Simpler panels**: camera presets as the one choice (six shown, the rest under « Plus de préréglages »), the style
+  under « Plus de réglages ».
 
 ## 0.1.0 (October 2026)
 
