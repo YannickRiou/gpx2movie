@@ -335,7 +335,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
     <li><strong>Top bar</strong>: project name, undo / redo, "Ouvrir" (open), "Enregistrer" (save), the output format in the middle and <strong>"Exporter"</strong> (export) on the right. The <kbd>?</kbd> button lists every keyboard shortcut.</li>
     <li><strong>Left rail</strong>: five labelled tabs, "Trace" (track), "Carte" (map), "Survol" (flyover), "Habillage" (overlay) and "Projet" (project). Click the active tab again, or press <kbd>[</kbd>, to fold the panel.</li>
     <li><strong>Centre</strong>: the 3D view, framed exactly like the video. <strong>Below</strong>: the film timeline.</li>
-    <li><strong>Bottom</strong>: a thin status bar with map loading and the data sources (ⓘ shows the full credits).</li>
+    <li><strong>Bottom</strong>: a thin status bar with the map state and the data sources (ⓘ shows the full credits). While the current view still waits for tiles, a small ring fills up next to "Carte · 72 %"; "Carte prête" (map ready) with a check means everything in view is loaded, so a preview from here runs without blurry patches. Tiles that could not be loaded show as "N tuiles en erreur" in yellow; they are retried automatically.</li>
   </ul>
   <p>Messages (track imported, project saved, video ready…) appear at the bottom of the view; errors stay until you close them. The app remembers the open tab and whether the panel is folded.</p>
 </section>

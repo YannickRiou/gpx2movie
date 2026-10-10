@@ -146,6 +146,9 @@ features included), `npm run build`,
 - **« Temps forts » replaces « Feuille de route »** (10 October 2026, user decision: a montage tool, not a hike
   planner): `HighlightsPanel` in the Survol tab, rows from `filmHighlights` (the timeline's candidates and stops, no
   state of its own); the roadbook, its steep sections, passing times and .txt export removed.
+- **Map state in the status bar** (10 October 2026): `ui/mapStatus.ts` (ring + « Carte · 72 % », « Carte prête »,
+  « N tuiles en erreur »), from the existing terrain stats, no engine change; seen in headless Chromium with simulated
+  stats. Not done: « Précharger le survol » (engine `prefetch` along the whole film path, with its own progress).
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn

@@ -329,8 +329,11 @@ ink, 7.3:1).
   as a project (`openFiles`, routing `routeOpenedFiles`), full-screen veil "Déposez vos traces GPX ou FIT" (drop your GPX or FIT tracks)
   (`pointer-events: none`) during the drag (`isFileDrag`). A drop already handled (`defaultPrevented`: the timeline
   takes photos) is left as is, and the veil fades out over the timeline; nothing is accepted during an export.
-- **Status bar** (24 px, below the timeline): "Chargement de la carte · N tuiles" (loading map · N tiles) / "Carte chargée · N tuiles" (map loaded · N tiles)
-  (nothing before the first tile, dimmed, errors in orange), import in progress, attributions on one line (`overlayCredits`,
+- **Status bar** (24 px, below the timeline): map state of the current view (`ui/mapStatus.ts`, pure): a ring and
+  "Carte · 72 %" (drawn tiles over drawn + awaited ones, `pendingVisibleTiles`; never back during one load, at most
+  99 % until complete; a load under 0.5 s does not show), then "Carte prête" (map ready) with a check, "N tuiles en
+  erreur" (N tiles in error) in yellow with a tip; nothing before the first tile; not a live region, the ring is a
+  `progressbar`. Import in progress, attributions on one line (`overlayCredits`,
   same strings as in the film) and ⓘ, which opens "Sources et licences" (sources and licenses) (`<dialog>`).
 - **Shortcuts** (`src/ui/shortcuts.ts`): `SHORTCUTS` registry (id, keys, label, group Lecture / Montage / Projet /
   Vue (playback / editing / project / view)) shown by the "Raccourcis clavier" (keyboard shortcuts) box (`HelpDialog.tsx`, native `<dialog>`, "?" or the bar button)

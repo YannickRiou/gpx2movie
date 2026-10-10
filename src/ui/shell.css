@@ -1281,9 +1281,50 @@
   white-space: nowrap;
 }
 
-.status__tiles,
+.status__map,
 .status__line {
   flex: none;
+}
+
+.status__map {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.status__map-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* brighter while loading, back to the calm strip colour once ready */
+.status__map-state--loading {
+  color: var(--text-on-dark);
+}
+
+.status__map-state--ready .icon {
+  color: var(--status-ok-on-dark);
+}
+
+/* determinate ring (track + arc from 12 o'clock), turning slowly while the view waits for tiles */
+.status__ring {
+  flex: none;
+  fill: none;
+  stroke-width: 2;
+  animation: status-spin 2.4s linear infinite;
+}
+
+.status__ring circle:first-child {
+  stroke: var(--color-ink-soft);
+}
+
+.status__ring circle:last-child {
+  stroke: var(--accent-on-dark);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 400ms ease-out;
 }
 
 /* tiles in error: attention colour (9:1 on the ink) */
@@ -1499,8 +1540,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .status__spinner {
+  .status__spinner,
+  .status__ring {
     animation: none;
+  }
+
+  .status__ring circle:last-child {
+    transition: none;
   }
 
   .toast,
