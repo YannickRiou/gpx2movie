@@ -132,6 +132,11 @@ features included), `npm run build`,
 - **T with a stop selected**: the new text is attached to that stop (`addText` with the stop, one undo step).
 - **Overlay-only export on the Linux desktop**: WebM / VP9 with alpha through ffmpeg (`yuva420p`), like the web;
   alpha checked with ffprobe and a decoded frame in the container, not tried in an editor (`docs/tests-gpu.md`).
+- **UI pass before v0.1.0** (10 October 2026): "Carte alpine" tokens refined (`theme.css`: semantic roles, accent scale,
+  attention / ok / error status colours, 3:1 control borders, two shadow levels, raised ink for menus and toasts; every
+  text pair measured ≥ 4.5:1 in headless Chromium), selections in accent tint instead of ink slabs, white-pill
+  segmented controls, neutral play button, tab labels under the rail icons; "Carte": "Atmosphère et météo" before
+  "Lumière"; "Survol": "Transitions" under "Plus de réglages". Seen in headless Chromium (grey terrain), not on a GPU.
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn
