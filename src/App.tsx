@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useReducer, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useBatchStore } from './export/batch'
 import { isExportBusy, useExportStore } from './export/store'
@@ -28,6 +28,7 @@ import {
   BOTTOM_SHEET_QUERY,
   COMPACT_QUERY,
   ONE_SIDE_MAX_WIDTH,
+  SHELL_TABS,
   installTipPlacement,
   isFileDrag,
   matchesQuery,
@@ -345,6 +346,71 @@ export default function App() {
     </div>
   )
 
+  // the tab contents, the stage and the timeline are built once per track state: React skips the same elements when
+  // only the shell changes (else a tab switch re-renders the eight panels and reconciles the 3D scene; slow on a phone)
+  const contents = useMemo(
+    () => ({
+      trace: <TrackList />,
+      carte: (
+        <>
+          <MapSettings />
+          <TrackMarkerSection />
+          <PanelSection title="Montées et étiquettes" keys={['labels']} hidden={!hasTracks}>
+            <ClimbList />
+          </PanelSection>
+          <LandmarkPanel />
+          <PoiPanel />
+        </>
+      ),
+      meteo: (
+        <>
+          <PanelSection title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
+            <WeatherPanel />
+          </PanelSection>
+          <WeatherSettings />
+        </>
+      ),
+      lumiere: (
+        <>
+          <LightSettings />
+          <GradingPanel />
+        </>
+      ),
+      survol: <CameraPanel />,
+      objectif: <LensPanel />,
+      habillage: <OverlayPanel />,
+      projet: (
+        <>
+          <ProjectPanel />
+          <PanelSection title="Hors ligne" hidden={!hasTracks}>
+            <Suspense>
+              <OfflinePanel />
+            </Suspense>
+          </PanelSection>
+        </>
+      ),
+      stage: (
+        <Stage>
+          {!hasTracks && <EmptyState />}
+          <Toaster />
+        </Stage>
+      ),
+    }),
+    [hasTracks],
+  )
+  const sheetOpen = !shell.collapsed || shell.dockOpen
+  const timeline = useMemo(
+    () => (
+      <Timeline
+        sheetOpen={sheetOpen}
+        onUnfold={() => {
+          if (matchesQuery(COMPACT_QUERY) && !isExporting()) dispatch({ type: 'fold' })
+        }}
+      />
+    ),
+    [sheetOpen],
+  )
+
   return (
     <div className="shell">
       <TopBar
@@ -403,62 +469,12 @@ export default function App() {
         {/* no change to the tracks or the settings while a film is being made: the export reads them live */}
         <aside id="side-panel" className="panel" aria-label="Réglages" hidden={shell.collapsed} inert={exporting}>
           <SheetHandle onClose={() => dispatch({ type: 'fold' })} />
-          {panel('trace', <TrackList />)}
-          {panel(
-            'carte',
-            <>
-              <MapSettings />
-              <TrackMarkerSection />
-              <PanelSection title="Montées et étiquettes" keys={['labels']} hidden={!hasTracks}>
-                <ClimbList />
-              </PanelSection>
-              <LandmarkPanel />
-              <PoiPanel />
-            </>,
-          )}
-          {panel(
-            'meteo',
-            <>
-              <PanelSection title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
-                <WeatherPanel />
-              </PanelSection>
-              <WeatherSettings />
-            </>,
-          )}
-          {panel(
-            'lumiere',
-            <>
-              <LightSettings />
-              <GradingPanel />
-            </>,
-          )}
-          {panel('survol', <CameraPanel />)}
-          {panel('objectif', <LensPanel />)}
-          {panel('habillage', <OverlayPanel />)}
-          {panel(
-            'projet',
-            <>
-              <ProjectPanel />
-              <PanelSection title="Hors ligne" hidden={!hasTracks}>
-                <Suspense>
-                  <OfflinePanel />
-                </Suspense>
-              </PanelSection>
-            </>,
-          )}
+          {SHELL_TABS.map((tab) => panel(tab, contents[tab]))}
         </aside>
 
         <main className="view">
-          <Stage>
-            {!hasTracks && <EmptyState />}
-            <Toaster />
-          </Stage>
-          <Timeline
-            sheetOpen={!shell.collapsed || shell.dockOpen}
-            onUnfold={() => {
-              if (matchesQuery(COMPACT_QUERY) && !isExporting()) dispatch({ type: 'fold' })
-            }}
-          />
+          {contents.stage}
+          {timeline}
         </main>
 
         <aside id="export-dock" className="dock" aria-label="Export" hidden={!shell.dockOpen}>

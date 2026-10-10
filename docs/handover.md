@@ -455,6 +455,11 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
     an open app looks for a new version every hour and when shown again (`watchForUpdates`). Checked in Chromium
     phone emulation only. Left: the same on a real iPhone and Android phone (iOS: `update()` of an app on the home
     screen).
+  - *Slow tabs on a phone* (user report, iPhone 12, Chrome iOS): a tab switch re-rendered the eight panels and the 3D
+    scene; `App` now builds them once per track state (click handling 45-70 ms → 18-37 ms at 4× CPU in Chromium,
+    ARCHITECTURE.md "Phone and tablet", guarded by `App.test.tsx`). To verify on the iPhone 12 (WebKit costs that
+    Chromium cannot show): tab switches feel immediate with the sample loaded, also while the map loads; if not,
+    Safari Web Inspector › Timelines on a tab tap (paint / composite of the sheet and its `--shadow-pop`).
 
 **In the user's hands**
 9. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,

@@ -291,7 +291,9 @@ ink, 7.3:1).
   **Météo** (weather; weather of the outing, clouds, weather in the image), **Lumière** (light; atmosphere, shadows,
   exposure, sun, colour grading), **Survol** (flyover; camera, pacing, highlights), **Objectif** (lens effects),
   **Habillage** (overlay), **Projet** (project; projects, presets, offline packs). All tabs stay mounted (`hidden`): weather, landmarks and export have
-  side effects. Flat sections separated by a rule, sticky section header (title + "modifié / Par défaut" (modified / default)). A click
+  side effects. `App` builds their contents, the stage and the timeline once per track state (`useMemo`, the timeline
+  also per `sheetOpen`): a tab switch re-renders the shell (tab bar, top bar, status bar), not the eight panels nor the
+  3D scene (see "Phone and tablet"). Flat sections separated by a rule, sticky section header (title + "modifié / Par défaut" (modified / default)). A click
   on the open tab, the button at the bottom of the rail or `[` collapses the panel. Tab and collapsed state are remembered by the browser
   (`getPlatform().storage` `openflyover.shell.v1`, `parseShellPrefs`: an unknown tab id falls back to Trace), not by the project.
   **Home screen** (no track): the rail holds « Projet » alone, folded, and « Exporter » is hidden (`ShellState.home`,
@@ -387,6 +389,13 @@ ink, 7.3:1).
     ↑ / ↓ step. The bottom tab bar holds all eight tabs (72 px wide at least, so the next one peeks past the edge) and scrolls
     sideways. Sheet content scrolls inside the sheet (`overscroll-behavior: contain`); a press on the view does not
     close it (it does on a tablet side sheet). Landscape phone: the rail stays on the side, without its fold button.
+  - *Tab switch cost* (October 2026, headless Chromium, 390 × 844 at DPR 3, touch, CPU throttled 4×, sample loaded,
+    scene idle): the sheets lie over the view, so a tab switch, an opening or a fold of the sheet never resizes the 3D
+    canvas nor draws a frame. Before the `useMemo` in `App`: 437 components re-rendered and the R3F scene reconciled
+    (two commits), 45 to 70 ms of click handling (one long task); after: 62 components (the tab bar, top and status
+    bars), 18 to 37 ms, no long task. Left: style and layout of the shown panel (« Carte » is the largest, 10 to 15 ms
+    at 4×). No `backdrop-filter` or CSS filter on the sheets or the tab bar; the sheet's `--shadow-pop` is the one
+    large blur. Not measurable here: WebKit's own paint and compositing costs (iPhone).
   - *Touch* (`pointer: coarse`, any width): `--topbar-h` 56 px, `--control-h` 44 px and 44 px minimum on buttons, fields, chips, segmented
     options, tiles, menu items and timeline buttons; lanes 40 px, grips 16 px; a larger invisible hit area around ⓘ;
     16 px text in fields (iOS zooms into smaller ones); no callout or selection on the 3D canvas.
