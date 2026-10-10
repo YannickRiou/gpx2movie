@@ -282,6 +282,61 @@ const SCENARIOS = [
     },
   },
   {
+    id: 'region',
+    title: 'Plan de situation : la région cherchée dès « Mettre en avant la région », « Réessayer » après un échec',
+    async run({ page }) {
+      await exposeStores(page)
+      // Overpass stubbed in the page: the first is_in query fails, then two areas (no geometry: no highlight drawn)
+      await page.evaluate(() => {
+        const film = window.__e2e.appStore.getState().settings.film
+        const stub = { film, fetch: window.fetch, isIn: 0, fail: true }
+        window.__e2e.overpass = stub
+        window.fetch = async (input, init) => {
+          if (!String(input).includes('/interpreter')) return stub.fetch.call(window, input, init)
+          const query = new URLSearchParams(String(init?.body ?? '')).get('data') ?? ''
+          const json = (elements) => new Response(JSON.stringify({ elements }), { headers: { 'Content-Type': 'application/json' } })
+          if (!query.includes('is_in')) return json([])
+          stub.isIn++
+          if (stub.fail) return new Response('', { status: 400 })
+          const area = (id, name, level, [w, s, e, n]) => ({
+            type: 'relation',
+            id,
+            tags: { boundary: 'administrative', admin_level: level, name },
+            bounds: { minlon: w, minlat: s, maxlon: e, maxlat: n },
+          })
+          return json([area(1, 'Haute-Savoie', '6', [5.8, 45.6, 7.1, 46.4]), area(2, 'Auvergne-Rhône-Alpes', '4', [2, 44.1, 7.2, 46.8])])
+        }
+      })
+      try {
+        await page.click('[role="group"][aria-label="Plans"] .film-tl__block')
+        await until(page, () => [...document.querySelectorAll('select')].some((s) => [...s.options].some((o) => o.value === 'situation')))
+        await page.evaluate(() => {
+          const select = [...document.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'situation'))
+          Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, 'situation')
+          select.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await page.click('label::-p-text(Mettre en avant la région)')
+        // asked at once, without touching « Lieu »; the failure says so and offers to retry
+        const retry = await page.waitForSelector('.dock button::-p-text(Réessayer)', { visible: true, timeout: STEP_MS })
+        assert((await page.evaluate(() => window.__e2e.overpass.isIn)) === 1, 'la région n’a pas été cherchée une seule fois')
+        await page.evaluate(() => (window.__e2e.overpass.fail = false))
+        await retry.click()
+        await until(page, () =>
+          [...document.querySelectorAll('select')].some((s) => [...s.options].some((o) => o.textContent.startsWith('Haute-Savoie'))),
+        )
+        assert((await page.evaluate(() => window.__e2e.overpass.isIn)) === 2, 'la région a été cherchée plus de deux fois')
+      } finally {
+        // the film and the network as they were (the export does not fly over a region view)
+        await page.evaluate(() => {
+          const { film, fetch } = window.__e2e.overpass
+          window.fetch = fetch
+          window.__e2e.appStore.getState().setSetting('film', film)
+          window.__e2e.appStore.getState().setFilmSelection(null)
+        })
+      }
+    },
+  },
+  {
     id: 'projet',
     title: 'Projet enregistré puis rouvert',
     async run({ page, url }) {

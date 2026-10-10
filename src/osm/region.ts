@@ -219,12 +219,14 @@ export interface RegionAnswer {
 
 /**
  * Region to highlight for a track of box `track`: the area `regionId` while it contains the track, else the automatic
- * choice, from the caches or two queued Overpass queries (the geometry of the chosen area only).
+ * choice, from the caches or two queued Overpass queries (the geometry of the chosen area only). `onListed` gets the
+ * areas as soon as the first (light) query answers, before the geometry.
  */
 export async function fetchRegion(
   track: LonLatBounds,
   regionId: string | null = null,
   signal?: AbortSignal,
+  onListed?: (listed: Omit<RegionAnswer, 'region'>) => void,
   deps?: OverpassDeps,
 ): Promise<RegionAnswer> {
   const centre = { lon: (track.west + track.east) / 2, lat: (track.south + track.north) / 2 }
@@ -233,6 +235,7 @@ export async function fetchRegion(
   const auto = chooseRegion(all, track)
   const chosen = candidates.find((c) => candidateId(c) === regionId) ?? auto
   const listed = { candidates, autoId: auto ? candidateId(auto) : null }
+  onListed?.(listed)
   if (!chosen) return { ...listed, region: null }
   const [region] = await cachedOverpassQuery(regionGeometryQuery(chosen.id, chosen.type), parseRegionGeometry, signal, deps)
   return { ...listed, region: region ?? null }
@@ -299,6 +302,8 @@ export function captureFraming(highlighted: boolean): CapturedFraming | null {
 }
 
 let controller: AbortController | null = null
+/** arguments of the last `syncRegion`, asked again by `retryRegion` */
+let lastSync: Parameters<typeof syncRegion> | null = null
 /** `holdRegion`: an answer arriving meanwhile waits in `heldAnswer` */
 let holding = false
 let heldAnswer: Partial<RegionState> | null = null
@@ -325,8 +330,14 @@ export function syncRegion(
   track: LonLatBounds | null,
   wanted: boolean,
   regionId: string | null = null,
-  fetch: (track: LonLatBounds, regionId: string | null, signal: AbortSignal) => Promise<RegionAnswer> = fetchRegion,
+  fetch: (
+    track: LonLatBounds,
+    regionId: string | null,
+    signal: AbortSignal,
+    onListed: (listed: Omit<RegionAnswer, 'region'>) => void,
+  ) => Promise<RegionAnswer> = fetchRegion,
 ): void {
+  lastSync = [track, wanted, regionId, fetch]
   const box = track ? [track.west, track.south, track.east, track.north].join(',') : ''
   const key = wanted && track ? `${box}|${regionId ?? ''}` : null
   const before = useRegionStore.getState()
@@ -347,9 +358,17 @@ export function syncRegion(
     if (holding) heldAnswer = state
     else useRegionStore.setState(state)
   }
-  fetch(track, regionId, ctrl.signal).then(
+  // « Lieu » lists the areas while the geometry of the region is still loading
+  fetch(track, regionId, ctrl.signal, answer).then(
     ({ region, candidates, autoId }) =>
       answer({ status: region ? 'ready' : 'none', region, frame: region ? regionFrame(region) : null, candidates, autoId }),
     () => answer({ status: 'error' }),
   )
+}
+
+/** « Réessayer » after a failed search: the same track and place asked again (the key alone would make it a no-op). */
+export function retryRegion(): void {
+  if (useRegionStore.getState().status !== 'error' || !lastSync) return
+  useRegionStore.setState({ key: null })
+  syncRegion(...lastSync)
 }

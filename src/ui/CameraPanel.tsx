@@ -21,7 +21,7 @@ import { HighlightsPanel } from './HighlightsPanel'
 import { Icon } from './icons'
 import type { IconName } from './icons'
 import { InfoTip, PanelSection, RangeField, SettingRow } from './PanelSection'
-import { useRegionStore } from '../osm/region'
+import { retryRegion, useRegionStore } from '../osm/region'
 import type { RegionStatus } from '../osm/region'
 
 /** « Mettre en avant la région »: what it does, then how the search for the region went (found: after its name). */
@@ -37,10 +37,17 @@ export function RegionHint({ id, highlight }: { id: string; highlight: boolean }
   const regionStatus = useRegionStore((s) => s.status)
   const regionName = useRegionStore((s) => s.region?.name)
   return (
-    <p id={id} className="field__hint">
-      {highlight && regionStatus === 'ready' && regionName ? `${regionName} : ` : ''}
-      {REGION_HINTS[highlight ? regionStatus : 'idle']}
-    </p>
+    <>
+      <p id={id} className="field__hint">
+        {highlight && regionStatus === 'ready' && regionName ? `${regionName} : ` : ''}
+        {REGION_HINTS[highlight ? regionStatus : 'idle']}
+      </p>
+      {highlight && regionStatus === 'error' && (
+        <button type="button" className="btn btn--secondary btn--block" onClick={retryRegion}>
+          Réessayer
+        </button>
+      )}
+    </>
   )
 }
 
