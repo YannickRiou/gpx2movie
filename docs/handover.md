@@ -372,7 +372,7 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   motion-blur sub-frames, native encoder), size of the desktop installers, CI duration. Keep only changes with a
   measured gain and no visible regression.
 
-**Later, once the desktop and web versions are finished and working**
+**Next, right after the `v0.1.0` tag (user's request, 10 October 2026)**
 - **Web app highly usable on mobile** (large lot, user's request). Today the interface is built for a desktop screen,
   mouse and keyboard. To cover: a layout for phone and tablet widths (panels as bottom sheets, one panel at a time,
   the 3D view kept visible); touch gestures for the 3D view and the timeline (pinch, two-finger orbit, drag of clips,
