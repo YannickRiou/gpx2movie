@@ -7,6 +7,7 @@
  * Cache first: a registered reader of stored tiles (offline packs, `setStoredTileReader`) is asked before the
  * network; a miss or an unreadable copy falls back to the network.
  */
+import { deviceBudget } from '../core/deviceBudget'
 import type { TileFetcher, TileFetcherStats } from '../core/types'
 
 export interface TileFetcherOptions {
@@ -249,7 +250,7 @@ interface HeapEntry {
 
 export function createTileFetcher(options: TileFetcherOptions = {}): TileFetcher {
   const concurrency = Math.max(1, Math.floor(options.concurrency ?? 12))
-  const maxEntries = Math.max(1, Math.floor(options.maxEntries ?? 600))
+  const maxEntries = Math.max(1, Math.floor(options.maxEntries ?? deviceBudget().tileBitmaps))
   const retryDelayMs = Math.max(0, options.retryDelayMs ?? 250)
 
   /** Insertion order doubles as LRU order: the first key is the least recently used. */

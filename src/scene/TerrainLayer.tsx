@@ -10,6 +10,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { PerspectiveCamera } from 'three'
+import { deviceBudget } from '../core/deviceBudget'
 import type { LocalFrame, LonLatBounds, TerrainEngine, TerrainEngineOptions, TerrainStats } from '../core/types'
 import { createLocalFrame, expandBounds } from '../geo/ellipsoid'
 import type { Film } from '../film/model'
@@ -106,7 +107,8 @@ export function engineOptionsFromSettings(settings: Settings): EngineSettingsOpt
   return {
     terrain: getTerrainSource(settings.terrainSourceId),
     imagery: getImagerySource(settings.imagerySourceId),
-    imageryZoomOffset: settings.imageryZoomOffset,
+    // « Très fin » (1024 px textures) is too heavy for a phone's GPU memory
+    imageryZoomOffset: Math.min(settings.imageryZoomOffset, deviceBudget().maxImageryZoomOffset),
     exaggeration: settings.exaggeration,
     wireframe: settings.wireframe,
   }

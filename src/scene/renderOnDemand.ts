@@ -9,6 +9,7 @@
 import { useEffect } from 'react'
 import { invalidate, useFrame, useThree } from '@react-three/fiber'
 import { DefaultLoadingManager } from 'three'
+import { deviceBudget } from '../core/deviceBudget'
 import { useExportStore } from '../export/store'
 import { useRegionStore } from '../osm/region'
 import { useAppStore } from '../state/store'
@@ -42,8 +43,8 @@ export function frameDelta(delta: number): number {
   return Math.min(delta, MAX_FRAME_DELTA_S)
 }
 
-/** Still frames the preview clouds average before the scene may sleep (CloudsLayer). */
-export const CLOUD_SETTLE_FRAMES = 32
+/** Still frames the preview clouds average before the scene may sleep (CloudsLayer): 32, 16 on a phone or tablet. */
+export const CLOUD_SETTLE_FRAMES = deviceBudget().cloudSettleFrames
 
 /** Cloud pass of a preview frame (CloudsLayer). */
 export interface PreviewCloudPass {
