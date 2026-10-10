@@ -38,6 +38,7 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
   (the autosave waits for a track).
 - **Fixes**: tooltips stay whole near the edge of a panel or of the screen (shifted, or above); « Lieu » lists the
   areas as soon as they are found, and a failed region search offers « Réessayer ».
+- **Faster tabs on a phone**: switching tabs no longer redraws every panel nor goes through the 3D scene.
 
 ## 0.1.0 (October 2026)
 
