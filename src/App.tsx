@@ -201,7 +201,8 @@ export default function App() {
   // no undo during an export: the film being rendered would change under it
   useEffect(() => installHistoryShortcuts(getSettingsHistory(), window, () => !isExporting()), [])
   useEffect(() => installSliderGestures(getSettingsHistory()), [])
-  useEffect(() => installLibraryAutosave(() => !isExporting()), [])
+  // a project emptied of its tracks is not written over the kept one (it waits for a track)
+  useEffect(() => installLibraryAutosave(() => !isExporting() && useAppStore.getState().tracks.length > 0), [])
   useEffect(() => installCloseGuard(isExporting, saveProject), [])
 
   /** a pointer button is down */
