@@ -83,7 +83,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/core/deviceBudget.ts` | GPU and memory budget of the device (see "Device budget") | `deviceBudget()`, pure, tested: `budgetFor`, `readDeviceTraits`, `DESKTOP_BUDGET`, `PHONE_MAX_SHORT_SIDE`, `LOW_MEMORY_GB` |
 | `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefixes` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | zustand state | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
-| `src/ui/*` + `src/App.tsx` | interface | `App` (shell); `shell.ts` (pure, tested: `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`); `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`); `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `runImport`, `loadSample`, `chainLoadedTracks`); `importFlow.ts` (import orchestration without React, tested) |
+| `src/ui/*` + `src/App.tsx` | interface | `App` (shell); `shell.ts` (pure, tested: `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`, `settleSheet`, `BOTTOM_SHEET_QUERY`, `COMPACT_QUERY`); `SheetHandle`; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`); `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `runImport`, `loadSample`, `chainLoadedTracks`); `importFlow.ts` (import orchestration without React, tested) |
 
 ### Development rules
 
@@ -290,6 +290,13 @@ ink, 7.3:1).
   closing the drawer are disabled (resizing the scene would resize the canvas).
 - **View**: floating "Recadrer la vue" (reframe the view) button (F); click on the track and right-click menu (`TrackPicker`, see "Film and
   timeline").
+- **Touch gestures**: 3D view, the controls' own touch handling (`OrbitControls`: one finger orbits, two pinch to
+  zoom and pan; the controls set `touch-action: none`); a double tap (two one-finger taps within 300 ms and 30 px,
+  `useDoubleTapFit` in `CameraRig`, touch only) fits like F; a tap on the track moves the playhead, a long press
+  (500 ms, one finger still within 10 px, `TrackPicker`) opens the right-click menu, a second finger cancels both.
+  Timeline: blocks, grips and playhead drag with the same pointer events as the mouse (pointer capture, content in
+  `touch-action: none`); a second finger is not a press (`isPrimary`) but a pinch, which zooms around the fingers'
+  middle and scrolls as they slide (touch listeners on the scroller, `zoomAt`).
 - **Safe zones** (`src/ui/SafeZones.tsx`, pure and tested geometry in `src/ui/safeZoneLayout.ts`): floating button below
   "Recadrer" (outside "Libre") or G; preview state (small `useSafeZonesStore` store, neither saved nor undoable, off at
   startup). DOM layer in the framed `.view__stage`, above the overlay, `pointer-events: none`: the export (canvas)
@@ -333,9 +340,30 @@ ink, 7.3:1).
   button; `data-tip-side` (`top`, `left`, `right`) and `data-tip-align` (`start`, `end`) near the edges of the window or
   of a scrolling column. Timeline blocks keep their `title` (full label; a pseudo-element would be clipped
   by the block).
-- **Widths**: at 1280 px the panel and dock shrink to 280 px and "Ouvrir / Enregistrer" become icon-only; below 1024 px the
-  panel becomes a drawer above the view; below 700 px the tabs move to a bottom bar, panel and export
-  drawer become sheets above, with no format picker in the bar (the drawer tiles remain).
+- **Widths** (media queries at the end of `shell.css`; the desktop layout from 1100 px up is unchanged by the touch
+  rules, which only match a coarse pointer): at 1280 px the panel and dock shrink to 280 px and "Ouvrir / Enregistrer"
+  become icon-only; below 1024 px (tablet) the panel, the export drawer and the inspector become side sheets over the view
+  (rail and timeline kept).
+- **Phone and tablet** (`BOTTOM_SHEET_QUERY` and `COMPACT_QUERY` in `shell.ts`, same strings as the CSS):
+  - *Compact* (`max-width: 699px` or `max-height: 499px`, a phone either way up): top bar reduced to the logo, the
+    project name, « Plus d'actions » (⋯, `MoreMenu` in `TopBar.tsx`: undo, redo, open, save) and « Exporter » with its
+    label; no format picker (the drawer tiles) nor « ? »; the timeline starts folded (`Timeline`: strip with play and
+    time) and unfolds as a sheet over the view; panel and drawer sheets fold it (`sheetOpen`), its unfolding folds them
+    (`onUnfold` → shell event `fold`): one sheet at a time. Dialogs (`.sources`) are full screen. Safe areas
+    (`viewport-fit=cover` in `index.html`, `env(safe-area-inset-*)` on the shell rows and sides), `100dvh`, no page
+    overscroll. A touch tablet in portrait (`max-width: 1023px` and `pointer: coarse`) also takes the « Plus d'actions »
+    menu.
+  - *Bottom sheets* (`max-width: 699px`, portrait phone): the rail is a bottom tab bar with labels; panel, export drawer
+    and inspector are bottom sheets above it, with a grip (`SheetHandle.tsx`) that drags the sheet and settles it on
+    a snap (`settleSheet`: `SHEET_SNAPS` peek 0.3 / half 0.55 / full of the room, a flick carries it one step, below half
+    the peek it closes); the snap is the sheet's `data-snap` (CSS heights), a tap on the grip switches half / full,
+    ↑ / ↓ step. Sheet content scrolls inside the sheet (`overscroll-behavior: contain`); a press on the view does not
+    close it (it does on a tablet side sheet). Landscape phone: the rail stays on the side, without its fold button.
+  - *Touch* (`pointer: coarse`, any width): `--topbar-h` 56 px, `--control-h` 44 px and 44 px minimum on buttons, fields, chips, segmented
+    options, tiles, menu items and timeline buttons; lanes 40 px, grips 16 px; a larger invisible hit area around ⓘ;
+    16 px text in fields (iOS zooms into smaller ones); no callout or selection on the 3D canvas.
+  - *No hover* (`hover: none`): `data-tip` tooltips do not stick after a tap; an ⓘ shows its sentence when tapped
+    (focus), a long press shows any other tip (`:active`).
 - **Sections of the Carte and Survol tabs** (`PanelSection.tsx`): `PanelSection` = flat collapsible section (`fold` classes,
   sticky header: title, "modifié / Par défaut" of its keys, chevron), open initially, then as last left: open / folded
   state remembered by title in the platform storage (`FOLDS_KEY` `openflyover.folds.v1`, `parseFoldPrefs` in `shell.ts`,
