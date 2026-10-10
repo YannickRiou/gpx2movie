@@ -6,6 +6,8 @@ import type { InterleavedBufferAttribute, TypedArray } from 'three'
 import type { TerrainEngine, Track, TrackPoint } from '../core/types'
 import { buildSequence } from '../flyover/sequence'
 import { createLocalFrame } from '../geo/ellipsoid'
+import { DEFAULT_TRACK_STYLE } from './markerSettings'
+import { TRACK_GLOW_MAX_STRENGTH } from './trackLineStyle'
 import type { TrackLineSet } from './TrackLines'
 
 vi.mock('@react-three/fiber', () => ({ useFrame: vi.fn(), useThree: vi.fn() }))
@@ -296,6 +298,24 @@ describe('applyExposure', () => {
     applyExposure(sets.values(), 1)
     expect(set.solidMaterial.color.getHexString()).toBe('ff0000')
   })
+
+  it('gives the glow its own colour, over the per-vertex colours too, and the track colour back', () => {
+    const sets = new Map<string, TrackLineSet>()
+    syncTrackLineSets(new Group(), sets, [makeTrack('a', [segmentA])], frame, 800, 600)
+    const set = sets.get('a')!
+    drapeTrackLineSet(set, null, 1)
+    applyTrackColors(sets.values(), 'elevation')
+
+    applyExposure(sets.values(), 2, '#ffff00')
+    expect(set.glowMaterial.vertexColors).toBe(false)
+    expect(set.glowMaterial.color.r).toBeCloseTo(0.5, 6)
+    expect(set.glowMaterial.color.b).toBe(0)
+    expect(set.solidMaterial.vertexColors).toBe(true)
+
+    applyExposure(sets.values(), 1)
+    expect(set.glowMaterial.vertexColors).toBe(true)
+    expect(set.glowMaterial.color.getHexString()).toBe('ffffff')
+  })
 })
 
 describe('applyTrackColors', () => {
@@ -408,16 +428,20 @@ describe('applyTrackStyle', () => {
     const set = sets.get('a')!
     drapeTrackLineSet(set, null, 1)
 
-    applyTrackStyle(sets.values(), { width: 6, dash: 'tirets', glow: true, drawOn: false, smoothingM: 0 }, 2, 0.5)
+    const style = { ...DEFAULT_TRACK_STYLE, width: 6, dash: 'tirets', glow: true, glowWidth: 30, glowIntensity: 0.5 } as const
+    applyTrackStyle(sets.values(), style, 2, 0.5)
     expect(set.solidMaterial.linewidth).toBe(12)
-    expect(set.glowMaterial.linewidth).toBeGreaterThan(12)
+    expect(set.glowMaterial.linewidth).toBe(60)
     expect(set.segments[0].glow.visible).toBe(true)
+    // the halo starts at the edge of the line (6 of 30 px), at half the full strength
+    expect(set.glowMaterial.uniforms.glowInner.value).toBeCloseTo(0.2, 6)
+    expect(set.glowMaterial.uniforms.glowStrength.value).toBeCloseTo(0.5 * TRACK_GLOW_MAX_STRENGTH, 6)
     expect(set.solidMaterial.dashed).toBe(true)
     expect(set.solidMaterial.dashScale).toBe(2)
     // dash distances are measured along the draped line
     expect(set.segments[0].geometry.getAttribute('instanceDistanceStart')).toBeDefined()
 
-    applyTrackStyle(sets.values(), { width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 }, 1, 0)
+    applyTrackStyle(sets.values(), DEFAULT_TRACK_STYLE, 1, 0)
     expect(set.solidMaterial.dashed).toBe(false)
     expect(set.segments[0].glow.visible).toBe(false)
   })

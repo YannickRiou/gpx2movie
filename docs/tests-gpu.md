@@ -101,7 +101,8 @@ reproduce it next to the box.
       time × ~8 without clouds, much less with clouds (the cloud renders are shared). Frames per second of the
       preview with every effect on.
 - [ ] Edge smoothing (atmosphere enabled): no light fringe and no staircase on the ridges and the track.
-- [ ] Track and marker ("Survol" tab): width, dashes and dots during the flight, halo over forest and over snow, track
+- [ ] Track and marker ("Carte" tab): width, dashes and dots during the flight; "Halo de la trace" over forest, rock and
+      snow, in daylight and at low sun, its intensity, width and colour rows (the line keeps its colour); track
       drawn stuck to the marker, figures readable and flipped in turns, round avatar; default "Boule" (ball)
       identical to before.
 - [ ] Track behind the relief (mountains, "Poursuite" and the region view): a ridge or a spur between the camera and

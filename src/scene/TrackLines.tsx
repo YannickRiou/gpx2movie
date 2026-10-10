@@ -50,6 +50,8 @@ import {
   cutLine,
   lineWidthPx,
   quantizedPixelSize,
+  setGlow,
+  TRACK_GLOW_MAX_STRENGTH,
   viewDistance,
   type CuttableLine,
 } from './trackLineStyle'
@@ -252,7 +254,10 @@ function createLineMaterials(
     worldUnits: false,
   })
   solid.resolution.set(width, height)
-  return { solid, glow: createGlowMaterial(new Color(color), width, height) }
+  const glow = createGlowMaterial(new Color(color), width, height)
+  // in the opaque pass (still MAX-blended), after the terrain and before the line: the line covers the glow under it
+  glow.transparent = false
+  return { solid, glow }
 }
 
 export function buildTrackLineSet(
@@ -281,8 +286,10 @@ export function buildTrackLineSet(
     const geometry = new LineGeometry()
     const solid = new Line2(geometry, materials.solid)
     solid.name = 'track-line'
+    solid.renderOrder = 2
     const glow = new Line2(geometry, materials.glow)
     glow.name = 'track-line-glow'
+    glow.renderOrder = 1
     glow.visible = false
     object.add(solid, glow)
     segments.push({ index, source, points, buffer, positions, dist, shortened: -1, geometry, solid, glow })
@@ -325,13 +332,19 @@ export function drapeTrackLineSet(set: TrackLineSet, engine: TerrainEngine | nul
 /**
  * Line colours divided by the renderer exposure. The lines are unlit: with the atmosphere the frame is
  * tone-mapped at a high exposure (physical radiances) and they would otherwise burn out to white.
+ * `glowColor` ('#rrggbb') replaces the track colour (and its per-vertex colours) in the glow; '' keeps it.
  */
-export function applyExposure(sets: Iterable<TrackLineSet>, exposure: number): void {
+export function applyExposure(sets: Iterable<TrackLineSet>, exposure: number, glowColor = ''): void {
   for (const set of sets) {
     // with vertex colours the material colour is a plain multiplier
     const base = set.solidMaterial.vertexColors ? '#ffffff' : set.track.color
     set.solidMaterial.color.set(base).multiplyScalar(1 / exposure)
-    set.glowMaterial.color.copy(set.solidMaterial.color)
+    const glowVertexColors = set.solidMaterial.vertexColors && glowColor === ''
+    if (set.glowMaterial.vertexColors !== glowVertexColors) {
+      set.glowMaterial.vertexColors = glowVertexColors
+      set.glowMaterial.needsUpdate = true
+    }
+    set.glowMaterial.color.set(glowColor || base).multiplyScalar(1 / exposure)
   }
 }
 
@@ -391,6 +404,8 @@ export function applyTrackStyle(sets: Iterable<TrackLineSet>, style: TrackStyle,
   for (const set of sets) {
     set.solidMaterial.linewidth = lineWidthPx(style, renderScale)
     set.glowMaterial.linewidth = lineWidthPx(style, renderScale, true)
+    // the halo starts at the edge of the line
+    setGlow(set.glowMaterial, style.glowIntensity * TRACK_GLOW_MAX_STRENGTH, Math.min(1, style.width / style.glowWidth))
     for (const material of materialsOf(set)) applyDash(material, style, renderScale, pixelSize)
     for (const segment of set.segments) {
       segment.glow.visible = style.glow
@@ -547,12 +562,14 @@ export function TrackLines() {
     if (!applied || applied.style !== style || applied.renderScale !== renderScale || applied.pixelSize !== pixelSize) {
       styleRef.current = { style, renderScale, pixelSize }
       applyTrackStyle(setsRef.current.values(), style, renderScale, pixelSize)
+      // the glow colour is applied with the exposure
+      exposureRef.current = Number.NaN
     }
     // after a rebuild or a re-drape (the subscription covers the progress and settings)
     refreshDrawOn()
     if (gl.toneMappingExposure === exposureRef.current) return
     exposureRef.current = gl.toneMappingExposure
-    applyExposure(setsRef.current.values(), gl.toneMappingExposure)
+    applyExposure(setsRef.current.values(), gl.toneMappingExposure, style.glowColor)
   })
 
   // Re-drape (debounced, with a bounded wait so a long tile stream cannot starve it) whenever the engine

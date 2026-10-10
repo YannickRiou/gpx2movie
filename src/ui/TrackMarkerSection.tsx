@@ -12,13 +12,15 @@ import {
   MARKER_SIZE_RANGE,
   TRACK_DASH_LABELS,
   TRACK_DASHES,
+  TRACK_GLOW_INTENSITY_RANGE,
+  TRACK_GLOW_WIDTH_RANGE,
   TRACK_SMOOTHING_RANGE,
   TRACK_WIDTH_RANGE,
 } from '../scene/markerSettings'
 import type { MarkerFigure, MarkerSettings, TrackStyle } from '../scene/markerSettings'
 import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
-import { formatDistance, formatNumber } from './format'
+import { formatDistance, formatNumber, formatPercent } from './format'
 import { InfoTip, PanelSection, RangeField, SettingRow } from './PanelSection'
 
 /** 4 -> "4", 4.5 -> "4,5", 1.25 -> "1,25" */
@@ -183,8 +185,53 @@ export function TrackMarkerSection() {
       </div>
       <label className="checkbox checkbox--switch">
         <input type="checkbox" checked={style.glow} onChange={(e) => updateStyle({ glow: e.currentTarget.checked })} />
-        Halo lumineux
+        Halo de la trace
       </label>
+      {style.glow && (
+        <>
+          <SettingRow label="Intensité du halo" value={formatPercent(style.glowIntensity)} paths={['trackStyle.glowIntensity']}>
+            <RangeField
+              label="Intensité du halo"
+              {...TRACK_GLOW_INTENSITY_RANGE}
+              value={style.glowIntensity}
+              format={formatPercent}
+              onChange={(glowIntensity) => updateStyle({ glowIntensity })}
+            />
+          </SettingRow>
+          <SettingRow label="Largeur du halo" value={`${formatShort(style.glowWidth)} px`} paths={['trackStyle.glowWidth']}>
+            <RangeField
+              label="Largeur du halo"
+              {...TRACK_GLOW_WIDTH_RANGE}
+              value={style.glowWidth}
+              format={(v) => `${formatShort(v)} px`}
+              onChange={(glowWidth) => updateStyle({ glowWidth })}
+            />
+          </SettingRow>
+          <SettingRow
+            label="Couleur du halo"
+            value={style.glowColor ? 'Personnalisée' : 'Celle de la trace'}
+            paths={['trackStyle.glowColor']}
+          >
+            <div className="field">
+              <label className="field__label" htmlFor={`${id}-glow-color`}>
+                Couleur du halo
+              </label>
+              <div className="color-row">
+                <input
+                  id={`${id}-glow-color`}
+                  className="color-row__input"
+                  type="color"
+                  value={style.glowColor || firstTrack?.color || '#ffffff'}
+                  onChange={(e) => updateStyle({ glowColor: e.currentTarget.value })}
+                />
+                <button type="button" className="btn btn--secondary" disabled={!style.glowColor} onClick={() => updateStyle({ glowColor: '' })}>
+                  Celle de la trace
+                </button>
+              </div>
+            </div>
+          </SettingRow>
+        </>
+      )}
       <SettingRow label="Colorer selon" value={colorModes.find((m) => m.mode === trackColorBy)?.label} paths={['trackColorBy']}>
         <div className="field">
           <label className="field__label" htmlFor={`${id}-color`}>

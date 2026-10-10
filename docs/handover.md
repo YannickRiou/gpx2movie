@@ -143,6 +143,9 @@ features included), `npm run build`,
 - **Track draped on the drawn terrain** (10 October 2026): `engine.sampleHeight` reads the mesh of the tile on screen
   (`sampleTileMesh`) instead of the LRU height field, which held 100 grids for up to ~390 drawn tiles (points at 0 m,
   jumps of hundreds of metres on a 540 km track without elevation); measured with a simulated flight, not seen on a GPU.
+- **Track glow settings** (10 October 2026, user request): `trackStyle.glowIntensity` / `glowWidth` / `glowColor`
+  (older projects get the defaults), stronger default, drawn before the line in the opaque pass so a strong glow
+  cannot tint it; rows in « Trace et marqueur ». Seen in headless Chromium on synthetic tiles, not on a GPU.
 - **Track hidden by the relief** (10 October 2026, user report): the depth-test-free 25 % "ghost" pass is removed; its
   overlapping round caps (10 m pieces) piled up to an opaque line far away, over the ridges (pixel readback in headless
   Chromium, direct and HDR composer). Not seen on a GPU.

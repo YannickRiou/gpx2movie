@@ -22,6 +22,8 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
   the outing, then joins the flight's sun; « Heure du survol » and « Accéléré » (the former « Faire bouger le soleil »).
 - **Timeline**: a narrow block (a 4 s stop on a phone) pressed in its middle is moved, no longer stretched by its edge.
 - **OpenStreetMap**: the memory cache of Overpass results keeps the 32 most recently used, no longer every track of the session.
+- **Track glow**: « Halo de la trace » (formerly « Halo lumineux », the name of the lens bloom too) is clearly visible
+  and has its intensity, width and colour.
 - **Track behind the relief**: a ridge or a spur between the camera and the track hides it (the faint « ghost » of
   the hidden parts piled up into a full line in the distance and is gone).
 - **Track on the relief**: the line, the marker and the labels lie on the terrain as drawn, without the jumps up and

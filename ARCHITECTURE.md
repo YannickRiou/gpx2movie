@@ -694,7 +694,8 @@ ink, 7.3:1).
 
 ## Track and marker
 
-- **Settings** `settings.trackStyle { width, dash: 'plein' | 'tirets' | 'points', glow, drawOn, smoothingM }` and `settings.marker { kind:
+- **Settings** `settings.trackStyle { width, dash: 'plein' | 'tirets' | 'points', glow, glowIntensity, glowWidth, glowColor, drawOn,
+  smoothingM }` and `settings.marker { kind:
   'boule' | 'figurine' | 'image', figure, image, size, animated }` (`src/scene/markerSettings.ts`, pure). `animated`: the
   figurine bounces and sways with `figureMotion(timeS)` (two steps per second of film, lift up to 8% of the badge through
   `sprite.center`, ±5° through `material.rotation`), a function of the film time only: a paused film keeps its pose,
@@ -702,11 +703,15 @@ ink, 7.3:1).
   (4 px, solid, white ball). Checked by `SETTING_CHECKS`, completed by `SETTING_UPGRADES` (keys added later).
   `image`: 128 px square PNG as a data URL (`fileToAvatarDataUrl`, platform picker), 300,000 characters at most.
   "Trace et marqueur" (track and marker) section of the Carte tab (`src/ui/TrackMarkerSection.tsx`).
-- **Width**: pixels of a 1080 px image, times `renderScale` in the export (as before). **Glow**: a third `Line2` on the
-  same geometry, 3.5 times wider, `LineMaterial` material whose fragment shader is replaced (`onBeforeCompile`, own
-  program key): track color × radial fade (`vUv`), **MAX** blending — no beads at the joints of
-  overlapping pieces, the track keeps its hue; the glow mostly lights up dark backgrounds. Follows the exposure and the
-  per-vertex colors like the other two passes.
+- **Width**: pixels of a 1080 px image, times `renderScale` in the export (as before). **Glow** (« Halo de la trace »):
+  a second `Line2` on the same geometry, `glowWidth` px wide (6–64, default 24), `LineMaterial` material whose fragment
+  shader is replaced (`onBeforeCompile`, own program key): colour × `glowStrength` × radial fade (`vUv`) from the edge
+  of the line (`glowInner` = width / glowWidth) outwards, **MAX** blending — no beads at the joints of overlapping
+  pieces. Strength = `glowIntensity` (0.1–1, default 0.75) × `TRACK_GLOW_MAX_STRENGTH` (2): above 1 the halo is
+  brighter than the line, so it reads on mid-tone imagery too; on white snow a light halo cannot show. Drawn in the
+  opaque pass (`transparent: false`, renderOrder 1) after the terrain and before the line (renderOrder 2), which
+  covers it: the line keeps its colour. Depth-tested like the line. Colour: `glowColor` ('#rrggbb'), '' = the track
+  colour or its per-vertex colours; divided by the exposure like the line (`applyExposure`).
 - **Smoothing** (`smoothingM`, 0–300 m, 0 = off by default; `src/flyover/smooth.ts`, pure): tent-weighted moving average
   of the positions over `smoothingM` metres of recorded distance, per segment, end points kept, other fields kept.
   `TrackLines` densifies the smoothed points (rebuild when the value changes); `FlyoverRig` and the export camera use

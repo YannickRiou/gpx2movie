@@ -181,7 +181,7 @@ describe('settings and misc', () => {
       grading: { preset: 'naturel', contrast: 0, saturation: 0, warmth: 0, vignette: 0 },
       lens: { shutter: 0, bloom: 0, bloomRadius: 0.6, flare: 0, depthOfField: 0 },
       trackColorBy: 'none',
-      trackStyle: { width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 },
+      trackStyle: { width: 4, dash: 'plein', glow: false, glowIntensity: 0.75, glowWidth: 24, glowColor: '', drawOn: false, smoothingM: 0 },
       marker: { kind: 'boule', figure: 'randonneur', image: '', size: 1, animated: false },
       camera: { style: 'chase', distance: 1, pitchDeg: 30, headingOffsetDeg: 0, smoothing: 1, northUp: false, turnSmoothingM: 0, aimSmoothingS: 0, cameraSmoothingS: 3, endingS: 0 },
       flyoverDurationS: 60,
