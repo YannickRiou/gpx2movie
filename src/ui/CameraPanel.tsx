@@ -17,6 +17,7 @@ import type { PacingSettings } from '../flyover/pacing'
 import { editFilm, setFlightTiming, useFilmClock, useFilmTrack } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatDegrees, formatDistance, formatNumber, formatPercent, formatSecondsShort } from './format'
+import { HighlightsPanel } from './HighlightsPanel'
 import { Icon } from './icons'
 import type { IconName } from './icons'
 import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
@@ -454,6 +455,8 @@ export function CameraPanel() {
           />
         </MoreSettings>
       </PanelSection>
+
+      <HighlightsPanel />
 
       <TrackMarkerSection />
     </>

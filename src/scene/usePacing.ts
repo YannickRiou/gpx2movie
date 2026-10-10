@@ -71,6 +71,14 @@ export function editFilm(edit: (film: Film) => { film: Film; id?: string | null 
 }
 
 /**
+ * « Arrêts automatiques » on the film of the stores (timeline options, « Temps forts »): on, a stop generated at every
+ * highlight, the film's own stops dropped; off, the generated stops written out as its own. One undo step.
+ */
+export function setAutoStops(on: boolean): void {
+  editFilm((film) => ({ film: on ? { ...film, autoStops: true, autoMode: 'temps-forts', stops: [] } : film }), { stops: !on })
+}
+
+/**
  * « Ralentir et titrer aux repères » on the film of the stores: on, its landmark slow-downs and titles made again from
  * the landmarks loaded for the first track (`withLandmarkTitles`); off, removed. The texts and media attached to a
  * stop follow it (`followStops`). One undo step, none when nothing changes (the landmarks are published again and

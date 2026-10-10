@@ -7,6 +7,7 @@ import type { Landmark } from '../osm/landmarks'
 import {
   autoStopId,
   autoStops,
+  filmHighlights,
   filmStops,
   freezeLandmarkTitles,
   LANDMARK_TITLE_S,
@@ -97,6 +98,27 @@ describe('autoStops (temps-forts: new films)', () => {
     const candidates = stopCandidates({ track, landmarks, pacing: { ...DEFAULT_PACING, windowM: 5000 } })
     expect(candidates.map((c) => c.source.kind)).toEqual(['landmark', 'climb', 'landmark'])
     expect(autoStops({ track, landmarks, pacing: { ...DEFAULT_PACING, windowM: 5000 } }, 'temps-forts')).toHaveLength(1)
+  })
+
+  it('filmHighlights: each candidate once with its stop (within a metre), then the other stops, by position', () => {
+    const candidates = stopCandidates({ track, landmarks, pacing: DEFAULT_PACING })
+    const [pass, top] = candidates
+    const stops = [
+      { id: 'stop-1', atM: 4000, durationS: 2, camera: 'fixe' as const, label: 'Lac' },
+      { id: 'stop-2', atM: pass.atM + 0.5, durationS: 6, camera: 'orbite' as const },
+      { id: 'stop-3', atM: 100, durationS: 1, camera: 'orbite' as const },
+      // a second stop at the pass: a row of its own
+      { id: 'stop-4', atM: pass.atM, durationS: 3, camera: 'orbite' as const, label: 'Pique-nique' },
+    ]
+    const rows = filmHighlights([...candidates, { ...top, label: 'Même place' }], stops)
+    expect(rows.map((r) => [r.label.slice(0, 6), r.stop?.id, r.source !== undefined])).toEqual([
+      ['Arrêt', 'stop-3', false],
+      ['Col de', 'stop-2', true],
+      ['Pique-', 'stop-4', false],
+      ['Montée', undefined, true],
+      ['Lac', 'stop-1', false],
+      ['Mont L', undefined, true],
+    ])
   })
 })
 

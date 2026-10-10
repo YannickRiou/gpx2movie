@@ -9,7 +9,7 @@
 import { errorMessage } from '../core/errors'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
-import { freezeLandmarkTitles, materializeStops, stopCandidates } from '../film/assemble'
+import { freezeLandmarkTitles, materializeStops, stopAt, stopCandidates } from '../film/assemble'
 import { AUDIO_FILE_EXTENSIONS, fitFilmToMusic, isAudioFile, musicLengthS, readAudio, startMusicPreview, useMusicPreview, waveformPath } from '../film/audio'
 import { beatTicksPath } from '../film/beats'
 import { buildFilmClock, filmClockFor, filmClockInputFor } from '../film/clock'
@@ -47,7 +47,7 @@ import type { DragContext, Grip, TimelineItem } from '../film/timeline'
 import { buildTrackPath, elevationProfile, recordedTimeAt, samplePath, type ElevationProfile } from '../flyover/path'
 import { modifiedSettings } from '../project/apply'
 import { getSettingsHistory } from '../project/history'
-import { editFilm, getFilmSource, useFilmClock, useFilmSequence, useFilmSource } from '../scene/usePacing'
+import { editFilm, getFilmSource, setAutoStops, useFilmClock, useFilmSequence, useFilmSource } from '../scene/usePacing'
 import { PLAYBACK_SPEEDS, useAppStore } from '../state/store'
 import { formatDistance, formatNumber } from './format'
 import { Icon } from './icons'
@@ -418,8 +418,7 @@ export function Timeline({ sheetOpen = false, onUnfold }: { sheetOpen?: boolean;
   const ele = profile && path.count > 0 ? samplePath(path, progress * path.lengthM).ele : undefined
   // startTime is set as soon as one point has a time: skips the scan of an untimed track
   const time = track.stats.startTime !== undefined && path.count > 0 ? recordedTimeAt(path, progress * path.lengthM) : undefined
-  const stoppedAt = (atM: number) => shownClock.stops.some((s) => Math.abs(s.atM - atM) < 1)
-  const freeCandidates = candidates.filter((c) => !stoppedAt(c.atM))
+  const freeCandidates = candidates.filter((c) => !stopAt(shownClock.stops, c.atM))
 
   // --- edits -------------------------------------------------------------------------------------------------
   const isStop = (item: TimelineItem) => clock.stops.some((s) => s.id === item)
@@ -563,8 +562,6 @@ export function Timeline({ sheetOpen = false, onUnfold }: { sheetOpen?: boolean;
   }
   const pickMusic = () =>
     void pickFiles({ filters: MUSIC_FILTERS, multiple: true }).then((files) => (files.length > 0 ? addMusicFiles(files) : undefined))
-  const toggleAutoStops = (on: boolean) =>
-    commit(on ? { ...film, autoStops: true, autoMode: 'temps-forts', stops: [] } : withOwnStops(film))
 
   // --- pointer -----------------------------------------------------------------------------------------------
   const timeAt = (clientX: number) => (clientX - (contentRef.current?.getBoundingClientRect().left ?? 0) - PAD_PX) / pxPerS
@@ -900,7 +897,7 @@ export function Timeline({ sheetOpen = false, onUnfold }: { sheetOpen?: boolean;
           />
           <BarButton icon="move-horizontal" label="Ajuster" name="Ajuster : voir tout le film" tip="Voir tout le film" onClick={fitZoom} disabled={zoom <= ZOOM_RANGE.min} />
         </div>
-        <FilmOptions autoStops={film.autoStops} onAutoStops={toggleAutoStops} onAddMusic={pickMusic} reading={reading} />
+        <FilmOptions autoStops={film.autoStops} onAutoStops={setAutoStops} onAddMusic={pickMusic} reading={reading} />
         <button
           type="button"
           className="icon-btn film-tl__fold"

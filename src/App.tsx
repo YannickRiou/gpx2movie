@@ -20,7 +20,6 @@ import { PanelSection } from './ui/PanelSection'
 import { PoiPanel } from './ui/PoiPanel'
 import { chooseFilesToOpen, openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
-import { RoadbookPanel } from './ui/RoadbookPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
 import { useSafeZonesStore } from './ui/SafeZones'
 import {
@@ -395,9 +394,6 @@ export default function App() {
               <TrackList />
               <PanelSection title="Montées et étiquettes" keys={['labels']} hidden={!hasTracks}>
                 <ClimbList />
-              </PanelSection>
-              <PanelSection title="Feuille de route" hidden={!hasTracks}>
-                <RoadbookPanel />
               </PanelSection>
               <PanelSection title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
                 <WeatherPanel />

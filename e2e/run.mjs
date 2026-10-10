@@ -221,6 +221,20 @@ const SCENARIOS = [
     },
   },
   {
+    id: 'temps-forts',
+    title: 'Temps forts (onglet Survol) : un ajout au marqueur et sa suppression, vus sur la timeline',
+    async run({ page }) {
+      if (await page.evaluate(() => document.getElementById('tab-survol')?.getAttribute('aria-selected') !== 'true')) {
+        await page.click('#tab-survol')
+      }
+      const stops = await laneCount(page, 'Arrêts')
+      await clickButton(page, 'Ajouter à la position du marqueur')
+      await until(page, ([n]) => document.querySelectorAll('[role="group"][aria-label="Arrêts"] .film-tl__block').length === n + 1, [stops])
+      await page.click('#tab-panel-survol .highlight button[aria-label^="Supprimer le temps fort"]')
+      await until(page, ([n]) => document.querySelectorAll('[role="group"][aria-label="Arrêts"] .film-tl__block').length === n, [stops])
+    },
+  },
+  {
     id: 'projet',
     title: 'Projet enregistré puis rouvert',
     async run({ page, url }) {
