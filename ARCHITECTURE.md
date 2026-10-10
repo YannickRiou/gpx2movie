@@ -270,7 +270,7 @@ ink, 7.3:1).
   Without a track, no framing: the welcome card (`EmptyState.tsx`) fills the center of the view ("Choisir un fichier" (choose a file),
   "Essayer avec l'exemple (Tour du Mont-Blanc)" (try the sample), "Ouvrir un projet…" (open a project), a single picker whose `accept` changes).
 - **Rail and panel**: vertical rail of icon + label tabs (64 px; `tablist`, roving focus, arrows / Home / End) and a
-  320 px panel, one tab at a time: **Trace** (track; track list with "+ Ajouter" (add), waiting message without a track,
+  320 px panel, one tab at a time: **Trace** (track; track list with "+ Ajouter" (add; a menu: « Fichiers GPX ou FIT… », « Activités Strava… »), waiting message without a track,
   collapsible Climbs and Weather), **Carte** (map; scene settings, OSM landmarks), **Survol** (flyover; camera, pacing),
   **Habillage** (overlay), **Projet** (project; presets). All tabs stay mounted (`hidden`): weather, landmarks and export have
   side effects. Flat sections separated by a rule, sticky section header (title + "modifié / Par défaut" (modified / default)). A click
@@ -1890,8 +1890,8 @@ it, know at what time you will pass each point, where the sun will be and what t
 
 ## Strava import
 
-"Importer depuis Strava" (import from Strava; "Strava" button of the track list, "Importer depuis Strava" on the home
-screen; `src/ui/StravaImport.tsx`): OAuth connection to Strava, list of the athlete's activities, import of the
+"Importer depuis Strava" (import from Strava; « + Ajouter » › « Activités Strava… » in the track list, "Importer depuis
+Strava" on the home screen; `src/ui/StravaImport.tsx`: `StravaDialog`, `StravaImport`): OAuth connection to Strava, list of the athlete's activities, import of the
 ticked ones.
 
 - **No PKCE at Strava** (checked in October 2026, developers.strava.com/docs/authentication): the code exchange and

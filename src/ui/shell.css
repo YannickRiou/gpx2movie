@@ -509,6 +509,16 @@
   gap: var(--space-2);
 }
 
+/* « + Ajouter » of the track list: its menu (the look of « Plus d'actions ») under the button */
+.tracks__add {
+  position: relative;
+}
+
+/* its head above the next sticky section header while the menu is open */
+.section-head:has(.tracks__add .track-menu) {
+  z-index: 3;
+}
+
 /* foldable sections (Montées, Météo) */
 .fold__summary {
   display: flex;
@@ -1758,6 +1768,16 @@
     padding-bottom: calc(var(--space-1) + env(safe-area-inset-bottom));
     border-radius: var(--radius-md) var(--radius-md) 0 0;
     transform: none !important;
+  }
+
+  /* « + Ajouter » of the track list: under its button, inside the sheet (fixed, it would sit under the tab bar) */
+  .tracks__add .track-menu {
+    position: absolute;
+    top: calc(100% + 6px) !important;
+    bottom: auto;
+    left: auto !important;
+    padding-bottom: var(--space-1);
+    border-radius: var(--radius-md);
   }
 }
 

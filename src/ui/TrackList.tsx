@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Track } from '../core/types'
 import { isExportBusy, useExportStore } from '../export/store'
@@ -32,7 +32,7 @@ import { useAppStore } from '../state/store'
 import { formatClock, formatDistance, formatDistanceGap, formatNumber, formatTimeGap, formatTrackSummary } from './format'
 import { Icon } from './icons'
 import { chainLoadedTracks, chooseTracksToImport } from './projectActions'
-import { StravaImport } from './StravaImport'
+import { StravaDialog } from './StravaImport'
 
 /** Progress steps the leaderboard follows: a few renders per second of its own rows, not one per frame. */
 const PROGRESS_STEPS = 1000
@@ -247,21 +247,68 @@ function RacePanel({ tracks }: { tracks: readonly Track[] }) {
   )
 }
 
-/** « + Ajouter »: pick more GPX / FIT files. */
-function AddTracksButton() {
+/** « + Ajouter »: a menu to pick more GPX / FIT files or import Strava activities. */
+function AddTracksMenu() {
   const loading = useAppStore((s) => s.loading)
+  const [open, setOpen] = useState(false)
+  const [strava, setStrava] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target instanceof Node) || !ref.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    return () => document.removeEventListener('pointerdown', onDown, true)
+  }, [open])
+  const items = [
+    { label: 'Fichiers GPX ou FIT…', icon: 'upload', onClick: () => void chooseTracksToImport() },
+    { label: 'Activités Strava…', icon: 'route', onClick: () => setStrava(true) },
+  ] as const
+
   return (
-    <button
-      type="button"
-      className="btn btn--secondary btn--small"
-      onClick={() => void chooseTracksToImport()}
-      disabled={loading}
-      data-tip="Ajouter des traces GPX ou FIT (plusieurs à la fois)"
-      data-tip-align="end"
+    <div
+      ref={ref}
+      className="tracks__add"
+      data-local-escape=""
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || !open) return
+        setOpen(false)
+        e.stopPropagation()
+      }}
     >
-      <Icon name="plus" size={16} />
-      Ajouter
-    </button>
+      <button
+        type="button"
+        className="btn btn--secondary btn--small"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        disabled={loading}
+      >
+        <Icon name="plus" size={16} />
+        Ajouter
+      </button>
+      {open && (
+        <div className="track-menu topbar__menu" role="menu" aria-label="Ajouter des traces">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className="track-menu__item"
+              onClick={() => {
+                setOpen(false)
+                item.onClick()
+              }}
+            >
+              <Icon name={item.icon} size={18} />
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <StravaDialog open={strava} onClose={() => setStrava(false)} />
+    </div>
   )
 }
 
@@ -431,8 +478,7 @@ export function TrackList() {
           Traces
         </h2>
         <div className="section-head__actions">
-          <StravaImport />
-          <AddTracksButton />
+          <AddTracksMenu />
         </div>
       </div>
       {tracks.length === 0 ? (

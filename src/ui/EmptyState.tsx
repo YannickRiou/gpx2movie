@@ -19,7 +19,7 @@ export function EmptyState() {
         <button type="button" className="btn btn--primary" onClick={() => void chooseTracksToImport()} disabled={loading}>
           {loading ? 'Import en cours…' : 'Choisir un fichier'}
         </button>
-        <StravaImport welcome />
+        <StravaImport />
         <button type="button" className="btn btn--secondary" onClick={loadSample} disabled={loading}>
           Essayer avec l'exemple (Tour du Mont-Blanc)
         </button>

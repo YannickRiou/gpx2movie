@@ -13,7 +13,7 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
 - **OpenStreetMap**: the memory cache of Overpass results keeps the 32 most recently used, no longer every track of the session.
 - **Simpler panels**: camera presets as the one choice, the style under « Plus de réglages ».
 - **Simpler panels**: camera presets as the one choice (six shown, the rest under « Plus de préréglages »), the style
-  under « Plus de réglages ».
+  under « Plus de réglages »; Strava import in the « + Ajouter » menu of the track list.
 
 ## 0.1.0 (October 2026)
 
