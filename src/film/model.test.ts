@@ -129,6 +129,7 @@ describe('film model', () => {
       { headroomPct: -5 },
       { headroomPct: 50 },
       { moveSun: 'oui' as never },
+      { sun: 'nuit' as never },
     ]
     for (const patch of bad) expect(isValidFilm(film({ opening: { ...framed, ...patch } }))).toBe(false)
   })

@@ -5,6 +5,7 @@
  * Pure functions (no DOM, no React, no Three).
  */
 import type { FilmClock } from '../film/clock'
+import { shotSunOf } from '../film/model'
 import { recordedTimeAt, type TrackPath } from './path'
 
 const DAY_MS = 86_400_000
@@ -63,12 +64,33 @@ export const SHOT_SUN_HOURS = 2
  * light the same frames.
  */
 export function shotSunShiftMs(clock: Pick<FilmClock, 'stateAt' | 'opening' | 'closing'>, timeS: number): number {
+  const away = shotSunAway(clock, timeS, 'accelere')
+  return away === null ? 0 : (away.opening ? -away.weight : away.weight) * SHOT_SUN_HOURS * HOUR_MS
+}
+
+/** Solar hour of « Plein jour »: the region view is lit whatever the time of the outing. */
+export const SHOT_DAYLIGHT_HOUR = 13
+
+/**
+ * Sun date at film time `timeS`: `flightDate` (the sun of the flight) outside a 'situation' shot and with « Heure du
+ * survol »; « Accéléré », the time lapse of `shotSunShiftMs`; « Plein jour », from `daylight` at the region view to
+ * `flightDate` where the shot meets the flight, with the same easing (no jump, the sun stands still at the joint).
+ */
+export function shotSunDate(clock: Pick<FilmClock, 'stateAt' | 'opening' | 'closing'>, timeS: number, flightDate: Date, daylight: Date): Date {
+  const away = shotSunAway(clock, timeS, 'jour')
+  if (away !== null) return new Date(flightDate.getTime() + away.weight * (daylight.getTime() - flightDate.getTime()))
+  return new Date(flightDate.getTime() + shotSunShiftMs(clock, timeS))
+}
+
+/** Share (1 at the region view, 0 where the shot meets the flight) of a 'situation' shot lit in `mode`, else null. */
+function shotSunAway(clock: Pick<FilmClock, 'stateAt' | 'opening' | 'closing'>, timeS: number, mode: 'jour' | 'accelere'): { weight: number; opening: boolean } | null {
   const state = clock.stateAt(timeS)
-  if (state.phase !== 'opening' && state.phase !== 'closing') return 0
-  const shot = state.phase === 'opening' ? clock.opening : clock.closing
-  if (shot.style !== 'situation' || shot.moveSun !== true || !(state.lengthS > 0)) return 0
+  if (state.phase !== 'opening' && state.phase !== 'closing') return null
+  const opening = state.phase === 'opening'
+  const shot = opening ? clock.opening : clock.closing
+  if (shot.style !== 'situation' || shotSunOf(shot) !== mode || !(state.lengthS > 0)) return null
   const u = Math.min(1, Math.max(0, state.localS / state.lengthS))
-  return (state.phase === 'opening' ? -((1 - u) ** 2) : u ** 2) * SHOT_SUN_HOURS * HOUR_MS
+  return { weight: opening ? (1 - u) ** 2 : u ** 2, opening }
 }
 
 /** Local mean solar time (hours) at `lon` of `date`, counted from the UTC day containing `dayMs` (inverse of `solarHourToDate`). */

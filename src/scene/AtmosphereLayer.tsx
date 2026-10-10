@@ -20,7 +20,7 @@ import type { Track } from '../core/types'
 import { samplePath, trackPathOf, type TrackPath } from '../flyover/path'
 import { trackUnderMarker } from '../flyover/sequence'
 import { mslLocalToEcef } from '../geo/geoid'
-import { shotSunShiftMs, sunDateAt, sunDayMs } from '../flyover/sun'
+import { SHOT_DAYLIGHT_HOUR, shotSunDate, solarHourToDate, sunDateAt, sunDayMs } from '../flyover/sun'
 import { useAppStore } from '../state/store'
 import { CLEAR_SCENE_WEATHER, hazeExtinction, sceneWeatherAt } from '../weather/sceneWeather'
 import type { SceneWeather } from '../weather/sceneWeather'
@@ -124,13 +124,15 @@ export function AtmosphereLayer() {
     const at = trackUnderMarker(tracks, settings.race, playback.progress)
     const under = at && { ...at, path: trackPathOf(at.track), series: weatherSeriesOf(useWeatherStore.getState(), at.track) }
     markerRef.current = under ?? null
+    const dayMs = sunDayMs(settings.sunDate, under?.track.stats.startTime, today)
     const sunDate = sunDateAt(under?.path ?? null, under?.progress ?? playback.progress, {
       sunFromTrack: settings.sunFromTrack,
       solarHour: settings.sunHour,
       lon: frame.origin.lon,
-      dayMs: sunDayMs(settings.sunDate, under?.track.stats.startTime, today),
+      dayMs,
     })
-    const date = new Date(sunDate.getTime() + shotSunShiftMs(clock, playback.timeS ?? clock.timeAtProgress(playback.progress)))
+    const daylight = solarHourToDate(dayMs, frame.origin.lon, SHOT_DAYLIGHT_HOUR)
+    const date = shotSunDate(clock, playback.timeS ?? clock.timeAtProgress(playback.progress), sunDate, daylight)
     atmosphere.updateByDate(date)
     dateRef.current = date
     const elevation = sunElevation(atmosphere.sunDirection, up)

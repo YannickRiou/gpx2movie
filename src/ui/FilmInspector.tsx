@@ -29,8 +29,9 @@ import {
   SYNC_OFFSET_RANGE,
   shotDipColor,
   situationTiming,
+  shotSunOf,
 } from '../film/model'
-import type { Film, FilmShot, MediaLayout, MediaSync, ShotStyle, ShotTransition, StartHeight, StopCamera } from '../film/model'
+import type { Film, FilmShot, MediaLayout, MediaSync, ShotStyle, ShotSun, ShotTransition, StartHeight, StopCamera } from '../film/model'
 import {
   addItemCamera,
   attachToStop,
@@ -53,6 +54,19 @@ import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
 import { CAMERA_RANGES } from '../flyover/cameraSettings'
 import { buildTrackPath } from '../flyover/path'
 import { SHOT_SUN_HOURS } from '../flyover/sun'
+
+/** Hint of each « Soleil » choice, [opening, closing]. */
+const SHOT_SUN_HINTS: Record<ShotSun, readonly [string, string]> = {
+  jour: [
+    'La vue de la région est en plein jour, puis le soleil rejoint l’heure du départ pendant la plongée.',
+    'Le soleil quitte l’heure de l’arrivée pour le plein jour pendant la remontée.',
+  ],
+  survol: ['Le soleil de l’heure du départ, comme le survol.', 'Le soleil de l’heure de l’arrivée, comme le survol.'],
+  accelere: [
+    `Accéléré : le soleil part de ${SHOT_SUN_HOURS} h avant le départ et ralentit jusqu’à l’heure du survol ; les ombres balaient le relief.`,
+    `Accéléré : le soleil repart de l’heure de l’arrivée et avance de ${SHOT_SUN_HOURS} h ; les ombres balaient le relief.`,
+  ],
+}
 import { REGION_KIND_LABELS, candidateId, captureFraming, useRegionStore } from '../osm/region'
 import { OVERLAY_ANCHORS, OVERLAY_ANCHOR_LABELS, WIDGET_SIZE_MAX, WIDGET_SIZE_MIN } from '../overlay/settings'
 import type { OverlayAnchor } from '../overlay/settings'
@@ -533,19 +547,19 @@ export function FilmInspector() {
             />
             <SituationFramingFields phase={item} shot={shot} onChange={(patch) => change((f) => updateShot(f, item, patch), false)} />
             <InspectorGroup title="Soleil">
-              <label className="checkbox checkbox--switch">
-                <input
-                  type="checkbox"
-                  checked={shot.moveSun === true}
-                  aria-describedby={`${id}-sun-hint`}
-                  onChange={(e) => change((f) => updateShot(f, item, { moveSun: e.currentTarget.checked || undefined }), false)}
-                />
-                Faire bouger le soleil
-              </label>
+              <select
+                className="select"
+                aria-label="Soleil du plan"
+                aria-describedby={`${id}-sun-hint`}
+                value={shotSunOf(shot)}
+                onChange={(e) => change((f) => updateShot(f, item, { sun: e.currentTarget.value as ShotSun, moveSun: undefined }), false)}
+              >
+                <option value="jour">Plein jour</option>
+                <option value="survol">Heure du survol</option>
+                <option value="accelere">Accéléré ({SHOT_SUN_HOURS} h)</option>
+              </select>
               <p id={`${id}-sun-hint`} className="field__hint">
-                {item === 'opening'
-                  ? `Accéléré : le soleil part de ${SHOT_SUN_HOURS} h avant le départ et ralentit jusqu’à l’heure du survol ; les ombres balaient le relief.`
-                  : `Accéléré : le soleil repart de l’heure de l’arrivée et avance de ${SHOT_SUN_HOURS} h ; les ombres balaient le relief.`}
+                {SHOT_SUN_HINTS[shotSunOf(shot)][item === 'opening' ? 0 : 1]}
                 {!atmosphere && ' Avec l’atmosphère seulement.'}
               </p>
             </InspectorGroup>

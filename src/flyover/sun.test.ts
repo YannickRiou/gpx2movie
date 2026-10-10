@@ -9,6 +9,8 @@ import {
   SUN_CHIPS,
   clockHourOfSolar,
   isSunDate,
+  SHOT_DAYLIGHT_HOUR,
+  shotSunDate,
   shotSunShiftMs,
   solarDay,
   solarHourOf,
@@ -209,7 +211,22 @@ describe('shotSunShiftMs', () => {
     expect(Math.abs(speed(8 - 0.002))).toBeLessThan((0.01 * SHOT_SUN_HOURS * HOUR) / 8)
   })
 
-  it('none without the switch, outside a « Depuis la région » shot', () => {
+  it('« Plein jour » (default): daylight at the region view, easing to the flight\'s sun where the shot meets it', () => {
+    const plain = { style: 'situation', durationS: 8 } as const
+    const clock = clockOf(plain, { ...plain, durationS: 6 })
+    const flight = new Date(Date.UTC(2026, 5, 1, 4)), daylight = new Date(Date.UTC(2026, 5, 1, SHOT_DAYLIGHT_HOUR))
+    expect(shotSunDate(clock, 0, flight, daylight)).toEqual(daylight)
+    expect(shotSunDate(clock, 4, flight, daylight).getTime()).toBeCloseTo(flight.getTime() + 0.25 * (daylight.getTime() - flight.getTime()), -1)
+    expect(shotSunDate(clock, 8, flight, daylight)).toEqual(flight)
+    expect(shotSunDate(clock, 30, flight, daylight)).toEqual(flight)
+    expect(shotSunDate(clock, clock.totalTime(), flight, daylight)).toEqual(daylight)
+    // « Heure du survol »: the flight's sun throughout; old projects with moveSun stay « Accéléré »
+    const still = { ...plain, sun: 'survol' } as const
+    for (const t of [0, 4, 8]) expect(shotSunDate(clockOf(still, still), t, flight, daylight)).toEqual(flight)
+    expect(shotSunDate(clockOf(moving, moving), 0, flight, daylight).getTime()).toBe(flight.getTime() - SHOT_SUN_HOURS * HOUR)
+  })
+
+  it('no time lapse without « Accéléré », outside a « Depuis la région » shot', () => {
     for (const shot of [{ style: 'situation', durationS: 8 }, { style: 'descente', durationS: 8, moveSun: true }] as const) {
       const clock = clockOf(shot, shot)
       for (const t of [0, 4, clock.totalTime()]) expect(shotSunShiftMs(clock, t)).toBe(0)

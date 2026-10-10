@@ -329,7 +329,7 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    on the marker; all off by default; ARCHITECTURE.md, "Lens"). Field of view kept fixed (too many framing
    computations depend on it). To check on a GPU (`docs/tests-gpu.md`).
 6. **Situation shot, more control**: done on the work branch (« Lieu » among the areas containing the track,
-   « Maintien » / « Plongée », « Cadrage » with « Capturer la vue actuelle », « Faire bouger le soleil »; see
+   « Maintien » / « Plongée », « Cadrage » with « Capturer la vue actuelle », « Soleil » (« Plein jour » by default since 10 October 2026, « Heure du survol », « Accéléré »); see
    ARCHITECTURE.md, "Film and timeline", Camera). To check on a GPU (`docs/tests-gpu.md`); the place list was only
    tested against a mocked Overpass.
 7. **Several tracks: « À la suite » or « En parallèle »**: done on the work branch (ARCHITECTURE.md, "Several
