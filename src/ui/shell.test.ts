@@ -15,6 +15,7 @@ import {
   shellReducer,
   shownTabs,
   SHELL_TABS,
+  tipPlacement,
 } from './shell'
 import type { ShellState } from './shell'
 
@@ -257,5 +258,28 @@ describe('settleSheet', () => {
     expect(settleSheet(0.55, -1.5)).toBe('peek')
     expect(settleSheet(0.3, -1)).toBeNull()
     expect(settleSheet(0.1, 0)).toBeNull()
+  })
+})
+
+describe('tipPlacement', () => {
+  // the inspector column of a 1440 px window, from 1140 px
+  const column = { left: 1140, top: 48, right: 1440, bottom: 876 }
+  const icon = (left: number, top: number) => ({ left, top, right: left + 14, bottom: top + 14 })
+
+  it('keeps a tip centred when it fits', () => {
+    expect(tipPlacement(icon(1283, 300), 200, 100, column)).toEqual({ shift: 0, above: false })
+  })
+
+  it('shifts a tip clipped by the column into it, on either side', () => {
+    // « Lieu » ⓘ near the left edge: centred, the tip would start 47 px out
+    expect(tipPlacement(icon(1186, 327), 200, 104, column)).toEqual({ shift: 55, above: false })
+    expect(tipPlacement(icon(1420, 327), 200, 104, column)).toEqual({ shift: -95, above: false })
+  })
+
+  it('puts it above without room below, and starts it at the left edge when wider than the room', () => {
+    expect(tipPlacement(icon(1283, 800), 200, 100, column).above).toBe(true)
+    // no room either way: stays below
+    expect(tipPlacement(icon(1283, 400), 200, 900, column).above).toBe(false)
+    expect(tipPlacement(icon(1283, 300), 400, 50, column).shift).toBe(1148 - (1290 - 200))
   })
 })

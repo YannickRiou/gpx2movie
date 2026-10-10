@@ -117,7 +117,8 @@
   z-index: 30;
   top: calc(100% + 8px);
   left: 50%;
-  transform: translateX(-50%);
+  /* shifted inside the window and its scrolling column (installTipPlacement, shell.ts) */
+  transform: translateX(calc(-50% + var(--tip-shift, 0px)));
   padding: 4px var(--space-2);
   border: 1px solid var(--color-ink-soft);
   border-radius: var(--radius-sm);
@@ -146,7 +147,10 @@
 }
 
 [data-tip-side='top']:hover::after,
-[data-tip-side='top']:focus-visible::after {
+[data-tip-side='top']:focus-visible::after,
+[data-tip-flip]:hover::after,
+[data-tip-flip]:focus-visible::after,
+[data-tip-flip]:has(input:focus-visible)::after {
   top: auto;
   bottom: calc(100% + 8px);
 }

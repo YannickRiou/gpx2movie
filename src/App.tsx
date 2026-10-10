@@ -28,6 +28,8 @@ import {
   BOTTOM_SHEET_QUERY,
   COMPACT_QUERY,
   ONE_SIDE_MAX_WIDTH,
+  SHELL_TABS,
+  installTipPlacement,
   isFileDrag,
   matchesQuery,
   nextTabIndex,
@@ -203,6 +205,8 @@ export default function App() {
   useEffect(() => installSliderGestures(getSettingsHistory()), [])
   // a project emptied of its tracks is not written over the kept one (it waits for a track)
   useEffect(() => installLibraryAutosave(() => !isExporting() && useAppStore.getState().tracks.length > 0), [])
+  useEffect(() => installTipPlacement(), [])
+  useEffect(() => installLibraryAutosave(() => !isExporting()), [])
   useEffect(() => installCloseGuard(isExporting, saveProject), [])
 
   /** a pointer button is down */
