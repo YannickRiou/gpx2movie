@@ -10,7 +10,7 @@
  * Shadow maps are enabled (PCF) but only the atmosphere's sun casts them (terrainShadow.ts). Frames are drawn on
  * demand only (`renderOnDemand.ts`).
  */
-import { Suspense, lazy, useEffect, useMemo, type CSSProperties } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import type { RootState } from '@react-three/fiber'
 import { deviceBudget } from '../core/deviceBudget'
@@ -28,6 +28,7 @@ import { Labels } from './Labels'
 import { RaceMarkers } from './RaceMarkers'
 import { RegionHighlight } from './RegionHighlight'
 import { useRenderOnDemand } from './renderOnDemand'
+import { watchTouchGesture } from './touchGesture'
 import { TerrainLayer } from './TerrainLayer'
 import { TrackLines } from './TrackLines'
 import { WaterLayer } from './WaterLayer'
@@ -68,17 +69,22 @@ export interface FlyoverCanvasProps {
   style?: CSSProperties
 }
 
-/** Pixel ratio caps of this device: [1, 2] on a computer, lower while the film plays on a phone (core/deviceBudget.ts). */
+/** Pixel ratio caps of this device: [1, 2] on a computer, lower while the view moves on a phone (core/deviceBudget.ts). */
 const BUDGET = deviceBudget()
 
-/** Phones and tablets: the lower pixel ratio while the film plays; the export sets its own. */
+/** Phones and tablets: the lower pixel ratio while the film plays or fingers move the view; the export sets its own. */
 function MovingPixelRatio() {
   const playing = useAppStore((s) => s.playback.playing)
   const exporting = useExportStore((s) => isExportBusy(s.phase))
   const setDpr = useThree((s) => s.setDpr)
+  // the orbit controls listen there too, and capture the pointer there
+  const surface = useThree((s) => (s.events.connected as EventTarget | undefined) ?? s.gl.domElement)
+  const [touching, setTouching] = useState(false)
+  useEffect(() => watchTouchGesture(surface, setTouching), [surface])
+  const moving = playing || touching
   useEffect(() => {
-    if (!exporting) setDpr([1, playing ? BUDGET.movingPixelRatio : BUDGET.maxPixelRatio])
-  }, [playing, exporting, setDpr])
+    if (!exporting) setDpr([1, moving ? BUDGET.movingPixelRatio : BUDGET.maxPixelRatio])
+  }, [moving, exporting, setDpr])
   return null
 }
 

@@ -81,6 +81,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/project/*` | project document, history, presets | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
 | `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`, `isProjectThumbnail`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import"); `webApp.ts`: `installWebApp`, pure, tested: `shouldRegisterServiceWorker`, `wantsIosInstallHint`, `sharedFileName`; `serviceWorker.js` (see "Installable web app and mobile"); `isAppleMobile`, `pickerAccept`, `touchScreen`, `SHARE_SAVE_LABEL` |
 | `src/core/deviceBudget.ts` | GPU and memory budget of the device (see "Device budget") | `deviceBudget()`, pure, tested: `budgetFor`, `readDeviceTraits`, `DESKTOP_BUDGET`, `PHONE_MAX_SHORT_SIDE`, `LOW_MEMORY_GB` |
+| `src/scene/touchGesture.ts` | fingers moving the 3D view (lower pixel ratio, see "Device budget") | tested: `watchTouchGesture`, `TOUCH_SETTLE_MS` |
 | `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefixes` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | zustand state | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` (shell); `shell.ts` (pure, tested: `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`, `settleSheet`, `BOTTOM_SHEET_QUERY`, `COMPACT_QUERY`); `SheetHandle`; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`); `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `runImport`, `loadSample`, `chainLoadedTracks`); `importFlow.ts` (import orchestration without React, tested) |
@@ -2211,7 +2212,7 @@ and short side < 600 CSS px; tablet = touch screen, larger; computer = everythin
 
 | Limit | Where | Computer | Tablet | Phone | ≤ 2 GB |
 |---|---|---|---|---|---|
-| pixel ratio cap / while playing | `FlyoverCanvas` (`dpr`, `MovingPixelRatio`) | 2 / 2 | 2 / 1.5 | 2 / 1.5 | 1.5 / 1 |
+| pixel ratio cap / while playing or touching | `FlyoverCanvas` (`dpr`, `MovingPixelRatio`) | 2 / 2 | 2 / 1.5 | 2 / 1.5 | 1.5 / 1 |
 | decoded tile bitmaps (LRU) | `createTileFetcher` | 600 | 200 | 200 | 120 |
 | height grids (256 px equivalents) | `DEFAULT_TUNING.heightCacheEntries` | 400 | 160 | 160 | 100 |
 | finest imagery (zoom offset) | `engineOptionsFromSettings` | « Très fin » (2) | « Fin » (1) | « Fin » (1) | « Fin » |
@@ -2221,5 +2222,9 @@ and short side < 600 CSS px; tablet = touch screen, larger; computer = everythin
 
 « Nappe » is one draw call, no ray march: far cheaper than the volumetric sea. Lens effects stay off by default (as on
 a computer). A larger export class comes out at the cap (`videoSize`), with `exportResolutionNote` to show next to the
-choice. Verified in headless Chromium: iPhone 15 emulation (DPR 3) draws at 2, 1.5 while playing, 2 again on pause;
-a desktop viewport at DPR 2 stays at 2. Not measured: memory and frame time on a real phone.
+choice. "Touching" = fingers moving the 3D view (`watchTouchGesture`, `scene/touchGesture.ts`: a finger past 6 px, a tap
+does not count), until 400 ms after the last one lifts (the controls' damping; a new touch in between keeps the lower
+ratio, so one drop and one return per gesture); the mouse never changes it. Verified in headless Chromium: iPhone 15
+emulation (DPR 3) draws at 2, 1.5 while playing, 2 again on pause; 1.5 during a one-finger orbit and a pinch, 2 again
+after release, one change each way, a tap changes nothing; a desktop viewport at DPR 2 stays at 2, mouse drag
+included. Not measured: memory and frame time on a real phone.
