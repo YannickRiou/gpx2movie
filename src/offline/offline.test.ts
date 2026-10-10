@@ -8,7 +8,7 @@ import { createDailyQuota, MAX_FAILURES_IN_A_ROW, startPackDownload } from './do
 import type { DownloadProgress } from './download'
 import { createPackRegistry, createStoredTileReader, packIdFor, sourcePrefixes } from './packs'
 import type { PackInfo } from './packs'
-import { LANDSCAPE_LEVELS, planOfflineTiles, splitDistanceM } from './plan'
+import { LANDSCAPE_LEVELS, packImageryLevel, planOfflineTiles, splitDistanceM } from './plan'
 import type { OfflinePlanInput, PlannedTile } from './plan'
 import { offlinePolicy } from './policy'
 
@@ -128,6 +128,15 @@ describe('planOfflineTiles', () => {
     // EOX stops at 16: deeper terrain tiles reuse (crop) the same imagery tiles
     const eox = planOfflineTiles(input({ imagery: getImagerySource('eox-s2cloudless'), imageryZoomOffset: 2 }))
     expect(eox.imageryTiles).toBeLessThan(eox.terrainTiles * 16)
+  })
+
+  it('plans the imagery no finer than the device shows, and says so', () => {
+    // a phone shows « Fin » at most
+    expect(packImageryLevel(2, 1)).toEqual({ zoomOffset: 1, note: 'Imagerie au niveau « Fin » : cet appareil n’affiche pas le niveau « Très fin ».' })
+    expect(packImageryLevel(1, 1)).toEqual({ zoomOffset: 1, note: null })
+    expect(packImageryLevel(0, 1)).toEqual({ zoomOffset: 0, note: null })
+    // a computer: the setting as it is
+    expect(packImageryLevel(2)).toEqual({ zoomOffset: 2, note: null })
   })
 
   it('plans the relief only without imagery, with an estimate from the typical tile sizes', () => {

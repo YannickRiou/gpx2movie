@@ -3,7 +3,7 @@ import { useId, useMemo, useState } from 'react'
 import { trackPathOf } from '../flyover/path'
 import { autoDistanceM } from '../flyover/camera'
 import { offlinePolicy } from '../offline/policy'
-import { CORRIDOR_WIDTHS_M, MAX_PACK_TILES, planOfflineTiles } from '../offline/plan'
+import { CORRIDOR_WIDTHS_M, MAX_PACK_TILES, packImageryLevel, planOfflineTiles } from '../offline/plan'
 import { cancelPack, deletePack, pausePack, preparePack, resumePack, useOfflineStore } from '../offline/store'
 import { getPlatform } from '../platform'
 import { useAppStore } from '../state/store'
@@ -33,6 +33,7 @@ export function OfflinePanel() {
   const imagery = getImagerySource(imagerySourceId)
   const terrainPolicy = offlinePolicy(terrain.id)
   const imageryPolicy = offlinePolicy(imagery.id)
+  const imageryLevel = packImageryLevel(imageryZoomOffset)
 
   const plan = useMemo(() => {
     if (!bounds || tracks.length === 0 || !terrainPolicy.allowed) return null
@@ -44,10 +45,10 @@ export function OfflinePanel() {
       corridorM,
       terrain,
       imagery: imageryPolicy.allowed ? imagery : null,
-      imageryZoomOffset,
+      imageryZoomOffset: imageryLevel.zoomOffset,
       cameraHeightM: distanceM * Math.sin((camera.pitchDeg * Math.PI) / 180),
     })
-  }, [tracks, bounds, corridorM, terrain, imagery, imageryZoomOffset, camera.distance, camera.pitchDeg, terrainPolicy.allowed, imageryPolicy.allowed])
+  }, [tracks, bounds, corridorM, terrain, imagery, imageryLevel.zoomOffset, camera.distance, camera.pitchDeg, terrainPolicy.allowed, imageryPolicy.allowed])
 
   const tooBig = plan !== null && plan.tiles.length > MAX_PACK_TILES
 
@@ -120,6 +121,7 @@ export function OfflinePanel() {
             <p className="field__hint">
               Estimation : {formatNumber(plan.tiles.length)} tuiles, environ {formatSize(plan.estimatedBytes)} (détail fin
               jusqu’au niveau {plan.maxTerrainZoom}, pour une vidéo 1080p).
+              {imageryPolicy.allowed && imageryLevel.note && ` ${imageryLevel.note}`}
               {tooBig && ' Trop de tuiles : choisissez un couloir plus étroit.'}
             </p>
           )}

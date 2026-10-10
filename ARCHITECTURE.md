@@ -82,7 +82,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`, `isProjectThumbnail`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import"); `webApp.ts`: `installWebApp`, pure, tested: `shouldRegisterServiceWorker`, `wantsIosInstallHint`, `sharedFileName`; `serviceWorker.js` (see "Installable web app and mobile"); `isAppleMobile`, `pickerAccept`, `touchScreen`, `SHARE_SAVE_LABEL` |
 | `src/core/deviceBudget.ts` | GPU and memory budget of the device (see "Device budget") | `deviceBudget()`, pure, tested: `budgetFor`, `readDeviceTraits`, `DESKTOP_BUDGET`, `PHONE_MAX_SHORT_SIDE`, `LOW_MEMORY_GB` |
 | `src/scene/touchGesture.ts` | fingers moving the 3D view (lower pixel ratio, see "Device budget") | tested: `watchTouchGesture`, `TOUCH_SETTLE_MS` |
-| `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefixes` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
+| `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `packImageryLevel`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefixes` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | zustand state | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` (shell); `shell.ts` (pure, tested: `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`, `settleSheet`, `BOTTOM_SHEET_QUERY`, `COMPACT_QUERY`); `SheetHandle`; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`); `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `runImport`, `loadSample`, `chainLoadedTracks`); `importFlow.ts` (import orchestration without React, tested) |
 
@@ -2100,7 +2100,8 @@ of a flyover of the loaded tracks; the view and the export then read them withou
   roots over the whole area (the distant landscape), deeper only the children of the tiles that touch the
   corridor (2, 5 or 10 km wide, centered on the track). Outside the corridor the engine keeps the pack's coarser
   level (replacement waits for the four children, hence whole sets of children). Imagery: `planImagerySubtiles` of
-  each terrain tile, same zoom offset as the view (cropping beyond the source's max zoom). Estimate
+  each terrain tile, same zoom offset as the view (cropping beyond the source's max zoom), so never finer than the
+  device shows (`packImageryLevel`: « Fin » on a phone or tablet, said in the estimate). Estimate
   = number of tiles × average size measured per source (`policy.ts`). Order of magnitude, straight 20 km track in
   the Alps, Mapterhorn + IGN, offset 1, h = 400 m: 2 km → 10,500 tiles, ~450 MB; 5 km → 22,000, ~930 MB;
   10 km → 28,000, ~1.2 GB (Mapterhorn: ~150 KB per 512 px tile). Beyond 150,000 tiles, refused. Not in the
@@ -2215,7 +2216,7 @@ and short side < 600 CSS px; tablet = touch screen, larger; computer = everythin
 | pixel ratio cap / while playing or touching | `FlyoverCanvas` (`dpr`, `MovingPixelRatio`) | 2 / 2 | 2 / 1.5 | 2 / 1.5 | 1.5 / 1 |
 | decoded tile bitmaps (LRU) | `createTileFetcher` | 600 | 200 | 200 | 120 |
 | height grids (256 px equivalents) | `DEFAULT_TUNING.heightCacheEntries` | 400 | 160 | 160 | 100 |
-| finest imagery (zoom offset) | `engineOptionsFromSettings` | « Très fin » (2) | « Fin » (1) | « Fin » (1) | « Fin » |
+| finest imagery (zoom offset) | `engineOptionsFromSettings`, offline packs (`packImageryLevel`) | « Très fin » (2) | « Fin » (1) | « Fin » (1) | « Fin » |
 | preview clouds: resolution, still frames | `CloudsLayer`, `CLOUD_SETTLE_FRAMES` | 1, 32 | 0.5, 16 | 0.5, 16 | 0.5, 16 |
 | sea of clouds by default | `DEFAULT_CLOUDS.seaRender` | volume | « Nappe » | « Nappe » | « Nappe » |
 | export short side | `videoSize` | 2160 (4K) | 1440 | 1080 | as the device |

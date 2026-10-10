@@ -10,6 +10,8 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
 - **Flyover camera**: smooth on long, fast or sparsely recorded tracks (a 540 km raid in 4 min 30 s no longer swings
   around the marker nor jolts at each corner): heading, aim and height smoothed at the film's ground speed.
 - **Phones, follow-ups**: lower pixel ratio while fingers move the 3D view.
+- **Phones, follow-ups**: lower pixel ratio while fingers move the 3D view; offline packs no finer than the phone
+  shows.
 - **Situation shot**: « Soleil » › « Plein jour » (default) lights the region view in daylight whatever the time of
   the outing, then joins the flight's sun; « Heure du survol » and « Accéléré » (the former « Faire bouger le soleil »).
 - **Timeline**: a narrow block (a 4 s stop on a phone) pressed in its middle is moved, no longer stretched by its edge.
