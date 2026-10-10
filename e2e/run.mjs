@@ -55,6 +55,9 @@ const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`
 
 // ---------------------------------------------------------------------------------------------------- helpers
 
+/** The tabs of the side panel, in the order of the rail (SHELL_TABS in src/ui/shell.ts). */
+const TABS = ['trace', 'carte', 'meteo', 'lumiere', 'survol', 'objectif', 'habillage', 'projet']
+
 /** Waits until `fn` (run in the page) returns a truthy value. */
 const until = (page, fn, arg, timeout = STEP_MS) => page.waitForFunction(fn, { timeout, polling: 250 }, arg)
 
@@ -159,7 +162,9 @@ const SCENARIOS = [
     id: 'onglets',
     title: 'Onglets du rail et aide des raccourcis',
     async run({ page }) {
-      for (const tab of ['trace', 'carte', 'survol', 'habillage', 'projet']) {
+      const shown = await page.$$eval('.rail [role="tab"]', (tabs) => tabs.map((t) => t.id.replace('tab-', '')))
+      assert(shown.join() === TABS.join(), `onglets du rail : ${shown.join(', ')}`)
+      for (const tab of TABS) {
         const open = await page.evaluate(
           (t) => document.getElementById(`tab-${t}`)?.getAttribute('aria-selected') === 'true' && !document.getElementById('side-panel')?.hidden,
           tab,
@@ -185,6 +190,40 @@ const SCENARIOS = [
       await page.waitForSelector('dialog.help[open]', { visible: true, timeout: STEP_MS })
       await page.keyboard.press('Escape')
       await until(page, () => !document.querySelector('dialog.help[open]'))
+    },
+  },
+  {
+    id: 'reglage-repli',
+    title: 'Réglage replié (onglet Lumière) : nom et valeur, curseur au clavier, Par défaut',
+    async run({ page }) {
+      if (await page.evaluate(() => document.getElementById('tab-lumiere')?.getAttribute('aria-selected') !== 'true')) {
+        await page.click('#tab-lumiere')
+      }
+      const head = '#tab-panel-lumiere .setting-row__head::-p-text(Exposition)'
+      const rowState = () =>
+        page.evaluate(() => {
+          const button = [...document.querySelectorAll('#tab-panel-lumiere .setting-row__head')].find((b) => b.textContent.startsWith('Exposition'))
+          const body = button && document.getElementById(button.getAttribute('aria-controls'))
+          return button && { expanded: button.getAttribute('aria-expanded'), value: button.querySelector('.setting-row__value').textContent, hidden: body.hidden }
+        })
+      const before = await rowState()
+      assert(before && before.expanded === 'false' && before.hidden && before.value.startsWith('0'), `ligne Exposition au départ : ${JSON.stringify(before)}`)
+      // pressed: the slider shows under the row and takes the focus; the arrows move it, the row says the new value
+      await page.click(head)
+      await until(page, () => document.activeElement?.matches('#tab-panel-lumiere .setting-row__body input[type="range"]'))
+      await page.keyboard.press('ArrowRight')
+      await until(page, () => document.querySelector('#tab-panel-lumiere .setting-row__value--modified')?.textContent.startsWith('+0,5'))
+      // the section's « Par défaut » puts it back
+      await page.click('#tab-panel-lumiere button[aria-label="Rétablir les réglages par défaut : Atmosphère"]')
+      await until(page, () => !document.querySelector('#tab-panel-lumiere .setting-row__value--modified'))
+      // Enter on the row folds it again
+      await page.evaluate(() =>
+        [...document.querySelectorAll('#tab-panel-lumiere .setting-row__head')].find((b) => b.textContent.startsWith('Exposition')).focus(),
+      )
+      await page.keyboard.press('Enter')
+      const after = await rowState()
+      assert(after.expanded === 'false' && after.hidden && after.value === before.value, `ligne Exposition à la fin : ${JSON.stringify(after)}`)
+      await blur(page)
     },
   },
   {
@@ -333,7 +372,7 @@ const SCENARIOS = [
   },
   {
     id: 'mobile',
-    title: 'Téléphone (390 × 844, tactile) : exemple, deux onglets en feuille, un réglage, la feuille d’export',
+    title: 'Téléphone (390 × 844, tactile) : exemple, onglets en feuille dans une barre qui défile, un réglage, la feuille d’export',
     async run({ url, newPage }) {
       // its own page: switching an open page to touch emulation reloads it
       const page = await newPage()
@@ -357,10 +396,23 @@ const SCENARIOS = [
             },
             selector,
           )
-        for (const tab of ['carte', 'survol']) {
+        // the eight tabs do not fit: the bar scrolls, and the open tab is brought into sight
+        assert(await page.evaluate(() => {
+          const bar = document.querySelector('.rail__tabs')
+          return bar.scrollWidth > bar.clientWidth
+        }), 'la barre d’onglets ne défile pas')
+        for (const tab of ['carte', 'projet', 'survol']) {
           await tap(`#tab-${tab}`)
           await until(page, (t) => !document.getElementById(`tab-panel-${t}`)?.hidden, tab)
           await isBottomSheet('#side-panel')
+          await until(
+            page,
+            (t) => {
+              const r = document.getElementById(`tab-${t}`).getBoundingClientRect()
+              return r.left >= 0 && r.right <= innerWidth && r.height >= 44
+            },
+            tab,
+          )
         }
         await tap('#tab-panel-survol label:has(input[value="Oiseau"])')
         await until(page, () => document.querySelector('#tab-panel-survol input[value="Oiseau"]')?.checked === true)

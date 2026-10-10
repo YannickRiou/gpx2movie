@@ -4,7 +4,10 @@ import { KM_MARKER_STEPS, LABEL_RANGE_KM, LABEL_SIZE_RANGE } from '../scene/labe
 import { useFilmTrack } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { formatAscent, formatDistance, formatNumber } from './format'
-import { RangeField } from './PanelSection'
+import { RangeField, SettingRow } from './PanelSection'
+
+/** 0 -> "Aucune", 1 -> "Tous les kilomètres", 5 -> "Tous les 5 km" */
+const kmStepLabel = (step: number) => (step === 0 ? 'Aucune' : step === 1 ? 'Tous les kilomètres' : `Tous les ${step} km`)
 
 /** « Montées » section: climbs detected on the film track (the first one, or the tracks « À la suite »; click = seek the flyover) and the label toggles. */
 export function ClimbList() {
@@ -82,6 +85,8 @@ export function ClimbList() {
           <input type="checkbox" checked={labels.photos} onChange={(e) => setSetting('labels', { ...labels, photos: e.currentTarget.checked })} />
           Photos, là où elles ont été prises
         </label>
+      </fieldset>
+      <SettingRow label="Bornes kilométriques" value={kmStepLabel(labels.kmStep)} paths={['labels.kmStep']}>
         <label className="field">
           <span className="field__label">Bornes kilométriques</span>
           <select
@@ -91,11 +96,13 @@ export function ClimbList() {
           >
             {KM_MARKER_STEPS.map((step) => (
               <option key={step} value={step}>
-                {step === 0 ? 'Aucune' : step === 1 ? 'Tous les kilomètres' : `Tous les ${step} km`}
+                {kmStepLabel(step)}
               </option>
             ))}
           </select>
         </label>
+      </SettingRow>
+      <SettingRow label="Taille des étiquettes" value={`×${formatNumber(labels.size, 1)}`} paths={['labels.size']}>
         <RangeField
           label="Taille"
           {...LABEL_SIZE_RANGE}
@@ -103,6 +110,8 @@ export function ClimbList() {
           format={(v) => `×${formatNumber(v, 1)}`}
           onChange={(size) => setSetting('labels', { ...labels, size })}
         />
+      </SettingRow>
+      <SettingRow label="Portée des étiquettes" value={`${formatNumber(labels.rangeKm)} km`} paths={['labels.rangeKm']}>
         <RangeField
           label="Portée"
           {...LABEL_RANGE_KM}
@@ -110,7 +119,7 @@ export function ClimbList() {
           format={(v) => `${formatNumber(v)} km`}
           onChange={(rangeKm) => setSetting('labels', { ...labels, rangeKm })}
         />
-      </fieldset>
+      </SettingRow>
     </section>
   )
 }

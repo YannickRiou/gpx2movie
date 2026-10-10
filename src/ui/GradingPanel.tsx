@@ -3,7 +3,7 @@ import { getSettingsHistory } from '../project/history'
 import { GRADING_PRESETS, GRADING_RANGES, gradingOfPreset, withGradingValue } from '../scene/grading'
 import type { GradingValues } from '../scene/grading'
 import { useAppStore } from '../state/store'
-import { InfoTip, MoreSettings, PanelSection } from './PanelSection'
+import { InfoTip, PanelSection, SettingRow } from './PanelSection'
 import { formatNumber } from './format'
 
 const SLIDERS: { key: keyof GradingValues; label: string; tip?: string }[] = [
@@ -20,8 +20,8 @@ function formatSigned(v: number): string {
 }
 
 /**
- * « Couleurs » (section of the Carte tab): colour grading of the image, preview and export alike. Preset chips
- * first (one undo step each), the four sliders under « Plus de réglages ».
+ * « Couleurs » (section of the Lumière tab): colour grading of the image, preview and export alike. Preset chips
+ * first (one undo step each), then the four sliders, one row each (name and value, slider on demand).
  */
 export function GradingPanel() {
   const id = useId()
@@ -50,13 +50,13 @@ export function GradingPanel() {
         {grading.preset === 'personnalise' && <p className="field__hint">Réglage personnalisé.</p>}
       </div>
 
-      <MoreSettings paths={['grading.contrast', 'grading.saturation', 'grading.warmth', 'grading.vignette']}>
-        {SLIDERS.map(({ key, label, tip }) => {
-          const range = GRADING_RANGES[key]
-          const inputId = `${id}-${key}`
-          const text = key === 'vignette' ? `${formatNumber(Math.round(grading[key] * 100))} %` : formatSigned(grading[key])
-          return (
-            <div className="field" key={key}>
+      {SLIDERS.map(({ key, label, tip }) => {
+        const range = GRADING_RANGES[key]
+        const inputId = `${id}-${key}`
+        const text = key === 'vignette' ? `${formatNumber(Math.round(grading[key] * 100))} %` : formatSigned(grading[key])
+        return (
+          <SettingRow key={key} label={label} value={text} paths={[`grading.${key}`]}>
+            <div className="field">
               <div className="field__label-row">
                 <label className="field__label" htmlFor={inputId}>
                   {label}
@@ -80,9 +80,9 @@ export function GradingPanel() {
                 </output>
               </div>
             </div>
-          )
-        })}
-      </MoreSettings>
+          </SettingRow>
+        )
+      })}
     </PanelSection>
   )
 }

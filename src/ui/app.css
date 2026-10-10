@@ -1393,63 +1393,100 @@
 }
 
 /* ==========================================================================
- * Carte et Survol : sections repliables, « Plus de réglages », ⓘ, journée du soleil, moments, tuiles de style
+ * Panel tabs: foldable sections, setting rows, ⓘ, day of the sun, moments, style tiles
  * ========================================================================== */
-.panel-section__body {
+.panel-section__body,
+.panel-section__body > section {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-.more-settings {
+/* a secondary setting (SettingRow): name and value on one line, a list of rows separated by rules; its control unfolds under it */
+.setting-row {
   border-top: 1px solid var(--line);
 }
 
-.more-settings__summary {
+.setting-row + .setting-row {
+  margin-top: calc(-1 * var(--space-3));
+}
+
+.setting-row__head {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  width: 100%;
   min-height: var(--control-h);
-  padding-top: var(--space-2);
-  color: var(--text-2);
+  padding: var(--space-2) 0;
+  border: 0;
+  background: none;
+  color: var(--text-1);
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
-  list-style: none;
+  text-align: left;
   cursor: pointer;
 }
 
-.more-settings__summary::-webkit-details-marker {
-  display: none;
-}
-
-.more-settings[open] > .more-settings__summary {
-  color: var(--text-1);
-}
-
-@media (hover: hover) {
-  .more-settings__summary:hover {
-    color: var(--text-1);
-  }
-}
-
-.more-settings__summary:focus-visible {
+.setting-row__head:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
-.more-settings__label {
+.setting-row__label {
   flex: 1 1 auto;
+  min-width: 0;
 }
 
-.more-settings:not([open]) > .more-settings__summary > .icon:last-child {
+.setting-row__value {
+  max-width: 55%;
+  overflow: hidden;
+  color: var(--text-2);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* departs from the default (the section's « modifié / Par défaut » resets it) */
+.setting-row__value--modified {
+  color: var(--text-1);
+  font-weight: 700;
+}
+
+.setting-row__head > .icon {
+  flex: none;
+  color: var(--text-2);
   transform: rotate(-90deg);
 }
 
-.more-settings__body {
+.setting-row__head[aria-expanded='true'] > .icon {
+  transform: none;
+}
+
+@media (hover: hover) {
+  .setting-row__head:hover > .setting-row__value,
+  .setting-row__head:hover > .icon {
+    color: var(--text-1);
+  }
+}
+
+.setting-row__body {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  margin-top: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+/* the row names its setting: a lone field does not repeat its plain label (screen readers still get it) */
+.setting-row__body > .field:only-child > .field__label,
+.setting-row__body > .fieldset:only-child > legend.field__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* label + ⓘ on one line */
@@ -1603,15 +1640,42 @@
 }
 
 /* « Plus de préréglages »: the folded presets, right under the main grid */
-.preset-more {
-  border-top: 0;
+.preset-more__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
 }
 
-.preset-more > .more-settings__summary {
-  padding-top: 0;
+.preset-more__summary::-webkit-details-marker {
+  display: none;
 }
 
-.preset-more:not([open]) > .more-settings__summary > .icon:last-child {
+.preset-more[open] > .preset-more__summary {
+  color: var(--text-1);
+}
+
+@media (hover: hover) {
+  .preset-more__summary:hover {
+    color: var(--text-1);
+  }
+}
+
+.preset-more__summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.preset-more__label {
+  flex: 1 1 auto;
+}
+
+.preset-more:not([open]) > .preset-more__summary > .icon:last-child {
   transform: rotate(-90deg);
 }
 

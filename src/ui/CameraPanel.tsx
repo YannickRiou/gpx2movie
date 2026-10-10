@@ -20,8 +20,7 @@ import { formatDegrees, formatDistance, formatNumber, formatPercent, formatSecon
 import { HighlightsPanel } from './HighlightsPanel'
 import { Icon } from './icons'
 import type { IconName } from './icons'
-import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
-import { TrackMarkerSection } from './TrackMarkerSection'
+import { InfoTip, PanelSection, RangeField, SettingRow } from './PanelSection'
 import { useRegionStore } from '../osm/region'
 import type { RegionStatus } from '../osm/region'
 
@@ -140,6 +139,12 @@ const PACING_SLIDERS: PacingSlider[] = [
   { key: 'pauseS', label: 'Pause aux temps forts', format: (v) => (v === 0 ? 'Aucune' : `${formatNumber(v, 1)} s`) },
 ]
 
+/** What « Ralentir aux temps forts » slows down on, in a few words. */
+function slowOnLabel(pacing: PacingSettings): string {
+  if (pacing.climbs && pacing.landmarks) return 'Montées et repères'
+  return pacing.climbs ? 'Montées' : pacing.landmarks ? 'Repères' : 'Rien'
+}
+
 /** One-line description of each style (hint under the preset tiles). */
 const STYLE_HINTS: Record<CameraStyle, string> = {
   chase: 'Derrière le marqueur, dans la direction du trajet.',
@@ -192,9 +197,9 @@ function SituationShotSwitches() {
 }
 
 /**
- * « Survol » tab: sections Caméra (preset tiles; style and fine parameters under « Plus de réglages ») and Durée et rythme
- * (flyover duration, situation shots of the opening and closing, slow-downs on/off; their details under « Plus de
- * réglages »).
+ * « Survol » tab: sections Caméra (preset tiles; style and fine parameters as rows), Durée et rythme (flyover duration,
+ * situation shots of the opening and closing, slow-downs on/off; their details as rows) and Temps forts. A row shows a
+ * setting's name and value, its control on demand.
  */
 export function CameraPanel() {
   const camera = useAppStore((s) => s.settings.camera)
@@ -243,9 +248,9 @@ export function CameraPanel() {
               </label>
             )}
           </div>
-          <details className="more-settings preset-more">
-            <summary className="more-settings__summary">
-              <span className="more-settings__label">Plus de préréglages</span>
+          <details className="preset-more">
+            <summary className="preset-more__summary">
+              <span className="preset-more__label">Plus de préréglages</span>
               <Icon name="chevron-down" size={16} />
             </summary>
             <div className="style-tiles">{morePresets.map(presetTile)}</div>
@@ -267,19 +272,7 @@ export function CameraPanel() {
           </label>
         )}
 
-        <MoreSettings
-          paths={[
-            'camera.style',
-            'camera.distance',
-            'camera.pitchDeg',
-            'camera.headingOffsetDeg',
-            'camera.smoothing',
-            'camera.turnSmoothingM',
-            'camera.aimSmoothingS',
-            'camera.cameraSmoothingS',
-            'camera.endingS',
-          ]}
-        >
+        <SettingRow label="Style" value={CAMERA_STYLE_LABELS[camera.style]} paths={['camera.style']}>
           <div className="field">
             <label className="field__label" htmlFor={`${id}-style`}>
               Style
@@ -298,12 +291,14 @@ export function CameraPanel() {
               ))}
             </select>
           </div>
-          {SLIDERS.map(({ key, label, tip, format }) => {
-            const range = CAMERA_RANGES[key]
-            const inputId = `${id}-${key}`
-            const value = format(camera[key], autoTurnM)
-            return (
-              <div key={key} className="field">
+        </SettingRow>
+        {SLIDERS.map(({ key, label, tip, format }) => {
+          const range = CAMERA_RANGES[key]
+          const inputId = `${id}-${key}`
+          const value = format(camera[key], autoTurnM)
+          return (
+            <SettingRow key={key} label={label} value={value} paths={[`camera.${key}`]}>
+              <div className="field">
                 <div className="field__label-row">
                   <label className="field__label" htmlFor={inputId}>
                     {label}
@@ -327,9 +322,9 @@ export function CameraPanel() {
                   </output>
                 </div>
               </div>
-            )
-          })}
-        </MoreSettings>
+            </SettingRow>
+          )
+        })}
 
         <button type="button" className="btn btn--secondary" onClick={keepFraming} disabled={lengthM <= 0} aria-describedby={`${id}-key-hint`}>
           Garder ce cadrage ici
@@ -380,19 +375,9 @@ export function CameraPanel() {
           <InfoTip text="Temps forts : sommets des montées, cols franchis et sommets proches de la trace." />
         </div>
 
-        <MoreSettings
-          paths={[
-            'pacing.climbs',
-            'pacing.landmarks',
-            'pacing.slowFactor',
-            'pacing.windowM',
-            'pacing.pauseS',
-            'pacing.keepDuration',
-            'pacing.transitionS',
-          ]}
-        >
-          {pacing.enabled && (
-            <>
+        {pacing.enabled && (
+          <>
+            <SettingRow label="Ralentir sur" value={slowOnLabel(pacing)} paths={['pacing.climbs', 'pacing.landmarks']}>
               <fieldset className="field fieldset">
                 <legend className="field__label">Ralentir sur</legend>
                 <label className="checkbox">
@@ -404,12 +389,14 @@ export function CameraPanel() {
                   Repères (cols, sommets)
                 </label>
               </fieldset>
+            </SettingRow>
 
-              {PACING_SLIDERS.map(({ key, label, format, spoken = format }) => {
-                const range = PACING_RANGES[key]
-                const inputId = `${id}-pacing-${key}`
-                return (
-                  <div key={key} className="field">
+            {PACING_SLIDERS.map(({ key, label, format, spoken = format }) => {
+              const range = PACING_RANGES[key]
+              const inputId = `${id}-pacing-${key}`
+              return (
+                <SettingRow key={key} label={label} value={format(pacing[key])} paths={[`pacing.${key}`]}>
+                  <div className="field">
                     <label className="field__label" htmlFor={inputId}>
                       {label}
                     </label>
@@ -430,9 +417,11 @@ export function CameraPanel() {
                       </output>
                     </div>
                   </div>
-                )
-              })}
+                </SettingRow>
+              )
+            })}
 
+            <SettingRow label="Garder la durée du survol" value={pacing.keepDuration ? 'Oui' : 'Non'} paths={['pacing.keepDuration']}>
               <label className="checkbox">
                 <input
                   type="checkbox"
@@ -442,9 +431,11 @@ export function CameraPanel() {
                 Garder la durée du survol
               </label>
               <p className="field__hint">Le reste du trajet accélère pour compenser ralentis et pauses.</p>
-            </>
-          )}
+            </SettingRow>
+          </>
+        )}
 
+        <SettingRow label="Transitions" value={formatSecondsShort(pacing.transitionS)} paths={['pacing.transitionS']}>
           <RangeField
             label="Transitions"
             tip="Durée des changements de vitesse : entrée et sortie des arrêts, des pauses et des portions de vitesse."
@@ -453,12 +444,10 @@ export function CameraPanel() {
             format={formatSecondsShort}
             onChange={(transitionS) => updatePacing({ transitionS })}
           />
-        </MoreSettings>
+        </SettingRow>
       </PanelSection>
 
       <HighlightsPanel />
-
-      <TrackMarkerSection />
     </>
   )
 }

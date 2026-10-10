@@ -1,16 +1,13 @@
 import { useId, useMemo, useState } from 'react'
 import { SUN_CHIP_LABELS, SUN_CHIPS, SUN_HOUR_RANGE, clockHourOfSolar, solarDay, sunChipHour, sunDayMs } from '../flyover/sun'
 import type { SolarDay } from '../flyover/sun'
-import { TRACK_COLOR_MODES, TRACK_METRICS, hasMetric } from '../flyover/trackColor'
 import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
 import type { Settings } from '../state/store'
 import { IMAGERY_SOURCES, TERRAIN_SOURCES } from '../terrain/sources'
 import { CLOUD_ALTITUDE_RANGE, SEA_TOP_RANGE, seaTopFor, type CloudMode, type CloudQuality, type SeaRender } from '../weather/sceneClouds'
 import { useWeatherStore } from '../weather/store'
-import { GradingPanel } from './GradingPanel'
-import { LensPanel } from './LensPanel'
-import { InfoTip, MoreSettings, PanelSection, RangeField } from './PanelSection'
+import { InfoTip, PanelSection, RangeField, SettingRow } from './PanelSection'
 import { formatNumber, formatPercent } from './format'
 
 const ZOOM_OFFSETS: { value: Settings['imageryZoomOffset']; label: string }[] = [
@@ -29,8 +26,6 @@ const EXPOSURE_EV_STEP = 0.5
 
 const WEATHER_STRENGTH_STEP = 0.05
 
-/** 0.75 -> "75 %" */
-
 /** 0.5 -> "+0,5 IL" */
 function formatEv(ev: number): string {
   return `${ev > 0 ? '+' : ev < 0 ? '−' : ''}${formatNumber(Math.abs(ev), 1)} IL`
@@ -40,6 +35,12 @@ function formatEv(ev: number): string {
 function formatHour(hour: number): string {
   const minutes = Math.round(hour * 60)
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`
+}
+
+/** "2024-07-14" -> "14 juil. 2024" */
+function formatDay(date: string): string {
+  const ms = Date.parse(`${date}T12:00:00Z`)
+  return Number.isNaN(ms) ? date : new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 
 /** Day used for the chips and the day bar before a track is loaded. */
@@ -177,26 +178,6 @@ function SunTimeControl() {
           <p id={`${id}-sun-day`} className="field__hint">
             {dayHint}
           </p>
-          <div className="field__label-row">
-            <label className="field__label" htmlFor={`${id}-sun-date`}>
-              Jour
-            </label>
-            <InfoTip text="Vide : le jour de la sortie (aujourd’hui pour une trace sans heure). Une autre saison change la hauteur du soleil et l’heure du lever." />
-          </div>
-          <div className="sun-date">
-            <input
-              id={`${id}-sun-date`}
-              className="input"
-              type="date"
-              value={sunDate}
-              onChange={(e) => setSetting('sunDate', e.currentTarget.value)}
-            />
-            {sunDate && (
-              <button type="button" className="btn btn--secondary" onClick={() => setSetting('sunDate', '')}>
-                Jour de la sortie
-              </button>
-            )}
-          </div>
           <div className="sun-chips" role="group" aria-label="Moments de la journée">
             {SUN_CHIPS.map((chip) => {
               const hour = sunChipHour(chip, shown)
@@ -216,6 +197,33 @@ function SunTimeControl() {
             })}
           </div>
         </div>
+      )}
+
+      {!follows && (
+        <SettingRow label="Jour" value={sunDate ? formatDay(sunDate) : 'Jour de la sortie'} paths={['sunDate']}>
+          <div className="field">
+            <div className="field__label-row">
+              <label className="field__label" htmlFor={`${id}-sun-date`}>
+                Jour
+              </label>
+              <InfoTip text="Vide : le jour de la sortie (aujourd’hui pour une trace sans heure). Une autre saison change la hauteur du soleil et l’heure du lever." />
+            </div>
+            <div className="sun-date">
+              <input
+                id={`${id}-sun-date`}
+                className="input"
+                type="date"
+                value={sunDate}
+                onChange={(e) => setSetting('sunDate', e.currentTarget.value)}
+              />
+              {sunDate && (
+                <button type="button" className="btn btn--secondary" onClick={() => setSetting('sunDate', '')}>
+                  Jour de la sortie
+                </button>
+              )}
+            </div>
+          </div>
+        </SettingRow>
       )}
     </>
   )
@@ -250,7 +258,8 @@ function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
   return (
     <>
       <fieldset className="field fieldset">
-        <legend className="field__label">Nuages</legend>
+        {/* the section is titled « Nuages » */}
+        <legend className="visually-hidden">Nuages</legend>
         <div className="segmented">
           {CLOUD_MODE_OPTIONS.map((option) => (
             <label key={option.value} className="segmented__option">
@@ -307,41 +316,54 @@ function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
       )}
 
       {clouds.mode === 'mer' && (
-        <fieldset className="field fieldset">
-          <legend className="field__label">Rendu de la mer de nuages</legend>
-          <div className="segmented">
-            {SEA_RENDER_OPTIONS.map((option) => (
-              <label key={option.value} className="segmented__option">
-                <input
-                  type="radio"
-                  name={`${id}-sea-render`}
-                  checked={clouds.seaRender === option.value}
-                  onChange={() => set({ seaRender: option.value })}
-                />
-                {option.label}
-              </label>
-            ))}
-          </div>
-          <p className="field__hint">
-            {clouds.seaRender === 'surface'
-              ? 'Une nappe de nuages éclairée, sans grain, plus légère à calculer.'
-              : 'Des nuages en volume, plus coûteux.'}
-          </p>
-        </fieldset>
+        <SettingRow
+          label="Rendu de la mer de nuages"
+          value={SEA_RENDER_OPTIONS.find((o) => o.value === clouds.seaRender)?.label}
+          paths={['clouds.seaRender']}
+        >
+          <fieldset className="field fieldset">
+            <legend className="field__label">Rendu de la mer de nuages</legend>
+            <div className="segmented">
+              {SEA_RENDER_OPTIONS.map((option) => (
+                <label key={option.value} className="segmented__option">
+                  <input
+                    type="radio"
+                    name={`${id}-sea-render`}
+                    checked={clouds.seaRender === option.value}
+                    onChange={() => set({ seaRender: option.value })}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            <p className="field__hint">
+              {clouds.seaRender === 'surface'
+                ? 'Une nappe de nuages éclairée, sans grain, plus légère à calculer.'
+                : 'Des nuages en volume, plus coûteux.'}
+            </p>
+          </fieldset>
+        </SettingRow>
+      )}
+
+      {clouds.mode !== 'aucun' && clouds.mode !== 'mer' && (
+        <SettingRow label="Base des nuages bas" value={`${formatNumber(clouds.altitudeM)} m`} paths={['clouds.altitudeM']}>
+          <RangeField
+            label="Base des nuages bas"
+            tip="Hauteur au-dessus du point le plus bas de la trace. Les nuages moyens sont 2 km plus haut."
+            {...CLOUD_ALTITUDE_RANGE}
+            value={clouds.altitudeM}
+            format={(v) => `${formatNumber(v)} m`}
+            onChange={(altitudeM) => set({ altitudeM })}
+          />
+        </SettingRow>
       )}
 
       {clouds.mode !== 'aucun' && (
-        <MoreSettings paths={['clouds.altitudeM', 'clouds.quality']} label="Réglages des nuages">
-          {clouds.mode !== 'mer' && (
-            <RangeField
-              label="Base des nuages bas"
-              tip="Hauteur au-dessus du point le plus bas de la trace. Les nuages moyens sont 2 km plus haut."
-              {...CLOUD_ALTITUDE_RANGE}
-              value={clouds.altitudeM}
-              format={(v) => `${formatNumber(v)} m`}
-              onChange={(altitudeM) => set({ altitudeM })}
-            />
-          )}
+        <SettingRow
+          label="Qualité des nuages à l’export"
+          value={CLOUD_QUALITY_OPTIONS.find((o) => o.value === clouds.quality)?.label}
+          paths={['clouds.quality']}
+        >
           <div className="field">
             <div className="field__label-row">
               <label className="field__label" htmlFor={`${id}-clouds-quality`}>
@@ -362,7 +384,7 @@ function CloudsControl({ weatherReady }: { weatherReady: boolean }) {
               ))}
             </select>
           </div>
-        </MoreSettings>
+        </SettingRow>
       )}
     </>
   )
@@ -388,47 +410,32 @@ function WaterControl() {
         <InfoTip text="Plans d’eau d’OpenStreetMap autour de la trace : reflets du ciel et du soleil, vaguelettes." />
       </div>
       {water.enabled && (
-        <RangeField
-          label="Intensité de l’eau"
-          min={0}
-          max={1}
-          step={0.05}
-          value={water.strength}
-          format={formatPercent}
-          onChange={(strength) => setSetting('water', { ...water, strength })}
-        />
+        <SettingRow label="Intensité de l’eau" value={formatPercent(water.strength)} paths={['water.strength']}>
+          <RangeField
+            label="Intensité de l’eau"
+            min={0}
+            max={1}
+            step={0.05}
+            value={water.strength}
+            format={formatPercent}
+            onChange={(strength) => setSetting('water', { ...water, strength })}
+          />
+        </SettingRow>
       )}
     </>
   )
 }
 
-/**
- * « Carte » tab (before the landmarks): sections Fond de carte, Relief et trace, Lumière, Atmosphère et météo, Couleurs
- * (`GradingPanel`), Objectif (`LensPanel`), each with its essentials and its rarely used settings under « Plus de réglages ».
- */
-export function SettingsPanel() {
+/** « Carte » tab, before the track and the landmarks: sections Fond de carte and Relief. */
+export function MapSettings() {
   const settings = useAppStore((s) => s.settings)
   const setSetting = useAppStore((s) => s.setSetting)
   const id = useId()
   const terrainId = `${id}-terrain`
   const imageryId = `${id}-imagery`
   const wireframeId = `${id}-wireframe`
-  const atmosphereId = `${id}-atmosphere`
-  const shadowsId = `${id}-shadows`
-  const weatherSceneId = `${id}-weather-scene`
-  const firstTrackId = useAppStore((s) => s.tracks[0]?.id)
-  const weatherReady = useWeatherStore((s) => s.status === 'ready' && s.trackId !== null && s.trackId === firstTrackId)
-  const trackColorId = `${id}-track-color`
-  const firstTrack = useAppStore((s) => s.tracks[0])
-  const colorModes = useMemo(
-    () =>
-      TRACK_COLOR_MODES.map((mode) =>
-        mode === 'none'
-          ? { mode, label: 'Unie', available: true }
-          : { mode, label: TRACK_METRICS[mode].label, available: !!firstTrack && hasMetric(firstTrack, mode) },
-      ),
-    [firstTrack],
-  )
+  const zoomLabel = ZOOM_OFFSETS.find((o) => o.value === settings.imageryZoomOffset)?.label
+  const terrainName = TERRAIN_SOURCES.find((source) => source.id === settings.terrainSourceId)?.name
 
   return (
     <>
@@ -454,7 +461,7 @@ export function SettingsPanel() {
 
         <WaterControl />
 
-        <MoreSettings paths={['imageryZoomOffset', 'terrainSourceId']}>
+        <SettingRow label="Détail de l’imagerie" value={zoomLabel} paths={['imageryZoomOffset']}>
           <fieldset className="field fieldset">
             <legend className="field__label">Détail de l’imagerie</legend>
             <div className="segmented">
@@ -472,7 +479,9 @@ export function SettingsPanel() {
               ))}
             </div>
           </fieldset>
+        </SettingRow>
 
+        <SettingRow label="Source du relief" value={terrainName} paths={['terrainSourceId']}>
           <div className="field">
             <label className="field__label" htmlFor={terrainId}>
               Source du relief
@@ -490,10 +499,10 @@ export function SettingsPanel() {
               ))}
             </select>
           </div>
-        </MoreSettings>
+        </SettingRow>
       </PanelSection>
 
-      <PanelSection title="Relief et trace" keys={['exaggeration', 'trackColorBy', 'wireframe']}>
+      <PanelSection title="Relief" keys={['exaggeration', 'wireframe']}>
         <RangeField
           label="Exagération du relief"
           tip="Multiplie les hauteurs pour accentuer les montagnes (×1 = relief réel)."
@@ -506,25 +515,7 @@ export function SettingsPanel() {
           wide={false}
         />
 
-        <div className="field">
-          <label className="field__label" htmlFor={trackColorId}>
-            Colorer selon
-          </label>
-          <select
-            id={trackColorId}
-            className="select"
-            value={settings.trackColorBy}
-            onChange={(e) => setSetting('trackColorBy', e.currentTarget.value as Settings['trackColorBy'])}
-          >
-            {colorModes.map(({ mode, label, available }) => (
-              <option key={mode} value={mode} disabled={!available}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <MoreSettings paths={['wireframe']}>
+        <SettingRow label="Filaire" value={settings.wireframe ? 'Oui' : 'Non'} paths={['wireframe']}>
           <div className="field__label-row">
             <label className="checkbox" htmlFor={wireframeId}>
               <input
@@ -537,84 +528,124 @@ export function SettingsPanel() {
             </label>
             <InfoTip text="Dessine le relief en triangles, pour voir le détail chargé." />
           </div>
-        </MoreSettings>
+        </SettingRow>
+      </PanelSection>
+    </>
+  )
+}
+
+/** The weather of the outing is loaded for the first track: the clouds « Météo » and the weather in the image follow it. */
+function useWeatherReady(): boolean {
+  const firstTrackId = useAppStore((s) => s.tracks[0]?.id)
+  return useWeatherStore((s) => s.status === 'ready' && s.trackId !== null && s.trackId === firstTrackId)
+}
+
+/** In place of what needs the atmosphere (sky, clouds, sun) while it is off. */
+function AtmosphereOffHint({ what }: { what: string }) {
+  return <p className="field__hint">Activez l’atmosphère (onglet Lumière) pour {what}.</p>
+}
+
+/** « Météo » tab, after the weather of the outing: sections Nuages and Pluie et brume (the weather in the image). */
+export function WeatherSettings() {
+  const atmosphere = useAppStore((s) => s.settings.atmosphere)
+  const weatherScene = useAppStore((s) => s.settings.weatherScene)
+  const setSetting = useAppStore((s) => s.setSetting)
+  const weatherReady = useWeatherReady()
+  const id = useId()
+
+  return (
+    <>
+      <PanelSection title="Nuages" keys={['clouds']}>
+        {atmosphere ? <CloudsControl weatherReady={weatherReady} /> : <AtmosphereOffHint what="voir les nuages" />}
       </PanelSection>
 
-      <PanelSection title="Atmosphère et météo" keys={['atmosphere', 'shadows', 'exposureEv', 'weatherScene', 'clouds']}>
-        <label className="checkbox checkbox--switch" htmlFor={atmosphereId}>
+      <PanelSection title="Pluie et brume" keys={['weatherScene']}>
+        {!atmosphere ? (
+          <AtmosphereOffHint what="voir la météo dans l’image" />
+        ) : !weatherReady ? (
+          <p className="field__hint">Ciel gris, pluie et brume suivent la météo de la sortie, une fois chargée.</p>
+        ) : (
+          <>
+            <label className="checkbox checkbox--switch" htmlFor={`${id}-weather-scene`}>
+              <input
+                id={`${id}-weather-scene`}
+                type="checkbox"
+                checked={weatherScene.enabled}
+                onChange={(e) => setSetting('weatherScene', { ...weatherScene, enabled: e.currentTarget.checked })}
+              />
+              Météo dans la scène
+            </label>
+            {weatherScene.enabled && (
+              <SettingRow label="Intensité de la météo" value={formatPercent(weatherScene.strength)} paths={['weatherScene.strength']}>
+                <RangeField
+                  label="Intensité de la météo"
+                  min={0}
+                  max={1}
+                  step={WEATHER_STRENGTH_STEP}
+                  value={weatherScene.strength}
+                  format={formatPercent}
+                  onChange={(strength) => setSetting('weatherScene', { ...weatherScene, strength })}
+                />
+              </SettingRow>
+            )}
+          </>
+        )}
+      </PanelSection>
+    </>
+  )
+}
+
+/** « Lumière » tab, before the colours (`GradingPanel`): sections Atmosphère (sky, shadows, exposure) and Soleil. */
+export function LightSettings() {
+  const atmosphere = useAppStore((s) => s.settings.atmosphere)
+  const shadows = useAppStore((s) => s.settings.shadows)
+  const exposureEv = useAppStore((s) => s.settings.exposureEv)
+  const setSetting = useAppStore((s) => s.setSetting)
+  const id = useId()
+
+  return (
+    <>
+      <PanelSection title="Atmosphère" keys={['atmosphere', 'shadows', 'exposureEv']}>
+        <label className="checkbox checkbox--switch" htmlFor={`${id}-atmosphere`}>
           <input
-            id={atmosphereId}
+            id={`${id}-atmosphere`}
             type="checkbox"
-            checked={settings.atmosphere}
+            checked={atmosphere}
             onChange={(e) => setSetting('atmosphere', e.currentTarget.checked)}
           />
           Atmosphère : ciel, soleil et brume
         </label>
 
-        {settings.atmosphere && (
-          <label className="checkbox" htmlFor={shadowsId}>
-            <input
-              id={shadowsId}
-              type="checkbox"
-              checked={settings.shadows}
-              onChange={(e) => setSetting('shadows', e.currentTarget.checked)}
-            />
+        {atmosphere && (
+          <label className="checkbox" htmlFor={`${id}-shadows`}>
+            <input id={`${id}-shadows`} type="checkbox" checked={shadows} onChange={(e) => setSetting('shadows', e.currentTarget.checked)} />
             Ombres du relief
           </label>
         )}
 
-        {settings.atmosphere && weatherReady && (
-          <label className="checkbox" htmlFor={weatherSceneId}>
-            <input
-              id={weatherSceneId}
-              type="checkbox"
-              checked={settings.weatherScene.enabled}
-              onChange={(e) => setSetting('weatherScene', { ...settings.weatherScene, enabled: e.currentTarget.checked })}
-            />
-            Météo dans la scène
-          </label>
-        )}
-
-        {settings.atmosphere && <CloudsControl weatherReady={weatherReady} />}
-
-        {settings.atmosphere && (
-          <MoreSettings paths={['exposureEv', 'weatherScene.strength']} label="Exposition et intensité">
+        {atmosphere && (
+          <SettingRow label="Exposition" value={formatEv(exposureEv)} paths={['exposureEv']}>
             <RangeField
               label="Exposition"
               tip="Éclaircit ou assombrit l’image, en plus du réglage automatique selon le soleil."
               min={EXPOSURE_EV_MIN}
               max={EXPOSURE_EV_MAX}
               step={EXPOSURE_EV_STEP}
-              value={settings.exposureEv}
+              value={exposureEv}
               format={formatEv}
-              onChange={(exposureEv) => setSetting('exposureEv', exposureEv)}
+              onChange={(ev) => setSetting('exposureEv', ev)}
             />
-
-            {weatherReady && settings.weatherScene.enabled && (
-              <RangeField
-                label="Intensité de la météo"
-                min={0}
-                max={1}
-                step={WEATHER_STRENGTH_STEP}
-                value={settings.weatherScene.strength}
-                format={formatPercent}
-                onChange={(strength) => setSetting('weatherScene', { ...settings.weatherScene, strength })}
-              />
-            )}
-          </MoreSettings>
+          </SettingRow>
         )}
       </PanelSection>
 
-      <PanelSection title="Lumière" keys={['sunFromTrack', 'sunHour', 'sunDate']}>
-        {settings.atmosphere ? (
+      <PanelSection title="Soleil" keys={['sunFromTrack', 'sunHour', 'sunDate']}>
+        {atmosphere ? (
           <SunTimeControl />
         ) : (
           <p className="field__hint">Activez l’atmosphère (section précédente) pour régler l’heure du soleil.</p>
         )}
       </PanelSection>
-
-      <GradingPanel />
-      <LensPanel />
     </>
   )
 }

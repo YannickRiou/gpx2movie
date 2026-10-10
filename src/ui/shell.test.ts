@@ -125,6 +125,7 @@ describe('shellReducer', () => {
     expect(folded.collapsed).toBe(true)
     expect(shellReducer(folded, { type: 'click-tab', tab: 'trace', narrow: false })).toMatchObject({ collapsed: false })
     expect(shellReducer(base, { type: 'click-tab', tab: 'carte', narrow: false })).toMatchObject({ tab: 'carte', collapsed: false })
+    expect(shellReducer(base, { type: 'click-tab', tab: 'objectif', narrow: false })).toMatchObject({ tab: 'objectif', collapsed: false })
   })
 
   it('keyboard selection never folds', () => {
@@ -193,6 +194,13 @@ describe('parseShellPrefs', () => {
     expect(parseShellPrefs('not json')).toEqual({ tab: 'trace', collapsed: false })
     expect(parseShellPrefs(null)).toEqual({ tab: 'trace', collapsed: false })
     expect(parseShellPrefs('null')).toEqual({ tab: 'trace', collapsed: false })
+  })
+
+  it('reads the tabs added later, and an unknown tab id falls back to Trace with the fold kept', () => {
+    for (const tab of ['meteo', 'lumiere', 'objectif'] as const) {
+      expect(parseShellPrefs(`{"tab":"${tab}","collapsed":false}`)).toEqual({ tab, collapsed: false })
+    }
+    expect(parseShellPrefs('{"tab":"reglages","collapsed":true}')).toEqual({ tab: 'trace', collapsed: true })
   })
 })
 

@@ -48,6 +48,7 @@ import { PosterPanel } from '../poster/PosterPanel'
 import { useFilmClock } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { ModifiedMarker } from './ModifiedMarker'
+import { SettingRow } from './PanelSection'
 import { formatNumber } from './format'
 import { saveExportedFile } from './projectActions'
 import { effectiveProjectName } from './shell'
@@ -114,7 +115,7 @@ interface CodecProbe {
 /**
  * "Exporter" drawer: aspect (tiles), resolution, codec and estimated size, start / cancel, progress and download;
  * also a still image of the current progress at the same size, or the overlay alone over a transparent background;
- * frame rate, quality and image type under « Plus de réglages ».
+ * frame rate, quality and image type as rows (name and value, control on demand).
  */
 function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; modes: ReactNode; hidden: boolean }) {
   const video = useAppStore((s) => s.settings.video)
@@ -399,67 +400,65 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         </p>
       )}
 
-      <details className="export__more">
-        <summary className="export__more-summary">
-          Plus de réglages
-          <Icon name="chevron-down" size={16} />
-        </summary>
-        <div className="export__more-body">
-          <fieldset className="field fieldset" disabled={busy}>
-            <legend className="field__label">Images par seconde</legend>
-            <div className="segmented">
-              {VIDEO_FPS.map((fps) => (
-                <label key={fps} className="segmented__option">
-                  <input
-                    type="radio"
-                    name={`${id}-fps`}
-                    value={fps}
-                    checked={video.fps === fps}
-                    onChange={() => update({ fps })}
-                  />
-                  {fps}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+      <SettingRow label="Images par seconde" value={`${video.fps} i/s`} paths={['video.fps']}>
+        <fieldset className="field fieldset" disabled={busy}>
+          <legend className="field__label">Images par seconde</legend>
+          <div className="segmented">
+            {VIDEO_FPS.map((fps) => (
+              <label key={fps} className="segmented__option">
+                <input
+                  type="radio"
+                  name={`${id}-fps`}
+                  value={fps}
+                  checked={video.fps === fps}
+                  onChange={() => update({ fps })}
+                />
+                {fps}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </SettingRow>
 
-          <fieldset className="field fieldset" disabled={busy}>
-            <legend className="field__label">Qualité</legend>
-            <div className="segmented">
-              {QUALITIES.map((q) => (
-                <label key={q.value} className="segmented__option">
-                  <input
-                    type="radio"
-                    name={`${id}-quality`}
-                    value={q.value}
-                    checked={video.quality === q.value}
-                    onChange={() => update({ quality: q.value })}
-                  />
-                  {q.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+      <SettingRow label="Qualité" value={QUALITIES.find((q) => q.value === video.quality)?.label} paths={['video.quality']}>
+        <fieldset className="field fieldset" disabled={busy}>
+          <legend className="field__label">Qualité</legend>
+          <div className="segmented">
+            {QUALITIES.map((q) => (
+              <label key={q.value} className="segmented__option">
+                <input
+                  type="radio"
+                  name={`${id}-quality`}
+                  value={q.value}
+                  checked={video.quality === q.value}
+                  onChange={() => update({ quality: q.value })}
+                />
+                {q.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </SettingRow>
 
-          <fieldset className="field fieldset" disabled={busy}>
-            <legend className="field__label">Type de l'image fixe</legend>
-            <div className="segmented">
-              {STILL_TYPES.map((t) => (
-                <label key={t.value} className="segmented__option">
-                  <input
-                    type="radio"
-                    name={`${id}-still`}
-                    value={t.value}
-                    checked={stillType === t.value}
-                    onChange={() => setStillType(t.value)}
-                  />
-                  {t.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        </div>
-      </details>
+      <SettingRow label="Type de l'image fixe" value={STILL_TYPES.find((t) => t.value === stillType)?.label}>
+        <fieldset className="field fieldset" disabled={busy}>
+          <legend className="field__label">Type de l'image fixe</legend>
+          <div className="segmented">
+            {STILL_TYPES.map((t) => (
+              <label key={t.value} className="segmented__option">
+                <input
+                  type="radio"
+                  name={`${id}-still`}
+                  value={t.value}
+                  checked={stillType === t.value}
+                  onChange={() => setStillType(t.value)}
+                />
+                {t.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </SettingRow>
 
       <p className="visually-hidden" role="status">
         {announcement}

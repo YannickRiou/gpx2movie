@@ -99,7 +99,8 @@ export function isProjectDirty(current: SavedProject, saved: SavedProject): bool
 // Side columns: tabs of the left panel and the right dock (export drawer, else the inspector of the timeline)
 // ---------------------------------------------------------------------------
 
-export const SHELL_TABS = ['trace', 'carte', 'survol', 'habillage', 'projet'] as const
+/** In montage order: the track, the place, the weather, the light, the camera, the lens, the overlay, the project. */
+export const SHELL_TABS = ['trace', 'carte', 'meteo', 'lumiere', 'survol', 'objectif', 'habillage', 'projet'] as const
 export type ShellTab = (typeof SHELL_TABS)[number]
 
 /** Below this window width (px) only one side column is open at a time (panel or dock). */
@@ -178,7 +179,7 @@ export function shellReducer(state: ShellState, event: ShellEvent): ShellState {
   }
 }
 
-/** Tab and folded panel remembered by the browser (not by the project); defaults for anything unreadable. */
+/** Tab and folded panel remembered by the browser (not by the project); defaults for anything unreadable or unknown. */
 export function parseShellPrefs(raw: string | null): Pick<ShellState, 'tab' | 'collapsed'> {
   const fallback = { tab: 'trace' as ShellTab, collapsed: false }
   if (!raw) return fallback

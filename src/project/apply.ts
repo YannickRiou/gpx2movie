@@ -48,7 +48,7 @@ function valueAt(settings: Settings, path: SettingPath): unknown {
   return field === undefined ? value : (value as unknown as Record<string, unknown>)[field]
 }
 
-/** The paths among `paths` whose value differs from `DEFAULT_SETTINGS` (« modifié » of a « Plus de réglages » group). */
+/** The paths among `paths` whose value differs from `DEFAULT_SETTINGS` (the bold value of a `SettingRow`). */
 export function modifiedPaths(settings: Settings, paths: readonly SettingPath[]): SettingPath[] {
   return paths.filter((path) => !sameValue(valueAt(settings, path), valueAt(DEFAULT_SETTINGS, path)))
 }

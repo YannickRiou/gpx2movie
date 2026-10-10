@@ -10,17 +10,19 @@ import { useAppStore } from './state/store'
 import { CameraPanel } from './ui/CameraPanel'
 import { ClimbList } from './ui/ClimbList'
 import { EmptyState } from './ui/EmptyState'
+import { GradingPanel } from './ui/GradingPanel'
 import { HelpDialog } from './ui/HelpDialog'
 import { Icon } from './ui/icons'
 import type { IconName } from './ui/icons'
 import { LandmarkPanel } from './ui/LandmarkPanel'
+import { LensPanel } from './ui/LensPanel'
 import { installCloseGuard, installLibraryAutosave } from './ui/library'
 import { OverlayPanel } from './ui/OverlayPanel'
 import { PanelSection } from './ui/PanelSection'
 import { PoiPanel } from './ui/PoiPanel'
 import { chooseFilesToOpen, openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
-import { SettingsPanel } from './ui/SettingsPanel'
+import { LightSettings, MapSettings, WeatherSettings } from './ui/SettingsPanel'
 import { useSafeZonesStore } from './ui/SafeZones'
 import {
   BOTTOM_SHEET_QUERY,
@@ -42,6 +44,7 @@ import { Timeline } from './ui/Timeline'
 import { Toaster } from './ui/Toaster'
 import { TopBar } from './ui/TopBar'
 import { TrackList } from './ui/TrackList'
+import { TrackMarkerSection } from './ui/TrackMarkerSection'
 import { WeatherPanel } from './ui/WeatherPanel'
 import './ui/app.css'
 import './ui/shell.css'
@@ -57,13 +60,16 @@ const FilmInspector = lazy(() => import('./ui/FilmInspector').then((m) => ({ def
 const TAB_LABELS: Record<ShellTab, { label: string; icon: IconName }> = {
   trace: { label: 'Trace', icon: 'route' },
   carte: { label: 'Carte', icon: 'map' },
+  meteo: { label: 'Météo', icon: 'cloud-sun' },
+  lumiere: { label: 'Lumière', icon: 'sun' },
   survol: { label: 'Survol', icon: 'video' },
+  objectif: { label: 'Objectif', icon: 'aperture' },
   habillage: { label: 'Habillage', icon: 'layers' },
   projet: { label: 'Projet', icon: 'folder' },
 }
 
 /** tabs that say, without a track, to add one first (Trace has its own empty list, Projet works without one) */
-const NO_TRACK_HINT_TABS: readonly ShellTab[] = ['carte', 'survol', 'habillage']
+const NO_TRACK_HINT_TABS: readonly ShellTab[] = ['carte', 'meteo', 'lumiere', 'survol', 'objectif', 'habillage']
 
 const PREFS_KEY = 'openflyover.shell.v1'
 
@@ -171,6 +177,11 @@ export default function App() {
   useEffect(() => {
     dockOpen.current = shell.dockOpen
   }, [shell.dockOpen])
+
+  // the phone tab bar scrolls: the open tab stays in sight (also when restored at startup)
+  useEffect(() => {
+    tabRefs.current[SHELL_TABS.indexOf(shell.tab)]?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [shell.tab])
 
   useEffect(() => {
     collapsedRef.current = shell.collapsed
@@ -388,16 +399,42 @@ export default function App() {
         {/* no change to the tracks or the settings while a film is being made: the export reads them live */}
         <aside id="side-panel" className="panel" aria-label="Réglages" hidden={shell.collapsed} inert={exporting}>
           <SheetHandle onClose={() => dispatch({ type: 'fold' })} />
+          {panel('trace', <TrackList />)}
           {panel(
-            'trace',
+            'carte',
             <>
-              <TrackList />
+              <MapSettings />
+              <TrackMarkerSection />
               <PanelSection title="Montées et étiquettes" keys={['labels']} hidden={!hasTracks}>
                 <ClimbList />
               </PanelSection>
+              <LandmarkPanel />
+              <PoiPanel />
+            </>,
+          )}
+          {panel(
+            'meteo',
+            <>
               <PanelSection title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
                 <WeatherPanel />
               </PanelSection>
+              <WeatherSettings />
+            </>,
+          )}
+          {panel(
+            'lumiere',
+            <>
+              <LightSettings />
+              <GradingPanel />
+            </>,
+          )}
+          {panel('survol', <CameraPanel />)}
+          {panel('objectif', <LensPanel />)}
+          {panel('habillage', <OverlayPanel />)}
+          {panel(
+            'projet',
+            <>
+              <ProjectPanel />
               <PanelSection title="Hors ligne" hidden={!hasTracks}>
                 <Suspense>
                   <OfflinePanel />
@@ -405,17 +442,6 @@ export default function App() {
               </PanelSection>
             </>,
           )}
-          {panel(
-            'carte',
-            <>
-              <SettingsPanel />
-              <LandmarkPanel />
-              <PoiPanel />
-            </>,
-          )}
-          {panel('survol', <CameraPanel />)}
-          {panel('habillage', <OverlayPanel />)}
-          {panel('projet', <ProjectPanel />)}
         </aside>
 
         <main className="view">

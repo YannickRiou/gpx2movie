@@ -16,7 +16,7 @@ function formatSize(bytes: number): string {
   return bytes >= 1e9 ? `${formatNumber(bytes / 1e9, 1)} Go` : `${formatNumber(Math.max(bytes, 0) / 1e6)} Mo`
 }
 
-/** « Hors ligne » (Trace tab): estimate, download and list of the offline tile packs. */
+/** « Hors ligne » (Projet tab): estimate, download and list of the offline tile packs. */
 export function OfflinePanel() {
   const id = useId()
   const tracks = useAppStore((s) => s.tracks)

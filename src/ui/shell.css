@@ -356,11 +356,15 @@
   color: var(--color-glacier);
 }
 
+/* eight tabs: they scroll when the window is too short (landscape phone) or, as a bottom bar, too narrow */
 .rail__tabs {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-1);
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
 
 .rail__tab,
@@ -531,7 +535,7 @@
   z-index: 3;
 }
 
-/* foldable sections (Montées, Météo) */
+/* foldable sections (PanelSection) */
 .fold__summary {
   display: flex;
   align-items: center;
@@ -559,18 +563,17 @@
   padding-bottom: var(--space-1);
 }
 
-.fold:not([open]) > .fold__summary .icon,
-.export__more:not([open]) > summary .icon {
+.fold:not([open]) > .fold__summary .icon {
   transform: rotate(-90deg);
 }
 
-/* the folded section brings its own title and marker: the summary shows them */
-.fold > section > .section-title,
-.fold > .settings > .modified {
+/* the foldable section brings its own title and marker: the summary shows them, no section in a section */
+.panel-section__body > section > .section-title,
+.panel-section__body > .settings > .modified {
   display: none;
 }
 
-.fold > .settings {
+.panel-section__body > .settings {
   padding: 0;
   border-radius: 0;
   background: none;
@@ -969,32 +972,6 @@
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-.export__more {
-  border-top: 1px solid var(--line);
-}
-
-.export__more-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) 0 0;
-  font-size: 13px;
-  font-weight: 600;
-  list-style: none;
-  cursor: pointer;
-}
-
-.export__more-summary::-webkit-details-marker {
-  display: none;
-}
-
-.export__more-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
 }
 
 /* Inspector of the selected timeline block, in the dock (header and close as the export drawer) ------- */
@@ -1623,7 +1600,6 @@
   .segmented__option,
   .checkbox,
   .fold__summary,
-  .export__more-summary,
   .track-menu__item {
     min-height: 44px;
   }
@@ -1887,17 +1863,25 @@
     border-right: 0;
   }
 
+  /* all eight tabs in a bar that scrolls sideways (App keeps the open one in sight) */
   .rail__tabs {
     flex: 1 1 auto;
     flex-direction: row;
-    justify-content: space-around;
+    gap: 0;
+    padding: 0 var(--space-1);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
   }
 
   .rail__tab {
+    flex: none;
     width: auto;
-    min-width: 56px;
+    /* a part of the next tab shows past the edge: the bar reads as scrollable */
+    min-width: 72px;
     height: 52px;
     margin: 0;
+    padding: 0 var(--space-1);
   }
 
   .rail__tab[aria-selected='true']::before {
