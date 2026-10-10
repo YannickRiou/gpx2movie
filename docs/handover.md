@@ -158,9 +158,6 @@ features included), `npm run build`,
   `data-tip` inside its scrolling column; `fetchRegion` lists the areas before the geometry, `retryRegion` after a failure (e2e `region`).
 - **Export waits for tiles without rendering** (10 October 2026): `settle` only runs `engine.update` (`updateTiles`)
   while the view's tiles load, then renders (e2e with fake tiles after 300 ms: 320 → 36 renders for 20 frames), not
-  seen on a GPU. Open: failed tiles are now retried after ~5 s during the waits (frame-counted engine delays), so
-  with unreachable tile hosts the e2e export hits the 5 s timeout on 20 frames of 20 (5 before); a time-based retry
-  in the engine would fix it.
   seen on a GPU. The engine's retry and unload delays became times (`retryDelayMs` 5 s, `unloadAfterMs` 2 s,
   `prefetchKeepMs` 30 s), a retry is fetched last and no longer held for by the view (unreachable tile hosts: export
   of 20 frames 45–50 s instead of 82–107 s, 7–9 frames at the timeout instead of 5).
