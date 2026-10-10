@@ -67,8 +67,8 @@ reproduce it next to the box.
       border and name of that place, framed whole; "Maintien" 2 s then "Plongée" 5 s: still, region whole, then the
       dive with the highlight fading; "Cadrage": "Inclinaison" 10°, "Distance" 35 km, "Boussole" 0° (north up), "Marge"
       20 % (place at the bottom of the frame), "Capturer la vue actuelle" after orbiting the 3D view (the shot starts
-      from that view); no terrain edge at 60° of tilt; "Faire bouger le soleil" (low sun, morning outing): shadows
-      sweeping the relief, no jump of light where the shot meets the flight; same in the exported video.
+      from that view); no terrain edge at 60° of tilt; "Soleil" › "Plein jour" on a dawn outing: the region view lit, the light easing to the dawn during the push-in;
+      "Accéléré" (low sun, morning outing): shadows sweeping the relief, no jump of light where the shot meets the flight; same in the exported video.
 - [ ] Shot transitions (Opening / Closing inspector): clean "Coupe" (cut) at the start and at the end of the flight; "Fondu au
       noir" and "Fondu au blanc" (fade to black / to white, 0.3 s and 2 s): the picture goes through the color, the camera jump
       hidden at the darkest point, only the credits visible on top, tiles loaded when the picture comes back; same rendering

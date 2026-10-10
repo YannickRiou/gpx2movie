@@ -63,8 +63,18 @@ export interface FilmShot {
   heading?: SituationHeading
   bearingDeg?: number
   headroomPct?: number
-  /** 'situation': the sun moves during the shot (« Faire bouger le soleil », flyover/sun.ts `shotSunShiftMs`); default off */
+  /** 'situation': light of the shot (« Soleil », flyover/sun.ts `shotSunDate`); absent: « Plein jour », or 'accelere' when `moveSun` */
+  sun?: ShotSun
+  /** older projects: « Faire bouger le soleil », read as `sun: 'accelere'` */
   moveSun?: boolean
+}
+
+export const SHOT_SUNS = ['jour', 'survol', 'accelere'] as const
+/** « Plein jour » (daylight easing into the flight's sun), « Heure du survol », « Accéléré » (a 2 h time lapse). */
+export type ShotSun = (typeof SHOT_SUNS)[number]
+
+export function shotSunOf(shot: Pick<FilmShot, 'sun' | 'moveSun'>): ShotSun {
+  return shot.sun ?? (shot.moveSun === true ? 'accelere' : 'jour')
 }
 
 export const SITUATION_HEADINGS = ['libre', 'boussole'] as const
@@ -483,7 +493,8 @@ export function isValidShot(shot: unknown): shot is FilmShot {
     (shot.heading === undefined || oneOf(SITUATION_HEADINGS, shot.heading)) &&
     (shot.bearingDeg === undefined || within(shot.bearingDeg, SITUATION_BEARING_RANGE.min, SITUATION_BEARING_RANGE.max)) &&
     (shot.headroomPct === undefined || within(shot.headroomPct, SITUATION_HEADROOM_RANGE.min, SITUATION_HEADROOM_RANGE.max)) &&
-    (shot.moveSun === undefined || typeof shot.moveSun === 'boolean')
+    (shot.moveSun === undefined || typeof shot.moveSun === 'boolean') &&
+    (shot.sun === undefined || oneOf(SHOT_SUNS, shot.sun))
   )
 }
 
