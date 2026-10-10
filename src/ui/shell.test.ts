@@ -11,6 +11,7 @@ import {
   parseFoldPrefs,
   parseShellPrefs,
   routeOpenedFiles,
+  settleSheet,
   shellReducer,
 } from './shell'
 import type { ShellState } from './shell'
@@ -136,6 +137,11 @@ describe('shellReducer', () => {
     expect(shellReducer(open, { type: 'close-dock' })).toMatchObject({ dockOpen: false, collapsed: false, collapsedByDock: false })
   })
 
+  it('fold closes the panel and the export drawer, without bringing the panel back', () => {
+    const open = shellReducer(base, { type: 'toggle-dock', narrow: true })
+    expect(shellReducer(open, { type: 'fold' })).toMatchObject({ dockOpen: false, collapsed: true, collapsedByDock: false })
+  })
+
   it('on a wide window both columns stay open', () => {
     const open = shellReducer(base, { type: 'toggle-dock', narrow: false })
     expect(open).toMatchObject({ dockOpen: true, collapsed: false })
@@ -197,5 +203,20 @@ describe('parseFoldPrefs', () => {
     expect(parseFoldPrefs('{')).toEqual({})
     expect(parseFoldPrefs('[true]')).toEqual({})
     expect(parseFoldPrefs('null')).toEqual({})
+  })
+})
+
+describe('settleSheet', () => {
+  it('settles a slow release on the nearest snap', () => {
+    expect(settleSheet(0.32, 0)).toBe('peek')
+    expect(settleSheet(0.5, 0)).toBe('half')
+    expect(settleSheet(0.9, 0)).toBe('full')
+  })
+
+  it('carries a flick to the next snap, and closes below half the peek', () => {
+    expect(settleSheet(0.55, 2)).toBe('full')
+    expect(settleSheet(0.55, -1.5)).toBe('peek')
+    expect(settleSheet(0.3, -1)).toBeNull()
+    expect(settleSheet(0.1, 0)).toBeNull()
   })
 })
