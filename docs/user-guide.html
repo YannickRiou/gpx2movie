@@ -289,6 +289,7 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
     <li><a href="#export">Export</a></li>
     <li><a href="#offline">Work offline</a></li>
     <li><a href="#save">Save and reuse</a></li>
+    <li><a href="#mobile">On a phone or tablet</a></li>
     <li><a href="#desktop">Desktop extras</a></li>
     <li><a href="#keys">Keyboard shortcuts</a></li>
     <li><a href="#privacy">Data, privacy and credits</a></li>
@@ -547,8 +548,41 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
 </section>
 
 <!-- ================================================================== 12 -->
+<section id="mobile">
+  <div class="sec-head"><span class="num">12</span><h2>On a phone or tablet</h2></div>
+  <p>The website installs like an app: it then opens full screen, without the browser bar, and starts without a
+  connection (the tiles still need one, or an offline pack).</p>
+  <h3 class="sub">Install it</h3>
+  <ul>
+    <li><strong>Android</strong> (Chrome): menu <kbd>⋮</kbd> › "Installer l'application" (or "Ajouter à l'écran d'accueil").</li>
+    <li><strong>iPhone, iPad</strong> (Safari): "Partager" › "Sur l'écran d'accueil". The site reminds you once.</li>
+  </ul>
+  <p>When a new version is online, "Nouvelle version disponible" appears: "Recharger" switches to it.</p>
+  <h3 class="sub">Send a track to the app</h3>
+  <ul>
+    <li><strong>Android</strong>, once installed: in Strava, Garmin Connect, Komoot or Files, share the GPX or FIT file
+    ("Partager") and pick OpenFlyover. The app opens with the track imported.</li>
+    <li><strong>iPhone</strong>: iOS cannot share a file to a web app. Save the file to Files first ("Enregistrer dans
+    Fichiers"), then "Choisir un fichier" in OpenFlyover.</li>
+  </ul>
+  <h3 class="sub">Save a film on an iPhone</h3>
+  <p>Without a save dialog (iPhone, iPad, older Android), the save buttons open the share sheet, "Partager /
+  Enregistrer": "Enregistrer la vidéo" puts the film in Photos, "Enregistrer dans Fichiers" anywhere else. The same goes
+  for the still image, the poster and the project file ("Enregistrer").</p>
+  <h3 class="sub">What changes on a phone</h3>
+  <ul>
+    <li>The 3D view is lighter: sharper only when it stops moving, coarser clouds, "Nappe" for the sea of clouds,
+    imagery up to "Fin".</li>
+    <li>Films are exported up to 1080p on a phone (1440p on a tablet); a larger choice comes out at that size.</li>
+    <li>Sound needs Safari 26 on iPhone and iPad; before that, the film is exported without sound and the result says so
+    ("sans le son"). Firefox for Android cannot export a video: use Chrome. The still image works everywhere.</li>
+    <li>Keep the screen on and the app in front during an export: a phone pauses a page in the background.</li>
+  </ul>
+</section>
+
+<!-- ================================================================== 13 -->
 <section id="desktop">
-  <div class="sec-head"><span class="num">12</span><h2>Desktop extras</h2></div>
+  <div class="sec-head"><span class="num">13</span><h2>Desktop extras</h2></div>
   <p>The desktop application opens and saves through the system file dialogs, keeps offline packs and "Mes projets" in its own folder, and can render <strong>one film per track in a folder</strong> without any click:</p>
   <pre><code>openflyover --rendu ~/Traces/2026 --sortie ~/Films --prereglage "Montagne" --formats 16:9@1080p,9:16@1080p</code></pre>
   <div class="table-wrap">
@@ -566,9 +600,9 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
   <p class="note">On Linux the desktop app encodes video with the system <code>ffmpeg</code> (<code>sudo apt install ffmpeg</code>); without it, only still images can be exported.</p>
 </section>
 
-<!-- ================================================================== 13 -->
+<!-- ================================================================== 14 -->
 <section id="keys">
-  <div class="sec-head"><span class="num">13</span><h2>Keyboard shortcuts</h2></div>
+  <div class="sec-head"><span class="num">14</span><h2>Keyboard shortcuts</h2></div>
   <p>The same list is available in the app with <kbd>?</kbd>.</p>
   <div class="table-wrap">
     <table class="wide">
@@ -592,9 +626,9 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
   </div>
 </section>
 
-<!-- ================================================================== 14 -->
+<!-- ================================================================== 15 -->
 <section id="privacy">
-  <div class="sec-head"><span class="num">14</span><h2>Data, privacy and credits</h2></div>
+  <div class="sec-head"><span class="num">15</span><h2>Data, privacy and credits</h2></div>
   <ul>
     <li><strong>Your track never leaves your computer.</strong> Open services only see an approximate position: the tile area, a few points rounded to 1 km for the weather, the rectangle around the track for landmarks.</li>
     <li>Weather and landmarks are on by default; turn them off and no more requests are sent.</li>
@@ -603,9 +637,9 @@ footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16
   </ul>
 </section>
 
-<!-- ================================================================== 15 -->
+<!-- ================================================================== 16 -->
 <section id="faq">
-  <div class="sec-head"><span class="num">15</span><h2>Questions and answers</h2></div>
+  <div class="sec-head"><span class="num">16</span><h2>Questions and answers</h2></div>
   <div class="faq">
     <details>
       <summary>The export is slow. Is something wrong?</summary>

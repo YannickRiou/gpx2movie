@@ -17,6 +17,10 @@ sources were checked.
 | Open-Meteo | historical weather, forecast for an upcoming outing | `archive-api.open-meteo.com`, `api.open-meteo.com` | "Données météo : Open-Meteo.com (CC BY 4.0)" |
 | OpenStreetMap (Overpass API) | landmarks, water bodies (reflective lakes and rivers) | `overpass-api.de`, fallback `maps.mail.ru` | "© contributeurs OpenStreetMap (ODbL)" |
 
+The service worker of the website (installable app) caches only the app's own files: it never stores a tile, a weather
+answer, an Overpass answer nor a Strava call, so third-party data is kept only where its terms are checked (offline
+packs, see below; the weather and landmark caches of the app, in its local storage).
+
 The status bar, at the bottom of the screen, shows the attributions of the current terrain and imagery. Those of Open-Meteo and OpenStreetMap
 are added when the weather or the landmarks are loaded. The same lines are burned into exported videos and images
 ([README, "Licenses"](../README.md#licenses)).

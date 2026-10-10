@@ -79,7 +79,8 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | color grading | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms`; `GradingEffect`; `useGradingEffect`, `GradingComposer` |
 | `src/scene/lens.ts` + `useLensEffects.ts` + `flareEffect.ts` + `shutterEffect.ts` | « Objectif » lens effects (see "Lens") | pure, tested: `LensSettings`, `DEFAULT_LENS`, `LENS_RANGES`, `isValidLens`, `withLensDefaults`, `lensActive`, `bloomParams`, `depthOfFieldParams`, `SHUTTER_SUBFRAMES`, `shutterSamples`, `previewShutterWeight`, `radialBlurLength`, `setShutterSubFrame`, `shutterSubFrame`, `subFrameSlices`; `useLensEffects`, `FlareEffect`, `ShutterEffect`; `filmViewAt` (`filmView.ts`: the camera placement of `FlyoverRig` at a progress and film time, shared with the export); `LensPanel` (`src/ui`) |
 | `src/project/*` | project document, history, presets | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
-| `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`, `isProjectThumbnail`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import") |
+| `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`, `isProjectThumbnail`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import"); `webApp.ts`: `installWebApp`, pure, tested: `shouldRegisterServiceWorker`, `wantsIosInstallHint`, `sharedFileName`; `serviceWorker.js` (see "Installable web app and mobile"); `isAppleMobile`, `pickerAccept`, `touchScreen`, `SHARE_SAVE_LABEL` |
+| `src/core/deviceBudget.ts` | GPU and memory budget of the device (see "Device budget") | `deviceBudget()`, pure, tested: `budgetFor`, `readDeviceTraits`, `DESKTOP_BUDGET`, `PHONE_MAX_SHORT_SIDE`, `LOW_MEMORY_GB` |
 | `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefixes` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | zustand state | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` (shell); `shell.ts` (pure, tested: `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`); `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`); `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `runImport`, `loadSample`, `chainLoadedTracks`); `importFlow.ts` (import orchestration without React, tested) |
@@ -124,7 +125,7 @@ labels, export), after
 a drape (track, water, labels), the loading of the label font or the marker image, and for each
 texture from the three loaders (sky, clouds): the time for the temporal upsampling of the clouds to fill
 (~16 frames). The clouds ask for frames themselves until a still view has averaged `CLOUD_SETTLE_FRAMES` = 32
-frames (`previewCloudPass`, below). OrbitControls (drei) requests its own frames, damping included. The time step of a frame is
+frames (16 on a phone or tablet, see "Device budget") (`previewCloudPass`, below). OrbitControls (drei) requests its own frames, damping included. The time step of a frame is
 capped at `MAX_FRAME_DELTA_S` = 0.25 s (`frameDelta`), and `wakeScene` resets the clock when the scene was asleep
 (`clock.getDelta()`): playback and reframing do not jump after a pause.
 The export keeps `frameloop 'never'` and draws its own frames. Measured with software rendering: no more frame requests
@@ -150,7 +151,7 @@ once it is still (see "Volumetric clouds", Quality); the export goes back to the
    Exact URLs, max zooms, encoding and CORS support are checked empirically (`docs/sources.md`); `sources.ts` is the single source of truth.
    A source without CORS goes through the Vite proxy (`/tiles/<id>/...`, see `vite.config.ts`).
 2. **Fetch** (`fetch.ts`): `fetch()` + `createImageBitmap`, priority queue, concurrency ~12, deduplication of in-flight requests,
-   LRU ~600 bitmaps, `AbortSignal` support, 3 retries (250 ms, 1 s, 4 s, bypassing the HTTP cache) on network error, 5xx, 429
+   LRU ~600 bitmaps (200 on a phone or tablet, "Device budget"), `AbortSignal` support, 3 retries (250 ms, 1 s, 4 s, bypassing the HTTP cache) on network error, 5xx, 429
    and 400 (the IGN Géoplateforme returned bursts of "Layer … unknown" as 400 for valid tiles, with a
    `max-age` of 21 days): a failed imagery sub-tile stays gray as long as its terrain tile lives. Before the
    network, the copy from an offline pack when a pack contains the URL's source (see "Offline packs").
@@ -175,7 +176,7 @@ once it is still (see "Volumetric clouds", Quality); the export goes back to the
      DEM **4xx or outside coverage = "no data" leaf** (Mapterhorn stops at z12 outside high-resolution areas):
      never retried, not counted as an error, the parent stays displayed at its resolution.
    - Unloading: nodes not visited for > 2 s and not ancestors of a visible node → dispose geometry/texture; the `HeightField`
-     keeps ~400 grids at 256 px equivalent (LRU, i.e. ~100 MB; a 512 px grid counts as four).
+     keeps ~400 grids at 256 px equivalent (LRU, i.e. ~100 MB; a 512 px grid counts as four; 160 on a phone or tablet).
    - Bounding sphere: from the geometry if loaded, otherwise from the tile bounds with heights [-500, 9000] m.
    - Material: `MeshStandardMaterial({ map, roughness: 1, metalness: 0 })`, `side: FrontSide`. `wireframe` option.
    - `onChange` fired (coalesced per frame) when a tile becomes ready or is removed → the track re-drapes.
@@ -2084,3 +2085,95 @@ of a flyover of the loaded tracks; the view and the export then read them withou
 - **Limits**: offline, a tile outside the pack fails after the retries (the parent stays displayed); the export waits for
   these failures as it does online. The pack follows the track and the settings of the moment: changing the source or the zoom
   offset requires another pack.
+
+## Installable web app and mobile (after v0.1.0)
+
+Website only: none of this runs in the desktop app (`shouldRegisterServiceWorker`: never inside Tauri, never in
+development, only in a secure context).
+
+**Browser support** (MDN browser-compat-data 8.1.5, checked 10 October 2026):
+
+| Feature | Safari iOS | Chrome Android | Firefox Android |
+|---|---|---|---|
+| `VideoEncoder` / `VideoDecoder` (WebCodecs) | 16.4 | 94 | no |
+| `AudioEncoder` (sound of the film) | 26 | 94 | no |
+| WebGL 2, `EXT_color_buffer_float` | 15 | 58 / 56 | yes |
+| `OffscreenCanvas` | 16.4 | yes | yes |
+| Manifest `display` | 11.3 | yes | yes |
+| Manifest `share_target` | no | 76 | no |
+| `showSaveFilePicker` | no | 132 | no |
+| `navigator.share` with files (`canShare`) | 14 | 75 | no |
+| Service worker | 11.3 | 40 | yes |
+| `StorageManager.persist` | 15.2 | yes | yes |
+
+iOS publishes no per-tab WebGL memory budget; Safari kills and reloads a page that holds too many textures (WebKit
+bug 300782, October 2025): the device budget below is conservative, to be measured on real phones.
+
+- **Manifest** (`public/manifest.webmanifest`): « OpenFlyover », `display: standalone`, theme `#1b2832` (top bar ink),
+  background `#f6f3ec` (paper), icons rendered from `public/favicon.svg` (`icons/`: 192 and 512 px, a 512 px maskable
+  one with a full-bleed background and the drawing at 72 %, a 180 px `apple-touch-icon`). Every URL is relative
+  (`start_url`, `scope`, `id`: `./`), so the same file works under `/gpx2movie/` and at a root (tested,
+  `webApp.test.ts`). `index.html` links it with `theme-color` and `apple-touch-icon` (Vite adds the base).
+- **Service worker** (`src/platform/serviceWorker.js`, plain JS, emitted as `sw.js` by the `serviceWorker()` plugin of
+  `vite.config.ts`, which writes in the precache list and two hashes; scope = the base):
+  - precached at install, in `openflyover-shell-<hash of the build>`: the page (`./`), every build file (JS, CSS) and
+    every public file except `oauth-callback.html` (fonts, sample, icons, manifest): ~3.7 MB, 50-odd files. The whole
+    app works offline, the 3D scene and the export included;
+  - cached on first use, in `openflyover-sky-<hash of their content>`: the sky and cloud textures (`atmosphere/`,
+    `clouds/`, ~12 MB), downloaded only when the atmosphere is first shown, not at install over a mobile connection;
+    the cache name follows their content, so it survives app updates (the textures change with the Takram packages
+    only);
+  - never: another origin (tiles, Open-Meteo, Overpass, Strava: their requests are not even seen by the worker; tiles
+    have their own cache, the offline packs, under their terms) nor the Strava callback page;
+  - navigation to the app: the precached page (any query), so it opens offline; the precache answers before the
+    network, `ignoreVary` (servers send `Vary: Origin`, module scripts carry an `Origin`);
+  - update: a new build changes `sw.js` (its hash); the browser installs it in the background, the app shows
+    « Nouvelle version disponible » › « Recharger » (`webApp.ts`: `SKIP_WAITING`, reload on `controllerchange`); on
+    activation the worker deletes the older `openflyover-shell-` / `openflyover-sky-` caches only, never the offline
+    packs (`openflyover-tiles-v1:`) nor « Mes projets » (`openflyover-projects-v1`).
+  Verified in headless Chromium (Pixel 5 emulation, `vite preview` under `/gpx2movie/` and at `/`): manifest without
+  errors, no installability error (`Page.getInstallabilityErrors`), worker active, second load with the server stopped
+  served from the cache.
+- **iOS install hint**: iOS has no install prompt; once per device, in a Safari tab (`navigator.standalone` false), a
+  message says « Pour installer OpenFlyover : touchez Partager, puis « Sur l'écran d'accueil ». » (toast, « Compris »).
+- **Files in**: Android (installed app): `share_target` (POST, multipart, field `tracks`, `.gpx`, `.fit` and the MIME
+  types apps use, `application/octet-stream` included: Garmin and Komoot share FIT / GPX under it). The worker answers
+  the POST to `share-target`: files kept in the `openflyover-share` cache, then a 303 to `./?partage`; the page
+  (`takeSharedFiles`) reads them, empties the cache, removes the query and opens them as « Ouvrir » does. A name
+  without extension gets one from the content (`sharedFileName`: ".FIT" at byte 8, `<gpx`). iOS has no share target:
+  the file picker. On iOS, the track picker has no `accept` filter (`pickerAccept`): Safari greys out `.gpx` / `.fit`
+  files whose type it does not know; the import checks the extension. Verified in headless Chromium: a multipart form
+  posted to `share-target` (file without extension) opens the app with the track.
+- **Files out**: where `showSaveFilePicker` is missing on a touch screen (iOS, Android before Chrome 132),
+  `capabilities.sharesFiles`: `saveFile` / `saveUrl` hand the file to `navigator.share({ files })` when `canShare`
+  takes it (iOS: « Enregistrer la vidéo » into Photos, « Enregistrer dans Fichiers »); the sheet closed = nothing
+  saved; a file the sheet does not take (Chrome Android refuses `.json`) or a refusal (no user gesture left) =
+  the download as before. The share sheet needs the click: called from a button (« Enregistrer », « Enregistrer à
+  nouveau… », the toast action), never at the end of an export. Label: `SHARE_SAVE_LABEL` (« Partager /
+  Enregistrer »). Computers keep the download. Sound: without `AudioEncoder` (iOS before 26) the film is exported
+  without sound and the result says « sans le son : ce navigateur ne sait pas l'encoder » (existing path). No
+  WebCodecs (Firefox Android): `videoEncoderMissingHint` points to Chrome (Android) or Safari 16.4+ on a touch screen.
+- **Persistence**: `navigator.storage.persist()` is requested once, on the first offline tile or the first « Mes
+  projets » save (`tileCache.ts`, `projectLibrary.ts`), on every browser: iOS 15.2+ may then keep them; an app added
+  to the home screen is exempt from Safari's 7-day eviction of script-written storage.
+
+### Device budget (`src/core/deviceBudget.ts`)
+
+Read once (`deviceBudget()`), where each limit lives. Phone = touch screen as the main pointer (`(pointer: coarse)`)
+and short side < 600 CSS px; tablet = touch screen, larger; computer = everything else, values strictly unchanged
+(tested). `navigator.deviceMemory` ≤ 2 GB (Chrome only) lowers a touch device further.
+
+| Limit | Where | Computer | Tablet | Phone | ≤ 2 GB |
+|---|---|---|---|---|---|
+| pixel ratio cap / while playing | `FlyoverCanvas` (`dpr`, `MovingPixelRatio`) | 2 / 2 | 2 / 1.5 | 2 / 1.5 | 1.5 / 1 |
+| decoded tile bitmaps (LRU) | `createTileFetcher` | 600 | 200 | 200 | 120 |
+| height grids (256 px equivalents) | `DEFAULT_TUNING.heightCacheEntries` | 400 | 160 | 160 | 100 |
+| finest imagery (zoom offset) | `engineOptionsFromSettings` | « Très fin » (2) | « Fin » (1) | « Fin » (1) | « Fin » |
+| preview clouds: resolution, still frames | `CloudsLayer`, `CLOUD_SETTLE_FRAMES` | 1, 32 | 0.5, 16 | 0.5, 16 | 0.5, 16 |
+| sea of clouds by default | `DEFAULT_CLOUDS.seaRender` | volume | « Nappe » | « Nappe » | « Nappe » |
+| export short side | `videoSize` | 2160 (4K) | 1440 | 1080 | as the device |
+
+« Nappe » is one draw call, no ray march: far cheaper than the volumetric sea. Lens effects stay off by default (as on
+a computer). A larger export class comes out at the cap (`videoSize`), with `exportResolutionNote` to show next to the
+choice. Verified in headless Chromium: iPhone 15 emulation (DPR 3) draws at 2, 1.5 while playing, 2 again on pause;
+a desktop viewport at DPR 2 stays at 2. Not measured: memory and frame time on a real phone.

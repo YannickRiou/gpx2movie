@@ -50,6 +50,15 @@ server {
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
+    location = /sw.js {
+        add_header Cache-Control "no-cache";
+    }
+
+    location = /manifest.webmanifest {
+        types { application/manifest+json webmanifest; }
+        add_header Cache-Control "no-cache";
+    }
+
     location ~ ^/(atmosphere|clouds)/ {
         types { image/x-exr exr; application/octet-stream bin; image/png png; }
     }
@@ -59,6 +68,22 @@ server {
 Files in `/assets/` have a fingerprint in their name: they can be cached for a year. The `/atmosphere/` and `/clouds/`
 folders contain the sky and cloud textures, as `.exr`, `.bin` and `.png`; nginx does not know `.exr` and `.bin`.
 
+### Installable web app (service worker)
+
+The build contains `sw.js` (service worker) and `manifest.webmanifest`, at the root of the site or of its subfolder:
+installing the site on a phone and the offline app shell need nothing else from the server, HTTPS apart. The worker
+precaches the app (~3.7 MB) on the first visit and the sky and cloud textures (~12 MB) the first time they are shown;
+it never caches the tiles, the weather, the landmarks nor Strava (see [`ARCHITECTURE.md`](../ARCHITECTURE.md),
+"Installable web app and mobile").
+
+- `sw.js` and `manifest.webmanifest` must not be cached for long: `Cache-Control: no-cache` (nginx above). Browsers
+  check `sw.js` without their HTTP cache anyway, so a new release reaches a visitor on their next visit, then the app
+  offers « Nouvelle version disponible ».
+- `manifest.webmanifest`: type `application/manifest+json` (nginx does not know `.webmanifest`).
+- GitHub Pages: nothing to set; it sends every file with `max-age=600` and the right types.
+- Removing the app from a site: deploying without `sw.js` is not enough (the installed worker keeps serving the cached
+  app); deploy a `sw.js` that unregisters itself.
+
 ### Apache
 
 On Apache hosting, add a `.htaccess` file at the root:
@@ -66,6 +91,10 @@ On Apache hosting, add a `.htaccess` file at the root:
 ```apache
 AddType image/x-exr .exr
 AddType font/woff2 .woff2
+AddType application/manifest+json .webmanifest
+<Files "sw.js">
+  Header set Cache-Control "no-cache"
+</Files>
 ```
 
 ### Known limitations
