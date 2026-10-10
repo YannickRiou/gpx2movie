@@ -12,12 +12,32 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
 - **Phones, follow-ups**: lower pixel ratio while fingers move the 3D view; offline packs no finer than the phone
   shows; no hover style left on a button after a tap; an open app looks for a new version every hour and when
   shown again.
+- **Home screen**: a calm welcome page with the latest projects; until a track is loaded only « Projet » is in the rail.
+- **Status bar**: the map state is clear: a ring and « Carte · 72 % » while the view loads, then « Carte prête »;
+  tiles in error stay visible.
+- **Video export**: no rendering while a frame waits for its tiles (only the tile requests go on), so clouds and
+  motion blur no longer keep the graphics card busy with frames that are thrown away; a tile that failed is retried
+  in the background instead of holding the frames.
 - **Situation shot**: « Soleil » › « Plein jour » (default) lights the region view in daylight whatever the time of
   the outing, then joins the flight's sun; « Heure du survol » and « Accéléré » (the former « Faire bouger le soleil »).
 - **Timeline**: a narrow block (a 4 s stop on a phone) pressed in its middle is moved, no longer stretched by its edge.
 - **OpenStreetMap**: the memory cache of Overpass results keeps the 32 most recently used, no longer every track of the session.
+- **Track glow**: « Halo de la trace » (formerly « Halo lumineux », the name of the lens bloom too) is clearly visible
+  and has its intensity, width and colour.
+- **Track behind the relief**: a ridge or a spur between the camera and the track hides it (the faint « ghost » of
+  the hidden parts piled up into a full line in the distance and is gone).
+- **Track on the relief**: the line, the marker and the labels lie on the terrain as drawn, without the jumps up and
+  down (or down to sea level) of a long track without elevation while tiles came and went.
 - **Simpler panels**: camera presets as the one choice (six shown, the rest under « Plus de préréglages »), the style
-  under « Plus de réglages »; Strava import in the « + Ajouter » menu of the track list.
+  as a row of « Caméra »; Strava import in the « + Ajouter » menu of the track list.
+- **« Temps forts »** (Survol tab) replaces the « Feuille de route » roadbook: the film's highlights at a glance, each
+  stop on or off with its duration, your own added or deleted, in sync with the timeline.
+- **Clearer tabs**: eight tabs in montage order, with the new « Météo », « Lumière » and « Objectif »; secondary
+  settings are one row with their name and value, the control shown on a tap (no more « Plus de réglages »).
+- **Mes projets**: removing the last track no longer writes an empty project over the one kept in « Mes projets »
+  (the autosave waits for a track).
+- **Fixes**: tooltips stay whole near the edge of a panel or of the screen (shifted, or above); « Lieu » lists the
+  areas as soon as they are found, and a failed region search offers « Réessayer ».
 
 ## 0.1.0 (October 2026)
 

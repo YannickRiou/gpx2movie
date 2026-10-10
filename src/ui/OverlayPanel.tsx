@@ -32,7 +32,7 @@ import { getPlatform } from '../platform'
 import { useAppStore } from '../state/store'
 import { useWeatherStore } from '../weather/store'
 import { formatNumber, formatPercent } from './format'
-import { InfoTip, MoreSettings, PanelSection, RangeField, TextField } from './PanelSection'
+import { InfoTip, PanelSection, RangeField, SettingRow, TextField } from './PanelSection'
 
 const COUNTER_LABELS: Record<CounterId, string> = {
   distance: 'Distance',
@@ -234,13 +234,13 @@ export function FilmTextStyleFields({
   const overrides = useAppStore((s) => s.settings.overlay.overrides)
   const shown = color ?? toHex(resolveOverlayTheme(style, overrides).text)
   return (
-    <MoreSettings paths={[]} label="Couleur et police">
+    <SettingRow label="Couleur et police" value={color || font ? 'Personnalisées' : 'Comme l’habillage'}>
       <ColorField label="Couleur" value={shown} onChange={(c) => onChange({ color: c, font })} />
       <FontField label="Police" value={font} inherit="Celle de l'habillage" onChange={(f) => onChange({ color, font: f })} />
       <button type="button" className="btn btn--secondary" disabled={!color && !font} onClick={() => onChange({})}>
         Comme l'habillage
       </button>
-    </MoreSettings>
+    </SettingRow>
   )
 }
 
@@ -264,7 +264,11 @@ function StyleOverrides({
   const inherit = widget ? "Celle de l'habillage" : 'Celle du style'
   return (
     // a widget's own changes: no « modifié » badge (the paths stop at the widget, which has its other settings)
-    <MoreSettings paths={widget ? [] : ['overlay.overrides']} label="Couleurs et polices">
+    <SettingRow
+      label="Couleurs et polices"
+      value={Object.keys(own).length > 0 ? 'Personnalisées' : widget ? 'Comme l’habillage' : 'Celles du style'}
+      paths={widget ? [] : ['overlay.overrides']}
+    >
       <ColorField label="Accent" value={toHex(theme.accent)} onChange={(accent) => onChange({ accent })} />
       <ColorField label="Texte" value={toHex(theme.text)} onChange={(text) => onChange({ text })} />
       {panel ? (
@@ -288,7 +292,7 @@ function StyleOverrides({
       <button type="button" className="btn btn--secondary" disabled={Object.keys(own).length === 0} onClick={() => onChange(null)}>
         {widget ? "Comme le reste de l'habillage" : 'Revenir au style'}
       </button>
-    </MoreSettings>
+    </SettingRow>
   )
 }
 

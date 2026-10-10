@@ -55,6 +55,9 @@ const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`
 
 // ---------------------------------------------------------------------------------------------------- helpers
 
+/** The tabs of the side panel, in the order of the rail (SHELL_TABS in src/ui/shell.ts). */
+const TABS = ['trace', 'carte', 'meteo', 'lumiere', 'survol', 'objectif', 'habillage', 'projet']
+
 /** Waits until `fn` (run in the page) returns a truthy value. */
 const until = (page, fn, arg, timeout = STEP_MS) => page.waitForFunction(fn, { timeout, polling: 250 }, arg)
 
@@ -144,7 +147,11 @@ const SCENARIOS = [
     title: "Accueil vide, puis l'exemple chargé",
     async run({ page, url }) {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: STEP_MS })
-      await page.waitForSelector('#empty-title::-p-text(Glissez vos traces)', { visible: true, timeout: STEP_MS })
+      await page.waitForSelector('#empty-title::-p-text(Votre sortie)', { visible: true, timeout: STEP_MS })
+      // the home screen: « Projet » alone in the rail, no export
+      const homeTabs = await page.$$eval('.rail [role="tab"]', (tabs) => tabs.map((t) => t.id.replace('tab-', '')))
+      assert(homeTabs.join() === 'projet', `onglets de l'accueil : ${homeTabs.join(', ')}`)
+      assert(!(await page.$('.topbar__export')), '« Exporter » est affiché sans trace')
       await clickButton(page, "Essayer avec l'exemple")
       await until(page, () => {
         const lane = document.querySelector('[role="group"][aria-label="Plans"]')
@@ -152,6 +159,10 @@ const SCENARIOS = [
         return text.includes('Ouverture') && text.includes('Survol') && text.includes('Clôture')
       })
       assert(!(await page.$('#empty-title')), "l'accueil est resté affiché après le chargement de l'exemple")
+      // the tabs come back, on « Trace »
+      await until(page, (all) => [...document.querySelectorAll('.rail [role="tab"]')].map((t) => t.id.replace('tab-', '')).join() === all, TABS.join())
+      assert(await page.$eval('#tab-trace', (t) => t.getAttribute('aria-selected') === 'true'), "l'onglet Trace n'est pas ouvert après l'exemple")
+      assert(await page.$('.topbar__export'), "« Exporter » manque après l'exemple")
       await waitForScene(page)
     },
   },
@@ -159,7 +170,9 @@ const SCENARIOS = [
     id: 'onglets',
     title: 'Onglets du rail et aide des raccourcis',
     async run({ page }) {
-      for (const tab of ['trace', 'carte', 'survol', 'habillage', 'projet']) {
+      const shown = await page.$$eval('.rail [role="tab"]', (tabs) => tabs.map((t) => t.id.replace('tab-', '')))
+      assert(shown.join() === TABS.join(), `onglets du rail : ${shown.join(', ')}`)
+      for (const tab of TABS) {
         const open = await page.evaluate(
           (t) => document.getElementById(`tab-${t}`)?.getAttribute('aria-selected') === 'true' && !document.getElementById('side-panel')?.hidden,
           tab,
@@ -185,6 +198,40 @@ const SCENARIOS = [
       await page.waitForSelector('dialog.help[open]', { visible: true, timeout: STEP_MS })
       await page.keyboard.press('Escape')
       await until(page, () => !document.querySelector('dialog.help[open]'))
+    },
+  },
+  {
+    id: 'reglage-repli',
+    title: 'Réglage replié (onglet Lumière) : nom et valeur, curseur au clavier, Par défaut',
+    async run({ page }) {
+      if (await page.evaluate(() => document.getElementById('tab-lumiere')?.getAttribute('aria-selected') !== 'true')) {
+        await page.click('#tab-lumiere')
+      }
+      const head = '#tab-panel-lumiere .setting-row__head::-p-text(Exposition)'
+      const rowState = () =>
+        page.evaluate(() => {
+          const button = [...document.querySelectorAll('#tab-panel-lumiere .setting-row__head')].find((b) => b.textContent.startsWith('Exposition'))
+          const body = button && document.getElementById(button.getAttribute('aria-controls'))
+          return button && { expanded: button.getAttribute('aria-expanded'), value: button.querySelector('.setting-row__value').textContent, hidden: body.hidden }
+        })
+      const before = await rowState()
+      assert(before && before.expanded === 'false' && before.hidden && before.value.startsWith('0'), `ligne Exposition au départ : ${JSON.stringify(before)}`)
+      // pressed: the slider shows under the row and takes the focus; the arrows move it, the row says the new value
+      await page.click(head)
+      await until(page, () => document.activeElement?.matches('#tab-panel-lumiere .setting-row__body input[type="range"]'))
+      await page.keyboard.press('ArrowRight')
+      await until(page, () => document.querySelector('#tab-panel-lumiere .setting-row__value--modified')?.textContent.startsWith('+0,5'))
+      // the section's « Par défaut » puts it back
+      await page.click('#tab-panel-lumiere button[aria-label="Rétablir les réglages par défaut : Atmosphère"]')
+      await until(page, () => !document.querySelector('#tab-panel-lumiere .setting-row__value--modified'))
+      // Enter on the row folds it again
+      await page.evaluate(() =>
+        [...document.querySelectorAll('#tab-panel-lumiere .setting-row__head')].find((b) => b.textContent.startsWith('Exposition')).focus(),
+      )
+      await page.keyboard.press('Enter')
+      const after = await rowState()
+      assert(after.expanded === 'false' && after.hidden && after.value === before.value, `ligne Exposition à la fin : ${JSON.stringify(after)}`)
+      await blur(page)
     },
   },
   {
@@ -218,6 +265,75 @@ const SCENARIOS = [
       await page.keyboard.press('t')
       await until(page, ([n]) => document.querySelectorAll('[role="group"][aria-label="Textes"] .film-tl__block').length === n + 1, [texts])
       await page.keyboard.press('Escape')
+    },
+  },
+  {
+    id: 'temps-forts',
+    title: 'Temps forts (onglet Survol) : un ajout au marqueur et sa suppression, vus sur la timeline',
+    async run({ page }) {
+      if (await page.evaluate(() => document.getElementById('tab-survol')?.getAttribute('aria-selected') !== 'true')) {
+        await page.click('#tab-survol')
+      }
+      const stops = await laneCount(page, 'Arrêts')
+      await clickButton(page, 'Ajouter à la position du marqueur')
+      await until(page, ([n]) => document.querySelectorAll('[role="group"][aria-label="Arrêts"] .film-tl__block').length === n + 1, [stops])
+      await page.click('#tab-panel-survol .highlight button[aria-label^="Supprimer le temps fort"]')
+      await until(page, ([n]) => document.querySelectorAll('[role="group"][aria-label="Arrêts"] .film-tl__block').length === n, [stops])
+    },
+  },
+  {
+    id: 'region',
+    title: 'Plan de situation : la région cherchée dès « Mettre en avant la région », « Réessayer » après un échec',
+    async run({ page }) {
+      await exposeStores(page)
+      // Overpass stubbed in the page: the first is_in query fails, then two areas (no geometry: no highlight drawn)
+      await page.evaluate(() => {
+        const film = window.__e2e.appStore.getState().settings.film
+        const stub = { film, fetch: window.fetch, isIn: 0, fail: true }
+        window.__e2e.overpass = stub
+        window.fetch = async (input, init) => {
+          if (!String(input).includes('/interpreter')) return stub.fetch.call(window, input, init)
+          const query = new URLSearchParams(String(init?.body ?? '')).get('data') ?? ''
+          const json = (elements) => new Response(JSON.stringify({ elements }), { headers: { 'Content-Type': 'application/json' } })
+          if (!query.includes('is_in')) return json([])
+          stub.isIn++
+          if (stub.fail) return new Response('', { status: 400 })
+          const area = (id, name, level, [w, s, e, n]) => ({
+            type: 'relation',
+            id,
+            tags: { boundary: 'administrative', admin_level: level, name },
+            bounds: { minlon: w, minlat: s, maxlon: e, maxlat: n },
+          })
+          return json([area(1, 'Haute-Savoie', '6', [5.8, 45.6, 7.1, 46.4]), area(2, 'Auvergne-Rhône-Alpes', '4', [2, 44.1, 7.2, 46.8])])
+        }
+      })
+      try {
+        await page.click('[role="group"][aria-label="Plans"] .film-tl__block')
+        await until(page, () => [...document.querySelectorAll('select')].some((s) => [...s.options].some((o) => o.value === 'situation')))
+        await page.evaluate(() => {
+          const select = [...document.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'situation'))
+          Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, 'situation')
+          select.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await page.click('label::-p-text(Mettre en avant la région)')
+        // asked at once, without touching « Lieu »; the failure says so and offers to retry
+        const retry = await page.waitForSelector('.dock button::-p-text(Réessayer)', { visible: true, timeout: STEP_MS })
+        assert((await page.evaluate(() => window.__e2e.overpass.isIn)) === 1, 'la région n’a pas été cherchée une seule fois')
+        await page.evaluate(() => (window.__e2e.overpass.fail = false))
+        await retry.click()
+        await until(page, () =>
+          [...document.querySelectorAll('select')].some((s) => [...s.options].some((o) => o.textContent.startsWith('Haute-Savoie'))),
+        )
+        assert((await page.evaluate(() => window.__e2e.overpass.isIn)) === 2, 'la région a été cherchée plus de deux fois')
+      } finally {
+        // the film and the network as they were (the export does not fly over a region view)
+        await page.evaluate(() => {
+          const { film, fetch } = window.__e2e.overpass
+          window.fetch = fetch
+          window.__e2e.appStore.getState().setSetting('film', film)
+          window.__e2e.appStore.getState().setFilmSelection(null)
+        })
+      }
     },
   },
   {
@@ -319,7 +435,7 @@ const SCENARIOS = [
   },
   {
     id: 'mobile',
-    title: 'Téléphone (390 × 844, tactile) : exemple, deux onglets en feuille, un réglage, la feuille d’export',
+    title: 'Téléphone (390 × 844, tactile) : exemple, onglets en feuille dans une barre qui défile, un réglage, la feuille d’export',
     async run({ url, newPage }) {
       // its own page: switching an open page to touch emulation reloads it
       const page = await newPage()
@@ -343,10 +459,23 @@ const SCENARIOS = [
             },
             selector,
           )
-        for (const tab of ['carte', 'survol']) {
+        // the eight tabs do not fit: the bar scrolls, and the open tab is brought into sight
+        assert(await page.evaluate(() => {
+          const bar = document.querySelector('.rail__tabs')
+          return bar.scrollWidth > bar.clientWidth
+        }), 'la barre d’onglets ne défile pas')
+        for (const tab of ['carte', 'projet', 'survol']) {
           await tap(`#tab-${tab}`)
           await until(page, (t) => !document.getElementById(`tab-panel-${t}`)?.hidden, tab)
           await isBottomSheet('#side-panel')
+          await until(
+            page,
+            (t) => {
+              const r = document.getElementById(`tab-${t}`).getBoundingClientRect()
+              return r.left >= 0 && r.right <= innerWidth && r.height >= 44
+            },
+            tab,
+          )
         }
         await tap('#tab-panel-survol label:has(input[value="Oiseau"])')
         await until(page, () => document.querySelector('#tab-panel-survol input[value="Oiseau"]')?.checked === true)

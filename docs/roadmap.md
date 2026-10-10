@@ -49,7 +49,7 @@ What sets OpenFlyover apart: everything stays local, and the data of the outing 
 | Batch rendering | the same movie in several formats at once; a folder of GPX files and a preset → one video per outing, from the command line, without a UI | several formats (format × resolution, still image, poster) in one go, in a chosen folder: done; one video per track in a folder, from the interface or from the command line (desktop application): done |
 | Printable poster | the track on the terrain at very high resolution, with title and figures, for printing | A4 / A3 at 300 dpi (portrait, landscape) and square, 3D overview, title, date, key figures, profile, weather, credits, three styles, several tracks, flat map: done |
 | Music sync | the flyover pacing (slow-motion, transitions) aligned on the beats of a local music file | "Musique" lane (volume, fades, waveform), played in the preview, mixed at export, movie duration fitted to the music, stops, titles and speed sections (slow-motion) synced to the beat: done |
-| Planned outing | fly over a route before going (a GPX prepared elsewhere, usually without times) | estimated passing times, forecast weather and roadbook for a route without times: done |
+| Planned outing | fly over a route before going (a GPX prepared elsewhere, usually without times) | estimated passing times and forecast weather for a route without times: done |
 
 ### Polish from real use (October 2026)
 

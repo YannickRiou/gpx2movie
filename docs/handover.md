@@ -109,8 +109,8 @@ features included), `npm run build`,
 - **Second simplification pass**: `RangeField` (optional ⓘ tip and spoken value) for the settings sliders;
   `cumulativeDistances` in `geo/lonLat`; shared `createCanvas` / `createAbortError` for DEM and imagery; terrain area
   margins in `terrain/engine`; one `CAMERA_FOV_DEG`; `Fold` merged into `PanelSection`.
-- **Ported from the old branch chain**: landmark hiding (`settings.landmarks.hiddenIds`, eye button in "Repères",
-  also left out of the roadbook), point smoothing (`trackStyle.smoothingM`, recorded distances kept; ghost racers follow
+- **Ported from the old branch chain**: landmark hiding (`settings.landmarks.hiddenIds`, eye button in "Repères"),
+  point smoothing (`trackStyle.smoothingM`, recorded distances kept; ghost racers follow
   their smoothed lines; labels, picking, mini-map and poster keep the recorded points), texts and media attached to a
   stop (`stopId`, `followStops`, also on landmark-title, duration and pacing changes through `setLandmarkTitles` and
   `setFlightTiming`, on the "Par défaut" of "Durée et rythme" and on landmarks published again; see the last bullet),
@@ -140,6 +140,35 @@ features included), `npm run build`,
 - **Camera smoothness on long tracks** (10 October 2026): measured with `cameraSmoothness.test.ts` (540 km raid-like
   track in 4 min 30 s, the sample in 60 s); heading averaged at the film's ground speed on unwrapped chord directions,
   corners of the line rounded over 0.5 s, aim height over at least 0.25 s of track with a B-spline grid; not seen on a GPU.
+- **Track draped on the drawn terrain** (10 October 2026): `engine.sampleHeight` reads the mesh of the tile on screen
+  (`sampleTileMesh`) instead of the LRU height field, which held 100 grids for up to ~390 drawn tiles (points at 0 m,
+  jumps of hundreds of metres on a 540 km track without elevation); measured with a simulated flight, not seen on a GPU.
+- **Track glow settings** (10 October 2026, user request): `trackStyle.glowIntensity` / `glowWidth` / `glowColor`
+  (older projects get the defaults), stronger default, drawn before the line in the opaque pass so a strong glow
+  cannot tint it; rows in « Trace et marqueur ». Seen in headless Chromium on synthetic tiles, not on a GPU.
+- **Track hidden by the relief** (10 October 2026, user report): the depth-test-free 25 % "ghost" pass is removed; its
+  overlapping round caps (10 m pieces) piled up to an opaque line far away, over the ridges (pixel readback in headless
+  Chromium, direct and HDR composer). Not seen on a GPU.
+- **« Temps forts » replaces « Feuille de route »** (10 October 2026, user decision: a montage tool, not a hike
+  planner): `HighlightsPanel` in the Survol tab, rows from `filmHighlights` (the timeline's candidates and stops, no
+  state of its own); the roadbook, its steep sections, passing times and .txt export removed.
+- **Map state in the status bar** (10 October 2026): `ui/mapStatus.ts` (ring + « Carte · 72 % », « Carte prête »,
+  « N tuiles en erreur »), from the existing terrain stats, no engine change; seen in headless Chromium with simulated
+  stats. Not done: « Précharger le survol » (engine `prefetch` along the whole film path, with its own progress).
+- **Tabs Météo, Lumière, Objectif** (10 October 2026, user request "pense Apple"): eight tabs in montage order, `SettingRow`
+  (name and value, control on a tap) replaces every « Plus de réglages »; phone bar scrolls sideways. Seen in headless Chromium.
+- **Home screen** (10 October 2026, user request): without a track the rail holds « Projet » alone (folded) and « Exporter »
+  is hidden (`home` in `shellReducer`, `shownTabs`); a paper page replaces the card on the sky gradient, with « Récents »
+  from « Mes projets ». Seen in headless Chromium (desktop and phone).
+- **Tooltips and region search** (10 October 2026): `installTipPlacement` (`ui/shell.ts`) shifts or flips a centred
+  `data-tip` inside its scrolling column; `fetchRegion` lists the areas before the geometry, `retryRegion` after a failure (e2e `region`).
+- **Export waits for tiles without rendering** (10 October 2026): `settle` only runs `engine.update` (`updateTiles`)
+  while the view's tiles load, then renders (e2e with fake tiles after 300 ms: 320 → 36 renders for 20 frames), not
+  seen on a GPU. The engine's retry and unload delays became times (`retryDelayMs` 5 s, `unloadAfterMs` 2 s,
+  `prefetchKeepMs` 30 s), a retry is fetched last and no longer held for by the view (unreachable tile hosts: export
+  of 20 frames 45–50 s instead of 82–107 s, 7–9 frames at the timeout instead of 5).
+- **Tabs Météo, Lumière, Objectif** (10 October 2026, user request "pense Apple"): eight tabs in montage order, `SettingRow`
+  (name and value, control on a tap) replaces every « Plus de réglages »; phone bar scrolls sideways. Seen in headless Chromium.
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn
@@ -160,10 +189,8 @@ Done (tests green, never seen on screen):
   without times (`TrackList.tsx`, `Track.timesEstimated`, "horaires estimés" (estimated times) chip, "Effacer les
   horaires" (clear the times)), weather from the Open-Meteo **forecast** (`api.open-meteo.com/v1/forecast`, 16 days,
   3 h memory cache; desktop CSP widened).
-- **Roadbook**: `src/plan/roadbook.ts`, `src/ui/RoadbookPanel.tsx` ("Trace" tab, under "Montées et étiquettes" (climbs and labels)): steep
-  sections ≥ 15 % / ≥ 25 %, key points (climbs, passes, summits, huts, water points, points of interest), km /
-  elevation / D+ / time, click = playhead, "Copier" (copy), "Enregistrer (.txt)" (save as text). New landmark type
-  `waterPoint` (water points, out of the film by default).
+- **Roadbook**: removed on 10 October 2026, replaced by « Temps forts » (see "Work in progress"). The landmark type
+  `waterPoint` it added stays (water points, out of the film by default).
 - **Shot transitions**: opening / closing "Enchaîné" (continuous, default), "Coupe" (cut), "Fondu au noir / au blanc"
   (fade to black / white, 0.3–2 s); `FilmShot.transition`, `dipS`, `transitionDipAt`, `shotWeight`. Not at stops
   (explained in `ARCHITECTURE.md`).

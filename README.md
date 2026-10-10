@@ -52,7 +52,7 @@ Linux **desktop application** (Tauri), from the same code.
 | Look | color grading presets; lens effects, all off by default: speed blur, bloom, lens flare, depth of field |
 | Landmarks | summits, passes, huts, lakes… from OpenStreetMap; climbs detected and categorized (cat. 4 to HC); 3D labels; the movie slows down at passes, summits and huts on the track and shows their name; any landmark can be hidden one by one |
 | Planned outing | for a route without times (Komoot, Visorando, IGNrando…): date, start time, activity and pace give the estimated passing time at each point, the sun and the weather forecast of the day |
-| Roadbook | before setting off: the steep sections (up and down), the passes, summits, huts and water points on the way, with the km, elevation, D+ and passing time; to copy or save as text |
+| Highlights | « Temps forts »: the film's highlights at a glance (climb tops, passes, summits, and your own), each with its stop in the movie on or off and its duration; in sync with the timeline |
 | Points of interest | your own places ("Picnic", "Paul's chalet"), placed with a right-click on the terrain or at the marker, with an icon (hut, bivouac, summit…), shown like landmarks in the view and in the movie |
 | Track | colored by speed, slope, elevation, heart rate, cadence, power or temperature; width, dashes or dots, glow, track that draws itself as the marker passes; smoothing of GPS jitter |
 | Marker | ball, figurine (hiker, mountaineer, runner, cyclist, bikepacking, mountain bike, skier, paraglider, motorbike, car, light aircraft) facing the direction of travel, or your photo in a circle; adjustable size |
@@ -85,7 +85,7 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:5173> and click "Essayer avec l'exemple (Tour du Mont-Blanc)" (try with the sample).
+Open <http://127.0.0.1:5173> and click "Essayer avec l'exemple" (try with the sample).
 
 To test the production build: `npm run build`, then `npm run preview` (<http://localhost:4173>).
 

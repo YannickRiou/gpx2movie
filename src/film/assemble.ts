@@ -52,6 +52,38 @@ export function stopCandidates({ track, landmarks = [], pacing }: AssembleInput)
   return candidates.sort((a, b) => a.atM - b.atM)
 }
 
+/** The stop of `stops` at `atM` (within a metre), the one a highlight there has. */
+export function stopAt<S extends Pick<FilmStop, 'atM'>>(stops: readonly S[], atM: number): S | undefined {
+  return stops.find((s) => Math.abs(s.atM - atM) < 1)
+}
+
+/** A row of « Temps forts »: a detected highlight (`source` set) or a stop placed elsewhere by hand. */
+export interface FilmHighlight {
+  atM: number
+  label: string
+  source?: StopCandidate['source']
+  /** its stop in the film, if any */
+  stop?: FilmStop
+}
+
+/**
+ * The highlights of the film by position: each candidate (one per position) with its stop (`stopAt`), then the other
+ * stops (added by hand, a second one at the same place included). `stops` are the film's, generated ones included
+ * (`FilmClock.stops`).
+ */
+export function filmHighlights(candidates: readonly StopCandidate[], stops: readonly FilmStop[]): FilmHighlight[] {
+  let free = stops
+  const detected = candidates
+    .filter((c, i) => candidates.findIndex((d) => d.atM === c.atM) === i)
+    .map((c) => {
+      const stop = stopAt(free, c.atM)
+      free = free.filter((s) => s !== stop)
+      return { ...c, stop }
+    })
+  const added = free.map((stop) => ({ atM: stop.atM, label: stop.label || 'Arrêt', stop }))
+  return [...detected, ...added].sort((a, b) => a.atM - b.atM)
+}
+
 /**
  * Stops at the highlights, one per cluster (like the pauses they replace): 'temps-forts' `AUTO_STOP_S` each,
  * camera orbiting; 'rythme' only while the pacing is on, `pauseS` each, camera as in the film (as these pauses were).

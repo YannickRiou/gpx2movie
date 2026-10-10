@@ -117,7 +117,8 @@
   z-index: 30;
   top: calc(100% + 8px);
   left: 50%;
-  transform: translateX(-50%);
+  /* shifted inside the window and its scrolling column (installTipPlacement, shell.ts) */
+  transform: translateX(calc(-50% + var(--tip-shift, 0px)));
   padding: 4px var(--space-2);
   border: 1px solid var(--color-ink-soft);
   border-radius: var(--radius-sm);
@@ -146,7 +147,10 @@
 }
 
 [data-tip-side='top']:hover::after,
-[data-tip-side='top']:focus-visible::after {
+[data-tip-side='top']:focus-visible::after,
+[data-tip-flip]:hover::after,
+[data-tip-flip]:focus-visible::after,
+[data-tip-flip]:has(input:focus-visible)::after {
   top: auto;
   bottom: calc(100% + 8px);
 }
@@ -356,11 +360,15 @@
   color: var(--color-glacier);
 }
 
+/* eight tabs: they scroll when the window is too short (landscape phone) or, as a bottom bar, too narrow */
 .rail__tabs {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-1);
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
 
 .rail__tab,
@@ -531,7 +539,7 @@
   z-index: 3;
 }
 
-/* foldable sections (Montées, Météo) */
+/* foldable sections (PanelSection) */
 .fold__summary {
   display: flex;
   align-items: center;
@@ -559,18 +567,17 @@
   padding-bottom: var(--space-1);
 }
 
-.fold:not([open]) > .fold__summary .icon,
-.export__more:not([open]) > summary .icon {
+.fold:not([open]) > .fold__summary .icon {
   transform: rotate(-90deg);
 }
 
-/* the folded section brings its own title and marker: the summary shows them */
-.fold > section > .section-title,
-.fold > .settings > .modified {
+/* the foldable section brings its own title and marker: the summary shows them, no section in a section */
+.panel-section__body > section > .section-title,
+.panel-section__body > .settings > .modified {
   display: none;
 }
 
-.fold > .settings {
+.panel-section__body > .settings {
   padding: 0;
   border-radius: 0;
   background: none;
@@ -700,55 +707,70 @@
   right: 4px;
 }
 
-/* Welcome card (no track yet) */
+/* Home screen (no track yet): a paper page over the whole view, one centred column */
 .empty {
   position: absolute;
   z-index: 5;
-  top: 50%;
-  left: 50%;
+  inset: 0;
+  display: flex;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-6) var(--space-4);
+  background: var(--surface-panel);
+  color: var(--text-1);
+  text-align: center;
+}
+
+.empty__inner {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
-  width: min(420px, calc(100% - 32px));
-  max-height: calc(100% - 32px);
-  overflow-y: auto;
-  padding: var(--space-6) var(--space-5) var(--space-4);
-  border: 2px dashed var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--surface-panel);
-  color: var(--text-1);
-  text-align: center;
-  box-shadow: var(--shadow-pop);
-  transform: translate(-50%, -50%);
+  width: min(400px, 100%);
+  /* centred when it fits, scrolls from the top when it does not */
+  margin: auto;
 }
 
-.empty__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: var(--surface-card);
-  color: var(--color-ink);
+.empty__logo {
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--space-2);
+  border-radius: 14px;
+  box-shadow: var(--shadow-pop);
 }
 
 .empty__title {
-  font-size: 20px;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.15;
 }
 
 .empty__hint {
-  margin: calc(-1 * var(--space-2)) 0 var(--space-1);
+  max-width: 32ch;
+  margin: 0 0 var(--space-3);
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.45;
 }
 
+.empty__primary {
+  width: 100%;
+  min-height: 48px;
+  font-size: 16px;
+}
+
+/* Strava and the sample side by side, stacked on a phone */
 .empty__actions {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-2);
   width: 100%;
+}
+
+@media (max-width: 699px) {
+  .empty__actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .empty__link {
@@ -773,6 +795,83 @@
 .empty__link:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+/* latest projects of « Mes projets » */
+.empty__recent {
+  width: 100%;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+.empty__recent-title {
+  margin-bottom: var(--space-2);
+  color: var(--text-2);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty__recent ul {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty__project {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .empty__project:hover:not(:disabled) {
+    background: var(--surface-card);
+  }
+}
+
+.empty__project:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.empty__project > .library__thumb {
+  grid-row: 1 / span 2;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+}
+
+.empty__project-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty__project-summary {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Messages (toasts), at the bottom of the view above the timeline */
@@ -969,32 +1068,6 @@
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-.export__more {
-  border-top: 1px solid var(--line);
-}
-
-.export__more-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) 0 0;
-  font-size: 13px;
-  font-weight: 600;
-  list-style: none;
-  cursor: pointer;
-}
-
-.export__more-summary::-webkit-details-marker {
-  display: none;
-}
-
-.export__more-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
 }
 
 /* Inspector of the selected timeline block, in the dock (header and close as the export drawer) ------- */
@@ -1281,9 +1354,50 @@
   white-space: nowrap;
 }
 
-.status__tiles,
+.status__map,
 .status__line {
   flex: none;
+}
+
+.status__map {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.status__map-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* brighter while loading, back to the calm strip colour once ready */
+.status__map-state--loading {
+  color: var(--text-on-dark);
+}
+
+.status__map-state--ready .icon {
+  color: var(--status-ok-on-dark);
+}
+
+/* determinate ring (track + arc from 12 o'clock), turning slowly while the view waits for tiles */
+.status__ring {
+  flex: none;
+  fill: none;
+  stroke-width: 2;
+  animation: status-spin 2.4s linear infinite;
+}
+
+.status__ring circle:first-child {
+  stroke: var(--color-ink-soft);
+}
+
+.status__ring circle:last-child {
+  stroke: var(--accent-on-dark);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 400ms ease-out;
 }
 
 /* tiles in error: attention colour (9:1 on the ink) */
@@ -1499,8 +1613,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .status__spinner {
+  .status__spinner,
+  .status__ring {
     animation: none;
+  }
+
+  .status__ring circle:last-child {
+    transition: none;
   }
 
   .toast,
@@ -1577,7 +1696,6 @@
   .segmented__option,
   .checkbox,
   .fold__summary,
-  .export__more-summary,
   .track-menu__item {
     min-height: 44px;
   }
@@ -1841,17 +1959,25 @@
     border-right: 0;
   }
 
+  /* all eight tabs in a bar that scrolls sideways (App keeps the open one in sight) */
   .rail__tabs {
     flex: 1 1 auto;
     flex-direction: row;
-    justify-content: space-around;
+    gap: 0;
+    padding: 0 var(--space-1);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
   }
 
   .rail__tab {
+    flex: none;
     width: auto;
-    min-width: 56px;
+    /* a part of the next tab shows past the edge: the bar reads as scrollable */
+    min-width: 72px;
     height: 52px;
     margin: 0;
+    padding: 0 var(--space-1);
   }
 
   .rail__tab[aria-selected='true']::before {

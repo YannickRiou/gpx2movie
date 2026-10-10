@@ -19,10 +19,10 @@ export const DASH_PATTERNS: Record<Exclude<TrackDash, 'plein'>, { dash: number; 
   tirets: { dash: 3, gap: 2 },
   points: { dash: 1, gap: 1.5 },
 }
-/** Width of the glow relative to the line. */
-export const GLOW_WIDTH_FACTOR = 3.5
-/** Strength of the glow at its centre (fraction of the line colour), fading to 0 at its edge. */
+/** Default strength of a glow at its centre (times its colour), fading to 0 at its edge. */
 export const GLOW_STRENGTH = 0.55
+/** Strength of the track glow at « Intensité du halo » 100 %: above 1 it is brighter than the line it borders. */
+export const TRACK_GLOW_MAX_STRENGTH = 2
 
 // ---------------------------------------------------------------------------
 // Glow
@@ -30,14 +30,15 @@ export const GLOW_STRENGTH = 0.55
 
 const FRAGMENT_OUTPUT = 'gl_FragColor = vec4( diffuseColor.rgb, alpha );'
 /**
- * Fade from the centre line to the edge (`vUv.x` across the line, `vUv.y` beyond ±1 in the round caps). Written
- * with MAX blending: where neighbouring pieces overlap at a joint the result does not add up into beads, and the
- * glow lightens dark ground with the track colour without washing out the line itself.
+ * Fade from `glowInner` (the edge of the line drawn over it, as a fraction of the half-width; 0 = the centre) to the
+ * edge (`vUv.x` across the line, `vUv.y` beyond ±1 in the round caps); nothing inside, so the line keeps its colour.
+ * Written with MAX blending: where neighbouring pieces overlap at a joint the result does not add up into beads (nor
+ * into an opaque line far away), and the glow lightens dark ground with the track colour.
  */
 const GLOW_OUTPUT = `
   float glowR = abs( vUv.y ) > 1.0 ? length( vec2( vUv.x, abs( vUv.y ) - 1.0 ) ) : abs( vUv.x );
-  float glowFade = 1.0 - smoothstep( 0.0, 1.0, glowR );
-  gl_FragColor = vec4( diffuseColor.rgb * glowFade * glowFade * ${GLOW_STRENGTH.toFixed(3)}, 1.0 );
+  float glowFade = glowR < glowInner ? 0.0 : 1.0 - smoothstep( glowInner, 1.0, glowR );
+  gl_FragColor = vec4( diffuseColor.rgb * glowFade * glowFade * glowStrength, 1.0 );
 `
 
 export function createGlowMaterial(color: Color, width: number, height: number): LineMaterial {
@@ -50,8 +51,11 @@ export function createGlowMaterial(color: Color, width: number, height: number):
     blendEquation: MaxEquation,
   })
   material.resolution.set(width, height)
+  // set with `setGlow`
+  material.uniforms.glowStrength = { value: GLOW_STRENGTH }
+  material.uniforms.glowInner = { value: 0 }
   material.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(FRAGMENT_OUTPUT, GLOW_OUTPUT)
+    shader.fragmentShader = `uniform float glowStrength;\nuniform float glowInner;\n${shader.fragmentShader.replace(FRAGMENT_OUTPUT, GLOW_OUTPUT)}`
   }
   // a different program than the plain line material, whose source is the same before the patch
   material.customProgramCacheKey = () => 'track-glow'
@@ -62,9 +66,15 @@ export function createGlowMaterial(color: Color, width: number, height: number):
 // Width and dashes
 // ---------------------------------------------------------------------------
 
-/** Width of `material` in canvas pixels for this style (the glow is wider). */
+/** Strength of a glow material where it starts, and the part of its half-width covered by the line (0..1). */
+export function setGlow(material: LineMaterial, strength: number, inner: number): void {
+  material.uniforms.glowStrength.value = strength
+  material.uniforms.glowInner.value = inner
+}
+
+/** Width in canvas pixels of the line, or of its glow, for this style. */
 export function lineWidthPx(style: TrackStyle, renderScale: number, glow = false): number {
-  return style.width * renderScale * (glow ? GLOW_WIDTH_FACTOR : 1)
+  return (glow ? style.glowWidth : style.width) * renderScale
 }
 
 /**

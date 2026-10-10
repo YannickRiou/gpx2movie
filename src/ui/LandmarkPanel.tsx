@@ -6,8 +6,14 @@ import { sequenceLandmarks } from '../flyover/sequence'
 import { followLandmarks, setLandmarkTitles, useFilmSequence, useFilmSource } from '../scene/usePacing'
 import { useAppStore } from '../state/store'
 import { Icon } from './icons'
-import { PanelSection } from './PanelSection'
+import { PanelSection, SettingRow } from './PanelSection'
 import { formatDistance, formatNumber } from './format'
+
+/** Kinds shown, in a few words: « Tous », « 4 sur 9 », « Aucun ». */
+function kindsLabel(kinds: Record<string, boolean>): string {
+  const on = OSM_KINDS.filter((kind) => kinds[kind]).length
+  return on === OSM_KINDS.length ? 'Tous' : on === 0 ? 'Aucun' : `${on} sur ${OSM_KINDS.length}`
+}
 
 /**
  * « Repères (OpenStreetMap) » (foldable section of the Carte tab): kinds and corridor width, « Ralentir et titrer aux
@@ -67,46 +73,50 @@ export function LandmarkPanel() {
       </label>
 
       {settings.enabled && (
-        <fieldset className="field fieldset">
-          <legend className="field__label">Types</legend>
-          <div className="chips">
-            {OSM_KINDS.map((kind) => (
-              <label key={kind} className="chip">
-                <input
-                  type="checkbox"
-                  checked={settings.kinds[kind]}
-                  onChange={(e) =>
-                    setSetting('landmarks', { ...settings, kinds: { ...settings.kinds, [kind]: e.currentTarget.checked } })
-                  }
-                />
-                {KIND_LABELS[kind]}
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <SettingRow label="Types" value={kindsLabel(settings.kinds)} paths={['landmarks.kinds']}>
+          <fieldset className="field fieldset">
+            <legend className="field__label">Types</legend>
+            <div className="chips">
+              {OSM_KINDS.map((kind) => (
+                <label key={kind} className="chip">
+                  <input
+                    type="checkbox"
+                    checked={settings.kinds[kind]}
+                    onChange={(e) =>
+                      setSetting('landmarks', { ...settings, kinds: { ...settings.kinds, [kind]: e.currentTarget.checked } })
+                    }
+                  />
+                  {KIND_LABELS[kind]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </SettingRow>
       )}
 
       {settings.enabled && (
-        <div className="field">
-          <label className="field__label" htmlFor={`${id}-distance`}>
-            Distance à la trace
-          </label>
-          <div className="range-row">
-            <input
-              id={`${id}-distance`}
-              className="range"
-              type="range"
-              min={LANDMARK_DISTANCE_RANGE.min}
-              max={LANDMARK_DISTANCE_RANGE.max}
-              step={LANDMARK_DISTANCE_RANGE.step}
-              value={settings.maxDistanceM}
-              onChange={(e) => setSetting('landmarks', { ...settings, maxDistanceM: Number(e.currentTarget.value) })}
-            />
-            <output className="range-row__value range-row__value--wide" htmlFor={`${id}-distance`}>
-              {formatDistance(settings.maxDistanceM)}
-            </output>
+        <SettingRow label="Distance à la trace" value={formatDistance(settings.maxDistanceM)} paths={['landmarks.maxDistanceM']}>
+          <div className="field">
+            <label className="field__label" htmlFor={`${id}-distance`}>
+              Distance à la trace
+            </label>
+            <div className="range-row">
+              <input
+                id={`${id}-distance`}
+                className="range"
+                type="range"
+                min={LANDMARK_DISTANCE_RANGE.min}
+                max={LANDMARK_DISTANCE_RANGE.max}
+                step={LANDMARK_DISTANCE_RANGE.step}
+                value={settings.maxDistanceM}
+                onChange={(e) => setSetting('landmarks', { ...settings, maxDistanceM: Number(e.currentTarget.value) })}
+              />
+              <output className="range-row__value range-row__value--wide" htmlFor={`${id}-distance`}>
+                {formatDistance(settings.maxDistanceM)}
+              </output>
+            </div>
           </div>
-        </div>
+        </SettingRow>
       )}
 
       {settings.enabled && (

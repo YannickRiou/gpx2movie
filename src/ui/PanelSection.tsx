@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { getPlatform } from '../platform'
 import { modifiedPaths } from '../project/apply'
@@ -63,22 +63,54 @@ export function PanelSection({
   )
 }
 
+/** What takes the focus when a row unfolds, first match wins: the chosen radio, a field, else anything focusable (not an ⓘ first). */
+const FOCUS_ORDER = [
+  'input[type="radio"]:checked:enabled',
+  'input:not([type="hidden"]):enabled, select:enabled, textarea:enabled',
+  'button:enabled, [tabindex]:not([tabindex="-1"])',
+]
+
 /**
- * « Plus de réglages » (or `label`): the rarely used settings of a section, folded; the summary shows « modifié » when
- * one of `paths` differs from its default.
+ * A secondary setting on one row: its name and current value (`value`), its control hidden until the row is pressed,
+ * then unfolded under it with the focus on it. The value reads as changed when one of `paths` differs from its default.
  */
-export function MoreSettings({ paths, label = 'Plus de réglages', children }: { paths: readonly SettingPath[]; label?: string; children: ReactNode }) {
+export function SettingRow({
+  label,
+  value,
+  paths = [],
+  children,
+}: {
+  label: string
+  value: ReactNode
+  paths?: readonly SettingPath[]
+  children: ReactNode
+}) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  const body = useRef<HTMLDivElement>(null)
   const modified = useAppStore((s) => modifiedPaths(s.settings, paths).length > 0)
+  // once the control shows (not on mount): it takes the focus
+  useEffect(() => {
+    if (!open) return
+    for (const selector of FOCUS_ORDER) {
+      const control = body.current?.querySelector<HTMLElement>(selector)
+      if (control) return control.focus()
+    }
+  }, [open])
   return (
-    <details className="more-settings">
-      <summary className="more-settings__summary">
-        <Icon name="sliders-horizontal" size={16} />
-        <span className="more-settings__label">{label}</span>
-        {modified && <span className="modified__badge">modifié</span>}
+    <div className="setting-row">
+      <button type="button" className="setting-row__head" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+        <span className="setting-row__label">{label}</span>
+        <span className={modified ? 'setting-row__value setting-row__value--modified' : 'setting-row__value'}>
+          {value}
+          {modified && <span className="visually-hidden"> (modifié)</span>}
+        </span>
         <Icon name="chevron-down" size={16} />
-      </summary>
-      <div className="more-settings__body">{children}</div>
-    </details>
+      </button>
+      <div id={id} ref={body} className="setting-row__body" hidden={!open}>
+        {children}
+      </div>
+    </div>
   )
 }
 

@@ -22,11 +22,15 @@ function fakeScene({ loadedAt = 0, canceled = (): boolean => false, drift = 0 } 
   const renders: number[] = []
   const progress: number[] = []
   const flushes: boolean[] = []
+  let tileUpdates = 0
   const deps: RenderFrameDeps = {
     advance: () => {
       clock += 10
       if (loadedAt > 0 && renders.length > 0 && clock >= loadedAt + 1000 && renders.at(-1)! < loadedAt + 1000) drapePending = true
       renders.push(clock)
+    },
+    updateTiles: () => {
+      tileUpdates++
     },
     pendingTiles: () => (clock < loadedAt + 1000 ? 2 : 0),
     flushDrapes: () => {
@@ -43,7 +47,7 @@ function fakeScene({ loadedAt = 0, canceled = (): boolean => false, drift = 0 } 
     setProgress: (p) => progress.push(p),
     cameraDrift: () => drift,
   }
-  return { deps, renders, progress, flushes }
+  return { deps, renders, progress, flushes, tileUpdates: () => tileUpdates }
 }
 
 describe('settle', () => {
@@ -64,6 +68,14 @@ describe('settle', () => {
     expect(renders.length).toBeGreaterThan(2)
   })
 
+  it('only requests tiles while they load: renders the first frame, the settled one and the re-drape', async () => {
+    const { deps, renders, tileUpdates } = fakeScene({ loadedAt: 1000 })
+    expect(await settle(deps)).toBe(true)
+    expect(renders).toHaveLength(3)
+    expect(renders[1]).toBeGreaterThanOrEqual(2000)
+    expect(tileUpdates()).toBeGreaterThan(50)
+  })
+
   it('honours a minimum number of renders', async () => {
     const { deps, renders } = fakeScene()
     await settle(deps, { ...DEFAULT_SETTLE, minAdvances: 3 })
@@ -71,10 +83,13 @@ describe('settle', () => {
   })
 
   it('gives up after the timeout, still flushing the re-drapes', async () => {
-    const { deps, flushes } = fakeScene({ loadedAt: 60_000 })
+    const { deps, renders, flushes } = fakeScene({ loadedAt: 60_000 })
     expect(await settle(deps, { ...DEFAULT_SETTLE, timeoutMs: 500 })).toBe(false)
     expect(deps.now()).toBeLessThan(1000 + 600)
     expect(flushes).toHaveLength(1)
+    // the captured frame is rendered at the timeout, with the tiles there by then
+    expect(renders).toHaveLength(2)
+    expect(renders[1]).toBeGreaterThanOrEqual(1000 + 500)
   })
 
   it('throws when canceled', async () => {

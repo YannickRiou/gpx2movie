@@ -29,6 +29,10 @@ reproduce it next to the box.
 - [ ] Cancel during the export, or close the "Save" dialog: no file left behind, view and interface restored.
 - [ ] Firefox: in-memory export, warning above an estimated 1.5 GB, download.
 - [ ] Clouds enabled ("Météo" (weather) or "Manuel 50 %" (manual 50%) setting): export cost, same frames from one export to the next.
+- [ ] Long fast track (540 km raid), volumetric sea of clouds and « Objectif » › shutter on, 1080p: export time per frame and
+      `[export]` line against the version before « no rendering while waiting for tiles » (~1 s per frame on a GTX 1060);
+      GPU load (Task Manager) drops while the `[export]` "attente des tuiles" grows instead of staying at 100 %; frames
+      identical (terrain complete, same clouds and blur), no more "incomplète" frames than before.
 - [ ] PNG and JPEG still image, with and without overlay.
 - [ ] Overlay only (transparent background): fast export, no waiting for tiles; WebM played with its transparency (Chrome
       on a colored background, Kdenlive or Shotcut), laid over the normal video of the same film: counters, profile, map,
@@ -67,6 +71,10 @@ reproduce it next to the box.
       vertical bobbing over hills; with "Lissage de la caméra" at 0 s, the old direct behaviour; the sample in 60 s
       still stays behind the marker in its bends. Same in the exported video. Note the frames per second (≈ 80 terrain
       samples per frame).
+- [ ] Long track **without elevation** (no `<ele>`, e.g. a tracker raid of a few hundred km in the mountains), flown in
+      "Poursuite": the line and the marker stay on the visible relief all along, never sink under it nor drop to sea
+      level, and do not jump up and down while the finer tiles arrive or when the camera has gone past; at most they
+      follow a tile of the terrain as it refines. Same in the exported video.
 - [ ] Intro and outro "Depuis la région" (from the region) (16:9 and 9:16, short and long track): terrain loaded in time for the
       very high view (no terrain edge, no blurry tiles), dive toward the track and climb back without stutter.
 - [ ] "Depuis la région" with "Lieu" set to a park, an island or a range (e.g. « Parc naturel régional de Corse »):
@@ -93,9 +101,13 @@ reproduce it next to the box.
       time × ~8 without clouds, much less with clouds (the cloud renders are shared). Frames per second of the
       preview with every effect on.
 - [ ] Edge smoothing (atmosphere enabled): no light fringe and no staircase on the ridges and the track.
-- [ ] Track and marker ("Survol" tab): width, dashes and dots during the flight, halo over forest and over snow, track
+- [ ] Track and marker ("Carte" tab): width, dashes and dots during the flight; "Halo de la trace" over forest, rock and
+      snow, in daylight and at low sun, its intensity, width and colour rows (the line keeps its colour); track
       drawn stuck to the marker, figures readable and flipped in turns, round avatar; default "Boule" (ball)
       identical to before.
+- [ ] Track behind the relief (mountains, "Poursuite" and the region view): a ridge or a spur between the camera and
+      the track hides it entirely (no red line over the relief, near or far, with and without atmosphere); the marker
+      stays visible; same in the exported video.
 - [ ] On-demand rendering: still view → the GPU drops to almost nothing (task manager, GPU tab); nothing
       frozen after a change: drag a slider, rotate the camera (damping to the end), tiles that
       arrive, clouds that settle (~0.5–1 s), label font, marker image, water, reframing (full
@@ -112,7 +124,7 @@ reproduce it next to the box.
 - [ ] Speed per section: ×2 block then ×0.5, acceleration without stutter at the edges, "garder la durée" (keep the duration).
 - [ ] Camera at stops: "Tour lent" (slow turn) at the summit (the turn comes back without stutter), "Vue large" (wide view) (smooth pull-back and
       rise), "Fixe" (fixed) with the "Orbite" (orbit) style (the camera slows down, stops, starts again), "Comme le film" (same as the film).
-- [ ] Camera smoothing ("Caméra" › "Plus de réglages"): "Lissage de la caméra" 0 then 7.5 s on a film with stops and a
+- [ ] Camera smoothing (a row of "Caméra", "Survol" tab): "Lissage de la caméra" 0 then 7.5 s on a film with stops and a
       "Ralentir aux temps forts" slow-down: the camera anticipates and eases into each stop, no jerk at the start of the
       flight; "Lissage de la visée" 2 s: the marker drifts a little off-centre at stops, then comes back; "Fin en douceur"
       3 s: the camera comes to rest at the end and turns to watch the marker finish; "Lissage des virages" "Auto" vs
@@ -204,10 +216,10 @@ reproduce it next to the box.
       "Prévision" (forecast) weather in the panel and in the scene, "Temps" (time) counter preceded by "≈"; a start 20 days
       ahead has no weather and says so; "Effacer les horaires" (clear the times) returns to the track without times;
       project reopened: times and chip kept.
-- [ ] Roadbook ("Feuille de route", "Trace" tab): Alpine route, "Repères" (landmarks) on; steep sections and passes, huts,
-      water points in order, climb top merged with the pass; click on a line = marker and camera at the right place;
-      "≈" times after "Prévoir la sortie"; "Copier" (copy) then paste into an editor, "Enregistrer (.txt)" (site and
-      desktop); columns aligned in the 320 px panel.
+- [ ] Highlights ("Temps forts", "Survol" tab): Alpine route, "Repères" (landmarks) on; climb tops, passes and summits
+      in order; click on a row = marker and camera at the right place; "Arrêt dans le film" off then on, duration
+      changed: the "Arrêts" lane of the timeline follows, "Arrêts automatiques" goes off; "Ajouter à la position du
+      marqueur" then its ×; a stop moved or deleted on the timeline shows in the panel; phone: rows usable in the sheet.
 
 ## 6. Offline
 

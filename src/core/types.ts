@@ -196,7 +196,8 @@ export interface TerrainStats {
   failedTiles: number
   /**
    * Tiles the current view still waits for before what it draws is final (in the frustum, loading or
-   * queued); excludes shadow casters, off-screen children and prefetches. Used by the video export.
+   * queued); excludes shadow casters, off-screen children, prefetches and the retries of failed tiles. Used by the
+   * video export.
    */
   pendingVisibleTiles?: number
 }
@@ -207,8 +208,8 @@ export interface TerrainEngine {
   /** call once per frame before rendering */
   update(camera: PerspectiveCamera, viewportHeightPx: number): void
   /**
-   * Best currently-loaded terrain height at lon/lat, in metres (true scale, NOT exaggerated),
-   * or undefined if no tile covering the point is loaded yet.
+   * Terrain height at lon/lat as drawn (the mesh of the tile on screen there, else the deepest loaded tile), in
+   * metres (true scale, NOT exaggerated), or undefined if no tile covering the point is loaded yet.
    */
   sampleHeight(lon: number, lat: number): number | undefined
   setOptions(partial: Partial<Omit<TerrainEngineOptions, 'frame' | 'area'>>): void

@@ -1,6 +1,7 @@
 /**
  * Pure logic of the application shell (no React, no DOM): framing of the 3D preview to the output format,
- * routing of the opened or dropped files, roving focus of the tabs, project name and save state (shortcuts: `shortcuts.ts`).
+ * routing of the opened or dropped files, roving focus of the tabs, project name and save state (shortcuts: `shortcuts.ts`),
+ * tooltip placement (its DOM listener `installTipPlacement` aside).
  */
 import type { Track } from '../core/types'
 import { DEFAULT_PROJECT_NAME } from '../project/document'
@@ -99,8 +100,12 @@ export function isProjectDirty(current: SavedProject, saved: SavedProject): bool
 // Side columns: tabs of the left panel and the right dock (export drawer, else the inspector of the timeline)
 // ---------------------------------------------------------------------------
 
-export const SHELL_TABS = ['trace', 'carte', 'survol', 'habillage', 'projet'] as const
+/** In montage order: the track, the place, the weather, the light, the camera, the lens, the overlay, the project. */
+export const SHELL_TABS = ['trace', 'carte', 'meteo', 'lumiere', 'survol', 'objectif', 'habillage', 'projet'] as const
 export type ShellTab = (typeof SHELL_TABS)[number]
+
+/** The only tab of the home screen (no track): the others have nothing to act on yet. */
+export const HOME_TABS: readonly ShellTab[] = ['projet']
 
 /** Below this window width (px) only one side column is open at a time (panel or dock). */
 export const ONE_SIDE_MAX_WIDTH = 1360
@@ -115,7 +120,12 @@ export interface ShellState {
   collapsedByDock: boolean
   /** a timeline block is selected: the dock shows its inspector (the export drawer goes first) */
   inspecting: boolean
+  /** no track (home screen): the tab and fold to restore once one is loaded; null when there is one */
+  home: Pick<ShellState, 'tab' | 'collapsed'> | null
 }
+
+/** The tabs shown in the rail. */
+export const shownTabs = (state: Pick<ShellState, 'home'>): readonly ShellTab[] => (state.home ? HOME_TABS : SHELL_TABS)
 
 export type ShellEvent =
   /** click on a tab: shows it, or folds the panel when it is already shown */
@@ -129,6 +139,8 @@ export type ShellEvent =
   | { type: 'inspect'; open: boolean; narrow: boolean }
   /** the phone timeline unfolds: panel and export drawer make room (one sheet at a time) */
   | { type: 'fold' }
+  /** the first track is loaded (`loaded`) or the last one removed */
+  | { type: 'tracks'; loaded: boolean }
 
 /** The panel unfolds; on a narrow window it takes the place of the dock (drawer and inspector). */
 function unfold(state: ShellState, narrow: boolean): ShellState {
@@ -158,13 +170,17 @@ function fillDock(state: ShellState, narrow: boolean): ShellState {
 export function shellReducer(state: ShellState, event: ShellEvent): ShellState {
   switch (event.type) {
     case 'click-tab':
+      if (!shownTabs(state).includes(event.tab)) return state
       if (event.tab === state.tab && !state.collapsed) return { ...state, collapsed: true, collapsedByDock: false }
       return unfold({ ...state, tab: event.tab }, event.narrow)
     case 'select-tab':
+      if (!shownTabs(state).includes(event.tab)) return state
       return unfold({ ...state, tab: event.tab }, event.narrow)
     case 'toggle-panel':
       return state.collapsed ? unfold(state, event.narrow) : { ...state, collapsed: true, collapsedByDock: false }
     case 'toggle-dock':
+      // nothing to export without a track
+      if (state.home) return state
       if (state.dockOpen) return closeDock(state)
       return fillDock({ ...state, dockOpen: true }, event.narrow)
     case 'close-dock':
@@ -175,10 +191,27 @@ export function shellReducer(state: ShellState, event: ShellEvent): ShellState {
       return state.dockOpen ? { ...state, inspecting: true } : fillDock({ ...state, inspecting: true }, event.narrow)
     case 'fold':
       return { ...state, collapsed: true, collapsedByDock: false, dockOpen: false }
+    case 'tracks':
+      if (event.loaded) {
+        if (!state.home) return state
+        // the tabs come back as last left with a track; « Projet » was the home screen's, the track comes first
+        const { tab, collapsed } = state.home
+        return { ...state, tab: tab === 'projet' ? 'trace' : tab, collapsed, collapsedByDock: false, home: null }
+      }
+      // home screen: « Projet » alone and folded, the welcome takes the view
+      if (state.home) return state
+      return {
+        tab: 'projet',
+        collapsed: true,
+        collapsedByDock: false,
+        dockOpen: false,
+        inspecting: false,
+        home: { tab: state.tab, collapsed: state.collapsed && !state.collapsedByDock },
+      }
   }
 }
 
-/** Tab and folded panel remembered by the browser (not by the project); defaults for anything unreadable. */
+/** Tab and folded panel remembered by the browser (not by the project); defaults for anything unreadable or unknown. */
 export function parseShellPrefs(raw: string | null): Pick<ShellState, 'tab' | 'collapsed'> {
   const fallback = { tab: 'trace' as ShellTab, collapsed: false }
   if (!raw) return fallback
@@ -239,4 +272,82 @@ export function settleSheet(fraction: number, velocity: number): SheetSnap | nul
     if (Math.abs(SHEET_SNAPS[snap] - projected) < Math.abs(SHEET_SNAPS[best] - projected)) best = snap
   }
   return best
+}
+
+// ---------------------------------------------------------------------------
+// Tooltips (data-tip)
+// ---------------------------------------------------------------------------
+
+/** A box in window pixels. */
+export interface Box {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/** Room kept between a tooltip and the edge it is pushed against; gap under its element (shell.css). */
+const TIP_MARGIN = 8
+const TIP_GAP = 8
+
+/**
+ * Where a tooltip of `width` × `height`, centred under its `anchor`, fits inside `clip` (the window and the scrolling
+ * columns around it): `shift` sideways from centred (px), `above` when there is no room below but there is above.
+ */
+export function tipPlacement(anchor: Box, width: number, height: number, clip: Box): { shift: number; above: boolean } {
+  const left = (anchor.left + anchor.right) / 2 - width / 2
+  const min = clip.left + TIP_MARGIN
+  const max = clip.right - TIP_MARGIN - width
+  // wider than the room: from its left edge
+  const shift = (max < min ? min : Math.min(Math.max(left, min), max)) - left
+  const below = anchor.bottom + TIP_GAP + height <= clip.bottom - TIP_MARGIN
+  const above = !below && anchor.top - TIP_GAP - height >= clip.top + TIP_MARGIN
+  return { shift: Math.round(shift), above }
+}
+
+/** The window cut by every ancestor of `el` that clips its overflow (a scrolling panel). */
+function clipBox(el: Element): Box {
+  const root = document.documentElement
+  const box: Box = { left: 0, top: 0, right: root.clientWidth, bottom: root.clientHeight }
+  for (let p = el.parentElement; p && p !== root; p = p.parentElement) {
+    const style = getComputedStyle(p)
+    if (style.overflowX === 'visible' && style.overflowY === 'visible') continue
+    const r = p.getBoundingClientRect()
+    box.left = Math.max(box.left, r.left)
+    box.top = Math.max(box.top, r.top)
+    box.right = Math.min(box.right, r.right)
+    box.bottom = Math.min(box.bottom, r.bottom)
+  }
+  return box
+}
+
+/**
+ * Keeps the centred `data-tip` tooltips whole (`tipPlacement`): when one shows (hover, focus, tap), its shift goes into
+ * `--tip-shift` and `data-tip-flip` puts it above. Tips placed by hand (`data-tip-side`, `data-tip-align`) are left alone.
+ */
+export function installTipPlacement(): () => void {
+  // measured once laid out, before it fades in (450 ms): a tap shows it a few frames after the pointer events
+  const measure = (el: HTMLElement, frames: number) =>
+    requestAnimationFrame(() => {
+      const tip = getComputedStyle(el, '::after')
+      const width = parseFloat(tip.width)
+      const height = parseFloat(tip.height)
+      if (!(width > 0 && height > 0)) {
+        if (frames > 0) measure(el, frames - 1)
+        return
+      }
+      const { shift, above } = tipPlacement(el.getBoundingClientRect(), width, height, clipBox(el))
+      el.style.setProperty('--tip-shift', `${shift}px`)
+      el.toggleAttribute('data-tip-flip', above)
+    })
+  const place = (e: Event) => {
+    const el = e.target instanceof Element ? e.target.closest('[data-tip]') : null
+    if (el instanceof HTMLElement && !el.dataset.tipSide && !el.dataset.tipAlign) measure(el, 20)
+  }
+  document.addEventListener('pointerover', place)
+  document.addEventListener('focusin', place)
+  return () => {
+    document.removeEventListener('pointerover', place)
+    document.removeEventListener('focusin', place)
+  }
 }

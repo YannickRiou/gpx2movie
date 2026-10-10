@@ -4,6 +4,7 @@
  * project document. Pure: no Three.js, no DOM, so the store and the interface can import it cheaply.
  */
 import { inRange, oneOf, withDefaults } from '../core/guards'
+import { isHexColor } from '../overlay/settings'
 
 // ---------------------------------------------------------------------------
 // Track style
@@ -16,8 +17,14 @@ export interface TrackStyle {
   /** line width in pixels of a 1080-pixel frame (times the export render scale, like the labels) */
   width: number
   dash: TrackDash
-  /** soft halo of the track colour around the line */
+  /** soft halo around the line, hidden by the relief like the line */
   glow: boolean
+  /** strength of the halo, 0..1 (« Intensité du halo ») */
+  glowIntensity: number
+  /** full width of the halo in pixels of a 1080-pixel frame, like `width` */
+  glowWidth: number
+  /** '#rrggbb', '' = the colour of the track (or of its colouring by a metric) */
+  glowColor: string
   /** « trace qui se dessine »: only the part already travelled by the marker is drawn */
   drawOn: boolean
   /** positions averaged over this many metres of track against GPS jitter (`flyover/smooth.ts`), 0 = as recorded */
@@ -26,8 +33,19 @@ export interface TrackStyle {
 
 export const TRACK_WIDTH_RANGE = { min: 1, max: 12, step: 0.5 } as const
 export const TRACK_SMOOTHING_RANGE = { min: 0, max: 300, step: 10 } as const
+export const TRACK_GLOW_INTENSITY_RANGE = { min: 0.1, max: 1, step: 0.05 } as const
+export const TRACK_GLOW_WIDTH_RANGE = { min: 6, max: 64, step: 2 } as const
 
-export const DEFAULT_TRACK_STYLE: TrackStyle = { width: 4, dash: 'plein', glow: false, drawOn: false, smoothingM: 0 }
+export const DEFAULT_TRACK_STYLE: TrackStyle = {
+  width: 4,
+  dash: 'plein',
+  glow: false,
+  glowIntensity: 0.75,
+  glowWidth: 24,
+  glowColor: '',
+  drawOn: false,
+  smoothingM: 0,
+}
 
 export const TRACK_DASH_LABELS: Record<TrackDash, string> = { plein: 'Plein', tirets: 'Tirets', points: 'Points' }
 
@@ -96,7 +114,14 @@ export const MARKER_FIGURE_LABELS: Record<MarkerFigure, string> = {
 
 
 export function isValidTrackStyle(style: TrackStyle): boolean {
-  return inRange(style.width, TRACK_WIDTH_RANGE) && oneOf(TRACK_DASHES, style.dash) && inRange(style.smoothingM, TRACK_SMOOTHING_RANGE)
+  return (
+    inRange(style.width, TRACK_WIDTH_RANGE) &&
+    oneOf(TRACK_DASHES, style.dash) &&
+    inRange(style.smoothingM, TRACK_SMOOTHING_RANGE) &&
+    inRange(style.glowIntensity, TRACK_GLOW_INTENSITY_RANGE) &&
+    inRange(style.glowWidth, TRACK_GLOW_WIDTH_RANGE) &&
+    (style.glowColor === '' || isHexColor(style.glowColor))
+  )
 }
 
 export function isValidMarker(marker: MarkerSettings): boolean {

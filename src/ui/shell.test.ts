@@ -13,6 +13,9 @@ import {
   routeOpenedFiles,
   settleSheet,
   shellReducer,
+  shownTabs,
+  SHELL_TABS,
+  tipPlacement,
 } from './shell'
 import type { ShellState } from './shell'
 
@@ -118,13 +121,14 @@ describe('project name and save state', () => {
 })
 
 describe('shellReducer', () => {
-  const base: ShellState = { tab: 'trace', collapsed: false, dockOpen: false, collapsedByDock: false, inspecting: false }
+  const base: ShellState = { tab: 'trace', collapsed: false, dockOpen: false, collapsedByDock: false, inspecting: false, home: null }
 
   it('a click on the open tab folds the panel, another tab unfolds it', () => {
     const folded = shellReducer(base, { type: 'click-tab', tab: 'trace', narrow: false })
     expect(folded.collapsed).toBe(true)
     expect(shellReducer(folded, { type: 'click-tab', tab: 'trace', narrow: false })).toMatchObject({ collapsed: false })
     expect(shellReducer(base, { type: 'click-tab', tab: 'carte', narrow: false })).toMatchObject({ tab: 'carte', collapsed: false })
+    expect(shellReducer(base, { type: 'click-tab', tab: 'objectif', narrow: false })).toMatchObject({ tab: 'objectif', collapsed: false })
   })
 
   it('keyboard selection never folds', () => {
@@ -184,6 +188,35 @@ describe('shellReducer', () => {
     expect(shellReducer(shown, { type: 'toggle-panel', narrow: true })).toMatchObject({ collapsed: false, inspecting: false })
     expect(shellReducer(shown, { type: 'click-tab', tab: 'carte', narrow: false })).toMatchObject({ collapsed: false, inspecting: true })
   })
+
+  it('without a track only « Projet » is shown, folded, and the other tabs and the export drawer cannot be reached', () => {
+    const open = shellReducer({ ...base, tab: 'habillage' }, { type: 'toggle-dock', narrow: false })
+    const home = shellReducer(open, { type: 'tracks', loaded: false })
+    expect(home).toMatchObject({ tab: 'projet', collapsed: true, dockOpen: false, home: { tab: 'habillage', collapsed: false } })
+    expect(shownTabs(home)).toEqual(['projet'])
+    expect(shownTabs(base)).toEqual(SHELL_TABS)
+    expect(shellReducer(home, { type: 'tracks', loaded: false })).toBe(home)
+    for (const tab of SHELL_TABS.filter((t) => t !== 'projet')) {
+      expect(shellReducer(home, { type: 'click-tab', tab, narrow: false })).toBe(home)
+      expect(shellReducer(home, { type: 'select-tab', tab, narrow: false })).toBe(home)
+    }
+    expect(shellReducer(home, { type: 'toggle-dock', narrow: false })).toBe(home)
+    expect(shellReducer(home, { type: 'click-tab', tab: 'projet', narrow: false })).toMatchObject({ tab: 'projet', collapsed: false })
+  })
+
+  it('the first track brings the tabs back as last left, « Trace » in place of « Projet »', () => {
+    const home = shellReducer({ ...base, tab: 'survol', collapsed: true }, { type: 'tracks', loaded: false })
+    const browsed = shellReducer(home, { type: 'click-tab', tab: 'projet', narrow: false })
+    expect(shellReducer(browsed, { type: 'tracks', loaded: true })).toMatchObject({ tab: 'survol', collapsed: true, home: null })
+    const fromProjet = shellReducer({ ...base, tab: 'projet' }, { type: 'tracks', loaded: false })
+    expect(shellReducer(fromProjet, { type: 'tracks', loaded: true })).toMatchObject({ tab: 'trace', collapsed: false, home: null })
+    expect(shellReducer(base, { type: 'tracks', loaded: true })).toBe(base)
+  })
+
+  it('a panel folded by the dock is remembered unfolded', () => {
+    const open = shellReducer(base, { type: 'toggle-dock', narrow: true })
+    expect(shellReducer(open, { type: 'tracks', loaded: false }).home).toEqual({ tab: 'trace', collapsed: false })
+  })
 })
 
 describe('parseShellPrefs', () => {
@@ -193,6 +226,13 @@ describe('parseShellPrefs', () => {
     expect(parseShellPrefs('not json')).toEqual({ tab: 'trace', collapsed: false })
     expect(parseShellPrefs(null)).toEqual({ tab: 'trace', collapsed: false })
     expect(parseShellPrefs('null')).toEqual({ tab: 'trace', collapsed: false })
+  })
+
+  it('reads the tabs added later, and an unknown tab id falls back to Trace with the fold kept', () => {
+    for (const tab of ['meteo', 'lumiere', 'objectif'] as const) {
+      expect(parseShellPrefs(`{"tab":"${tab}","collapsed":false}`)).toEqual({ tab, collapsed: false })
+    }
+    expect(parseShellPrefs('{"tab":"reglages","collapsed":true}')).toEqual({ tab: 'trace', collapsed: true })
   })
 })
 
@@ -218,5 +258,28 @@ describe('settleSheet', () => {
     expect(settleSheet(0.55, -1.5)).toBe('peek')
     expect(settleSheet(0.3, -1)).toBeNull()
     expect(settleSheet(0.1, 0)).toBeNull()
+  })
+})
+
+describe('tipPlacement', () => {
+  // the inspector column of a 1440 px window, from 1140 px
+  const column = { left: 1140, top: 48, right: 1440, bottom: 876 }
+  const icon = (left: number, top: number) => ({ left, top, right: left + 14, bottom: top + 14 })
+
+  it('keeps a tip centred when it fits', () => {
+    expect(tipPlacement(icon(1283, 300), 200, 100, column)).toEqual({ shift: 0, above: false })
+  })
+
+  it('shifts a tip clipped by the column into it, on either side', () => {
+    // « Lieu » ⓘ near the left edge: centred, the tip would start 47 px out
+    expect(tipPlacement(icon(1186, 327), 200, 104, column)).toEqual({ shift: 55, above: false })
+    expect(tipPlacement(icon(1420, 327), 200, 104, column)).toEqual({ shift: -95, above: false })
+  })
+
+  it('puts it above without room below, and starts it at the left edge when wider than the room', () => {
+    expect(tipPlacement(icon(1283, 800), 200, 100, column).above).toBe(true)
+    // no room either way: stays below
+    expect(tipPlacement(icon(1283, 400), 200, 900, column).above).toBe(false)
+    expect(tipPlacement(icon(1283, 300), 400, 50, column).shift).toBe(1148 - (1290 - 200))
   })
 })

@@ -14,6 +14,7 @@ import {
   parseRegionGeometry,
   regionCandidatesQuery,
   regionGeometryQuery,
+  retryRegion,
   syncRegion,
   useRegionStore,
 } from './region'
@@ -202,6 +203,37 @@ describe('holdRegion', () => {
     syncRegion(box, true, 'relation/9', second.fetch)
     expect(second.fetch).toHaveBeenCalledTimes(1)
     syncRegion(null, false)
+  })
+
+  it('lists the places as soon as they are known, before the region geometry', () => {
+    syncRegion(null, false)
+    const park: AdminCandidate = { type: 'relation', id: 9, kind: 'protege', level: NaN, name: 'Parc', bounds: box }
+    const fetch = vi.fn((_t: unknown, _id: string | null, _s: AbortSignal, onListed: (l: Omit<RegionAnswer, 'region'>) => void) => {
+      onListed({ candidates: [park], autoId: 'relation/9' })
+      return new Promise<RegionAnswer>(() => {})
+    })
+    syncRegion(box, true, null, fetch)
+    expect(useRegionStore.getState()).toMatchObject({ status: 'loading', candidates: [park], autoId: 'relation/9' })
+    syncRegion(null, false)
+  })
+
+  it('asks again after a failure on « Réessayer » only', async () => {
+    syncRegion(null, false)
+    const fetch = vi.fn(() => Promise.reject(new Error('busy')))
+    syncRegion(box, true, null, fetch)
+    await flush()
+    expect(useRegionStore.getState().status).toBe('error')
+    // same box and place: the effects do not ask again
+    syncRegion(box, true, null, fetch)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    retryRegion()
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(useRegionStore.getState().status).toBe('loading')
+    await flush()
+    syncRegion(null, false)
+    // nothing to retry once it is no longer wanted
+    retryRegion()
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 })
 

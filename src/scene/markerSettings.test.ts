@@ -22,6 +22,11 @@ describe('track style and marker settings', () => {
     expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, smoothingM: -10 })).toBe(false)
     expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, smoothingM: 500 })).toBe(false)
     expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, smoothingM: 100 })).toBe(true)
+    expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, glowIntensity: 0 })).toBe(false)
+    expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, glowIntensity: 1.5 })).toBe(false)
+    expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, glowWidth: 200 })).toBe(false)
+    expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, glowColor: 'red' })).toBe(false)
+    expect(isValidTrackStyle({ ...DEFAULT_TRACK_STYLE, glowColor: '#FFD23F', glowIntensity: 1, glowWidth: 64 })).toBe(true)
     expect(isValidMarker({ ...DEFAULT_MARKER, figure: 'cheval' as never })).toBe(false)
     expect(isValidMarker({ ...DEFAULT_MARKER, size: 0 })).toBe(false)
     expect(isValidMarker({ ...DEFAULT_MARKER, image: 'https://example.org/me.png' })).toBe(false)
@@ -35,10 +40,11 @@ describe('track style and marker settings', () => {
     const { settings, invalid } = sanitizeSettings({ marker: { kind: 'figurine', figure: 'skieur' }, trackStyle: { width: 'x' } })
     expect(settings.marker).toEqual({ ...DEFAULT_MARKER, kind: 'figurine', figure: 'skieur' })
     expect(invalid).toEqual(['trackStyle'])
-    // a track style saved before the smoothing existed: off
+    // a track style saved before the smoothing and the glow settings existed: off, default glow (track colour)
     const older = sanitizeSettings({ trackStyle: { width: 6, dash: 'tirets', glow: true, drawOn: true } })
     expect(older.invalid).toEqual([])
-    expect(older.settings.trackStyle).toEqual({ width: 6, dash: 'tirets', glow: true, drawOn: true, smoothingM: 0 })
+    expect(older.settings.trackStyle).toEqual({ ...DEFAULT_TRACK_STYLE, width: 6, dash: 'tirets', glow: true, drawOn: true, smoothingM: 0 })
+    expect(older.settings.trackStyle.glowColor).toBe('')
   })
 
   it('has a pictogram for every figure', () => {

@@ -318,6 +318,11 @@ export async function runExport(request: ExportRequest, deps: RunDeps): Promise<
     let frameTimeS = saved.timeS
     const frameDeps = {
       advance,
+      // what TerrainLayer does in a render (the only data requested per view), for the camera of the last render
+      updateTiles: () => {
+        const camera = deps.get().camera as PerspectiveCamera
+        if (camera.isPerspectiveCamera) deps.engine()?.update(camera, height)
+      },
       pendingTiles: () => {
         const stats = deps.engine()?.stats
         return stats ? (stats.pendingVisibleTiles ?? stats.pendingTiles) : 0

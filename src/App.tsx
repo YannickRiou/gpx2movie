@@ -10,29 +10,31 @@ import { useAppStore } from './state/store'
 import { CameraPanel } from './ui/CameraPanel'
 import { ClimbList } from './ui/ClimbList'
 import { EmptyState } from './ui/EmptyState'
+import { GradingPanel } from './ui/GradingPanel'
 import { HelpDialog } from './ui/HelpDialog'
 import { Icon } from './ui/icons'
 import type { IconName } from './ui/icons'
 import { LandmarkPanel } from './ui/LandmarkPanel'
+import { LensPanel } from './ui/LensPanel'
 import { installCloseGuard, installLibraryAutosave } from './ui/library'
 import { OverlayPanel } from './ui/OverlayPanel'
 import { PanelSection } from './ui/PanelSection'
 import { PoiPanel } from './ui/PoiPanel'
 import { chooseFilesToOpen, openFiles, saveProject } from './ui/projectActions'
 import { ProjectPanel } from './ui/ProjectPanel'
-import { RoadbookPanel } from './ui/RoadbookPanel'
-import { SettingsPanel } from './ui/SettingsPanel'
+import { LightSettings, MapSettings, WeatherSettings } from './ui/SettingsPanel'
 import { useSafeZonesStore } from './ui/SafeZones'
 import {
   BOTTOM_SHEET_QUERY,
   COMPACT_QUERY,
   ONE_SIDE_MAX_WIDTH,
-  SHELL_TABS,
+  installTipPlacement,
   isFileDrag,
   matchesQuery,
   nextTabIndex,
   parseShellPrefs,
   shellReducer,
+  shownTabs,
 } from './ui/shell'
 import type { ShellTab } from './ui/shell'
 import { SheetHandle } from './ui/SheetHandle'
@@ -43,6 +45,7 @@ import { Timeline } from './ui/Timeline'
 import { Toaster } from './ui/Toaster'
 import { TopBar } from './ui/TopBar'
 import { TrackList } from './ui/TrackList'
+import { TrackMarkerSection } from './ui/TrackMarkerSection'
 import { WeatherPanel } from './ui/WeatherPanel'
 import './ui/app.css'
 import './ui/shell.css'
@@ -58,13 +61,13 @@ const FilmInspector = lazy(() => import('./ui/FilmInspector').then((m) => ({ def
 const TAB_LABELS: Record<ShellTab, { label: string; icon: IconName }> = {
   trace: { label: 'Trace', icon: 'route' },
   carte: { label: 'Carte', icon: 'map' },
+  meteo: { label: 'Météo', icon: 'cloud-sun' },
+  lumiere: { label: 'Lumière', icon: 'sun' },
   survol: { label: 'Survol', icon: 'video' },
+  objectif: { label: 'Objectif', icon: 'aperture' },
   habillage: { label: 'Habillage', icon: 'layers' },
   projet: { label: 'Projet', icon: 'folder' },
 }
-
-/** tabs that say, without a track, to add one first (Trace has its own empty list, Projet works without one) */
-const NO_TRACK_HINT_TABS: readonly ShellTab[] = ['carte', 'survol', 'habillage']
 
 const PREFS_KEY = 'openflyover.shell.v1'
 
@@ -136,13 +139,13 @@ export default function App() {
   const batchRunning = useBatchStore((s) => s.phase === 'running')
   const exporting = exportBusy || batchRunning
   const selected = useAppStore((s) => s.filmSelection !== null && s.tracks.length > 0)
-  const [shell, dispatch] = useReducer(shellReducer, undefined, () => ({
-    ...loadPrefs(),
-    ...(isDrawer() && { collapsed: true }),
-    dockOpen: false,
-    collapsedByDock: false,
-    inspecting: false,
-  }))
+  const [shell, dispatch] = useReducer(shellReducer, undefined, () =>
+    shellReducer(
+      { ...loadPrefs(), ...(isDrawer() && { collapsed: true }), dockOpen: false, collapsedByDock: false, inspecting: false, home: null },
+      { type: 'tracks', loaded: useAppStore.getState().tracks.length > 0 },
+    ),
+  )
+  const tabs = shownTabs(shell)
   const [dragging, setDragging] = useState(false)
   // the export drawer is mounted on its first opening and kept (export progress, result, batch)
   const [dockMounted, setDockMounted] = useState(false)
@@ -159,19 +162,29 @@ export default function App() {
 
   // remember the tab and the folded panel chosen by the user (not a fold caused by the export drawer)
   const keptCollapsed = shell.collapsed && !shell.collapsedByDock
+  const home = shell.home !== null
   useEffect(() => {
-    // the drawer of a narrow window opens and closes on its own: only the tab is worth keeping then
-    if (isDrawer()) return
+    // the drawer of a narrow window opens and closes on its own: only the tab is worth keeping then; the home
+    // screen's folded « Projet » is not a choice
+    if (isDrawer() || home) return
     try {
       getPlatform().storage.set(PREFS_KEY, JSON.stringify({ tab: shell.tab, collapsed: keptCollapsed }))
     } catch {
       // storage unavailable: the choice lasts for the session
     }
-  }, [shell.tab, keptCollapsed])
+  }, [shell.tab, keptCollapsed, home])
+
+  // no track: only « Projet » in the rail; the first track brings the other tabs back
+  useEffect(() => dispatch({ type: 'tracks', loaded: hasTracks }), [hasTracks])
 
   useEffect(() => {
     dockOpen.current = shell.dockOpen
   }, [shell.dockOpen])
+
+  // the phone tab bar scrolls: the open tab stays in sight (also when restored at startup)
+  useEffect(() => {
+    tabRefs.current[tabs.indexOf(shell.tab)]?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [shell.tab, tabs])
 
   useEffect(() => {
     collapsedRef.current = shell.collapsed
@@ -189,7 +202,9 @@ export default function App() {
   // no undo during an export: the film being rendered would change under it
   useEffect(() => installHistoryShortcuts(getSettingsHistory(), window, () => !isExporting()), [])
   useEffect(() => installSliderGestures(getSettingsHistory()), [])
-  useEffect(() => installLibraryAutosave(() => !isExporting()), [])
+  // a project emptied of its tracks is not written over the kept one (it waits for a track)
+  useEffect(() => installLibraryAutosave(() => !isExporting() && useAppStore.getState().tracks.length > 0), [])
+  useEffect(() => installTipPlacement(), [])
   useEffect(() => installCloseGuard(isExporting, saveProject), [])
 
   /** a pointer button is down */
@@ -317,16 +332,15 @@ export default function App() {
   }, [])
 
   const onTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const next = nextTabIndex(index, e.key, SHELL_TABS.length)
+    const next = nextTabIndex(index, e.key, tabs.length)
     if (next === null) return
     e.preventDefault()
-    dispatch({ type: 'select-tab', tab: SHELL_TABS[next], narrow: isNarrow() })
+    dispatch({ type: 'select-tab', tab: tabs[next], narrow: isNarrow() })
     tabRefs.current[next]?.focus()
   }
 
   const panel = (tab: ShellTab, children: ReactNode) => (
     <div key={tab} id={`tab-panel-${tab}`} className="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} hidden={shell.tab !== tab}>
-      {!hasTracks && NO_TRACK_HINT_TABS.includes(tab) && <p className="tab-hint">Ajoutez une trace (onglet Trace) pour voir l’effet de ces réglages.</p>}
       {children}
     </div>
   )
@@ -343,7 +357,7 @@ export default function App() {
       <div className={shell.collapsed ? 'shell__body shell__body--collapsed' : 'shell__body'}>
         <nav className="rail" aria-label="Panneaux">
           <div className="rail__tabs" role="tablist" aria-label="Panneaux de réglages" aria-orientation="vertical">
-            {SHELL_TABS.map((tab, i) => {
+            {tabs.map((tab, i) => {
               const selected = shell.tab === tab
               return (
                 <button
@@ -389,19 +403,42 @@ export default function App() {
         {/* no change to the tracks or the settings while a film is being made: the export reads them live */}
         <aside id="side-panel" className="panel" aria-label="Réglages" hidden={shell.collapsed} inert={exporting}>
           <SheetHandle onClose={() => dispatch({ type: 'fold' })} />
+          {panel('trace', <TrackList />)}
           {panel(
-            'trace',
+            'carte',
             <>
-              <TrackList />
+              <MapSettings />
+              <TrackMarkerSection />
               <PanelSection title="Montées et étiquettes" keys={['labels']} hidden={!hasTracks}>
                 <ClimbList />
               </PanelSection>
-              <PanelSection title="Feuille de route" hidden={!hasTracks}>
-                <RoadbookPanel />
-              </PanelSection>
+              <LandmarkPanel />
+              <PoiPanel />
+            </>,
+          )}
+          {panel(
+            'meteo',
+            <>
               <PanelSection title="Météo de la sortie" keys={['weather']} hidden={!hasTracks}>
                 <WeatherPanel />
               </PanelSection>
+              <WeatherSettings />
+            </>,
+          )}
+          {panel(
+            'lumiere',
+            <>
+              <LightSettings />
+              <GradingPanel />
+            </>,
+          )}
+          {panel('survol', <CameraPanel />)}
+          {panel('objectif', <LensPanel />)}
+          {panel('habillage', <OverlayPanel />)}
+          {panel(
+            'projet',
+            <>
+              <ProjectPanel />
               <PanelSection title="Hors ligne" hidden={!hasTracks}>
                 <Suspense>
                   <OfflinePanel />
@@ -409,17 +446,6 @@ export default function App() {
               </PanelSection>
             </>,
           )}
-          {panel(
-            'carte',
-            <>
-              <SettingsPanel />
-              <LandmarkPanel />
-              <PoiPanel />
-            </>,
-          )}
-          {panel('survol', <CameraPanel />)}
-          {panel('habillage', <OverlayPanel />)}
-          {panel('projet', <ProjectPanel />)}
         </aside>
 
         <main className="view">

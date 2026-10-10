@@ -76,7 +76,7 @@ import { formatDegrees, formatDistance, formatNumber, formatPercent } from './fo
 import { Icon } from './icons'
 import { FilmTextStyleFields } from './OverlayPanel'
 import { RegionHint } from './CameraPanel'
-import { InfoTip, MoreSettings, RangeField } from './PanelSection'
+import { InfoTip, RangeField, SettingRow } from './PanelSection'
 import { nextGridIndex } from './shell'
 import { showToast } from './toast'
 
@@ -258,7 +258,7 @@ function SituationFramingFields({
           tip="Direction regardée par la caméra : 0° le nord en haut, 90° l’est en haut."
         />
       )}
-      <MoreSettings paths={[]}>
+      <SettingRow label="Marge" value={`${formatNumber(shot.headroomPct ?? 0)} %`}>
         <RangeField
           label="Marge"
           {...SITUATION_HEADROOM_RANGE}
@@ -268,7 +268,7 @@ function SituationFramingFields({
           wide={false}
           tip="Place laissée au-dessus du centre de la vue (titre, ciel) : le centre descend de cette part de la hauteur de l’image."
         />
-      </MoreSettings>
+      </SettingRow>
       <button type="button" className="btn btn--secondary" onClick={capture} data-tip="Reprend l’inclinaison, la distance et l’orientation de la vue 3D actuelle (cap Boussole)">
         <Icon name="crosshair" size={16} />
         Capturer la vue actuelle
