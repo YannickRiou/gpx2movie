@@ -53,12 +53,17 @@ export const LINE_OF_SIGHT_MAX_FRACTION = 0.9
 
 /**
  * Smoothing scaled with the ground speed of the film (track length / flyover duration, metres per film second), so a
- * long track flown fast turns no faster than a short one: the heading is averaged over ± HEADING_SMOOTHING_FACTOR ×
- * « Lissage de la caméra » film seconds of track, the aim point and the camera's point of the track over
- * POSITION_SMOOTHING_S (the corners of a sparse recording rounded off).
+ * long track flown fast turns and climbs no faster than a short one: the heading is averaged over
+ * ± HEADING_SMOOTHING_FACTOR × « Lissage de la caméra » film seconds of track, the aim point and the camera's point of
+ * the track over POSITION_SMOOTHING_S (the corners of a sparse recording rounded off), and the ground cell is at least
+ * GROUND_SPEED_S of track (at most GROUND_SPEED_MAX_M).
  */
 export const HEADING_SMOOTHING_FACTOR = 1.5
 export const POSITION_SMOOTHING_S = 0.5
+export const GROUND_SPEED_S = 0.25
+export const GROUND_SPEED_MAX_M = 500
+/** The aim's height eases between the track's ground and the grid's over this band (smooth maximum). */
+export const AIM_GROUND_EASE_M = 40
 /** Fixed samples on each side of a smoothing window (weights sliding over them). */
 export const SMOOTHING_SAMPLES_PER_SIDE = 8
 
@@ -361,8 +366,8 @@ function placement(
  * at `pitch` above the horizon, then raised (pitch steepens) to stay MIN_GROUND_CLEARANCE_M above the smoothed terrain
  * (MIN_TERRAIN_CLEARANCE_M above the actual one) and until the sight line to the aim clears the terrain between.
  * Aim = the track at the aim's progress, corners rounded off (`smoothPointAt`), at the smoothed ground height
- * (`trackGround`) + `liftM`. Heights: terrain sample, else recorded elevation, else 0; times `exaggeration`.
- * `aimProgress` / `cameraProgress`: see `timeSmoothing.ts`.
+ * (`trackGround` eased with `smoothGridGround`) + `liftM`. Heights: terrain sample, else recorded elevation, else 0;
+ * times `exaggeration`. `aimProgress` / `cameraProgress`: see `timeSmoothing.ts`.
  */
 export function computeCameraView(
   path: TrackPath,
@@ -385,9 +390,13 @@ export function computeCameraView(
   const speedMps = path.lengthM / Math.max(1, durationS)
   const pointRadiusM = (speedMps * POSITION_SMOOTHING_S) / 2
   const aim = smoothPointAt(path, dAim, pointRadiusM, 0, frame)
-  const cellM = Math.min(headingWindowM(path, camera) * GROUND_WINDOW_FRACTION, GROUND_WINDOW_MAX_M)
-  const gridAtAim = sample ? gridGround(aim.x, aim.z, cellM, frame, sample) : undefined
-  const aimGround = Math.max(trackGround(path, dAim, cellM, sample), gridAtAim ?? -Infinity) * exaggeration
+  const cellM = Math.max(
+    Math.min(headingWindowM(path, camera) * GROUND_WINDOW_FRACTION, GROUND_WINDOW_MAX_M),
+    Math.min(speedMps * GROUND_SPEED_S, GROUND_SPEED_MAX_M),
+  )
+  const alongTrack = trackGround(path, dAim, cellM, sample)
+  const gridAtAim = sample ? smoothGridGround(aim.x, aim.z, cellM, frame, sample) : undefined
+  const aimGround = (gridAtAim === undefined ? alongTrack : smoothMax(alongTrack, gridAtAim, AIM_GROUND_EASE_M)) * exaggeration
   const aimAt = frame.toLonLat(aim)
   const target = frame.toLocal(aimAt.lon, aimAt.lat, aimGround + liftM)
 
@@ -401,7 +410,7 @@ export function computeCameraView(
 }
 
 /**
- * Ground height (metres, not exaggerated) under the track around `d`: the tent-weighted mean over
+ * Ground height (metres, not exaggerated) under the track around `d`: the `bump`-weighted mean over
  * ]d - radiusM, d + radiusM[ of the terrain at fixed track distances (multiples of radiusM / GROUND_SAMPLES_PER_SIDE).
  * The samples stay put while the marker moves, only their weights slide: the mean follows the relief, not the
  * bumps under the marker, and a finer tile arriving shifts it by a fraction. Terrain, else recorded elevation, else 0.
@@ -411,7 +420,7 @@ function trackGround(path: TrackPath, d: number, radiusM: number, sample: Height
   let sum = 0
   let weight = 0
   for (let k = Math.floor((d - radiusM) / step) + 1; k * step < d + radiusM; k++) {
-    const w = 1 - Math.abs(k * step - d) / radiusM
+    const w = bump(k * step - d, radiusM)
     const at = samplePath(path, k * step)
     sum += w * (sample?.(at.lon, at.lat) ?? at.ele ?? 0)
     weight += w
@@ -437,6 +446,36 @@ function gridGround(x: number, z: number, cellM: number, frame: LocalFrame, samp
       const w = (ci ? tx : 1 - tx) * (cj ? tz : 1 - tz)
       if (w <= 0) continue
       const at = frame.toLonLat(_corner.set((i + ci) * cellM, 0, (j + cj) * cellM))
+      const h = sample(at.lon, at.lat)
+      if (h === undefined) continue
+      sum += w * h
+      weight += w
+    }
+  }
+  return weight > 0 ? sum / weight : undefined
+}
+
+/** Uniform cubic B-spline weights of the four corners around a cell fraction `t`. */
+function splineWeights(t: number): [number, number, number, number] {
+  const u = 1 - t
+  return [(u * u * u) / 6, (3 * t * t * t - 6 * t * t + 4) / 6, (-3 * t * t * t + 3 * t * t + 3 * t + 1) / 6, (t * t * t) / 6]
+}
+
+/**
+ * `gridGround` as a cubic B-spline over the 4 × 4 corners around the cell: still exact on a plane, with a continuous
+ * slope and curvature, so the aim's height does not jolt at each cell edge (16 terrain samples).
+ */
+function smoothGridGround(x: number, z: number, cellM: number, frame: LocalFrame, sample: HeightSampler): number | undefined {
+  const i = Math.floor(x / cellM)
+  const j = Math.floor(z / cellM)
+  const wx = splineWeights(x / cellM - i)
+  const wz = splineWeights(z / cellM - j)
+  let sum = 0
+  let weight = 0
+  for (let ci = 0; ci < 4; ci++) {
+    for (let cj = 0; cj < 4; cj++) {
+      const w = wx[ci] * wz[cj]
+      const at = frame.toLonLat(_corner.set((i + ci - 1) * cellM, 0, (j + cj - 1) * cellM))
       const h = sample(at.lon, at.lat)
       if (h === undefined) continue
       sum += w * h

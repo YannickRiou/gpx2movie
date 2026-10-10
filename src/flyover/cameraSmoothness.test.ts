@@ -21,6 +21,7 @@ describe('camera smoothness', () => {
     expect(max(film.turn)).toBeLessThan(120)
     expect(quantile(film.turnAccel, 0.99)).toBeLessThan(150)
     expect(max(film.turnAccel)).toBeLessThan(600)
+    expect(quantile(film.climbJerk, 0.99)).toBeLessThan(50_000)
   })
 
   it('every style keeps the raid calm', { timeout: 20_000 }, () => {
