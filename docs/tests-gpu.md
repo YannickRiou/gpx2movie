@@ -208,10 +208,10 @@ reproduce it next to the box.
       "Prévision" (forecast) weather in the panel and in the scene, "Temps" (time) counter preceded by "≈"; a start 20 days
       ahead has no weather and says so; "Effacer les horaires" (clear the times) returns to the track without times;
       project reopened: times and chip kept.
-- [ ] Roadbook ("Feuille de route", "Trace" tab): Alpine route, "Repères" (landmarks) on; steep sections and passes, huts,
-      water points in order, climb top merged with the pass; click on a line = marker and camera at the right place;
-      "≈" times after "Prévoir la sortie"; "Copier" (copy) then paste into an editor, "Enregistrer (.txt)" (site and
-      desktop); columns aligned in the 320 px panel.
+- [ ] Highlights ("Temps forts", "Survol" tab): Alpine route, "Repères" (landmarks) on; climb tops, passes and summits
+      in order; click on a row = marker and camera at the right place; "Arrêt dans le film" off then on, duration
+      changed: the "Arrêts" lane of the timeline follows, "Arrêts automatiques" goes off; "Ajouter à la position du
+      marqueur" then its ×; a stop moved or deleted on the timeline shows in the panel; phone: rows usable in the sheet.
 
 ## 6. Offline
 

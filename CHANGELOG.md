@@ -20,6 +20,8 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
   down (or down to sea level) of a long track without elevation while tiles came and went.
 - **Simpler panels**: camera presets as the one choice (six shown, the rest under « Plus de préréglages »), the style
   under « Plus de réglages »; Strava import in the « + Ajouter » menu of the track list.
+- **« Temps forts »** (Survol tab) replaces the « Feuille de route » roadbook: the film's highlights at a glance, each
+  stop on or off with its duration, your own added or deleted, in sync with the timeline.
 
 ## 0.1.0 (October 2026)
 

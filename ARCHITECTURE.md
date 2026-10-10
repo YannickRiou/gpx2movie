@@ -57,14 +57,13 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/flyover/climbs.ts` | detected climbs | `detectClimbs`, `climbsOf(track)` (cached per track), exported thresholds, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | 3D labels | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`…; `setLabelSource(id, labels)` (prefixed, unique ids), `useLabelSources` |
 | `src/flyover/pacing.ts` | flyover pacing | `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses given by the film) → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance`; `pacingHighlights`, `pacingFromHighlights` (pauses at the highlights); `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
-| `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha`, `START_HEIGHTS`, `START_HEIGHT_LABELS`, `highlightsRegion`; `autoStops`, `stopCandidates`, `materializeStops`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `pressedGrip`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `attachToStop`, `followStops`, `edgeScrollSpeed`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
+| `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha`, `START_HEIGHTS`, `START_HEIGHT_LABELS`, `highlightsRegion`; `autoStops`, `stopCandidates`, `stopAt`, `filmHighlights`, `materializeStops`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `pressedGrip`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `attachToStop`, `followStops`, `edgeScrollSpeed`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
 | `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)` (`options.follow`: `FollowedFlight`), `markerAt`, `framedGroup`, `overviewView`, `regionView`, `situationTarget`, `situationFramingOf`, `regionDistanceM`, `regionHighlightOpacity`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | sun date, sunrise / sunset | `shotSunDate(clock, timeS, flightDate, daylight)`, `shotSunShiftMs(clock, timeS)`, `SHOT_SUN_HOURS`, `SHOT_DAYLIGHT_HOUR`, `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | track colored by a metric | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (label, unit, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
 | `src/scene/exposure.ts` | exposure under the atmosphere | `DAYLIGHT_EXPOSURE`, `sunElevation`, `autoExposureEv`, `sceneExposure(elevation, ev)`, `nightFillIntensity` |
 | `src/weather/*` | weather of the outing (archive, or forecast for a planned outing) | `fetchOutingWeather(path, opts)`, `sampleLocations`, `outingDays` (source and days), `forecastCacheKey`, `createWeatherCache`, `WeatherError`, `OPEN_METEO_ATTRIBUTION`; `weatherAt(series, timeMs, lon, lat)`, `weatherAtTimes(series, timesMs, lon, lat)`, `weatherWidgetData(series, path, progress)`, `summarizeOuting`, `describeWeatherCode`, `windFromLabel`; `useWeatherStore`, `syncWeather` |
 | `src/plan/timing.ts` | estimated times of a planned outing (see "Planned outing") | `PLAN_ACTIVITIES`, `PLAN_ACTIVITY_LABELS`, `PACE_RANGE`, `OutingPlan`, `stretchHours`, `estimateElapsedS`, `withEstimatedTimes`, `withoutTimes`, `planActivityOf`, `localDepartureMs`, `localDayAndTime`, `localUtcOffsetMin` |
-| `src/plan/roadbook.ts` | roadbook (see "Planned outing") | `steepSections`, `roadbookLandmarks`, `buildRoadbook` → `Roadbook` (`rows`, `steep`, totals), `formatPlaceClock`, `passageText`, `roadbookSummary`, `longestSteepText`, `roadbookText`, thresholds `STEEP_PERCENT`, `VERY_STEEP_PERCENT`, `STEEP_MIN_LENGTH_M`, `STEEP_MERGE_GAP_M`, `SAME_PLACE_M`, `ROADBOOK_LANDMARKS` |
 | `src/osm/region.ts` + `src/scene/regionMesh.ts` + `src/scene/RegionHighlight.tsx` | administrative region of the outing, framed and highlighted by the region view (see "Film and timeline", Camera) | `regionName`, `regionCandidatesQuery`, `regionKind`, `REGION_KIND_LABELS`, `parseRegionCandidates`, `containingRegions`, `chooseRegion`, `candidateId`, `regionGeometryQuery`, `parseRegionGeometry`, `simplifyRings`, `fetchRegion`, `regionFrame`, `REGION_MIN_RATIO`, `REGION_MAX_POINTS`; `useRegionStore`, `syncRegion`, `holdRegion`; pure, tested: `buildRegionMesh`, `ringDepths`, `labelPoint`, `ringSegments`, `LABEL_GRID`; `RegionHighlight` |
 | `src/osm/*` | OpenStreetMap landmarks | `OVERPASS_ENDPOINTS`, `OSM_ATTRIBUTION`, `corridorBoxes`, `buildOverpassQuery`, `trackQuery`, `parseOverpass`, `runOverpassQuery`, `fetchTrackFeatures`; `parseEle`, `projectOnPath`, `landmarkPriority`, `landmarkText`, `buildLandmarks`, `landmarkLabels`, `splitHidden`, `DEFAULT_LANDMARK_SETTINGS`, `withLandmarkDefaults`, `LANDMARK_DISTANCE_RANGE`, `KIND_LABELS`, `KIND_BADGES`; `useLandmarkStore`, `syncLandmarks`, `resetLandmarkStore` |
 | `src/overlay/*` | film overlay | `drawOverlay(ctx, frame, settings, size, assets)`, `prepareOverlayTrack(track, weather?)`, `overlayFrameAt(data, progress)`, `prepareOverlayFilm`, `overlayFilmFrameAt`, `stageCardAt`, `stageDipAt`, `createOverlayFilmCache`, `cardOpacityAt`, `miniMapOutline`, `DEFAULT_OVERLAY`, `isValidOverlay`, `withOverlayDefaults`, `withOverrides`, `resolveOverlayTheme`, `leaderboardRows`, `loadLogo`, `loadOverlayFonts`, `createOverlayDrawer` (bridge to the export), `OverlayCanvas` |
@@ -483,7 +482,7 @@ ink, 7.3:1).
   `withCameraDefaults` in `SETTING_UPGRADES`: « Auto » keeps its multiplier, so the turns look the same) and named
   presets (`CAMERA_PRESETS`, 12: Poursuite (chase), Drone rapide, Oiseau, Hélicoptère, Orbite, Cinéma, Drone haut, Planeur, Montgolfière, Avion, Vue du dessus, Satellite; `findCameraPreset`; « Préréglage » is a grid of tiles with distance and tilt: six first, one per style plus a high view (`MAIN_PRESETS` in `CameraPanel.tsx`: Poursuite, Oiseau, Orbite, Cinéma, Drone haut, Satellite), the others under « Plus de préréglages », the current one always in the first grid, plus a « Personnalisé » tile when the settings match no preset) in
   `src/flyover/cameraSettings.ts`; `settings.flyoverDurationS` (15–600 s, 60 by default) = duration at ×1, the timeline
-  speed applies on top. "Survol" tab (`src/ui/CameraPanel.tsx`, "Caméra" and "Durée et rythme" sections; the
+  speed applies on top. "Survol" tab (`src/ui/CameraPanel.tsx`, "Caméra", "Durée et rythme" and "Temps forts" sections; the
   smoothing sliders under the camera's « Plus de réglages », « Lissage des virages » showing the « Auto » length for
   the first track). While paused, a camera setting change repositions the camera.
   "Cadrer la caméra pendant cet élément" (frame the camera during this item; inspector of a text or a media item): `addItemCamera` places a framing where
@@ -919,7 +918,7 @@ ink, 7.3:1).
   "Videos"), speaker (mutes or unmutes the preview sound, music and videos, `useMusicPreview`, shown when the film has
   music or a video with sound; neither saved nor undoable, the export keeps the sound), speed,
   zoom (− / logarithmic slider / + / "Ajuster" (fit) = the whole film), "Options" menu ("Ajouter une musique…" (add music), see
-  "Music"; "Arrêts automatiques" (automatic stops) checkbox:
+  "Music"; "Arrêts automatiques" (automatic stops) checkbox, `setAutoStops`, also in "Temps forts":
   checked, `autoStops` + `'temps-forts'`, own stops cleared; unchecked, generated stops written; "modifié" /
   "Par défaut" chip for the film, `ModifiedMarker keys={['film']}`; a dot on the button when the film departs from the default; it
   closes with Esc, a click outside or Tab), collapse.
@@ -1260,33 +1259,24 @@ it, know at what time you will pass each point, where the sun will be and what t
   reloads when the start time of the same track changes.
 - **Limit**: the start time is read in the device's time zone, not one derived from the coordinates.
 
-### Roadbook
+### Highlights (« Temps forts »)
 
-- **Use**: before setting off, the hard sections and the key points of the route, with km, elevation, D+ and passing
-  time; "Feuille de route" (roadbook) section of the "Trace" tab (`RoadbookPanel`), first track.
-- **Steep sections** (`steepSections`, `src/plan/roadbook.ts`, pure, tested): slope of each point from
-  `metricValues(…, 'slope')` (±50 m window of the track color, no second computation); runs of points at ≥ 15 % uphill
-  or ≤ −15 % downhill, two runs in the same direction less than 50 m apart merged (two consecutive steep points follow
-  each other whatever their gap), < 100 m dropped; "très raide" (very steep) if the maximum slope (over the window)
-  reaches 25 %. Average slope = elevation difference / length of the section.
-- **Key points** (`buildRoadbook(track, landmarks, pois)`): start, finish, climb tops (`climbsOf`), OSM landmarks
-  within 200 m (`roadbookLandmarks`: passes, summits, huts, water points, no cap, filtered again from the corridor
-  elements already loaded by `useLandmarkStore`, so no extra request; none if "Repères" (landmarks) is off), the
-  film's points of interest (nearest point of the track) and the start of each steep section, sorted by distance
-  (start first and finish last at equal distance). A climb top with an OSM pass or summit less than 300 m away along
-  the track becomes that landmark ("Col · sommet de la montée 2", pass · top of climb 2).
-- **Rows**: km, track elevation, D+ since the start (`computeElevationGain` on the elevations so far, rule of the
-  stats: the last row equals `stats.ascentM`), passing time (`recordedTimeAt`) and time since the previous row when
-  the track has times, recorded or estimated; "≈" before them if `timesEstimated`. Time on the local clock of the place
-  if `utcOffsetMin` is known (`formatPlaceClock`), otherwise in the browser's time zone.
-- **Panel**: summary (distance, D+ / D−, duration, longest steep section), clickable rows (`setProgress`), reminder
-  "Couleur de la trace › Pente" (track color › slope, "Carte" tab) to see the slopes in the view, "Copier" (copy,
-  `navigator.clipboard`, also in WebView2 and WebKitGTK; error message otherwise) and "Enregistrer (.txt)" (save as
-  text, `getPlatform().saveFile`) of the plain text `roadbookText`.
+- **Use**: a montage tool, the film's highlights at a glance; "Temps forts" section of the "Survol" tab
+  (`HighlightsPanel`, after "Durée et rythme"), film track (first track or the sequence « À la suite »).
+- **Rows** (`filmHighlights(candidates, stops)`, `src/film/assemble.ts`, pure, tested): the timeline's candidates
+  (`stopCandidates`: climb tops, passes crossed, summits nearby, one row per position), each with its stop in the film
+  (`stopAt`: a stop within 1 m, the rule of the timeline's « Arrêt à un temps fort… »), then the stops at no candidate
+  (added by hand, « ajouté »), by position. The stops are `FilmClock.stops` (generated ones included): no state of
+  its own, nothing saved, the timeline and the panel show the same film.
+- **Edits** (`editFilm` with `stops`, like the timeline and the inspector): « Arrêt dans le film » adds (`addStop`,
+  label and source of the candidate) or removes the stop; the duration field retouches it (`updateStop`, quick changes
+  merged); a row added by hand is deleted with its ×; « Ajouter à la position du marqueur » adds a stop at the marker.
+  The first edit writes the generated stops out (`materializeStops`): « Arrêts automatiques » goes off, as on the
+  timeline. The panel shows that switch (`setAutoStops`, shared with the timeline options): on again, a stop at every
+  highlight, the film's own stops dropped (said in the hint). A click on a row moves the marker there.
 - **Water points**: landmark type `waterPoint` (Overpass `amenity=drinking_water`, named "Eau potable" (drinking
-  water) when it has no name, and named `natural=spring`), off by default for the film and the labels, always used by
-  the roadbook; an old project receives the new type through `withLandmarkDefaults`. The request changes: each track
-  is requested again once.
+  water) when it has no name, and named `natural=spring`), off by default for the film and the labels; an old project
+  receives the type through `withLandmarkDefaults`.
 
 ## Climbs and labels
 
@@ -1866,7 +1856,7 @@ it, know at what time you will pass each point, where the sun will be and what t
   `filmTrackOf(tracks, race)` (hook `useFilmTrack`) replaces `tracks[0]` wherever the film is concerned: film source
   and clock (`useFilmSource`, `getFilmSource`: landmarks of every stage along the sequence, `sequenceLandmarks`, a
   landmark near two stages once), FlyoverRig and the export, timeline, track picker, climbs and their labels,
-  kilometre labels, landmark, climb, roadbook and point-of-interest panels (seeking in metres along the film), region
+  kilometre labels, landmark, climb, highlight and point-of-interest panels (seeking in metres along the film), region
   highlight, water. Stops, speed sections, camera keys and landmark titles are anchored in metres along the sequence:
   the first stage keeps the first track's metres, so switching mode keeps what was placed on it.
 - Clock: `FilmClockFor.cutsM` (the stages' starts) → `clock.cuts` (`{ atM, timeS }`, like the camera keys), read by

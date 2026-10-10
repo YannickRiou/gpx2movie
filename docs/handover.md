@@ -109,8 +109,8 @@ features included), `npm run build`,
 - **Second simplification pass**: `RangeField` (optional ⓘ tip and spoken value) for the settings sliders;
   `cumulativeDistances` in `geo/lonLat`; shared `createCanvas` / `createAbortError` for DEM and imagery; terrain area
   margins in `terrain/engine`; one `CAMERA_FOV_DEG`; `Fold` merged into `PanelSection`.
-- **Ported from the old branch chain**: landmark hiding (`settings.landmarks.hiddenIds`, eye button in "Repères",
-  also left out of the roadbook), point smoothing (`trackStyle.smoothingM`, recorded distances kept; ghost racers follow
+- **Ported from the old branch chain**: landmark hiding (`settings.landmarks.hiddenIds`, eye button in "Repères"),
+  point smoothing (`trackStyle.smoothingM`, recorded distances kept; ghost racers follow
   their smoothed lines; labels, picking, mini-map and poster keep the recorded points), texts and media attached to a
   stop (`stopId`, `followStops`, also on landmark-title, duration and pacing changes through `setLandmarkTitles` and
   `setFlightTiming`, on the "Par défaut" of "Durée et rythme" and on landmarks published again; see the last bullet),
@@ -143,6 +143,9 @@ features included), `npm run build`,
 - **Track draped on the drawn terrain** (10 October 2026): `engine.sampleHeight` reads the mesh of the tile on screen
   (`sampleTileMesh`) instead of the LRU height field, which held 100 grids for up to ~390 drawn tiles (points at 0 m,
   jumps of hundreds of metres on a 540 km track without elevation); measured with a simulated flight, not seen on a GPU.
+- **« Temps forts » replaces « Feuille de route »** (10 October 2026, user decision: a montage tool, not a hike
+  planner): `HighlightsPanel` in the Survol tab, rows from `filmHighlights` (the timeline's candidates and stops, no
+  state of its own); the roadbook, its steep sections, passing times and .txt export removed.
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn
@@ -163,10 +166,8 @@ Done (tests green, never seen on screen):
   without times (`TrackList.tsx`, `Track.timesEstimated`, "horaires estimés" (estimated times) chip, "Effacer les
   horaires" (clear the times)), weather from the Open-Meteo **forecast** (`api.open-meteo.com/v1/forecast`, 16 days,
   3 h memory cache; desktop CSP widened).
-- **Roadbook**: `src/plan/roadbook.ts`, `src/ui/RoadbookPanel.tsx` ("Trace" tab, under "Montées et étiquettes" (climbs and labels)): steep
-  sections ≥ 15 % / ≥ 25 %, key points (climbs, passes, summits, huts, water points, points of interest), km /
-  elevation / D+ / time, click = playhead, "Copier" (copy), "Enregistrer (.txt)" (save as text). New landmark type
-  `waterPoint` (water points, out of the film by default).
+- **Roadbook**: removed on 10 October 2026, replaced by « Temps forts » (see "Work in progress"). The landmark type
+  `waterPoint` it added stays (water points, out of the film by default).
 - **Shot transitions**: opening / closing "Enchaîné" (continuous, default), "Coupe" (cut), "Fondu au noir / au blanc"
   (fade to black / white, 0.3–2 s); `FilmShot.transition`, `dipS`, `transitionDipAt`, `shotWeight`. Not at stops
   (explained in `ARCHITECTURE.md`).
