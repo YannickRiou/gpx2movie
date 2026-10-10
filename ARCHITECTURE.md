@@ -100,12 +100,15 @@ full customization through a single project document, WebCodecs video export, Ta
 The first screen (shell, panels, welcome card) loads only the app and React: ~510 kB, ~170 kB gzip, instead of a
 single 3.1 MB file (930 kB gzip). The rest arrives through dynamic `import()` calls, each in its own file:
 
-- right after the first paint: the 3D scene (`FlyoverCanvas`, three.js + fiber, `React.lazy` in `Stage`), the export
-  drawer (video, batch, poster: `ExportPanel`) and the "Hors ligne" (offline) panel (`React.lazy` in `App`). They stay mounted;
+- right after the first paint: the 3D scene (`FlyoverCanvas`, three.js + fiber, `React.lazy` in `Stage`) and the
+  "Hors ligne" (offline) panel (`React.lazy` in `App`). They stay mounted;
 - with the first track: the atmosphere (Takram, clouds, post-processing, geoid grid: `AtmosphereLayer`, `React.lazy`
   in `FlyoverCanvas`, with its own `Suspense` so the terrain shows in the meantime);
+- when the export drawer is first opened: the drawer (video, batch, poster: `ExportPanel`, kept mounted afterwards)
+  and, through its codec check, mediabunny (~700 kB, 175 kB gzip). Mounting it at startup used to download both
+  before the user had done anything;
 - on demand: the FIT decoder (`import/fit.ts`, on the first .fit, `import/index.ts`), mediabunny (reading a video,
-  export, codec test in the drawer: `film/video.ts`, `export/encoder.ts`).
+  export: `film/video.ts`, `export/encoder.ts`).
 
 To keep three.js out of the first screen, the app imports lon/lat distances and boxes from `geo/lonLat.ts`, not from
 `geo/ellipsoid.ts`. React has its own file (`codeSplitting.groups` in `vite.config.ts`), kept in cache from one version to

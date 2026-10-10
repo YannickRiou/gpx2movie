@@ -272,6 +272,9 @@ const SCENARIOS = [
         const { settings, setSetting } = window.__e2e.appStore.getState()
         setSetting('clouds', { ...settings.clouds, mode: 'aucun' })
       })
+      // the export drawer, loaded on its first opening, downloads the finished films: open it first
+      await page.click('button.topbar__export')
+      await page.waitForSelector('#export-dock:not([hidden]) button::-p-text(Image fixe)', { visible: true, timeout: STEP_MS })
       // the film: straight into the export store (the panel's sizes start at 720p)
       let since = Date.now() - 1000
       await page.evaluate(() => {
@@ -297,9 +300,7 @@ const SCENARIOS = [
       assert(head.includes('ftyp') || head.readUInt32BE(0) === 0x1a45dfa3, 'le fichier vidéo n\'est ni un MP4 ni un WebM')
       log(`    vidéo : ${film.result.fileName}, ${film.result.codec}, ${video.size} octets, ${film.result.incompleteFrames} image(s) incomplète(s)`)
 
-      // the still image: from the export drawer, at its smallest size
-      await page.click('button.topbar__export')
-      await page.waitForSelector('#export-dock:not([hidden]) button::-p-text(Image fixe)', { visible: true, timeout: STEP_MS })
+      // the still image: from the export drawer (still open), at its smallest size
       await page.evaluate(() => {
         const select = [...document.querySelectorAll('#export-dock select')].find((s) => [...s.options].some((o) => o.value === '720p'))
         if (!select) throw new Error('sélecteur de résolution introuvable')
