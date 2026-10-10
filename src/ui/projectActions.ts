@@ -116,7 +116,7 @@ export async function chooseFilesToOpen(): Promise<void> {
   if (files.length > 0) await openFiles(files)
 }
 
-const SAMPLE_URL = '/samples/tour-du-mont-blanc-j1.gpx'
+const SAMPLE_URL = `${import.meta.env.BASE_URL}samples/tour-du-mont-blanc-j1.gpx`
 const SAMPLE_NAME = 'tour-du-mont-blanc-j1.gpx'
 
 /** `importFiles` bound to the app store and the toasts (files, the sample, Strava activities). */

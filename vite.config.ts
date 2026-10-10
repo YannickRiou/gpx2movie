@@ -74,6 +74,8 @@ const proxy = Object.fromEntries(
 )
 
 export default defineConfig({
+  // GitHub Pages serves the site under /gpx2movie/ (pages.yml); '/' everywhere else, desktop app included
+  base: process.env.BASE_PATH ?? '/',
   plugins: [react(), atmosphereAssets()],
   // src-tauri/target (Rust build of the desktop app) is not watched
   server: { port: 5173, proxy, watch: { ignored: ['**/src-tauri/**'] } },

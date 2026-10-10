@@ -67,7 +67,7 @@ export function TopBar({ onOpen, exportOpen, onToggleExport, onHelp }: TopBarPro
   return (
     <header className="topbar">
       <div className="topbar__start">
-        <img className="topbar__logo" src="/favicon.svg" alt="" width={28} height={28} title="OpenFlyover" />
+        <img className="topbar__logo" src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={28} height={28} title="OpenFlyover" />
         <h1 className="visually-hidden">OpenFlyover</h1>
         <input
           className="topbar__name"

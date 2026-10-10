@@ -3,6 +3,7 @@
 [![CI](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml/badge.svg)](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FYannickRiou%2Fgpx2movie%2Fbadges%2Fcoverage.json)](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml)
 [![Desktop installers](https://github.com/YannickRiou/gpx2movie/actions/workflows/desktop.yml/badge.svg)](https://github.com/YannickRiou/gpx2movie/actions/workflows/desktop.yml)
+[![Website](https://github.com/YannickRiou/gpx2movie/actions/workflows/pages.yml/badge.svg)](https://yannickriou.github.io/gpx2movie/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1C2A33.svg)](LICENSE)
 [![Node 24](https://img.shields.io/badge/node-24-1C2A33?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![TypeScript 6](https://img.shields.io/badge/TypeScript-6.0-1C2A33?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -25,6 +26,9 @@ OpenFlyover makes a 3D flyover movie from a GPX or FIT track, over the real terr
 - [Roadmap](#roadmap)
 
 ## Overview
+
+**Try it in your browser: <https://yannickriou.github.io/gpx2movie/>** (Chrome or Edge recommended for the video export), or
+download the desktop application from the [Releases](https://github.com/YannickRiou/gpx2movie/releases).
 
 You import the track of an outing: hiking, trail running, cycling, ski touring… OpenFlyover lays it on 3D terrain
 covered with orthophotos (orthorectified aerial photos). A camera flies over it, you edit the film on a timeline, and
