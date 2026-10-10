@@ -109,7 +109,7 @@ const SLIDERS: Slider[] = [
   {
     key: 'cameraSmoothingS',
     label: 'Lissage de la caméra',
-    tip: 'La caméra suit le marqueur en moyenne sur cette durée : elle anticipe arrêts et changements de vitesse au lieu de freiner sec.',
+    tip: 'La caméra suit le marqueur en moyenne sur cette durée : elle anticipe arrêts, changements de vitesse et virages au lieu de freiner ou de pivoter sec.',
     format: formatSmoothingS('Aucun'),
   },
   {

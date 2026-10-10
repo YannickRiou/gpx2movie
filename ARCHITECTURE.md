@@ -51,7 +51,7 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/marker*.ts` + `trackLineStyle.ts` | track and marker (see "Track and marker") | pure: `TrackStyle`, `DEFAULT_TRACK_STYLE`, `MarkerSettings`, `DEFAULT_MARKER`, `isValidTrackStyle`, `isValidMarker`, `withTrackStyleDefaults`, `withMarkerDefaults` (`markerSettings.ts`); `MARKER_FIGURE_PATHS`, `circlePath` (`markerFigures.ts`); `drawBadge`, `readableInk`, `squareCrop`, `fileToAvatarDataUrl`, `loadMarkerImage` (`markerBadge.ts`, 2D canvas); `markerBadge`, `badgeTexture`, `headsLeft`, `placeMarker`, `useMarkerImage`, `MARKER_SCREEN_FACTOR` (`markerSprite.ts`); `createGlowMaterial`, `applyDash`, `quantizedPixelSize`, `cumulativeDistances`, `cutAt`, `cutLine` (`trackLineStyle.ts`); `TrackMarkerSection` (`src/ui`) |
 | `src/flyover/path.ts` | flyover path | `buildTrackPath(track): TrackPath` (concatenated segments, cumulative distances, `time` in ms or NaN), `trackPathOf(track)` (same path, cached per track), `samplePath(path, distanceM): PathSample` (`ele` and `time` interpolated only if both neighbors have them), `recordedTimeAt(path, distanceM)` (fills points without a time), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)`, `pickProjectedPath(screen, distM, px, py, maxPx)` (point of the projected track closest to the pointer) |
 | `src/flyover/smooth.ts` | track smoothing (see "Track and marker") | `smoothPoints(points, windowM)`, `smoothTrack(track, windowM)`, `smoothedTrackPath(track, windowM)` (smoothed positions, recorded distances and times) |
-| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad?, aimProgress?, cameraProgress? })` → `{ target, position, marker }`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
+| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad?, aimProgress?, cameraProgress? })` → `{ target, position, marker }`, `autoDistanceM`, `smoothedTurn`, `smoothHeadingAt`, `movesWithTime` |
 | `src/flyover/cameraSettings.ts` | camera styles and presets | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `withCameraDefaults`, `turnSmoothingM(camera, lengthM)`, `advanceProgress(progress, dt, speed, durationS)` |
 | `src/flyover/timeSmoothing.ts` | camera smoothing in film time | `timeSmoothing(clock, timeS, motionS, camera)` → `{ aimProgress, cameraProgress, timeS }`, `windowAverage`, `easedEndTimeS`, `smoothsInTime`, `TIME_SMOOTHING_SAMPLES` |
 | `src/flyover/climbs.ts` | detected climbs | `detectClimbs`, `climbsOf(track)` (cached per track), exported thresholds, `CATEGORY_THRESHOLDS` |
@@ -420,6 +420,15 @@ ink, 7.3:1).
   turning during pacing pauses; the other styles depend only on progress. Heading = chord
   [d − w, d + w] (2w = « Lissage des virages » `turnSmoothingM` in metres; 0 = « Auto »: w = 2% of the track,
   150 m–1.5 km, × the `smoothing` multiplier of the presets and older projects), automatic distance 4% of the track (600 m–4 km, × distance).
+  **Scaled with the film's ground speed** v = track length / flyover duration (2 km per film second for 540 km in
+  4 min 30 s, 280 m for the sample): the heading is that chord averaged along the track over ± 1.5 × « Lissage de la
+  caméra » × v (`smoothHeadingAt`; none at 0 s): chord directions tabulated once per path and step, unwrapped along it
+  (each against the last chord at least w / 2 long) and weighted by the chord length, so a loop, an out-and-back or a
+  GPS star at a rest turns the camera through instead of flipping it (the bare chord swung by up to 180° in a frame
+  there: 3,000 °/s); 'sway' measures its turn as the averaged direction w ahead minus w behind. The aim point and the
+  camera's point of the track are the track averaged over 0.5 s × v (`POSITION_SMOOTHING_S`): the corners of a sparse
+  recording (a point every 60 m–2 km) are rounded off instead of jolting the view at each one. Weights: squared raised
+  cosine sliding over fixed samples (8 per side), flat to the second derivative at the window edges.
   Styles (`settings.camera.style`): `chase` (behind the marker), `sway` (swing toward the outside of bends:
   50° · tanh(0.8 · T / 50°), T = sum of turn angles weighted by a tent over ±2w, continuous and calm), `orbit` (6°/s
   around the marker from the start heading), `top` (≥ 70°, distance × 2.5, north or heading up), `cinematic` (distance × 1.6,
@@ -428,14 +437,17 @@ ink, 7.3:1).
   **Steady heights** (no frame-to-frame state, so preview and export stay identical): the heights are read from
   terrain samples that stay put while the marker moves, so the camera follows the relief without riding each bump
   or a sight-line sample (whose height counts up to 10× near the marker). Ground radius / cell r = w / 4, at most
-  150 m (37.5 m below a 7.5 km track at smoothing 1: scaled with the track, so with the marker's step per frame).
-  The camera looks at the aim point, not the marker (`marker`, on the draped track): marker x / z at
-  max(`trackGround`, grid ground) + lift; `trackGround` = tent-weighted mean of the terrain at fixed track
-  distances (multiples of r / 4, ≤ 8 samples) over ±r. Clearance rules (80 m under the camera, the sight line to the
+  150 m (37.5 m below a 7.5 km track at smoothing 1: scaled with the track, so with the marker's step per frame), and
+  at least 0.25 s × v, at most 500 m (`GROUND_SPEED_S`: a fast film no longer rides the relief at a few frames a cell).
+  The camera looks at the aim point, not the marker (`marker`, on the draped track): the aim's x / z at
+  the smooth maximum (over 40 m, `AIM_GROUND_EASE_M`) of `trackGround` and the grid ground there + lift;
+  `trackGround` = mean of the terrain at fixed track distances (multiples of r / 4, ≤ 8 samples) over ±r, weighted
+  as above; the grid ground at the aim is a cubic B-spline over the 4 × 4 corners around it (exact on a plane, no
+  slope break at a cell edge, 16 samples). Clearance rules (80 m under the camera, the sight line to the
   aim) read the grid ground: bilinear between the terrain at the corners of a fixed r grid of the local frame (exact
   on a plane, cliffs softened over a cell); the floor is eased in (smooth maximum over 80 m, at most 20 m above),
   then the camera is kept `MIN_TERRAIN_CLEARANCE_M` (40 m) above the actual terrain below it (a bump narrower than a
-  cell). About 65 terrain samples per frame. On ±15 m bumps 30 m wide, the frame-to-frame height change drops from
+  cell). About 80 terrain samples per frame. On ±15 m bumps 30 m wide, the frame-to-frame height change drops from
   3–35 m to 0.16 m on flat ground, the change of vertical speed from 1–70 m to under 2.5 m on hills.
   **Smoothing in film time** (`src/flyover/timeSmoothing.ts`, applied by `computeFilmView`; still no frame-to-frame
   state): the aim point follows the marker's progress averaged over « Lissage de la visée » `aimSmoothingS` (0 by

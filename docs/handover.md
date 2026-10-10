@@ -137,6 +137,9 @@ features included), `npm run build`,
   text pair measured ≥ 4.5:1 in headless Chromium), selections in accent tint instead of ink slabs, white-pill
   segmented controls, neutral play button, tab labels under the rail icons; "Carte": "Atmosphère et météo" before
   "Lumière"; "Survol": "Transitions" under "Plus de réglages". Seen in headless Chromium (grey terrain), not on a GPU.
+- **Camera smoothness on long tracks** (10 October 2026): measured with `cameraSmoothness.test.ts` (540 km raid-like
+  track in 4 min 30 s, the sample in 60 s); heading averaged at the film's ground speed on unwrapped chord directions,
+  corners of the line rounded over 0.5 s, aim height over at least 0.25 s of track with a B-spline grid; not seen on a GPU.
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn
