@@ -7,10 +7,13 @@ import App from './App.tsx'
 import { installOfflineTiles } from './offline/store'
 import { ErrorBoundary } from './ui/ErrorBoundary'
 import { installExternalLinks } from './platform/externalLinks'
+import { installWebApp } from './platform/webApp'
 
 // offline packs: the tile fetcher reads them before the network
 installOfflineTiles()
 installExternalLinks()
+// website: service worker, update prompt, iOS install hint
+installWebApp()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
