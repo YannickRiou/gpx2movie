@@ -149,6 +149,8 @@ features included), `npm run build`,
 - **Map state in the status bar** (10 October 2026): `ui/mapStatus.ts` (ring + « Carte · 72 % », « Carte prête »,
   « N tuiles en erreur »), from the existing terrain stats, no engine change; seen in headless Chromium with simulated
   stats. Not done: « Précharger le survol » (engine `prefetch` along the whole film path, with its own progress).
+- **Tabs Météo, Lumière, Objectif** (10 October 2026, user request "pense Apple"): eight tabs in montage order, `SettingRow`
+  (name and value, control on a tap) replaces every « Plus de réglages »; phone bar scrolls sideways. Seen in headless Chromium.
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn

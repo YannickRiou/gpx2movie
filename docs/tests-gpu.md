@@ -116,7 +116,7 @@ reproduce it next to the box.
 - [ ] Speed per section: ×2 block then ×0.5, acceleration without stutter at the edges, "garder la durée" (keep the duration).
 - [ ] Camera at stops: "Tour lent" (slow turn) at the summit (the turn comes back without stutter), "Vue large" (wide view) (smooth pull-back and
       rise), "Fixe" (fixed) with the "Orbite" (orbit) style (the camera slows down, stops, starts again), "Comme le film" (same as the film).
-- [ ] Camera smoothing ("Caméra" › "Plus de réglages"): "Lissage de la caméra" 0 then 7.5 s on a film with stops and a
+- [ ] Camera smoothing (a row of "Caméra", "Survol" tab): "Lissage de la caméra" 0 then 7.5 s on a film with stops and a
       "Ralentir aux temps forts" slow-down: the camera anticipates and eases into each stop, no jerk at the start of the
       flight; "Lissage de la visée" 2 s: the marker drifts a little off-centre at stops, then comes back; "Fin en douceur"
       3 s: the camera comes to rest at the end and turns to watch the marker finish; "Lissage des virages" "Auto" vs

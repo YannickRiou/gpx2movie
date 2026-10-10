@@ -279,14 +279,17 @@ ink, 7.3:1).
   Without a track, no framing: the welcome card (`EmptyState.tsx`) fills the center of the view ("Choisir un fichier" (choose a file),
   "Essayer avec l'exemple (Tour du Mont-Blanc)" (try the sample), "Ouvrir un projet…" (open a project), a single picker whose `accept` changes).
 - **Rail and panel**: vertical rail of icon + label tabs (64 px; `tablist`, roving focus, arrows / Home / End) and a
-  320 px panel, one tab at a time: **Trace** (track; track list with "+ Ajouter" (add; a menu: « Fichiers GPX ou FIT… », « Activités Strava… »), waiting message without a track,
-  collapsible Climbs and Weather), **Carte** (map; scene settings, OSM landmarks), **Survol** (flyover; camera, pacing),
-  **Habillage** (overlay), **Projet** (project; presets). All tabs stay mounted (`hidden`): weather, landmarks and export have
+  320 px panel, one tab at a time, eight tabs in montage order (`SHELL_TABS`), one question each: **Trace** (track; track list with "+ Ajouter" (add; a menu: « Fichiers GPX ou FIT… », « Activités Strava… »), waiting message without a track),
+  **Carte** (map; base map and water, relief, track and marker, climbs and labels, OSM landmarks, points of interest),
+  **Météo** (weather; weather of the outing, clouds, weather in the image), **Lumière** (light; atmosphere, shadows,
+  exposure, sun, colour grading), **Survol** (flyover; camera, pacing, highlights), **Objectif** (lens effects),
+  **Habillage** (overlay), **Projet** (project; projects, presets, offline packs). All tabs stay mounted (`hidden`): weather, landmarks and export have
   side effects. Flat sections separated by a rule, sticky section header (title + "modifié / Par défaut" (modified / default)). A click
   on the open tab, the button at the bottom of the rail or `[` collapses the panel. Tab and collapsed state are remembered by the browser
-  (`getPlatform().storage` `openflyover.shell.v1`, `parseShellPrefs`), not by the project.
+  (`getPlatform().storage` `openflyover.shell.v1`, `parseShellPrefs`: an unknown tab id falls back to Trace), not by the project.
+  The tab list scrolls when it does not fit (short window; phone bar), and `App` scrolls the open tab into view.
 - **Right dock** (300 px): non-modal export drawer (`ExportPanel`: formats as tiles, resolution, estimate, "Exporter
-  la vidéo" (export the video), "Image fixe" (still image), "Plus de réglages" (more settings): frames per second, quality, image type; summary duration · frames · codec ·
+  la vidéo" (export the video), "Image fixe" (still image), rows (`SettingRow`) for frames per second, quality, image type; summary duration · frames · codec ·
   size on one line; modes "Vidéo" (video), "Plusieurs formats" (several formats): resolution chips per format, still image, poster,
   batch estimate, "Tout exporter" (export all), progress "2 / 4 · 16:9 1080p · 42 %", file list, and "Affiche" (poster));
   otherwise the **inspector** of the block
@@ -369,7 +372,8 @@ ink, 7.3:1).
     and inspector are bottom sheets above it, with a grip (`SheetHandle.tsx`) that drags the sheet and settles it on
     a snap (`settleSheet`: `SHEET_SNAPS` peek 0.3 / half 0.55 / full of the room, a flick carries it one step, below half
     the peek it closes); the snap is the sheet's `data-snap` (CSS heights), a tap on the grip switches half / full,
-    ↑ / ↓ step. Sheet content scrolls inside the sheet (`overscroll-behavior: contain`); a press on the view does not
+    ↑ / ↓ step. The bottom tab bar holds all eight tabs (72 px wide at least, so the next one peeks past the edge) and scrolls
+    sideways. Sheet content scrolls inside the sheet (`overscroll-behavior: contain`); a press on the view does not
     close it (it does on a tablet side sheet). Landscape phone: the rail stays on the side, without its fold button.
   - *Touch* (`pointer: coarse`, any width): `--topbar-h` 56 px, `--control-h` 44 px and 44 px minimum on buttons, fields, chips, segmented
     options, tiles, menu items and timeline buttons; lanes 40 px, grips 16 px; a larger invisible hit area around ⓘ;
@@ -377,16 +381,23 @@ ink, 7.3:1).
   - *No hover* (`hover: none`): `data-tip` tooltips do not stick after a tap; an ⓘ shows its sentence when tapped
     (focus), a long press shows any other tip (`:active`). Every other `:hover` style sits in `@media (hover: hover)`,
     in place (same cascade on a computer): no grey background or border left on a button after a tap.
-- **Sections of the Carte and Survol tabs** (`PanelSection.tsx`): `PanelSection` = flat collapsible section (`fold` classes,
+- **Sections of the tabs** (`PanelSection.tsx`): `PanelSection` = flat collapsible section (`fold` classes,
   sticky header: title, "modifié / Par défaut" of its keys, chevron), open initially, then as last left: open / folded
   state remembered by title in the platform storage (`FOLDS_KEY` `openflyover.folds.v1`, `parseFoldPrefs` in `shell.ts`,
-  read once on mount, written on `toggle`; without storage or with an unreadable value every section opens). Carte: "Fond de carte" (base map)
-  (imagery), "Relief et trace" (terrain and track; exaggeration, track color), "Atmosphère et météo" (atmosphere and weather; atmosphere,
-  shadows, weather in the scene), "Lumière" (light; after the atmosphere switch it depends on), "Couleurs" (colors; color grading), "Objectif" (lens effects; `LensPanel`), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset tiles, each implying a style, north up),
-  "Durée et rythme" (duration and pacing; duration, film duration, slow-downs on / off, « Plan de situation » switches for the opening and the closing), "Trace et marqueur" (track and marker; `TrackMarkerSection`). Rare settings are in `MoreSettings` ("Plus de
-  réglages", closed `<details>`): imagery detail, terrain source, wireframe, exposure, weather intensity, camera style
-  (a select), distance / tilt / aim / smoothing, highlights and pacing parameters, transitions. Its summary shows "modifié" when a hidden setting
-  departs from the default (`modifiedPaths(settings, paths)` from `project/apply.ts`, paths `'key'` or `'key.field'`). Setting
+  read once on mount, written on `toggle`; without storage or with an unreadable value every section opens; a title no longer used is ignored). Carte: "Fond de carte" (base map)
+  (imagery, water), "Relief" (exaggeration), "Trace et marqueur" (track and marker; `TrackMarkerSection`, track colouring included), "Montées et étiquettes" (climbs and labels; `ClimbList`), "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise).
+  Météo: "Météo de la sortie" (`WeatherPanel`), "Nuages" (clouds), "Pluie et brume" (weather in the scene and its intensity;
+  `WeatherSettings`). Lumière: "Atmosphère" (atmosphere, shadows, exposure), "Soleil" (sun time and date; `LightSettings`),
+  "Couleurs" (`GradingPanel`). Survol: "Caméra" (camera; preset tiles, each implying a style, north up),
+  "Durée et rythme" (duration and pacing; duration, film duration, slow-downs on / off, « Plan de situation » switches for the opening and the closing), "Temps forts". Objectif: "Effets d'objectif" (`LensPanel`).
+  The two or three essential settings of a section stay open; every other one is a `SettingRow`: one button row with
+  its name and current value (iOS Settings style, `aria-expanded`), whose control stays hidden (mounted, `hidden`)
+  until the row is pressed, then unfolds under it and takes the focus (the checked radio, else the first field); the
+  value turns bold when one of its `paths` departs from the default (`modifiedPaths(settings, paths)` from
+  `project/apply.ts`, paths `'key'` or `'key.field'`); the section's "Par défaut" resets it. A lone field in a row hides its
+  plain label (the row names it). Rows: imagery detail, terrain source, water strength, wireframe, track colouring, smoothing, width,
+  dash, marker size, km markers, label size and range, landmark kinds and distance, sea render, low cloud base, cloud quality, weather intensity, exposure, sun date,
+  the four grading sliders, flare, bloom radius, camera style, distance / tilt / aim / smoothing, pacing parameters, transitions; export frame rate, quality, still type. Setting
   keys and behavior unchanged. `InfoTip` (ⓘ, one-sentence `data-tip` tooltip, focusable, `aria-label`) only
   on jargon: exaggeration, wireframe, exposure, highlights. Styles: delimited block at the end of `app.css`.
 - **Lumière**: toggle "Suivre la trace" (follow the track; = `sunFromTrack`, disabled with an explanation without timestamps) / "Heure
@@ -402,8 +413,8 @@ ink, 7.3:1).
   checkbox) to turn on a whole feature (overlay and each of its elements, atmosphere, weather, landmarks, ghost
   race, slow-downs, credits); checkable chips (`chips` / `chip`, hidden native checkbox, check mark and ink background once
   selected, dotted if unavailable) for multiple choices (landmark types, counters); option text at weight 500,
-  labels at 600. Without a track, Carte, Survol and Habillage start with a line "Ajoutez une trace…" (add a track; `tab-hint`,
-  `NO_TRACK_HINT_TABS` in `App`). Trace: weather on two lines (outing; marker instant), tables collapsed under
+  labels at 600. Without a track, every tab but Trace and Projet starts with a line "Ajoutez une trace…" (add a track; `tab-hint`,
+  `NO_TRACK_HINT_TABS` in `App`). Météo: weather on two lines (outing; marker instant), tables collapsed under
   "Détails" (details); ghost race synchronization and ranking only once it is enabled. Habillage (`OverlayPanel`)
   in `PanelSection`: "Habillage" (switch, style, "Couleurs et polices" (colors and fonts) collapsed; the only "modifié / Par défaut",
   for all of `overlay`), "Titres" (titles), "Compteurs" (counters; and "Classement (course fantôme)" (ghost race ranking) from two tracks), "Profil et mini-carte" (profile and mini-map), "Météo, logo et texte" (weather, logo and text; absent when the overlay is off), "Crédits des
@@ -486,7 +497,7 @@ ink, 7.3:1).
   presets (`CAMERA_PRESETS`, 12: Poursuite (chase), Drone rapide, Oiseau, Hélicoptère, Orbite, Cinéma, Drone haut, Planeur, Montgolfière, Avion, Vue du dessus, Satellite; `findCameraPreset`; « Préréglage » is a grid of tiles with distance and tilt: six first, one per style plus a high view (`MAIN_PRESETS` in `CameraPanel.tsx`: Poursuite, Oiseau, Orbite, Cinéma, Drone haut, Satellite), the others under « Plus de préréglages », the current one always in the first grid, plus a « Personnalisé » tile when the settings match no preset) in
   `src/flyover/cameraSettings.ts`; `settings.flyoverDurationS` (15–600 s, 60 by default) = duration at ×1, the timeline
   speed applies on top. "Survol" tab (`src/ui/CameraPanel.tsx`, "Caméra", "Durée et rythme" and "Temps forts" sections; the
-  smoothing sliders under the camera's « Plus de réglages », « Lissage des virages » showing the « Auto » length for
+  smoothing sliders as rows of « Caméra », « Lissage des virages » showing the « Auto » length for
   the first track). While paused, a camera setting change repositions the camera.
   "Cadrer la caméra pendant cet élément" (frame the camera during this item; inspector of a text or a media item): `addItemCamera` places a framing where
   the marker is at the start of the item (selected, to be adjusted) and, if the marker moves during the item, a second one at
@@ -589,16 +600,16 @@ ink, 7.3:1).
 - **Cost**: "Naturel" (natural; zero values, `isIdentityGrading`) mounts **nothing** (no effect, no pass; without atmosphere, no
   composer and no loading of `postprocessing`). Otherwise a few dozen operations per pixel, merged into the existing
   pass. Without atmosphere, switching from "Naturel" to a preset replaces the canvas's native MSAA with SMAA.
-- **Interface**: "Couleurs" section of the Carte tab (`src/ui/GradingPanel.tsx`): preset chips (one
-  undo step each), the four sliders under "Plus de réglages".
+- **Interface**: "Couleurs" section of the Lumière tab (`src/ui/GradingPanel.tsx`): preset chips (one
+  undo step each), the four sliders as rows.
 
 ## Lens (« Objectif »)
 
 - **Setting** `settings.lens` (`src/scene/lens.ts`, pure and tested): `shutter`, `bloom`, `bloomRadius`, `flare`,
   `depthOfField`, all 0..1 and off (0) by default (`bloomRadius` 0.6). `SETTING_CHECKS`: `isValidLens`;
   `SETTING_UPGRADES`: `withLensDefaults`; projects saved before it load with every effect off. In the "carte" preset
-  family. "Objectif" section of the Carte tab after "Couleurs" (`src/ui/LensPanel.tsx`; "Non" at 0, the bloom radius
-  under "Plus de réglages"). The vignette stays in "Couleurs" (it is part of the grading presets).
+  family. "Objectif" tab (`src/ui/LensPanel.tsx`; "Non" at 0; motion blur, bloom and depth of field open, flare and the bloom
+  radius as rows). The vignette stays in "Couleurs" (it is part of the grading presets).
 - **Chain** (`useLensEffects`): an effect exists only while its amount is above 0 (switching it on or off rebuilds the
   pass; a slider only sets uniforms). With the atmosphere, bloom, depth of field and flare are merged into the pass
   of the SMAA and the grading (after the SMAA, before the grading; `EffectPass` sorts depth effects first), on
@@ -679,7 +690,7 @@ ink, 7.3:1).
   the export matches the preview; the ghost-race markers stay still. Defaults = the previous look
   (4 px, solid, white ball). Checked by `SETTING_CHECKS`, completed by `SETTING_UPGRADES` (keys added later).
   `image`: 128 px square PNG as a data URL (`fileToAvatarDataUrl`, platform picker), 300,000 characters at most.
-  "Trace et marqueur" (track and marker) section of the Survol tab (`src/ui/TrackMarkerSection.tsx`).
+  "Trace et marqueur" (track and marker) section of the Carte tab (`src/ui/TrackMarkerSection.tsx`).
 - **Width**: pixels of a 1080 px image, times `renderScale` in the export (as before). **Glow**: a third `Line2` on the
   same geometry, 3.5 times wider, `LineMaterial` material whose fragment shader is replaced (`onBeforeCompile`, own
   program key): track color × radial fade (`vUv`), **MAX** blending — no beads at the joints of
@@ -831,7 +842,7 @@ ink, 7.3:1).
   portrait factor, « Hauteur » greyed out), still within the reach of the terrain for that tilt and never nearer
   than the overview; « Cap » « Libre » (the overview's side, as before) or « Boussole » (looking toward
   `bearingDeg`, « Orientation », 0° = north up: camera on the opposite side of the target); « Marge » (`headroomPct`,
-  in « Plus de réglages »): view and target moved up along the frame's vertical by 2 · h · distance · tan(25°), so the
+  a row): view and target moved up along the frame's vertical by 2 · h · distance · tan(25°), so the
   target sits h of the frame height below the middle. « Capturer la vue actuelle »: `FlyoverRig` registers
   (`registerFramingCapture`, `src/osm/region.ts`, so the UI does not import three.js) a reader of its camera around
   `situationTarget` (region centre when the shot highlights and it is loaded, else the track's), and
@@ -2091,7 +2102,7 @@ JavaScript.
 
 ## Offline packs (phase 6)
 
-"Préparer hors ligne" (prepare offline; Trace tab, "Hors ligne" section, `src/ui/OfflinePanel.tsx`) downloads once the tiles
+"Préparer hors ligne" (prepare offline; Projet tab, "Hors ligne" section, `src/ui/OfflinePanel.tsx`) downloads once the tiles
 of a flyover of the loaded tracks; the view and the export then read them without a network.
 
 - **Plan** (`plan.ts`, pure): the tiles the engine loads during the flyover, with its own rule. A tile of
