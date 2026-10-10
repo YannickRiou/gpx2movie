@@ -108,6 +108,20 @@ export interface Capabilities {
   videoEncoder: VideoEncoderKind
   /** `createWritableFile` works: desktop, or a browser with `showSaveFilePicker` (Chrome, Edge) */
   canStreamToDisk: boolean
+  /**
+   * Phones and tablets without `showSaveFilePicker` (iOS, older Android): `saveFile` / `saveUrl` open the share sheet
+   * (« Partager / Enregistrer »: Photos, Fichiers…) when it takes the file, else download it.
+   */
+  sharesFiles?: boolean
+}
+
+/** Label of the save button where files go through the share sheet. */
+export const SHARE_SAVE_LABEL = 'Partager / Enregistrer'
+
+/** Touch screen as the main pointer (phones, tablets). */
+export function touchScreen(scope: object): boolean {
+  const matchMedia = (scope as { matchMedia?: (query: string) => MediaQueryList }).matchMedia
+  return typeof matchMedia === 'function' && matchMedia.call(scope, '(pointer: coarse)').matches
 }
 
 export interface Platform {
@@ -159,6 +173,11 @@ export function detectCapabilities(scope: object): Capabilities {
       typeof (scope as { VideoEncoder?: unknown }).VideoEncoder === 'function' ? 'webcodecs' : isTauriRuntime(scope) ? 'native' : null,
     canStreamToDisk:
       isTauriRuntime(scope) || typeof (scope as { showSaveFilePicker?: unknown }).showSaveFilePicker === 'function',
+    sharesFiles:
+      !isTauriRuntime(scope) &&
+      typeof (scope as { showSaveFilePicker?: unknown }).showSaveFilePicker !== 'function' &&
+      typeof (scope as { navigator?: { share?: unknown } }).navigator?.share === 'function' &&
+      touchScreen(scope),
   }
 }
 

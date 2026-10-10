@@ -3,8 +3,8 @@
  * written while produced through `showSaveFilePicker` (File System Access, Chrome and Edge); offline tiles and
  * « Mes projets » in Cache Storage (HTTPS or localhost only).
  */
-import { droppedFiles, isAppleMobile, keyValueStore, pickerAccept, pickerTypes, saveFilters } from './platform'
-import type { Capabilities, Platform, SaveFileOptions, WritableFile } from './platform'
+import { droppedFiles, isAppleMobile, keyValueStore, mimeTypeOf, pickerAccept, pickerTypes, saveFilters } from './platform'
+import type { Capabilities, Platform, SaveFileOptions, SaveOutcome, WritableFile } from './platform'
 import { createProjectLibrary, createWebLibraryFiles } from './projectLibrary'
 import { createWebTileCache } from './tileCache'
 
@@ -58,6 +58,21 @@ function localStorageOrNull(): Storage | null {
   }
 }
 
+/**
+ * The share sheet (iOS: « Enregistrer la vidéo » in Photos, « Enregistrer dans Fichiers »), when it takes this file;
+ * null when it does not, or refuses (no user gesture left): the caller downloads instead.
+ */
+async function shareFile(capabilities: Capabilities, file: File): Promise<SaveOutcome | null> {
+  if (!capabilities.sharesFiles || !navigator.canShare?.({ files: [file] })) return null
+  try {
+    await navigator.share({ files: [file] })
+    return { saved: true, fileName: file.name }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return { saved: false }
+    return null
+  }
+}
+
 /** Click a download link (the browser saves the file in its download folder). */
 function clickDownload(url: string, fileName: string): void {
   const link = document.createElement('a')
@@ -90,6 +105,9 @@ export function createWebPlatform(capabilities: Capabilities): Platform {
         input.click()
       }),
     async saveFile(data, { fileName }) {
+      // called before any await: the share sheet needs the user's click
+      const shared = await shareFile(capabilities, new File([data], fileName, { type: data.type || mimeTypeOf(fileName) }))
+      if (shared) return shared
       const url = URL.createObjectURL(data)
       clickDownload(url, fileName)
       // released once the click has been handled
@@ -97,6 +115,11 @@ export function createWebPlatform(capabilities: Capabilities): Platform {
       return { saved: true, fileName }
     },
     async saveUrl(url, { fileName }) {
+      if (capabilities.sharesFiles) {
+        const blob = await (await fetch(url)).blob()
+        const shared = await shareFile(capabilities, new File([blob], fileName, { type: blob.type || mimeTypeOf(fileName) }))
+        if (shared) return shared
+      }
       clickDownload(url, fileName)
       return { saved: true, fileName }
     },
