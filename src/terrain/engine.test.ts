@@ -624,15 +624,39 @@ describe('createTerrainEngine', () => {
     expect(deps.field.size).toBe(0)
   })
 
-  it('delegates sampleHeight to the height field (true-scale heights)', async () => {
+  it('samples the drawn tile (true-scale heights), not the grids cached in the height field', async () => {
     const deps = createFakeDeps()
+    vi.mocked(deps.decodeDem).mockImplementation(() => ({ width: 4, height: 4, data: new Float32Array(16).fill(1234) }))
     const engine = engineWith(deps, { exaggeration: 2.5 })
     expect(engine.sampleHeight(6.9, 45.9)).toBeUndefined()
     const camera = cameraAbove(600_000)
     engine.update(camera, 1000)
     await settle()
+    // the fake height field answers lon + lat: a finer or older grid than the tile on screen
+    expect(engine.sampleHeight(6.9, 45.9)).toBeCloseTo(1234, 3)
+    engine.update(camera, 1000)
+    expect(engine.sampleHeight(6.9, 45.9)).toBeCloseTo(1234, 3)
+    // the height field still answers where no tile is loaded (tree rebuilt for new imagery)
+    engine.setOptions({ imageryZoomOffset: 2 })
     expect(engine.sampleHeight(6.9, 45.9)).toBeCloseTo(6.9 + 45.9, 9)
-    expect(deps.heightField.sampleHeight).toHaveBeenCalledWith(6.9, 45.9)
+  })
+
+  it('reports a change when the drawn tiles change without any load', async () => {
+    const deps = createFakeDeps()
+    const engine = engineWith(deps, { maxZoom: ROOT_ZOOM + 1 })
+    const near = cameraAbove(4000)
+    for (let i = 0; i < 4; i++) {
+      engine.update(near, 1000)
+      await settle()
+    }
+    engine.update(near, 1000)
+    const cb = vi.fn()
+    engine.onChange(cb)
+    // back up: the roots are drawn again instead of their loaded children
+    engine.update(cameraAbove(600_000), 1000)
+    expect(cb).toHaveBeenCalledTimes(1)
+    engine.update(cameraAbove(600_000), 1000)
+    expect(cb).toHaveBeenCalledTimes(1)
   })
 
   it('prunes the height field cache to the configured number of grids', async () => {

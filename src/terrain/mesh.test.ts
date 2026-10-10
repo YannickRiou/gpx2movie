@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
 import type { HeightGrid, TileKey } from '../core/types'
 import { createLocalFrame } from '../geo/ellipsoid'
-import { tileBounds, tileCenter } from '../geo/mercator'
-import { buildTileGeometry, tileMeshLayout } from './mesh'
+import { tileBounds, tileCenter, tileXToLon, tileYToLat } from '../geo/mercator'
+import { buildTileGeometry, sampleTileMesh, tileMeshLayout } from './mesh'
 
 /** A z=12 tile over the Mont Blanc massif. */
 const KEY: TileKey = { z: 12, x: 2126, y: 1457 }
@@ -194,5 +194,26 @@ describe('buildTileGeometry', () => {
     expect(() => buildTileGeometry(KEY, flatGrid(2, 0), FRAME, { segments: 0, exaggeration: 1, skirtDepthM: 1 })).toThrow(
       RangeError,
     )
+  })
+})
+
+describe('sampleTileMesh', () => {
+  /** a peak in the middle of a 2 × 2 cell mesh: the grid is finer than the mesh */
+  const grid: HeightGrid = { width: 3, height: 3, data: new Float32Array([0, 0, 0, 0, 900, 0, 0, 0, 0]) }
+  const at = (u: number, v: number) => sampleTileMesh(KEY, grid, 2, tileXToLon(KEY.x + u, KEY.z), tileYToLat(KEY.y + v, KEY.z))
+
+  it('is the grid at the mesh vertices', () => {
+    expect(at(0.5, 0.5)).toBeCloseTo(900, 3)
+    expect(at(0, 0)).toBeCloseTo(0, 3)
+    expect(at(1, 1)).toBeCloseTo(0, 3)
+  })
+
+  it('follows the triangles between the vertices, not the finer grid', () => {
+    // NW cell, on its NE-SW diagonal: halfway between two 0 m vertices, where the grid has ~100 m
+    expect(at(0.25, 0.25)).toBeCloseTo(0, 3)
+    // SE cell, on its NE-SW diagonal (from the 900 m NW corner): halfway between 0 m vertices too
+    expect(at(0.75, 0.75)).toBeCloseTo(0, 3)
+    // on the edge west of the peak, a quarter of a cell from it
+    expect(at(0.375, 0.5)).toBeCloseTo(675, 1)
   })
 })

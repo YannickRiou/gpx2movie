@@ -11,7 +11,7 @@
  */
 import { BufferAttribute, BufferGeometry, Vector3 } from 'three'
 import type { BuildTileGeometryOptions, HeightGrid, LocalFrame, TileGeometryResult, TileKey } from '../core/types'
-import { tileXToLon, tileYToLat } from '../geo/mercator'
+import { lonLatToTileFrac, tileXToLon, tileYToLat } from '../geo/mercator'
 import { sampleGrid } from './dem'
 
 export interface TileMeshLayout {
@@ -48,8 +48,8 @@ const SIDE_COUNT = 4
 
 /**
  * Build the geometry of one terrain tile in the local frame.
- * Heights come from `dem.sampleGrid` (the same bilinear, pixel-centre, NaN-safe sampler the
- * height field uses for draping, so tracks and meshes agree), multiplied by `opts.exaggeration`;
+ * Heights come from `dem.sampleGrid` (the same bilinear, pixel-centre, NaN-safe sampler as the
+ * height field; `sampleTileMesh` reads the result back), multiplied by `opts.exaggeration`;
  * a vertex whose four neighbours are all nodata becomes 0 m. `skirtDepthM` is applied along the
  * ellipsoid normal (the skirt vertex is the border vertex re-projected at h - skirtDepthM).
  */
@@ -180,6 +180,31 @@ export function buildTileGeometry(
   geometry.computeBoundingSphere()
 
   return { geometry, minHeight, maxHeight }
+}
+
+/**
+ * Height (metres, true scale) of the surface `buildTileGeometry` draws for `grid` at lon/lat in tile `key`: the
+ * triangle of its grid cell, not the finer grid, so what is draped on the tile lies on its mesh.
+ */
+export function sampleTileMesh(key: TileKey, grid: HeightGrid, segments: number, lon: number, lat: number): number {
+  const f = lonLatToTileFrac(lon, lat, key.z)
+  const u = Math.min(Math.max((f.x - key.x) * segments, 0), segments)
+  const v = Math.min(Math.max((f.y - key.y) * segments, 0), segments)
+  const i = Math.min(Math.floor(u), segments - 1)
+  const j = Math.min(Math.floor(v), segments - 1)
+  const tx = u - i
+  const ty = v - j
+  const at = (a: number, b: number) => {
+    const h = sampleGrid(grid, a / segments, b / segments)
+    return h === h ? h : 0
+  }
+  // the cell's two triangles share the NE-SW diagonal
+  if (tx + ty <= 1) {
+    const nw = at(i, j)
+    return nw + tx * (at(i + 1, j) - nw) + ty * (at(i, j + 1) - nw)
+  }
+  const se = at(i + 1, j + 1)
+  return se + (1 - tx) * (at(i, j + 1) - se) + (1 - ty) * (at(i + 1, j) - se)
 }
 
 /** Grid vertex index of the t-th vertex along a border (north/south walk east, west/east walk south). */

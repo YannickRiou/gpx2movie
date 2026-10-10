@@ -19,12 +19,12 @@ import type {
   TileKey,
 } from '../core/types'
 import { deviceBudget } from '../core/deviceBudget'
-import { boundsIntersect, tileGroundSizeM } from '../geo/mercator'
+import { boundsIntersect, lonLatToTileFrac, tileGroundSizeM } from '../geo/mercator'
 import { decodeDem as defaultDecodeDem } from './dem'
 import { createTileFetcher, isNoDataError } from './fetch'
 import { HeightField } from './heightField'
 import { loadImageryTexture as defaultLoadImageryTexture } from './imagery'
-import { buildTileGeometry } from './mesh'
+import { buildTileGeometry, sampleTileMesh } from './mesh'
 import {
   TileNode,
   createCameraState,
@@ -197,6 +197,8 @@ export function createTerrainEngine(
   const rendered: TileNode[] = []
   /** ready nodes outside the view frustum, kept visible for the shadow pass only */
   const casters: TileNode[] = []
+  /** `rendered` of the previous update */
+  const renderedBefore: TileNode[] = []
 
   let ctx: QuadtreeContext = { frame: opts.frame, segments: opts.segments, exaggeration: opts.exaggeration }
   let roots: TileNode[] = []
@@ -570,6 +572,8 @@ export function createTerrainEngine(
     selectTiles(roots, cameraState, selectionParams, selection)
 
     // Visibility: only the selected nodes draw.
+    renderedBefore.length = 0
+    for (let i = 0; i < rendered.length; i++) renderedBefore.push(rendered[i])
     hideAll(rendered)
     hideAll(casters)
     const toRender = selection.toRender
@@ -581,6 +585,8 @@ export function createTerrainEngine(
       }
     }
     for (let i = 0; i < roots.length; i++) collectCasters(roots[i])
+    // sampleHeight follows the drawn tiles: what is draped on them must follow too
+    if (rendered.length !== renderedBefore.length || rendered.some((node, i) => node !== renderedBefore[i])) changed = true
 
     // Loads, highest priority first, within the concurrency budget.
     const toLoad = selection.toLoad
@@ -619,7 +625,30 @@ export function createTerrainEngine(
     return started
   }
 
+  /** Tile drawn at lon/lat, else (off the view, or not drawn yet) the deepest loaded one there. */
+  function surfaceNodeAt(lon: number, lat: number): TileNode | undefined {
+    const f = lonLatToTileFrac(lon, lat, 0)
+    const indexAt = (z: number) => ({ x: Math.floor(f.x * 2 ** z), y: Math.floor(f.y * 2 ** z) })
+    let node = roots.find((r) => {
+      const at = indexAt(r.key.z)
+      return r.key.x === at.x && r.key.y === at.y
+    })
+    let loaded: TileNode | undefined
+    while (node) {
+      if (node.grid) {
+        if (node.mesh?.visible) return node
+        loaded = node
+      }
+      if (!node.children) break
+      const at = indexAt(node.key.z + 1)
+      node = node.children[(at.x & 1) + 2 * (at.y & 1)]
+    }
+    return loaded
+  }
+
   function sampleHeight(lon: number, lat: number): number | undefined {
+    const node = surfaceNodeAt(lon, lat)
+    if (node?.grid) return sampleTileMesh(node.key, node.grid, opts.segments, lon, lat)
     return io.heightField.sampleHeight(lon, lat)
   }
 
