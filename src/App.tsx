@@ -28,12 +28,12 @@ import {
   BOTTOM_SHEET_QUERY,
   COMPACT_QUERY,
   ONE_SIDE_MAX_WIDTH,
-  SHELL_TABS,
   isFileDrag,
   matchesQuery,
   nextTabIndex,
   parseShellPrefs,
   shellReducer,
+  shownTabs,
 } from './ui/shell'
 import type { ShellTab } from './ui/shell'
 import { SheetHandle } from './ui/SheetHandle'
@@ -67,9 +67,6 @@ const TAB_LABELS: Record<ShellTab, { label: string; icon: IconName }> = {
   habillage: { label: 'Habillage', icon: 'layers' },
   projet: { label: 'Projet', icon: 'folder' },
 }
-
-/** tabs that say, without a track, to add one first (Trace has its own empty list, Projet works without one) */
-const NO_TRACK_HINT_TABS: readonly ShellTab[] = ['carte', 'meteo', 'lumiere', 'survol', 'objectif', 'habillage']
 
 const PREFS_KEY = 'openflyover.shell.v1'
 
@@ -141,13 +138,13 @@ export default function App() {
   const batchRunning = useBatchStore((s) => s.phase === 'running')
   const exporting = exportBusy || batchRunning
   const selected = useAppStore((s) => s.filmSelection !== null && s.tracks.length > 0)
-  const [shell, dispatch] = useReducer(shellReducer, undefined, () => ({
-    ...loadPrefs(),
-    ...(isDrawer() && { collapsed: true }),
-    dockOpen: false,
-    collapsedByDock: false,
-    inspecting: false,
-  }))
+  const [shell, dispatch] = useReducer(shellReducer, undefined, () =>
+    shellReducer(
+      { ...loadPrefs(), ...(isDrawer() && { collapsed: true }), dockOpen: false, collapsedByDock: false, inspecting: false, home: null },
+      { type: 'tracks', loaded: useAppStore.getState().tracks.length > 0 },
+    ),
+  )
+  const tabs = shownTabs(shell)
   const [dragging, setDragging] = useState(false)
   // the export drawer is mounted on its first opening and kept (export progress, result, batch)
   const [dockMounted, setDockMounted] = useState(false)
@@ -164,15 +161,20 @@ export default function App() {
 
   // remember the tab and the folded panel chosen by the user (not a fold caused by the export drawer)
   const keptCollapsed = shell.collapsed && !shell.collapsedByDock
+  const home = shell.home !== null
   useEffect(() => {
-    // the drawer of a narrow window opens and closes on its own: only the tab is worth keeping then
-    if (isDrawer()) return
+    // the drawer of a narrow window opens and closes on its own: only the tab is worth keeping then; the home
+    // screen's folded « Projet » is not a choice
+    if (isDrawer() || home) return
     try {
       getPlatform().storage.set(PREFS_KEY, JSON.stringify({ tab: shell.tab, collapsed: keptCollapsed }))
     } catch {
       // storage unavailable: the choice lasts for the session
     }
-  }, [shell.tab, keptCollapsed])
+  }, [shell.tab, keptCollapsed, home])
+
+  // no track: only « Projet » in the rail; the first track brings the other tabs back
+  useEffect(() => dispatch({ type: 'tracks', loaded: hasTracks }), [hasTracks])
 
   useEffect(() => {
     dockOpen.current = shell.dockOpen
@@ -180,8 +182,8 @@ export default function App() {
 
   // the phone tab bar scrolls: the open tab stays in sight (also when restored at startup)
   useEffect(() => {
-    tabRefs.current[SHELL_TABS.indexOf(shell.tab)]?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [shell.tab])
+    tabRefs.current[tabs.indexOf(shell.tab)]?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [shell.tab, tabs])
 
   useEffect(() => {
     collapsedRef.current = shell.collapsed
@@ -327,16 +329,15 @@ export default function App() {
   }, [])
 
   const onTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const next = nextTabIndex(index, e.key, SHELL_TABS.length)
+    const next = nextTabIndex(index, e.key, tabs.length)
     if (next === null) return
     e.preventDefault()
-    dispatch({ type: 'select-tab', tab: SHELL_TABS[next], narrow: isNarrow() })
+    dispatch({ type: 'select-tab', tab: tabs[next], narrow: isNarrow() })
     tabRefs.current[next]?.focus()
   }
 
   const panel = (tab: ShellTab, children: ReactNode) => (
     <div key={tab} id={`tab-panel-${tab}`} className="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} hidden={shell.tab !== tab}>
-      {!hasTracks && NO_TRACK_HINT_TABS.includes(tab) && <p className="tab-hint">Ajoutez une trace (onglet Trace) pour voir l’effet de ces réglages.</p>}
       {children}
     </div>
   )
@@ -353,7 +354,7 @@ export default function App() {
       <div className={shell.collapsed ? 'shell__body shell__body--collapsed' : 'shell__body'}>
         <nav className="rail" aria-label="Panneaux">
           <div className="rail__tabs" role="tablist" aria-label="Panneaux de réglages" aria-orientation="vertical">
-            {SHELL_TABS.map((tab, i) => {
+            {tabs.map((tab, i) => {
               const selected = shell.tab === tab
               return (
                 <button

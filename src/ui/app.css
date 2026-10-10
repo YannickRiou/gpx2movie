@@ -1800,15 +1800,6 @@
   cursor: not-allowed;
 }
 
-/* Carte, Survol, Habillage without a track: one line on what to do */
-.tabpanel > .tab-hint {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  background: var(--surface-card);
-  color: var(--text-1);
-  font-size: 13px;
-}
-
 /* track delete: Lucide cross, centred */
 .track__delete {
   display: inline-flex;

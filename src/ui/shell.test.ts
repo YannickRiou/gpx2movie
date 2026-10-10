@@ -13,6 +13,8 @@ import {
   routeOpenedFiles,
   settleSheet,
   shellReducer,
+  shownTabs,
+  SHELL_TABS,
 } from './shell'
 import type { ShellState } from './shell'
 
@@ -118,7 +120,7 @@ describe('project name and save state', () => {
 })
 
 describe('shellReducer', () => {
-  const base: ShellState = { tab: 'trace', collapsed: false, dockOpen: false, collapsedByDock: false, inspecting: false }
+  const base: ShellState = { tab: 'trace', collapsed: false, dockOpen: false, collapsedByDock: false, inspecting: false, home: null }
 
   it('a click on the open tab folds the panel, another tab unfolds it', () => {
     const folded = shellReducer(base, { type: 'click-tab', tab: 'trace', narrow: false })
@@ -184,6 +186,35 @@ describe('shellReducer', () => {
     const shown = shellReducer(base, { type: 'inspect', open: true, narrow: true })
     expect(shellReducer(shown, { type: 'toggle-panel', narrow: true })).toMatchObject({ collapsed: false, inspecting: false })
     expect(shellReducer(shown, { type: 'click-tab', tab: 'carte', narrow: false })).toMatchObject({ collapsed: false, inspecting: true })
+  })
+
+  it('without a track only « Projet » is shown, folded, and the other tabs and the export drawer cannot be reached', () => {
+    const open = shellReducer({ ...base, tab: 'habillage' }, { type: 'toggle-dock', narrow: false })
+    const home = shellReducer(open, { type: 'tracks', loaded: false })
+    expect(home).toMatchObject({ tab: 'projet', collapsed: true, dockOpen: false, home: { tab: 'habillage', collapsed: false } })
+    expect(shownTabs(home)).toEqual(['projet'])
+    expect(shownTabs(base)).toEqual(SHELL_TABS)
+    expect(shellReducer(home, { type: 'tracks', loaded: false })).toBe(home)
+    for (const tab of SHELL_TABS.filter((t) => t !== 'projet')) {
+      expect(shellReducer(home, { type: 'click-tab', tab, narrow: false })).toBe(home)
+      expect(shellReducer(home, { type: 'select-tab', tab, narrow: false })).toBe(home)
+    }
+    expect(shellReducer(home, { type: 'toggle-dock', narrow: false })).toBe(home)
+    expect(shellReducer(home, { type: 'click-tab', tab: 'projet', narrow: false })).toMatchObject({ tab: 'projet', collapsed: false })
+  })
+
+  it('the first track brings the tabs back as last left, « Trace » in place of « Projet »', () => {
+    const home = shellReducer({ ...base, tab: 'survol', collapsed: true }, { type: 'tracks', loaded: false })
+    const browsed = shellReducer(home, { type: 'click-tab', tab: 'projet', narrow: false })
+    expect(shellReducer(browsed, { type: 'tracks', loaded: true })).toMatchObject({ tab: 'survol', collapsed: true, home: null })
+    const fromProjet = shellReducer({ ...base, tab: 'projet' }, { type: 'tracks', loaded: false })
+    expect(shellReducer(fromProjet, { type: 'tracks', loaded: true })).toMatchObject({ tab: 'trace', collapsed: false, home: null })
+    expect(shellReducer(base, { type: 'tracks', loaded: true })).toBe(base)
+  })
+
+  it('a panel folded by the dock is remembered unfolded', () => {
+    const open = shellReducer(base, { type: 'toggle-dock', narrow: true })
+    expect(shellReducer(open, { type: 'tracks', loaded: false }).home).toEqual({ tab: 'trace', collapsed: false })
   })
 })
 

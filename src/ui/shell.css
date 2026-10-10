@@ -703,55 +703,70 @@
   right: 4px;
 }
 
-/* Welcome card (no track yet) */
+/* Home screen (no track yet): a paper page over the whole view, one centred column */
 .empty {
   position: absolute;
   z-index: 5;
-  top: 50%;
-  left: 50%;
+  inset: 0;
+  display: flex;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-6) var(--space-4);
+  background: var(--surface-panel);
+  color: var(--text-1);
+  text-align: center;
+}
+
+.empty__inner {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
-  width: min(420px, calc(100% - 32px));
-  max-height: calc(100% - 32px);
-  overflow-y: auto;
-  padding: var(--space-6) var(--space-5) var(--space-4);
-  border: 2px dashed var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--surface-panel);
-  color: var(--text-1);
-  text-align: center;
-  box-shadow: var(--shadow-pop);
-  transform: translate(-50%, -50%);
+  width: min(400px, 100%);
+  /* centred when it fits, scrolls from the top when it does not */
+  margin: auto;
 }
 
-.empty__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: var(--surface-card);
-  color: var(--color-ink);
+.empty__logo {
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--space-2);
+  border-radius: 14px;
+  box-shadow: var(--shadow-pop);
 }
 
 .empty__title {
-  font-size: 20px;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.15;
 }
 
 .empty__hint {
-  margin: calc(-1 * var(--space-2)) 0 var(--space-1);
+  max-width: 32ch;
+  margin: 0 0 var(--space-3);
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.45;
 }
 
+.empty__primary {
+  width: 100%;
+  min-height: 48px;
+  font-size: 16px;
+}
+
+/* Strava and the sample side by side, stacked on a phone */
 .empty__actions {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-2);
   width: 100%;
+}
+
+@media (max-width: 699px) {
+  .empty__actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .empty__link {
@@ -776,6 +791,83 @@
 .empty__link:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+/* latest projects of « Mes projets » */
+.empty__recent {
+  width: 100%;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+.empty__recent-title {
+  margin-bottom: var(--space-2);
+  color: var(--text-2);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty__recent ul {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty__project {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .empty__project:hover:not(:disabled) {
+    background: var(--surface-card);
+  }
+}
+
+.empty__project:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.empty__project > .library__thumb {
+  grid-row: 1 / span 2;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+}
+
+.empty__project-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty__project-summary {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Messages (toasts), at the bottom of the view above the timeline */

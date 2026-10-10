@@ -147,7 +147,11 @@ const SCENARIOS = [
     title: "Accueil vide, puis l'exemple chargé",
     async run({ page, url }) {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: STEP_MS })
-      await page.waitForSelector('#empty-title::-p-text(Glissez vos traces)', { visible: true, timeout: STEP_MS })
+      await page.waitForSelector('#empty-title::-p-text(Votre sortie)', { visible: true, timeout: STEP_MS })
+      // the home screen: « Projet » alone in the rail, no export
+      const homeTabs = await page.$$eval('.rail [role="tab"]', (tabs) => tabs.map((t) => t.id.replace('tab-', '')))
+      assert(homeTabs.join() === 'projet', `onglets de l'accueil : ${homeTabs.join(', ')}`)
+      assert(!(await page.$('.topbar__export')), '« Exporter » est affiché sans trace')
       await clickButton(page, "Essayer avec l'exemple")
       await until(page, () => {
         const lane = document.querySelector('[role="group"][aria-label="Plans"]')
@@ -155,6 +159,10 @@ const SCENARIOS = [
         return text.includes('Ouverture') && text.includes('Survol') && text.includes('Clôture')
       })
       assert(!(await page.$('#empty-title')), "l'accueil est resté affiché après le chargement de l'exemple")
+      // the tabs come back, on « Trace »
+      await until(page, (all) => [...document.querySelectorAll('.rail [role="tab"]')].map((t) => t.id.replace('tab-', '')).join() === all, TABS.join())
+      assert(await page.$eval('#tab-trace', (t) => t.getAttribute('aria-selected') === 'true'), "l'onglet Trace n'est pas ouvert après l'exemple")
+      assert(await page.$('.topbar__export'), "« Exporter » manque après l'exemple")
       await waitForScene(page)
     },
   },

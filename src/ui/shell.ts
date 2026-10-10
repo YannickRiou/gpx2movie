@@ -103,6 +103,9 @@ export function isProjectDirty(current: SavedProject, saved: SavedProject): bool
 export const SHELL_TABS = ['trace', 'carte', 'meteo', 'lumiere', 'survol', 'objectif', 'habillage', 'projet'] as const
 export type ShellTab = (typeof SHELL_TABS)[number]
 
+/** The only tab of the home screen (no track): the others have nothing to act on yet. */
+export const HOME_TABS: readonly ShellTab[] = ['projet']
+
 /** Below this window width (px) only one side column is open at a time (panel or dock). */
 export const ONE_SIDE_MAX_WIDTH = 1360
 
@@ -116,7 +119,12 @@ export interface ShellState {
   collapsedByDock: boolean
   /** a timeline block is selected: the dock shows its inspector (the export drawer goes first) */
   inspecting: boolean
+  /** no track (home screen): the tab and fold to restore once one is loaded; null when there is one */
+  home: Pick<ShellState, 'tab' | 'collapsed'> | null
 }
+
+/** The tabs shown in the rail. */
+export const shownTabs = (state: Pick<ShellState, 'home'>): readonly ShellTab[] => (state.home ? HOME_TABS : SHELL_TABS)
 
 export type ShellEvent =
   /** click on a tab: shows it, or folds the panel when it is already shown */
@@ -130,6 +138,8 @@ export type ShellEvent =
   | { type: 'inspect'; open: boolean; narrow: boolean }
   /** the phone timeline unfolds: panel and export drawer make room (one sheet at a time) */
   | { type: 'fold' }
+  /** the first track is loaded (`loaded`) or the last one removed */
+  | { type: 'tracks'; loaded: boolean }
 
 /** The panel unfolds; on a narrow window it takes the place of the dock (drawer and inspector). */
 function unfold(state: ShellState, narrow: boolean): ShellState {
@@ -159,13 +169,17 @@ function fillDock(state: ShellState, narrow: boolean): ShellState {
 export function shellReducer(state: ShellState, event: ShellEvent): ShellState {
   switch (event.type) {
     case 'click-tab':
+      if (!shownTabs(state).includes(event.tab)) return state
       if (event.tab === state.tab && !state.collapsed) return { ...state, collapsed: true, collapsedByDock: false }
       return unfold({ ...state, tab: event.tab }, event.narrow)
     case 'select-tab':
+      if (!shownTabs(state).includes(event.tab)) return state
       return unfold({ ...state, tab: event.tab }, event.narrow)
     case 'toggle-panel':
       return state.collapsed ? unfold(state, event.narrow) : { ...state, collapsed: true, collapsedByDock: false }
     case 'toggle-dock':
+      // nothing to export without a track
+      if (state.home) return state
       if (state.dockOpen) return closeDock(state)
       return fillDock({ ...state, dockOpen: true }, event.narrow)
     case 'close-dock':
@@ -176,6 +190,23 @@ export function shellReducer(state: ShellState, event: ShellEvent): ShellState {
       return state.dockOpen ? { ...state, inspecting: true } : fillDock({ ...state, inspecting: true }, event.narrow)
     case 'fold':
       return { ...state, collapsed: true, collapsedByDock: false, dockOpen: false }
+    case 'tracks':
+      if (event.loaded) {
+        if (!state.home) return state
+        // the tabs come back as last left with a track; « Projet » was the home screen's, the track comes first
+        const { tab, collapsed } = state.home
+        return { ...state, tab: tab === 'projet' ? 'trace' : tab, collapsed, collapsedByDock: false, home: null }
+      }
+      // home screen: « Projet » alone and folded, the welcome takes the view
+      if (state.home) return state
+      return {
+        tab: 'projet',
+        collapsed: true,
+        collapsedByDock: false,
+        dockOpen: false,
+        inspecting: false,
+        home: { tab: state.tab, collapsed: state.collapsed && !state.collapsedByDock },
+      }
   }
 }
 

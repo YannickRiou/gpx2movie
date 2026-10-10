@@ -186,17 +186,20 @@ export function TopBar({ onOpen, exportOpen, onToggleExport, onHelp }: TopBarPro
             {phase === 'finalizing' ? 'Finalisation…' : `${percent} % · Annuler`}
           </button>
         ) : (
-          <button
-            type="button"
-            className="btn btn--primary topbar__export"
-            onClick={onToggleExport}
-            aria-expanded={exportOpen}
-            aria-controls="export-dock"
-            data-tip={withShortcut('Exporter une vidéo ou une image', 'export')}
-          >
-            <Icon name="download" size={18} />
-            <span className="icon-btn__text">Exporter</span>
-          </button>
+          // nothing to export before the first track
+          hasTracks && (
+            <button
+              type="button"
+              className="btn btn--primary topbar__export"
+              onClick={onToggleExport}
+              aria-expanded={exportOpen}
+              aria-controls="export-dock"
+              data-tip={withShortcut('Exporter une vidéo ou une image', 'export')}
+            >
+              <Icon name="download" size={18} />
+              <span className="icon-btn__text">Exporter</span>
+            </button>
+          )
         )}
       </div>
     </header>
