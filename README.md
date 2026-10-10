@@ -104,6 +104,7 @@ To test the production build: `npm run build`, then `npm run preview` (<http://l
 | [GPU tests](docs/tests-gpu.md) | manual checks on a machine with a real graphics card |
 | [Roadmap](docs/roadmap.md) | phases and what each one contains |
 | [Handover](docs/handover.md) | project status and next steps |
+| [Changelog](CHANGELOG.md) | what each version brings |
 
 The HTML pages are standalone: open them in a browser from a clone, or through any static host.
 
