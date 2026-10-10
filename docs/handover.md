@@ -154,6 +154,8 @@ features included), `npm run build`,
 - **Home screen** (10 October 2026, user request): without a track the rail holds « Projet » alone (folded) and « Exporter »
   is hidden (`home` in `shellReducer`, `shownTabs`); a paper page replaces the card on the sky gradient, with « Récents »
   from « Mes projets ». Seen in headless Chromium (desktop and phone).
+- **Tooltips and region search** (10 October 2026): `installTipPlacement` (`ui/shell.ts`) shifts or flips a centred
+  `data-tip` inside its scrolling column; `fetchRegion` lists the areas before the geometry, `retryRegion` after a failure (e2e `region`).
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn

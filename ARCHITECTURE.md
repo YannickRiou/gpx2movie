@@ -359,7 +359,8 @@ ink, 7.3:1).
   `installHistoryShortcuts` (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y) and Space (timeline) stay where they are.
 - **Tooltips**: `data-tip` in CSS (`shell.css`), after 450 ms, on hover and keyboard focus, on every icon-only
   button; `data-tip-side` (`top`, `left`, `right`) and `data-tip-align` (`start`, `end`) near the edges of the window or
-  of a scrolling column. Timeline blocks keep their `title` (full label; a pseudo-element would be clipped
+  of a scrolling column; any other tip is shifted inside the window and its scrolling column, or put above
+  (`installTipPlacement` / `tipPlacement`, `shell.ts`: `--tip-shift`, `data-tip-flip`). Timeline blocks keep their `title` (full label; a pseudo-element would be clipped
   by the block).
 - **Widths** (media queries at the end of `shell.css`; the desktop layout from 1100 px up is unchanged by the touch
   rules, which only match a coarse pointer): at 1280 px the panel and dock shrink to 280 px and "Ouvrir / Enregistrer"
@@ -871,7 +872,8 @@ ink, 7.3:1).
   `syncRegion` with the first track's box and the place chosen (`src/osm/region.ts`: one Overpass `is_in` request for
   the areas around the centre of the box, tags and box only: admin levels 4 to 6, `boundary=national_park` /
   `protected_area`, `leisure=nature_reserve`, `place=island`, `natural=mountain_range`, relations and closed ways;
-  those containing the whole box, smallest first, are offered in « Lieu » (`containingRegions`, store `candidates`);
+  those containing the whole box, smallest first, are offered in « Lieu » (`containingRegions`, store `candidates`,
+  published as soon as this query answers, before the geometry);
   `regionId` of the first shot that highlights (`filmRegionId`; `setFilmPlace` writes both shots: one place per film,
   one region in the store), else the automatic choice, unchanged: the smallest administrative boundary that contains
   the track's box and is at least 5 times larger (`chooseRegion`, `autoId`); a saved place no longer offered falls
@@ -880,8 +882,8 @@ ink, 7.3:1).
   (`useRegionStore.frame`), and the camera is placed again when it arrives, except during a video export: the export
   holds the region it started with (`holdRegion`, none if it was still loading) and an answer arriving meanwhile is
   applied at its end, so neither the framing nor the highlight changes mid-film. No boundary, offline or a failed query
-  (`status` `'none'` / `'error'`, said in the inspector's hint): no highlight and the framing of the track, nothing in
-  the console. Drawing (`src/scene/RegionHighlight.tsx`, geometry in `regionMesh.ts`, pure): the outside darkened
+  (`status` `'none'` / `'error'`, said in the inspector's hint, « Réessayer » after an error: `retryRegion`): no
+  highlight and the framing of the track, nothing in the console. Drawing (`src/scene/RegionHighlight.tsx`, geometry in `regionMesh.ts`, pure): the outside darkened
   (ink at 55 %) by one mesh, a box `REGION_AREA_MARGIN_M` around the region with the outer rings cut out and the
   enclaves filled (even-odd by ring depth, earcut on an equirectangular plane); the border as two `LineSegments2`
   sharing one geometry, a 16 px white glow (`createGlowMaterial`, max blending) and a 2 px white line; an orange dot

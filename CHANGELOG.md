@@ -29,6 +29,8 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
   settings are one row with their name and value, the control shown on a tap (no more « Plus de réglages »).
 - **Mes projets**: removing the last track no longer writes an empty project over the one kept in « Mes projets »
   (the autosave waits for a track).
+- **Fixes**: tooltips stay whole near the edge of a panel or of the screen (shifted, or above); « Lieu » lists the
+  areas as soon as they are found, and a failed region search offers « Réessayer ».
 
 ## 0.1.0 (October 2026)
 
