@@ -162,6 +162,20 @@ export function detectCapabilities(scope: object): Capabilities {
   }
 }
 
+/** iPhone, iPod or iPad (iPadOS reports a Mac with a touch screen). */
+export function isAppleMobile(nav: { userAgent: string; maxTouchPoints?: number }): boolean {
+  return /iPhone|iPad|iPod/.test(nav.userAgent) || (/Macintosh/.test(nav.userAgent) && (nav.maxTouchPoints ?? 0) > 1)
+}
+
+/**
+ * `accept` of the web file input: the filters' extensions, except for tracks on iOS, where Safari greys out the
+ * .gpx / .fit files it has no type for (Files, apps); the import checks the extension anyway.
+ */
+export function pickerAccept(filters: readonly FileFilter[], appleMobile: boolean): string {
+  const tracks = filters.some((f) => f.extensions.some((e) => /^(gpx|fit)$/i.test(e)))
+  return appleMobile && tracks ? '' : acceptAttribute(filters)
+}
+
 /** Filters -> `accept` attribute of a file input: ".gpx,.fit,.json". */
 export function acceptAttribute(filters: readonly FileFilter[]): string {
   return [...new Set(filters.flatMap((f) => f.extensions.map((e) => `.${e.toLowerCase()}`)))].join(',')

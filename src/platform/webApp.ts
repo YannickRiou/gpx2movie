@@ -5,8 +5,12 @@
  */
 import { showToast } from '../ui/toast'
 import { getPlatform } from './index'
-import { isTauriRuntime } from './platform'
+import { isAppleMobile, isTauriRuntime } from './platform'
 
+/** cache where the service worker keeps the files of a share (serviceWorker.js) */
+const SHARE_CACHE = 'openflyover-share'
+/** query of the page the share target opens */
+const SHARE_PARAM = 'partage'
 const IOS_HINT_KEY = 'openflyover.iosInstallHint.v1'
 const IOS_HINT_DELAY_MS = 4000
 
@@ -25,10 +29,9 @@ export function shouldRegisterServiceWorker(scope: object, production: boolean):
   )
 }
 
-/** iPhone, iPod or iPad (iPadOS reports a Mac with a touch screen) in a browser tab, not the installed app. */
+/** iPhone or iPad in a browser tab, not the installed app. */
 export function wantsIosInstallHint(nav: { userAgent: string; maxTouchPoints?: number; standalone?: boolean }): boolean {
-  const ios = /iPhone|iPad|iPod/.test(nav.userAgent) || (/Macintosh/.test(nav.userAgent) && (nav.maxTouchPoints ?? 0) > 1)
-  return ios && nav.standalone !== true
+  return isAppleMobile(nav) && nav.standalone !== true
 }
 
 function offerUpdate(registration: ServiceWorkerRegistration): void {
@@ -59,10 +62,47 @@ async function register(): Promise<void> {
   })
 }
 
-/** Called once at start-up (main.tsx); does nothing in the desktop app. */
-export function installWebApp(): void {
+/**
+ * Name of a shared file, with the extension the import needs: Android apps may share a track under a bare name.
+ * `head`: its first bytes (a FIT header says ".FIT" at byte 8).
+ */
+export function sharedFileName(name: string, head: Uint8Array): string {
+  if (/\.(gpx|fit|json)$/i.test(name)) return name
+  if (String.fromCharCode(...head.subarray(8, 12)) === '.FIT') return `${name}.fit`
+  if (/<gpx[\s>]/.test(new TextDecoder().decode(head))) return `${name}.gpx`
+  return name
+}
+
+/** Files of an Android share (share target of the manifest), kept by the service worker; empty otherwise. */
+async function takeSharedFiles(): Promise<File[]> {
+  const url = new URL(location.href)
+  if (!url.searchParams.has(SHARE_PARAM)) return []
+  url.searchParams.delete(SHARE_PARAM)
+  history.replaceState(history.state, '', url)
+  const cache = await caches.open(SHARE_CACHE)
+  const files: File[] = []
+  for (const request of await cache.keys()) {
+    const response = await cache.match(request)
+    if (!response) continue
+    const blob = await response.blob()
+    const name = decodeURIComponent(response.headers.get('x-file-name') ?? '') || 'trace'
+    const head = new Uint8Array(await blob.slice(0, 1024).arrayBuffer())
+    files.push(new File([blob], sharedFileName(name, head), { type: blob.type }))
+  }
+  await caches.delete(SHARE_CACHE)
+  return files
+}
+
+/**
+ * Called once at start-up (main.tsx); does nothing in the desktop app. `openShared` gets the tracks shared to the
+ * installed app (Android).
+ */
+export function installWebApp(openShared: (files: File[]) => void): void {
   if (!shouldRegisterServiceWorker(globalThis, import.meta.env.PROD)) return
   register().catch((error: unknown) => console.warn('[app] service worker non installé :', error))
+  takeSharedFiles()
+    .then((files) => files.length > 0 && openShared(files))
+    .catch((error: unknown) => console.warn('[app] fichiers partagés illisibles :', error))
   const storage = getPlatform().storage
   if (!wantsIosInstallHint(navigator) || storage.get(IOS_HINT_KEY)) return
   setTimeout(() => {

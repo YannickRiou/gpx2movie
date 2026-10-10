@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import manifestText from '../../public/manifest.webmanifest?raw'
-import { shouldRegisterServiceWorker, wantsIosInstallHint } from './webApp'
+import { pickerAccept } from './platform'
+import { sharedFileName, shouldRegisterServiceWorker, wantsIosInstallHint } from './webApp'
 
 /** files of public/, as `icons/icon-192.png` */
 const PUBLIC_FILES = Object.keys(import.meta.glob('../../public/**/*.{png,svg}')).map((path) => path.replace('../../public/', ''))
@@ -63,5 +64,42 @@ describe('web app manifest', () => {
     expect(at(manifest.id)).toBe(base)
     for (const icon of manifest.icons) expect(at(icon.src).startsWith(base)).toBe(true)
     if (manifest.share_target) expect(at(manifest.share_target.action)).toBe(`${base}share-target`)
+  })
+})
+
+describe('sharedFileName', () => {
+  const bytes = (text: string) => new TextEncoder().encode(text)
+
+  it('keeps a name with a known extension', () => {
+    expect(sharedFileName('Sortie.GPX', bytes('<?xml'))).toBe('Sortie.GPX')
+    expect(sharedFileName('run.fit', new Uint8Array(16))).toBe('run.fit')
+  })
+
+  it('adds the extension the content says', () => {
+    const fit = new Uint8Array([14, 0x10, 0, 0, 0, 0, 0, 0, ...bytes('.FIT'), 0, 0])
+    expect(sharedFileName('activity_123', fit)).toBe('activity_123.fit')
+    expect(sharedFileName('Komoot tour', bytes('<?xml version="1.0"?>\n<gpx version="1.1">'))).toBe('Komoot tour.gpx')
+    expect(sharedFileName('notes', bytes('hello'))).toBe('notes')
+  })
+})
+
+describe('pickerAccept', () => {
+  const tracks = [{ name: 'Traces GPX ou FIT', extensions: ['gpx', 'fit'] }]
+  const images = [{ name: 'Images', extensions: ['png', 'jpg'] }]
+
+  it('filters by extension, except tracks on iOS (Safari greys out the types it does not know)', () => {
+    expect(pickerAccept(tracks, false)).toBe('.gpx,.fit')
+    expect(pickerAccept(tracks, true)).toBe('')
+    expect(pickerAccept(images, true)).toBe('.png,.jpg')
+  })
+})
+
+describe('share target', () => {
+  it('posts the GPX and FIT files as multipart', () => {
+    const share = (manifest as Manifest & { share_target: { method: string; enctype: string; params: { files: { name: string; accept: string[] }[] } } }).share_target
+    expect(share.method).toBe('POST')
+    expect(share.enctype).toBe('multipart/form-data')
+    expect(share.params.files[0].name).toBe('tracks')
+    expect(share.params.files[0].accept).toEqual(expect.arrayContaining(['.gpx', '.fit', 'application/gpx+xml']))
   })
 })

@@ -3,7 +3,7 @@
  * written while produced through `showSaveFilePicker` (File System Access, Chrome and Edge); offline tiles and
  * « Mes projets » in Cache Storage (HTTPS or localhost only).
  */
-import { acceptAttribute, droppedFiles, keyValueStore, pickerTypes, saveFilters } from './platform'
+import { droppedFiles, isAppleMobile, keyValueStore, pickerAccept, pickerTypes, saveFilters } from './platform'
 import type { Capabilities, Platform, SaveFileOptions, WritableFile } from './platform'
 import { createProjectLibrary, createWebLibraryFiles } from './projectLibrary'
 import { createWebTileCache } from './tileCache'
@@ -78,7 +78,7 @@ export function createWebPlatform(capabilities: Capabilities): Platform {
         const input = document.createElement('input')
         input.type = 'file'
         input.multiple = multiple
-        input.accept = acceptAttribute(filters)
+        input.accept = pickerAccept(filters, isAppleMobile(navigator))
         input.style.display = 'none'
         const done = (files: File[]) => {
           input.remove()
