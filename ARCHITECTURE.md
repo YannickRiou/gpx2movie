@@ -100,12 +100,15 @@ full customization through a single project document, WebCodecs video export, Ta
 The first screen (shell, panels, welcome card) loads only the app and React: ~510 kB, ~170 kB gzip, instead of a
 single 3.1 MB file (930 kB gzip). The rest arrives through dynamic `import()` calls, each in its own file:
 
-- right after the first paint: the 3D scene (`FlyoverCanvas`, three.js + fiber, `React.lazy` in `Stage`), the export
-  drawer (video, batch, poster: `ExportPanel`) and the "Hors ligne" (offline) panel (`React.lazy` in `App`). They stay mounted;
+- right after the first paint: the 3D scene (`FlyoverCanvas`, three.js + fiber, `React.lazy` in `Stage`) and the
+  "Hors ligne" (offline) panel (`React.lazy` in `App`). They stay mounted;
 - with the first track: the atmosphere (Takram, clouds, post-processing, geoid grid: `AtmosphereLayer`, `React.lazy`
   in `FlyoverCanvas`, with its own `Suspense` so the terrain shows in the meantime);
+- when the export drawer is first opened: the drawer (video, batch, poster: `ExportPanel`, kept mounted afterwards)
+  and, through its codec check, mediabunny (~700 kB, 175 kB gzip). Mounting it at startup used to download both
+  before the user had done anything;
 - on demand: the FIT decoder (`import/fit.ts`, on the first .fit, `import/index.ts`), mediabunny (reading a video,
-  export, codec test in the drawer: `film/video.ts`, `export/encoder.ts`).
+  export: `film/video.ts`, `export/encoder.ts`).
 
 To keep three.js out of the first screen, the app imports lon/lat distances and boxes from `geo/lonLat.ts`, not from
 `geo/ellipsoid.ts`. React has its own file (`codeSplitting.groups` in `vite.config.ts`), kept in cache from one version to
@@ -207,19 +210,34 @@ once it is still (see "Volumetric clouds", Quality); the export goes back to the
 
 ## "Carte alpine" (alpine map) design system (CSS variables, `src/ui/theme.css`)
 
-Topographic map paper, ink, trail-marking red, glacier.
+Token set **"Refuge"**: the neutrals are tinted, never grey (warm map paper, blue-black ink), so the shell reads as a
+map sheet and not as a generic dark app; one trail-marker red carries every primary action and selected state, with its
+full scale (hover, tint, on-ink); glacier and moss, drawn from the subject, are used sparingly for meaning only.
+Contrast measured on the computed colours: text ≥ 4.5:1 on every pair, controls ≥ 3:1.
 
-| Role | Variable | Value |
-|---|---|---|
-| Panel background | `--color-paper` | `#F5F2EA` |
-| Cards, groups | `--color-card` | `#EAE4D6` |
-| Text, dark surfaces | `--color-ink` | `#1C2A33` |
-| Secondary text | `--color-ink-soft` | `#55626B` |
-| Borders | `--color-line` | `#D6CDBB` |
-| Primary action (trail-marker red) | `--color-accent` / `--color-accent-strong` (hover) | `#C23B22` / `#A3301A` |
-| Accent on ink background | `--color-accent-light` | `#FF8A5C` |
-| Sky, secondary elements | `--color-glacier` | `#A9CCD9` |
-| Start | `--color-moss` | `#3F6B4A` |
+| Role | Variable | Value | Contrast |
+|---|---|---|---|
+| Panel background | `--color-paper` | `#F6F3EC` | ink 13.6:1 |
+| Cards, segmented wells | `--color-card` | `#ECE7DA` | ink 12.2:1 |
+| Text, shell | `--color-ink` | `#1B2832` | |
+| Menus, toasts, tooltips on the shell | `--color-ink-raised` | `#263540` | white 12.6:1 |
+| Secondary text | `--color-ink-soft` | `#4E5C65` | paper 6.2:1, card 5.6:1 |
+| Separators | `--color-line` | `#DDD6C6` | decorative |
+| Field and control borders | `--color-line-strong` | `#8E8777` | white 3.0:1, paper 3.2:1 |
+| Primary action, selection (trail-marker red) | `--color-accent` / `--color-accent-strong` (hover) | `#B9391F` / `#962C15` | white on it 5.7:1 / 7.9:1 |
+| Selected tile, chip, current project | `--color-accent-tint` | `#F7DDD3` | ink 11.6:1 |
+| Accent on ink (focus, playhead, stops) | `--color-accent-light` | `#FF9B73` | ink 7.3:1 |
+| Secondary text on ink | `--color-glacier` | `#A9CCD9` | ink 8.8:1 |
+| Information badge on paper | `--color-glacier-deep` | `#2F5D70` | paper 6.5:1 |
+| Start, success | `--color-moss` / `--color-moss-light` | `#3A6446` / `#8FC79B` | paper 6.1:1 / ink 7.7:1 |
+| Attention (unsaved, tiles in error) | `--color-amber` / `--color-amber-light` | `#7A5200` / `#F0C35E` | paper 6.2:1 / ink 9.1:1 |
+
+Semantic roles over the palette (component CSS uses these): `--surface-chrome`, `--surface-chrome-raised`,
+`--surface-panel`, `--surface-card`, `--surface-control`, `--text-1`, `--text-2`, `--text-on-dark`,
+`--text-on-dark-2`, `--line`, `--line-strong`, `--accent`, `--accent-hover`, `--accent-tint`, `--accent-on-dark`,
+`--status-attention`, `--status-ok`, `--status-error` (each with an `-on-dark` variant), `--shadow-card`,
+`--shadow-pop`. Selected states (tiles, chips, switches, sliders, checkboxes) are in the accent; segmented controls
+are a card well with a white pill; the only filled accent buttons are the primary action of a view.
 
 Headings: Fraunces; body and buttons: IBM Plex Sans; "diffusion" (broadcast) overlay style: IBM Plex Sans Condensed. Fonts
 **bundled** (no network access): WOFF2 in `public/fonts/` (Fraunces variable opsz + wght, IBM Plex Sans variable wght,
@@ -232,10 +250,10 @@ Track colors (`TRACK_COLORS`) are chosen for legibility over orthophotos, not fr
 ## Interface
 
 Dark shell (ink) around light panels (paper), in the "Carte alpine" tokens. Layout: `src/ui/shell.css`
-(panel components: `app.css`). Tokens added to `theme.css`: semantic surfaces (`--surface-chrome`,
-`--surface-panel`, `--surface-card`, `--text-1`, `--text-2`, `--line`, plain aliases of the current colors: a dark
-variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--panel-w` 320, `--dock-w` 300,
-`--statusbar-h` 24, `--control-h` 32, `--space-6`), `--shadow-pop`, `--focus-ring-on-dark` (light orange, 6.3:1 on ink).
+(panel components: `app.css`). Tokens in `theme.css`: the semantic roles listed above (plain aliases of the palette: a dark
+variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 64, `--panel-w` 320, `--dock-w` 300,
+`--statusbar-h` 24, `--control-h` 32, `--space-6`), `--shadow-card`, `--shadow-pop`, `--focus-ring-on-dark` (accent on
+ink, 7.3:1).
 
 - **Top bar** (`TopBar.tsx`): logo, project name editable in place (`projectName` in the store, empty = name of the
   first track, `effectiveProjectName`) and "Modifié / Enregistré" (modified / saved) status (`savedProject`: settings, tracks and name at the
@@ -250,7 +268,7 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   rectangle; the overlay therefore follows the exported area with no change to `src/overlay`. The export renders into this visible canvas.
   Without a track, no framing: the welcome card (`EmptyState.tsx`) fills the center of the view ("Choisir un fichier" (choose a file),
   "Essayer avec l'exemple (Tour du Mont-Blanc)" (try the sample), "Ouvrir un projet…" (open a project), a single picker whose `accept` changes).
-- **Rail and panel**: vertical icon rail (`tablist`, roving focus, arrows / Home / End, tooltips) and a
+- **Rail and panel**: vertical rail of icon + label tabs (64 px; `tablist`, roving focus, arrows / Home / End) and a
   320 px panel, one tab at a time: **Trace** (track; track list with "+ Ajouter" (add), waiting message without a track,
   collapsible Climbs and Weather), **Carte** (map; scene settings, OSM landmarks), **Survol** (flyover; camera, pacing),
   **Habillage** (overlay), **Projet** (project; presets). All tabs stay mounted (`hidden`): weather, landmarks and export have
@@ -321,11 +339,11 @@ variant would only be a remapping), sizes (`--topbar-h` 48, `--rail-w` 56, `--pa
   sticky header: title, "modifié / Par défaut" of its keys, chevron), open initially, then as last left: open / folded
   state remembered by title in the platform storage (`FOLDS_KEY` `openflyover.folds.v1`, `parseFoldPrefs` in `shell.ts`,
   read once on mount, written on `toggle`; without storage or with an unreadable value every section opens). Carte: "Fond de carte" (base map)
-  (imagery), "Relief et trace" (terrain and track; exaggeration, track color), "Lumière" (light), "Atmosphère et météo" (atmosphere and weather; atmosphere,
-  shadows, weather in the scene), "Couleurs" (colors; color grading), "Objectif" (lens effects; `LensPanel`), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset, style as icon tiles, north up),
+  (imagery), "Relief et trace" (terrain and track; exaggeration, track color), "Atmosphère et météo" (atmosphere and weather; atmosphere,
+  shadows, weather in the scene), "Lumière" (light; after the atmosphere switch it depends on), "Couleurs" (colors; color grading), "Objectif" (lens effects; `LensPanel`), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset, style as icon tiles, north up),
   "Durée et rythme" (duration and pacing; duration, film duration, slow-downs on / off, « Plan de situation » switches for the opening and the closing), "Trace et marqueur" (track and marker; `TrackMarkerSection`). Rare settings are in `MoreSettings` ("Plus de
   réglages", closed `<details>`): imagery detail, terrain source, wireframe, exposure, weather intensity, distance /
-  tilt / aim / smoothing, highlights and pacing parameters. Its summary shows "modifié" when a hidden setting
+  tilt / aim / smoothing, highlights and pacing parameters, transitions. Its summary shows "modifié" when a hidden setting
   departs from the default (`modifiedPaths(settings, paths)` from `project/apply.ts`, paths `'key'` or `'key.field'`). Setting
   keys and behavior unchanged. `InfoTip` (ⓘ, one-sentence `data-tip` tooltip, focusable, `aria-label`) only
   on jargon: exaggeration, wireframe, exposure, highlights. Styles: delimited block at the end of `app.css`.

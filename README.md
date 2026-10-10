@@ -3,6 +3,7 @@
 [![CI](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml/badge.svg)](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FYannickRiou%2Fgpx2movie%2Fbadges%2Fcoverage.json)](https://github.com/YannickRiou/gpx2movie/actions/workflows/ci.yml)
 [![Desktop installers](https://github.com/YannickRiou/gpx2movie/actions/workflows/desktop.yml/badge.svg)](https://github.com/YannickRiou/gpx2movie/actions/workflows/desktop.yml)
+[![Website](https://github.com/YannickRiou/gpx2movie/actions/workflows/pages.yml/badge.svg)](https://yannickriou.github.io/gpx2movie/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1C2A33.svg)](LICENSE)
 [![Node 24](https://img.shields.io/badge/node-24-1C2A33?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![TypeScript 6](https://img.shields.io/badge/TypeScript-6.0-1C2A33?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -25,6 +26,9 @@ OpenFlyover makes a 3D flyover movie from a GPX or FIT track, over the real terr
 - [Roadmap](#roadmap)
 
 ## Overview
+
+**Try it in your browser: <https://yannickriou.github.io/gpx2movie/>** (Chrome or Edge recommended for the video export), or
+download the desktop application from the [Releases](https://github.com/YannickRiou/gpx2movie/releases).
 
 You import the track of an outing: hiking, trail running, cycling, ski touring… OpenFlyover lays it on 3D terrain
 covered with orthophotos (orthorectified aerial photos). A camera flies over it, you edit the film on a timeline, and
@@ -104,6 +108,7 @@ To test the production build: `npm run build`, then `npm run preview` (<http://l
 | [GPU tests](docs/tests-gpu.md) | manual checks on a machine with a real graphics card |
 | [Roadmap](docs/roadmap.md) | phases and what each one contains |
 | [Handover](docs/handover.md) | project status and next steps |
+| [Changelog](CHANGELOG.md) | what each version brings |
 
 The HTML pages are standalone: open them in a browser from a clone, or through any static host.
 
@@ -128,7 +133,7 @@ application is built with `npm run tauri:build`; installers for the three system
 | `npm run lint` | code analysis (oxlint) |
 | `npm run e2e` | end-to-end tests in a real browser (see below) |
 
-The suite has **about 1,580 tests** (9 October 2026), each file next to its module (`src/**/*.test.ts`); network calls
+The suite has **about 1,590 tests** (10 October 2026), each file next to its module (`src/**/*.test.ts`); network calls
 and the video encoder are mocked. `npm run e2e` drives the app in a headless Chromium through five scenarios (home,
 tabs, timeline, project, export); its options are documented at the top of `e2e/run.mjs`. The rendering
 quality is checked by eye ([`docs/tests-gpu.md`](docs/tests-gpu.md)).

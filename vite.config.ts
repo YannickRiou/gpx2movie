@@ -74,6 +74,8 @@ const proxy = Object.fromEntries(
 )
 
 export default defineConfig({
+  // GitHub Pages serves the site under /gpx2movie/ (pages.yml); '/' everywhere else, desktop app included
+  base: process.env.BASE_PATH ?? '/',
   plugins: [react(), atmosphereAssets()],
   // src-tauri/target (Rust build of the desktop app) is not watched
   server: { port: 5173, proxy, watch: { ignored: ['**/src-tauri/**'] } },
@@ -89,6 +91,8 @@ export default defineConfig({
   test: {
     // files that need the DOM say so on their first line: // @vitest-environment jsdom
     environment: 'node',
+    // one isolated worker thread per file: ~6 s faster than forked processes (105 files)
+    pool: 'threads',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     // fonts.test.ts reads this stylesheet with ?raw (other CSS stays stubbed out in tests)
     css: { include: [/src\/ui\/fonts\.css/] },

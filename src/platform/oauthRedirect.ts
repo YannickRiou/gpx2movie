@@ -10,7 +10,7 @@
 import type { Capabilities } from './platform'
 
 /** Static page of `public/` that receives the redirect on the web. */
-const WEB_CALLBACK_PATH = '/oauth-callback.html'
+const WEB_CALLBACK_PATH = `${import.meta.env.BASE_URL}oauth-callback.html`
 const CHANNEL = 'openflyover-oauth'
 /** Page the desktop listener answers the browser with. */
 const DESKTOP_RESPONSE =

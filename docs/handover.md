@@ -92,7 +92,7 @@ titles at landmarks, sync to music, multi-track poster and flat map, one film pe
 
 ## Work in progress (branch `ai-dev/confident-darwin-83rxik`): review, simplification, knowledge base
 
-Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (103 files, 1,577 tests, `lot-suites` and the ported
+Checked: typecheck, lint (0 errors), `npx vitest run --maxWorkers=1` (105 files, 1,588 tests, `lot-suites` and the ported
 features included), `npm run build`,
 `cargo test` (12). Screen check of the five tabs and the phone layout in Chromium without a GPU: no console error.
 
@@ -132,6 +132,11 @@ features included), `npm run build`,
 - **T with a stop selected**: the new text is attached to that stop (`addText` with the stop, one undo step).
 - **Overlay-only export on the Linux desktop**: WebM / VP9 with alpha through ffmpeg (`yuva420p`), like the web;
   alpha checked with ffprobe and a decoded frame in the container, not tried in an editor (`docs/tests-gpu.md`).
+- **UI pass before v0.1.0** (10 October 2026): "Carte alpine" tokens refined (`theme.css`: semantic roles, accent scale,
+  attention / ok / error status colours, 3:1 control borders, two shadow levels, raised ink for menus and toasts; every
+  text pair measured ≥ 4.5:1 in headless Chromium), selections in accent tint instead of ink slabs, white-pill
+  segmented controls, neutral play button, tab labels under the rail icons; "Carte": "Atmosphère et météo" before
+  "Lumière"; "Survol": "Transitions" under "Plus de réglages". Seen in headless Chromium (grey terrain), not on a GPU.
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn
@@ -333,8 +338,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    of the list) and « En parallèle » (the ghost race, camera on the first track, the one ahead or all of them,
    leaderboard toggle); each stage with its own sun, clouds and weather. Left: no hold or camera move between stages
    (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
-8. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
-   the current lots): a built-in openh264 encoder (patents checked: recommended to drop). Dropped by the user: GoPro GPS time (GPMF).
+8. Extensions: all built, except those the user dropped (GoPro GPS time (GPMF); a built-in openh264 encoder, patents
+   checked on 9 October 2026: Cisco's licence covers only its own binaries).
 
 **Before the final release (`v0.1.0`), once the lots above are merged**
 - **Final review** (user's request): one full pass over the product before tagging. Code: dead code and unused
@@ -355,8 +360,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   `readAudio` (Web Audio fake), environment `node` with jsdom only where needed (run time ~41 s → ~18 s; 1,556 tests,
   lines 66.9 %, branches 61.9 %); the export loop (`ExportController.test.ts`: frame count, cancel deletes the file,
   error path); preview == export (`FlyoverRig` and the export both place the camera with `filmViewAt`, and playing
-  the film reaches the progress of every exported frame, `schedule.test.ts`). Left: 2–3 real FIT files (Garmin, Wahoo, Coros;
-  from the user).
+  the film reaches the progress of every exported frame, `schedule.test.ts`). A real Garmin file (`__fixtures__/lunch-run.fit`, 42 min run,
+  2,307 points with heart rate, cadence and temperature) is read in `fit.test.ts`.
 - **Review done** (branch `final-review`, 9 October 2026): docs checked against the code, ~450 comment lines cut,
   French messages for browser / system errors, error screen, WebGL 2 missing or context lost, file dialog failures
   shown, camera presets as a tile grid (12 presets), initial JS −16 kB gzip (overlay canvas and film inspector lazy).
@@ -364,14 +369,30 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   branch: Windows command line prints to the calling terminal (`AttachConsole`), atomic project writes, external links
   in the system browser, `'wasm-unsafe-eval'` removed from the CSP, Esri optional (never default nor offline, « Powered
   by Esri »), Strava attribution and « Déconnecter Strava », `THIRD_PARTY_NOTICES.md` (npm packages, Rust crates, assets;
-  no GPL / LGPL / AGPL). Open: frozen old projects with media / POIs / camera keys (a test).
-- **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
-  and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
-  lens effects), memory (tile and DEM caches, textures, long sessions), export speed (cloud renders per frame,
-  motion-blur sub-frames, native encoder), size of the desktop installers, CI duration. Keep only changes with a
-  measured gain and no visible regression.
+  no GPL / LGPL / AGPL). The overlay of the very first v1 projects (before the weather widget) is replaced by the default one with a warning, and frozen
+  old projects with media / POIs / camera keys are not tested: both accepted by the user on 10 October 2026.
+- **Optimisation pass** (user's request): done on 10 October 2026 for what a machine without a GPU can measure
+  (headless Chromium, SwiftShader, tiles answered 404; scripts in the session's scratchpad), kept only with a measured
+  or provable gain:
 
-**Later, once the desktop and web versions are finished and working**
+  | Measure (method) | Before | After |
+  |---|---|---|
+  | Downloaded before the first interaction (production preview, cold cache) | 2.60 MB, incl. mediabunny 695 kB and the export drawer | 1.86 MB (−29 %): the drawer and mediabunny load on its first opening |
+  | Initial JS (index + react + store + trackColor + shell + small files, gzip) | ~204 kB | unchanged (chunks already split: three.js core / renderer / Takram / mediabunny, no duplication) |
+  | Startup, median of 3 (shell interactive / first WebGL draw on the sample) | 0.37 s / 1.15 s | 0.43 s / 1.49 s: noise of this container (±0.5 s between runs), no claim |
+  | WebGL resources, sample opened, closed and reopened 5× (`gl.info.memory`, closed state) | geometries 2 → 7, buffers 3 → 7 (+1 per cycle: drei's `ScreenQuad` under Takram's `<Sky>` never disposes its geometry) | geometries 1, buffers 2, textures 1, flat; heap still +0.4 MB per cycle after warm-up (JS side, not pursued) |
+  | React commits during playback (devtools hook, PerformedWork flag) | one commit per frame re-renders `Timeline` only (+ `FilmOptions`, 8 `BarButton`, 11 `Icon`); idle 0 commits | unchanged (the playhead needs it; splitting the timeline waits for the UI redesign) |
+  | `computeFilmView` (vitest, sample track, 2,000 calls) | 43 µs per call (33 µs without time smoothing) | unchanged: skipping it in `FlyoverRig` would save 0.3 % of a frame, rejected |
+  | Export 320 × 180, 2 s, 10 i/s (`[export]` line, 2 runs) | 20 frames in 2.8–3.7 s: render 0.1 s, tile waits 0, encoding 2.2 s (software encoder) | unchanged (CPU path not touched) |
+  | `npx vitest run` (105 files, 1,587 tests) | 21.9 s, forked processes | 16.0–17.0 s, worker threads (`pool: 'threads'`, still one isolated worker per file) |
+  | CI `web` job (run 37999933851) | 58 s: npm ci 7 s, coverage 23 s, build 11 s; `rust` 54 s | unchanged |
+  | Desktop installers | `dist` 16 MB: atmosphere EXR 9.3 MB, clouds 2.8 MB (`shape.bin` 2 MB raw noise), JS / CSS 3.3 MB, fonts 340 kB; nothing shipped twice | not buildable here (no webkit2gtk); levers: one Windows installer instead of NSIS + MSI, NSIS lzma already the default |
+
+  Left to a GPU machine (`docs/tests-gpu.md`): preview frame time (clouds, « Nappe », lens effects, labels'
+  line-of-sight sampling), cloud renders and motion-blur sub-frames per exported frame, texture memory with real tiles
+  (bitmap cache 600 entries, height cache), the real export rate and the native encoder.
+
+**Next, right after the `v0.1.0` tag (user's request, 10 October 2026)**
 - **Web app highly usable on mobile** (large lot, user's request). Today the interface is built for a desktop screen,
   mouse and keyboard. To cover: a layout for phone and tablet widths (panels as bottom sheets, one panel at a time,
   the 3D view kept visible); touch gestures for the 3D view and the timeline (pinch, two-finger orbit, drag of clips,
@@ -384,11 +405,13 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
 **In the user's hands**
 9. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
    steady camera, free camera, start / finish pins, export.
-10. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
-   remove them; delete the old branches (`lot-suites`, `landmarks-hide`, `track-style`, `ui-polish`,
-   `timeline-polish`, `export-stream`, `timeline-videos`, `water`): the session cannot delete remote branches.
-11. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
-   application); signing certificates if wanted; then a first `v0.1.0` tag (release published by `desktop.yml`).
+10. Pull requests #1 to #11 (closed): their commit tabs still show the pre-rewrite authors; GitHub has no archive for
+   a pull request, only GitHub Support can remove those commits. The old branches are deleted; `export-loop-tests` and
+   `final-review` (merged) are still to delete from a local clone (`git push origin --delete export-loop-tests
+   final-review`): the session's proxy refuses branch deletion.
+11. Command-line rendering once on a real machine. Strava import: checked by the user. No signing certificate (paid).
+   `v0.1.0` tag once the optimisation and UI passes are merged (release published by `desktop.yml`); the GPU tests of
+   `docs/tests-gpu.md` come after, when the user has a machine.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.

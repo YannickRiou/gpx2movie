@@ -36,8 +36,9 @@ import { WeatherPanel } from './ui/WeatherPanel'
 import './ui/app.css'
 import './ui/shell.css'
 
-// Loaded right after the first paint, in their own chunks: the export drawer (video, batch, poster) and the offline
-// packs are not needed to show the first screen. They stay mounted once loaded (side effects, see the side panel).
+// Loaded in their own chunks: the offline packs right after the first paint, the export drawer (video, batch,
+// poster) when it is first opened, as its codec check pulls mediabunny (~700 kB). They stay mounted once loaded
+// (side effects, see the side panel).
 const ExportPanel = lazy(() => import('./ui/ExportPanel').then((m) => ({ default: m.ExportPanel })))
 const OfflinePanel = lazy(() => import('./ui/OfflinePanel').then((m) => ({ default: m.OfflinePanel })))
 // the film inspector only opens on a selected timeline block
@@ -132,6 +133,9 @@ export default function App() {
     inspecting: false,
   }))
   const [dragging, setDragging] = useState(false)
+  // the export drawer is mounted on its first opening and kept (export progress, result, batch)
+  const [dockMounted, setDockMounted] = useState(false)
+  if (shell.dockOpen && !dockMounted) setDockMounted(true)
   const helpDialog = useRef<HTMLDialogElement>(null)
   const dockOpen = useRef(shell.dockOpen)
   const collapsedRef = useRef(shell.collapsed)
@@ -416,7 +420,7 @@ export default function App() {
 
         <aside id="export-dock" className="dock" aria-label="Export" hidden={!shell.dockOpen}>
           <Suspense fallback={<p className="field__hint">Chargement…</p>}>
-            <ExportPanel onClose={exporting ? undefined : () => dispatch({ type: 'close-dock' })} />
+            {dockMounted && <ExportPanel onClose={exporting ? undefined : () => dispatch({ type: 'close-dock' })} />}
           </Suspense>
         </aside>
         {/* the export drawer goes first */}

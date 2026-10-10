@@ -379,70 +379,80 @@ export function CameraPanel() {
           <InfoTip text="Temps forts : sommets des montées, cols franchis et sommets proches de la trace." />
         </div>
 
-        {pacing.enabled && (
-          <MoreSettings
-            paths={['pacing.climbs', 'pacing.landmarks', 'pacing.slowFactor', 'pacing.windowM', 'pacing.pauseS', 'pacing.keepDuration']}
-          >
-            <fieldset className="field fieldset">
-              <legend className="field__label">Ralentir sur</legend>
-              <label className="checkbox">
-                <input type="checkbox" checked={pacing.climbs} onChange={(e) => updatePacing({ climbs: e.currentTarget.checked })} />
-                Sommets des montées
-              </label>
-              <label className="checkbox">
-                <input type="checkbox" checked={pacing.landmarks} onChange={(e) => updatePacing({ landmarks: e.currentTarget.checked })} />
-                Repères (cols, sommets)
-              </label>
-            </fieldset>
+        <MoreSettings
+          paths={[
+            'pacing.climbs',
+            'pacing.landmarks',
+            'pacing.slowFactor',
+            'pacing.windowM',
+            'pacing.pauseS',
+            'pacing.keepDuration',
+            'pacing.transitionS',
+          ]}
+        >
+          {pacing.enabled && (
+            <>
+              <fieldset className="field fieldset">
+                <legend className="field__label">Ralentir sur</legend>
+                <label className="checkbox">
+                  <input type="checkbox" checked={pacing.climbs} onChange={(e) => updatePacing({ climbs: e.currentTarget.checked })} />
+                  Sommets des montées
+                </label>
+                <label className="checkbox">
+                  <input type="checkbox" checked={pacing.landmarks} onChange={(e) => updatePacing({ landmarks: e.currentTarget.checked })} />
+                  Repères (cols, sommets)
+                </label>
+              </fieldset>
 
-            {PACING_SLIDERS.map(({ key, label, format, spoken = format }) => {
-              const range = PACING_RANGES[key]
-              const inputId = `${id}-pacing-${key}`
-              return (
-                <div key={key} className="field">
-                  <label className="field__label" htmlFor={inputId}>
-                    {label}
-                  </label>
-                  <div className="range-row">
-                    <input
-                      id={inputId}
-                      className="range"
-                      type="range"
-                      min={range.min}
-                      max={range.max}
-                      step={range.step}
-                      value={pacing[key]}
-                      onChange={(e) => updatePacing({ [key]: Number(e.currentTarget.value) })}
-                      aria-valuetext={spoken(pacing[key])}
-                    />
-                    <output className="range-row__value range-row__value--wide" htmlFor={inputId}>
-                      {format(pacing[key])}
-                    </output>
+              {PACING_SLIDERS.map(({ key, label, format, spoken = format }) => {
+                const range = PACING_RANGES[key]
+                const inputId = `${id}-pacing-${key}`
+                return (
+                  <div key={key} className="field">
+                    <label className="field__label" htmlFor={inputId}>
+                      {label}
+                    </label>
+                    <div className="range-row">
+                      <input
+                        id={inputId}
+                        className="range"
+                        type="range"
+                        min={range.min}
+                        max={range.max}
+                        step={range.step}
+                        value={pacing[key]}
+                        onChange={(e) => updatePacing({ [key]: Number(e.currentTarget.value) })}
+                        aria-valuetext={spoken(pacing[key])}
+                      />
+                      <output className="range-row__value range-row__value--wide" htmlFor={inputId}>
+                        {format(pacing[key])}
+                      </output>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
 
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={pacing.keepDuration}
-                onChange={(e) => updatePacing({ keepDuration: e.currentTarget.checked })}
-              />
-              Garder la durée du survol
-            </label>
-            <p className="field__hint">Le reste du trajet accélère pour compenser ralentis et pauses.</p>
-          </MoreSettings>
-        )}
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={pacing.keepDuration}
+                  onChange={(e) => updatePacing({ keepDuration: e.currentTarget.checked })}
+                />
+                Garder la durée du survol
+              </label>
+              <p className="field__hint">Le reste du trajet accélère pour compenser ralentis et pauses.</p>
+            </>
+          )}
 
-        <RangeField
-          label="Transitions"
-          {...PACING_RANGES.transitionS}
-          value={pacing.transitionS}
-          format={formatSecondsShort}
-          onChange={(transitionS) => updatePacing({ transitionS })}
-        />
-        <p className="field__hint">Durée des changements de vitesse : entrée et sortie des arrêts, des pauses et des portions de vitesse.</p>
+          <RangeField
+            label="Transitions"
+            tip="Durée des changements de vitesse : entrée et sortie des arrêts, des pauses et des portions de vitesse."
+            {...PACING_RANGES.transitionS}
+            value={pacing.transitionS}
+            format={formatSecondsShort}
+            onChange={(transitionS) => updatePacing({ transitionS })}
+          />
+        </MoreSettings>
       </PanelSection>
 
       <TrackMarkerSection />

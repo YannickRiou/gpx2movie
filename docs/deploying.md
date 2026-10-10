@@ -16,6 +16,15 @@ landmarks itself.
 2. Copy the contents of `dist/` (about 17 MB) to the site root.
 3. Serve it over HTTPS.
 
+### GitHub Pages
+
+The repository publishes the site itself at <https://yannickriou.github.io/gpx2movie/> (workflow
+`.github/workflows/pages.yml`, on every push to `master` or by hand). GitHub Pages only serves the files: the 3D view,
+the clouds and the export run in each visitor's browser, on their graphics card, as with any other host. One-time
+setting: *Settings* › *Pages* › *Build and deployment* › *Source*: **GitHub Actions**. The site lives under
+`/gpx2movie/`, so the build gets `BASE_PATH=/gpx2movie/` (Vite `base`); a build without it serves from the domain
+root. For the Strava import, the redirect domain of your Strava application is `yannickriou.github.io`.
+
 ### HTTPS required
 
 Outside `localhost`, the browser reserves some features for HTTPS pages (a "secure context"): the WebCodecs video
