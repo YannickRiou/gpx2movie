@@ -51,6 +51,15 @@ export const GROUND_SAMPLES_PER_SIDE = 4
 export const LINE_OF_SIGHT_SAMPLES = 12
 export const LINE_OF_SIGHT_MAX_FRACTION = 0.9
 
+/**
+ * Smoothing scaled with the ground speed of the film (track length / flyover duration, metres per film second), so a
+ * long track flown fast turns no faster than a short one: the heading is averaged over ± HEADING_SMOOTHING_FACTOR ×
+ * « Lissage de la caméra » film seconds of track.
+ */
+export const HEADING_SMOOTHING_FACTOR = 1.5
+/** Fixed samples on each side of a smoothing window (weights sliding over them). */
+export const SMOOTHING_SAMPLES_PER_SIDE = 8
+
 /** 'sway': swing (radians) = SWAY_MAX_RAD · tanh(SWAY_GAIN · turn / SWAY_MAX_RAD), turn measured over ±2w. */
 export const SWAY_GAIN = 0.8
 export const SWAY_MAX_RAD = (50 * Math.PI) / 180
@@ -100,6 +109,95 @@ export function headingAt(path: TrackPath, d: number, w: number, frame: LocalFra
   const heading = new Vector3(b.x - a.x, 0, b.z - a.z)
   if (heading.lengthSq() < 1) return NORTH.clone()
   return heading.normalize()
+}
+
+/**
+ * Weight of a sample `offset` from the centre of a window of radius `radius`: squared raised cosine, flat to the second
+ * derivative at the edges, so a sample entering or leaving the window does not jolt the acceleration (0 outside).
+ */
+function bump(offset: number, radius: number): number {
+  if (Math.abs(offset) >= radius) return 0
+  const c = 0.5 + 0.5 * Math.cos((Math.PI * offset) / radius)
+  return c * c
+}
+
+interface HeadingTable {
+  step: number
+  /** chord direction at k · step, unwrapped along the track (radians, atan2(x, -z): 0 = north, > 0 = east) */
+  angle: Float64Array
+  /** chord length there (metres): a short chord (U-turn, GPS star at a rest) counts less */
+  chord: Float64Array
+}
+
+const headingTables = new WeakMap<TrackPath, WeakMap<LocalFrame, Map<string, HeadingTable>>>()
+
+/**
+ * Chord directions [s - w, s + w] at fixed steps along the track, unwrapped once for the whole path (each against the
+ * last chord at least a quarter of 2w long), so an average over them turns through a U-turn instead of flipping.
+ */
+function headingTable(path: TrackPath, w: number, step: number, frame: LocalFrame): HeadingTable {
+  let perFrame = headingTables.get(path)
+  if (!perFrame) headingTables.set(path, (perFrame = new WeakMap()))
+  let tables = perFrame.get(frame)
+  if (!tables) perFrame.set(frame, (tables = new Map()))
+  const key = `${w}:${step}`
+  const cached = tables.get(key)
+  if (cached) return cached
+  const count = Math.ceil(path.lengthM / step) + 1
+  const angle = new Float64Array(count)
+  const chord = new Float64Array(count)
+  let reference = Number.NaN
+  for (let k = 0; k < count; k++) {
+    const a = samplePath(path, k * step - w)
+    const b = samplePath(path, k * step + w)
+    const from = frame.toLocal(a.lon, a.lat, 0, _behind)
+    const to = frame.toLocal(b.lon, b.lat, 0, _ahead)
+    const x = to.x - from.x
+    const z = to.z - from.z
+    const raw = Math.atan2(x, -z)
+    const unwrapped = Number.isNaN(reference) ? raw : reference + Math.atan2(Math.sin(raw - reference), Math.cos(raw - reference))
+    angle[k] = unwrapped
+    chord[k] = Math.hypot(x, z)
+    if (chord[k] >= w / 2 || Number.isNaN(reference)) reference = unwrapped
+  }
+  if (tables.size > 16) tables.clear()
+  const table = { step, angle, chord }
+  tables.set(key, table)
+  return table
+}
+
+/**
+ * Travel direction at `d` (`headingAt`) averaged along the track over ± `radiusM`: `bump` weights times the chord
+ * length, over the unwrapped chord directions of `headingTable` (radians, atan2(x, -z)). Continuous, as is its turn rate.
+ */
+function smoothAngleAt(path: TrackPath, d: number, w: number, radiusM: number, frame: LocalFrame): number {
+  const { step, angle, chord } = headingTable(path, w, radiusM / SMOOTHING_SAMPLES_PER_SIDE, frame)
+  let sum = 0
+  let weight = 0
+  const last = angle.length - 1
+  for (let k = Math.floor((d - radiusM) / step) + 1; k * step < d + radiusM; k++) {
+    const i = clamp(k, 0, last)
+    const wk = bump(k * step - d, radiusM) * (chord[i] + 1e-3 * w)
+    sum += wk * angle[i]
+    weight += wk
+  }
+  return weight > 0 ? sum / weight : angle[clamp(Math.round(d / step), 0, last)]
+}
+
+/** `headingAt` averaged along the track over ± `radiusM` (`smoothAngleAt`); `headingAt` itself without a radius. */
+export function smoothHeadingAt(path: TrackPath, d: number, w: number, radiusM: number, frame: LocalFrame): Vector3 {
+  if (!(radiusM > 0)) return headingAt(path, d, w, frame)
+  const heading = smoothAngleAt(path, d, w, radiusM, frame)
+  return new Vector3(Math.sin(heading), 0, -Math.cos(heading))
+}
+
+/**
+ * `smoothedTurn` over ± 2w from the averaged chord directions (`smoothAngleAt`): the direction w ahead minus the one w
+ * behind, each averaged over ± `radiusM` (> 0 = to the right).
+ */
+function smoothTurnAt(path: TrackPath, d: number, w: number, radiusM: number, frame: LocalFrame): number {
+  if (!(radiusM > 0)) return smoothedTurn(path, d, 2 * w)
+  return smoothAngleAt(path, d + w, w, radiusM, frame) - smoothAngleAt(path, d - w, w, radiusM, frame)
 }
 
 /**
@@ -190,17 +288,20 @@ function placement(
   timeS: number,
   frame: LocalFrame,
   camera: CameraSettings,
+  speedMps: number,
 ): Placement {
   const w = headingWindowM(path, camera)
+  const radiusM = speedMps * camera.cameraSmoothingS * HEADING_SMOOTHING_FACTOR
+  const travel = (at: number, window: number) => smoothHeadingAt(path, at, window, radiusM, frame)
   const distance = autoDistanceM(path) * camera.distance
   const offset = camera.headingOffsetDeg * DEG
 
   switch (camera.style) {
     case 'sway': {
-      const turn = smoothedTurn(path, d, 2 * w)
+      const turn = smoothTurnAt(path, d, w, radiusM, frame)
       // to the outside of the bend: a right turn swings the view to the right (camera on the left)
       const swing = SWAY_MAX_RAD * Math.tanh((SWAY_GAIN * turn) / SWAY_MAX_RAD)
-      return { reference: headingAt(path, d, w, frame), viewAngle: offset + swing, pitchDeg: camera.pitchDeg, distance }
+      return { reference: travel(d, w), viewAngle: offset + swing, pitchDeg: camera.pitchDeg, distance }
     }
     case 'orbit':
       // absolute rotation from the start heading: independent of the bends of the track
@@ -212,21 +313,21 @@ function placement(
       }
     case 'top':
       return {
-        reference: camera.northUp ? NORTH.clone() : headingAt(path, d, w, frame),
+        reference: camera.northUp ? NORTH.clone() : travel(d, w),
         viewAngle: offset,
         pitchDeg: Math.max(camera.pitchDeg, TOP_MIN_PITCH_DEG),
         distance: distance * TOP_DISTANCE_FACTOR,
       }
     case 'cinematic':
       return {
-        reference: headingAt(path, d, w * CINEMATIC_WINDOW_FACTOR, frame),
+        reference: travel(d, w * CINEMATIC_WINDOW_FACTOR),
         viewAngle: offset + CINEMATIC_SWING_RAD * Math.sin((2 * Math.PI * timeS) / CINEMATIC_PERIOD_S),
         pitchDeg: camera.pitchDeg * CINEMATIC_PITCH_FACTOR,
         distance: distance * CINEMATIC_DISTANCE_FACTOR,
       }
     case 'chase':
     default:
-      return { reference: headingAt(path, d, w, frame), viewAngle: offset, pitchDeg: camera.pitchDeg, distance }
+      return { reference: travel(d, w), viewAngle: offset, pitchDeg: camera.pitchDeg, distance }
   }
 }
 
@@ -262,7 +363,7 @@ export function computeCameraView(
   const aimGround = Math.max(trackGround(path, dAim, cellM, sample), gridAtAim ?? -Infinity) * exaggeration
   const target = frame.toLocal(aimAt.lon, aimAt.lat, aimGround + liftM)
 
-  const place = placement(path, dCamera, timeS, frame, camera)
+  const place = placement(path, dCamera, timeS, frame, camera, path.lengthM / Math.max(1, durationS))
   place.viewAngle += options.orbitRad ?? 0
   // placed around its own point of the track, at the aim's height
   const from = dCamera === dAim ? target : anchorAt(path, dCamera, aimGround + liftM, frame)

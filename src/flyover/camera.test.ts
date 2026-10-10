@@ -214,7 +214,7 @@ describe('computeCameraView — styles', () => {
     const offset = start.position.clone().sub(start.target)
     expect(offset.length()).toBeCloseTo(CHASE_DISTANCE_MIN_M * CINEMATIC_DISTANCE_FACTOR, 3)
     expect(pitchDeg(start.position, start.target)).toBeCloseTo(30 * CINEMATIC_PITCH_FACTOR, 6)
-    expect(azimuthFromTarget(start.position, start.target)).toBeCloseTo(Math.PI, 3)
+    expect(Math.abs(azimuthFromTarget(start.position, start.target))).toBeCloseTo(Math.PI, 3)
     // a quarter period (10 s of 60) later: swung by the full amplitude
     const later = computeCameraView(northbound, 10 / 60, frame, null, options({ style: 'cinematic' }))
     expect(Math.abs(Math.abs(azimuthFromTarget(later.position, later.target)) - Math.PI)).toBeCloseTo((35 * Math.PI) / 180, 3)
