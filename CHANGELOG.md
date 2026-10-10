@@ -16,6 +16,8 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
   the outing, then joins the flight's sun; « Heure du survol » and « Accéléré » (the former « Faire bouger le soleil »).
 - **Timeline**: a narrow block (a 4 s stop on a phone) pressed in its middle is moved, no longer stretched by its edge.
 - **OpenStreetMap**: the memory cache of Overpass results keeps the 32 most recently used, no longer every track of the session.
+- **Track on the relief**: the line, the marker and the labels lie on the terrain as drawn, without the jumps up and
+  down (or down to sea level) of a long track without elevation while tiles came and went.
 - **Simpler panels**: camera presets as the one choice (six shown, the rest under « Plus de préréglages »), the style
   under « Plus de réglages »; Strava import in the « + Ajouter » menu of the track list.
 

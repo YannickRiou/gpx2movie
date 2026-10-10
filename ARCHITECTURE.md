@@ -43,9 +43,9 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/terrain/sources.ts` | source catalog | `TERRAIN_SOURCES: TerrainSource[]`, `IMAGERY_SOURCES: ImagerySource[]`, `buildTileUrl(source, key): string`, `getTerrainSource(id)`, `getImagerySource(id)`, `sourceCovers(source, bounds \| point)` |
 | `src/terrain/fetch.ts` | fetch + bitmap cache | `createTileFetcher(opts?: {concurrency?, maxEntries?, retryDelayMs?, storedTiles?}): TileFetcher`, `TileFetchError` (`status`, `url`), `isAbortError(e)`, `downloadTile(url, signal?, retryDelayMs?)` (same retry policy), `setStoredTileReader(reader)` + `StoredTileReader` (`covers`, `get`: offline packs read before the network) |
 | `src/terrain/dem.ts` | elevation decoding | `decodeDem(bitmap, encoding): HeightGrid`, `sampleGrid(grid, u, v): number` (bilinear, NaN-safe) |
-| `src/terrain/heightField.ts` | multi-level height field | `class HeightField { set(key, grid); delete(key); has(key); sampleHeight(lon, lat): number \| undefined }` (deepest tile containing the point) |
+| `src/terrain/heightField.ts` | multi-level height field | `class HeightField { set(key, grid); delete(key); has(key); sampleHeight(lon, lat): number \| undefined }` (deepest tile containing the point; the engine's fallback where no tile of its tree is loaded) |
 | `src/terrain/imagery.ts` | composed texture | `loadImageryTexture: LoadImageryTexture` |
-| `src/terrain/mesh.ts` | tile geometry | `buildTileGeometry(key, grid, frame, opts: BuildTileGeometryOptions): TileGeometryResult` |
+| `src/terrain/mesh.ts` | tile geometry | `buildTileGeometry(key, grid, frame, opts: BuildTileGeometryOptions): TileGeometryResult`, `sampleTileMesh(key, grid, segments, lon, lat)` (height of that mesh) |
 | `src/terrain/quadtree.ts` + `engine.ts` | LOD, loading, Three group | `createTerrainEngine(options: TerrainEngineOptions, deps?: Partial<EngineDeps>, tuning?: Partial<EngineTuning>): TerrainEngine` (deps injectable for tests) |
 | `src/scene/*.tsx` | R3F components | `FlyoverCanvas`, `TerrainLayer` (+ `useTerrainContext`), `TrackLines`, `TrackPicker` (+ `TrackMenu`, DOM), `CameraRig`, `FlyoverRig`, `useDebouncedCallback` |
 | `src/scene/marker*.ts` + `trackLineStyle.ts` | track and marker (see "Track and marker") | pure: `TrackStyle`, `DEFAULT_TRACK_STYLE`, `MarkerSettings`, `DEFAULT_MARKER`, `isValidTrackStyle`, `isValidMarker`, `withTrackStyleDefaults`, `withMarkerDefaults` (`markerSettings.ts`); `MARKER_FIGURE_PATHS`, `circlePath` (`markerFigures.ts`); `drawBadge`, `readableInk`, `squareCrop`, `fileToAvatarDataUrl`, `loadMarkerImage` (`markerBadge.ts`, 2D canvas); `markerBadge`, `badgeTexture`, `headsLeft`, `placeMarker`, `useMarkerImage`, `MARKER_SCREEN_FACTOR` (`markerSprite.ts`); `createGlowMaterial`, `applyDash`, `quantizedPixelSize`, `cumulativeDistances`, `cutAt`, `cutLine` (`trackLineStyle.ts`); `TrackMarkerSection` (`src/ui`) |
@@ -180,7 +180,15 @@ once it is still (see "Volumetric clouds", Quality); the export goes back to the
      keeps ~400 grids at 256 px equivalent (LRU, i.e. ~100 MB; a 512 px grid counts as four; 160 on a phone or tablet).
    - Bounding sphere: from the geometry if loaded, otherwise from the tile bounds with heights [-500, 9000] m.
    - Material: `MeshStandardMaterial({ map, roughness: 1, metalness: 0 })`, `side: FrontSide`. `wireframe` option.
-   - `onChange` fired (coalesced per frame) when a tile becomes ready or is removed → the track re-drapes.
+   - `sampleHeight` = the terrain **as drawn**: the triangles of the tile drawn at the point (`sampleTileMesh`), else
+     (off the view) the deepest loaded tile there, else the `HeightField` (tree rebuilt after a change of imagery).
+     The track, the marker and the labels therefore lie on the visible mesh: never on a finer grid the mesh does not
+     show yet (or no longer), never on a coarser one or at sea level because the LRU evicted the grid of a drawn tile.
+     Reading only the LRU `HeightField` (100 grids of 512 px on a computer, for up to ~390 drawn tiles in a chase view)
+     left a 540 km track without elevation with thousands of points on screen at 0 m in most re-drapes and jumps of
+     200 to 500 m (p95) between them (simulated flight in Corsica, 0.1.0 included).
+   - `onChange` fired (coalesced per frame) when a tile becomes ready or is removed, or the drawn tiles change (a
+     refinement from loaded children, a return to the parent) → the track re-drapes.
 7. **Scene** (`scene/`):
    - `FlyoverCanvas`: `<Canvas gl={{ antialias: true, logarithmicDepthBuffer: true, alpha: true }} camera={{ fov: 50, near: 1, far: 5e6 }} flat>`
      (no tone mapping: orthophotos are already displayable images), `HemisphereLight` 1.2 + `DirectionalLight` 2.0 (fixed SE sun;
@@ -192,7 +200,8 @@ once it is still (see "Volumetric clouds", Quality); the export goes back to the
      pushes a copy of `stats` to the store at ~4 Hz (only if changed), `setOptions` with only the changed keys when the settings change.
      Exposes `{ engine, frame }` through a context to `TrackLines` and `CameraRig` (which must be rendered inside it).
    - `TrackLines`: for each track, `Line2` (three/addons/lines) 4 px wide, color `track.color`, densified points (step ≤ 10 m),
-     height = `(engine.sampleHeight(lon,lat) ?? pt.ele ?? 0) * exaggeration + 3`. Re-draped on `engine.onChange` (150 ms debounce).
+     height = `(engine.sampleHeight(lon,lat) ?? pt.ele ?? 0) * exaggeration + 3` (the drawn surface, see above). Re-draped on
+     `engine.onChange` (150 ms debounce, 600 ms at most while the drawn tiles keep changing).
      Second pass with `depthTest: false`, opacity 0.25, to hint at the parts hidden by the terrain.
      No start / finish mesh: `Labels` pins them (see "Climbs and labels").
    - `CameraRig`: `OrbitControls` (drei) with damping, `maxPolarAngle = 85°`, `minDistance = 30`, `maxDistance = 400 km`;

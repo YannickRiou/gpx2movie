@@ -140,6 +140,9 @@ features included), `npm run build`,
 - **Camera smoothness on long tracks** (10 October 2026): measured with `cameraSmoothness.test.ts` (540 km raid-like
   track in 4 min 30 s, the sample in 60 s); heading averaged at the film's ground speed on unwrapped chord directions,
   corners of the line rounded over 0.5 s, aim height over at least 0.25 s of track with a B-spline grid; not seen on a GPU.
+- **Track draped on the drawn terrain** (10 October 2026): `engine.sampleHeight` reads the mesh of the tile on screen
+  (`sampleTileMesh`) instead of the LRU height field, which held 100 grids for up to ~390 drawn tiles (points at 0 m,
+  jumps of hundreds of metres on a 540 km track without elevation); measured with a simulated flight, not seen on a GPU.
 - **Left for later** (proposed, not done): the inspector's text field and « Taille » slider could use the shared
   `TextField` (`PanelSection.tsx`) and the overlay's size field (its « Position » is a 3 × 3 grid, the overlay's a
   list: kept apart), `diffEngineOptions` in `TerrainLayer` (used and tested, kept). Declined by the user: "Texte libre" drawn

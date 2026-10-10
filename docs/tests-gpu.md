@@ -67,6 +67,10 @@ reproduce it next to the box.
       vertical bobbing over hills; with "Lissage de la caméra" at 0 s, the old direct behaviour; the sample in 60 s
       still stays behind the marker in its bends. Same in the exported video. Note the frames per second (≈ 80 terrain
       samples per frame).
+- [ ] Long track **without elevation** (no `<ele>`, e.g. a tracker raid of a few hundred km in the mountains), flown in
+      "Poursuite": the line and the marker stay on the visible relief all along, never sink under it nor drop to sea
+      level, and do not jump up and down while the finer tiles arrive or when the camera has gone past; at most they
+      follow a tile of the terrain as it refines. Same in the exported video.
 - [ ] Intro and outro "Depuis la région" (from the region) (16:9 and 9:16, short and long track): terrain loaded in time for the
       very high view (no terrain edge, no blurry tiles), dive toward the track and climb back without stutter.
 - [ ] "Depuis la région" with "Lieu" set to a park, an island or a range (e.g. « Parc naturel régional de Corse »):
