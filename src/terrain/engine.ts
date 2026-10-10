@@ -58,14 +58,18 @@ export interface EngineDeps {
   decodeDem: (bitmap: ImageBitmap, encoding: DemEncoding) => HeightGrid
   loadImageryTexture: LoadImageryTexture
   heightField: HeightFieldLike
+  /** clock (ms) of the retry and unload delays; default `performance.now` */
+  now?: () => number
 }
 
 /** Knobs that do not belong to the public `TerrainEngineOptions` (mostly for tests and tuning). */
 export interface EngineTuning {
   /** nodes loading at the same time */
   maxConcurrentLoads: number
-  /** a node not visited by the selection for more than this many frames is unloaded */
-  unloadAfterFrames: number
+  /** a node not visited by the selection for more than this long (ms) is unloaded */
+  unloadAfterMs: number
+  /** how long (ms) the nodes a prefetch visits are kept, even when no view visits them */
+  prefetchKeepMs: number
   /** how often the unload sweep runs, in frames */
   sweepEveryFrames: number
   /** dirty geometries rebuilt per frame after an exaggeration change */
@@ -80,8 +84,8 @@ export interface EngineTuning {
   rootTileBudget: number
   /** a failed node is retried at most this many times */
   maxLoadAttempts: number
-  /** frames to wait before retrying a failed node */
-  retryDelayFrames: number
+  /** wait (ms) before retrying a failed node */
+  retryDelayMs: number
   /** share of `maxConcurrentLoads` that prefetches may use (the rest stays free for the current view) */
   prefetchLoadShare: number
   /** skirt depth as a fraction of the tile ground size */
@@ -92,14 +96,18 @@ export interface EngineTuning {
 
 export const DEFAULT_TUNING: Readonly<EngineTuning> = {
   maxConcurrentLoads: 24,
-  unloadAfterFrames: 120,
+  // time-based, so the export's tile waits (an update every 16 ms, no render) do not hurry them:
+  // 2 s and 5 s are the former 120 and 300 updates of the preview at 60 fps
+  unloadAfterMs: 2_000,
+  // 5 rendered frames (the export prefetches every 5) waiting the full 5 s each
+  prefetchKeepMs: 30_000,
   sweepEveryFrames: 30,
   rebuildsPerFrame: 4,
   // 400 on a computer, fewer on a phone (core/deviceBudget.ts)
   heightCacheEntries: deviceBudget().heightGrids,
   rootTileBudget: 16,
   maxLoadAttempts: 3,
-  retryDelayFrames: 300,
+  retryDelayMs: 5_000,
   prefetchLoadShare: 0.5,
   skirtRatio: 0.015,
   minSkirtDepthM: 20,
@@ -163,6 +171,7 @@ export function createTerrainEngine(
 ): TerrainEngine {
   const cfg: EngineTuning = { ...DEFAULT_TUNING, ...tuning }
   const ownsFetcher = deps.fetcher === undefined
+  const now = deps.now ?? (() => performance.now())
   const io: EngineDeps = {
     fetcher: deps.fetcher ?? createTileFetcher(),
     decodeDem: deps.decodeDem ?? defaultDecodeDem,
@@ -260,6 +269,8 @@ export function createTerrainEngine(
 
   function startLoad(node: TileNode, rank: number): void {
     if (node.state === 'failed' && !node.noData) failedCount--
+    // a retry may well fail again: in the background, after every first attempt (it would hold their fetch slots)
+    if (node.failedAttempts > 0) rank += RETRY_RANK
     const { terrain, imagery, imageryZoomOffset } = opts
     if (terrain.coverage && !boundsIntersect(terrain.coverage, node.bounds)) {
       // No elevation data there: fail permanently without a request (the parent stays rendered).
@@ -353,7 +364,7 @@ export function createTerrainEngine(
     node.state = 'failed'
     node.noData = permanent
     node.failedAttempts = permanent ? cfg.maxLoadAttempts : node.failedAttempts + 1
-    node.retryAtFrame = frame + cfg.retryDelayFrames
+    node.retryAt = now() + cfg.retryDelayMs
     if (permanent) return
     failedCount++
     if (import.meta.env.DEV && error !== undefined) {
@@ -432,17 +443,17 @@ export function createTerrainEngine(
   }
 
   /**
-   * Post-order sweep. Unloads stale nodes (not visited for more than `unloadAfterFrames` and not
+   * Post-order sweep. Unloads stale nodes (past their `keepUntil` and not
    * an ancestor of a rendered node) and collapses idle subtrees. Returns true if the node can be
    * dropped from the tree.
    */
-  function sweepNode(node: TileNode, threshold: number): boolean {
-    const stale = node.lastVisitedFrame < threshold
+  function sweepNode(node: TileNode, time: number): boolean {
+    const stale = node.keepUntil < time
     const children = node.children
     if (children) {
       let allDroppable = true
       for (let i = 0; i < 4; i++) {
-        if (!sweepNode(children[i], threshold)) allDroppable = false
+        if (!sweepNode(children[i], time)) allDroppable = false
       }
       if (allDroppable && stale) {
         for (let i = 0; i < 4; i++) {
@@ -458,8 +469,8 @@ export function createTerrainEngine(
   }
 
   function sweep(): void {
-    const threshold = frame - cfg.unloadAfterFrames
-    for (let i = 0; i < roots.length; i++) sweepNode(roots[i], threshold)
+    const time = now()
+    for (let i = 0; i < roots.length; i++) sweepNode(roots[i], time)
   }
 
   // --- dirty geometries (exaggeration change) -------------------------------------
@@ -569,6 +580,8 @@ export function createTerrainEngine(
     selectionParams.maxZoom = opts.maxZoom
     selectionParams.detailArea = opts.detailArea
     selectionParams.frame = frame
+    selectionParams.now = now()
+    selectionParams.keepUntil = selectionParams.now + cfg.unloadAfterMs
     selectTiles(roots, cameraState, selectionParams, selection)
 
     // Visibility: only the selected nodes draw.
@@ -605,6 +618,8 @@ export function createTerrainEngine(
 
   /** Fetch ranks of prefetches start here: after any request of the current view (lower rank = sooner). */
   const PREFETCH_RANK = 1_000_000
+  /** Fetch ranks of retries start here: after the prefetches. */
+  const RETRY_RANK = 2 * PREFETCH_RANK
 
   function prefetch(camera: PerspectiveCamera, viewportHeightPx: number): number {
     if (disposed) return 0
@@ -613,6 +628,8 @@ export function createTerrainEngine(
     selectionParams.maxZoom = opts.maxZoom
     selectionParams.detailArea = opts.detailArea
     selectionParams.frame = frame
+    selectionParams.now = now()
+    selectionParams.keepUntil = selectionParams.now + cfg.prefetchKeepMs
     selectTiles(roots, prefetchCameraState, selectionParams, prefetchSelection)
     const limit = Math.max(1, Math.floor(cfg.maxConcurrentLoads * cfg.prefetchLoadShare))
     const toLoad = prefetchSelection.toLoad

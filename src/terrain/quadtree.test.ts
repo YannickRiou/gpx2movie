@@ -127,7 +127,7 @@ describe('TileNode', () => {
 })
 
 describe('isLoadable', () => {
-  it('allows empty nodes and failed nodes once their retry frame has passed', () => {
+  it('allows empty nodes and failed nodes once their retry time has passed', () => {
     const node = new TileNode(ROOT_KEY, undefined, CTX)
     expect(isLoadable(node, 0)).toBe(true)
     node.state = 'loading'
@@ -136,7 +136,7 @@ describe('isLoadable', () => {
     expect(isLoadable(node, 0)).toBe(false)
     node.state = 'failed'
     node.failedAttempts = 1
-    node.retryAtFrame = 100
+    node.retryAt = 100
     expect(isLoadable(node, 50)).toBe(false)
     expect(isLoadable(node, 100)).toBe(true)
     node.failedAttempts = 3
@@ -279,7 +279,7 @@ describe('selectTiles', () => {
     expect(grandchildren[1].lastVisitedFrame).toBe(10)
   })
 
-  it('does not retry a failed child before its retry frame and never beyond the attempt budget', () => {
+  it('does not retry a failed child before its retry time and never beyond the attempt budget', () => {
     const root = new TileNode(ROOT_KEY, undefined, CTX)
     makeReady(root)
     const children = root.ensureChildren()
@@ -288,15 +288,15 @@ describe('selectTiles', () => {
     failing.state = 'failed'
     failing.mesh = undefined
     failing.failedAttempts = 1
-    failing.retryAtFrame = 50
-    const params = { errorTargetPx: 0.001, maxZoom: 11, frame: 10 }
+    failing.retryAt = 50
+    const params = { errorTargetPx: 0.001, maxZoom: 11, frame: 10, now: 10 }
     const early = selectTiles([root], farAbove(), params)
     expect(early.toRender).toEqual([root])
     expect(early.toLoad).toEqual([])
-    const late = selectTiles([root], farAbove(), { ...params, frame: 50 })
+    const late = selectTiles([root], farAbove(), { ...params, frame: 11, now: 50 })
     expect(late.toLoad).toEqual([failing])
     failing.failedAttempts = 3
-    const exhausted = selectTiles([root], farAbove(), { ...params, frame: 500 })
+    const exhausted = selectTiles([root], farAbove(), { ...params, frame: 12, now: 500 })
     expect(exhausted.toLoad).toEqual([])
     expect(exhausted.toRender).toEqual([root])
   })

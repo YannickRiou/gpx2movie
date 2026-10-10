@@ -196,7 +196,8 @@ export interface TerrainStats {
   failedTiles: number
   /**
    * Tiles the current view still waits for before what it draws is final (in the frustum, loading or
-   * queued); excludes shadow casters, off-screen children and prefetches. Used by the video export.
+   * queued); excludes shadow casters, off-screen children, prefetches and the retries of failed tiles. Used by the
+   * video export.
    */
   pendingVisibleTiles?: number
 }

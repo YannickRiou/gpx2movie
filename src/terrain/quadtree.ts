@@ -57,6 +57,8 @@ export class TileNode {
 
   /** frame counter of the last selection pass that touched this node */
   lastVisitedFrame = -1
+  /** engine clock (ms) until which the unload sweep keeps this node: its latest selection pass's `keepUntil` */
+  keepUntil = 0
   /** screen-space error from the last selection pass (0 when culled) */
   sse = 0
   /** load priority from the last selection pass (higher = sooner) */
@@ -74,8 +76,8 @@ export class TileNode {
    * never retried, not an error. Only meaningful while `state === 'failed'`.
    */
   noData = false
-  /** frame counter from which a failed node may be retried */
-  retryAtFrame = 0
+  /** engine clock (ms) from which a failed node may be retried */
+  retryAt = 0
 
   constructor(key: TileKey, parent: TileNode | undefined, ctx: QuadtreeContext) {
     this.key = key
@@ -227,8 +229,12 @@ export interface SelectionParams {
   /** outside this area, nodes stop at `outerMaxZoom` (when both are set) */
   detailArea?: LonLatBounds
   outerMaxZoom?: number
-  /** current frame counter (stamps lastVisitedFrame, gates retries) */
+  /** current frame counter (stamps lastVisitedFrame) */
   frame: number
+  /** engine clock (ms): gates retries; default 0 */
+  now?: number
+  /** stamped on the visited nodes (the latest wins): the sweep keeps them until then; default 0 */
+  keepUntil?: number
   /** failed nodes are re-queued at most this many times; default 3 */
   maxLoadAttempts?: number
 }
@@ -296,18 +302,19 @@ function byPriorityDesc(a: TileNode, b: TileNode): number {
 }
 
 /** True if the node may be (re)queued for loading. */
-export function isLoadable(node: TileNode, frame: number, maxLoadAttempts = DEFAULT_MAX_LOAD_ATTEMPTS): boolean {
+export function isLoadable(node: TileNode, now: number, maxLoadAttempts = DEFAULT_MAX_LOAD_ATTEMPTS): boolean {
   if (node.state === 'empty') return true
-  if (node.state === 'failed') return node.failedAttempts < maxLoadAttempts && frame >= node.retryAtFrame
+  if (node.state === 'failed') return node.failedAttempts < maxLoadAttempts && now >= node.retryAt
   return false
 }
 
 function queueLoad(node: TileNode, priority: number, ctx: SelectionContext): void {
   node.priority = priority
-  const loadable = isLoadable(node, ctx.params.frame, ctx.maxLoadAttempts)
+  const loadable = isLoadable(node, ctx.params.now ?? 0, ctx.maxLoadAttempts)
   if (loadable) ctx.out.toLoad.push(node)
-  // visible nodes have a priority >= 0 (their sse), culled ones a negative one
-  if (priority >= 0 && (loadable || node.state === 'loading')) ctx.out.pendingVisible++
+  // visible nodes have a priority >= 0 (their sse), culled ones a negative one; the view waits for a first attempt
+  // only, a failed node's retry loads in the background (unreachable hosts would otherwise hold every export frame)
+  if (priority >= 0 && node.failedAttempts === 0 && (loadable || node.state === 'loading')) ctx.out.pendingVisible++
 }
 
 /** Priority of a culled node: always below any visible node, shallow levels first. */
@@ -315,9 +322,15 @@ function culledPriority(node: TileNode): number {
   return -1 - node.key.z
 }
 
+/** Mark `node` as touched by this selection pass (casters, unload sweep). */
+function stamp(node: TileNode, params: SelectionParams): void {
+  node.lastVisitedFrame = params.frame
+  node.keepUntil = Math.max(node.keepUntil, params.keepUntil ?? 0)
+}
+
 function visit(node: TileNode, ctx: SelectionContext): void {
   const { camera, params } = ctx
-  node.lastVisitedFrame = params.frame
+  stamp(node, params)
   const visible = camera.frustum.intersectsSphere(node.boundingSphere)
   if (!visible) {
     node.sse = 0
@@ -352,7 +365,7 @@ function visit(node: TileNode, ctx: SelectionContext): void {
   renderOrQueue(node, sse, ctx)
   for (let i = 0; i < 4; i++) {
     const child = children[i]
-    child.lastVisitedFrame = params.frame
+    stamp(child, params)
     if (camera.frustum.intersectsSphere(child.boundingSphere)) {
       child.sse = screenSpaceError(child.geometricError, child.boundingSphere, camera)
       queueLoad(child, child.sse, ctx)
@@ -389,7 +402,7 @@ function renderReadyDescendants(children: readonly TileNode[], ctx: SelectionCon
   for (let i = 0; i < 4; i++) {
     const child = children[i]
     if (!camera.frustum.intersectsSphere(child.boundingSphere)) continue
-    child.lastVisitedFrame = params.frame
+    stamp(child, params)
     if (child.state === 'ready' && child.mesh) ctx.out.toRender.push(child)
     else if (child.children) renderReadyDescendants(child.children, ctx)
   }

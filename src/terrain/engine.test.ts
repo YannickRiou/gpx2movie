@@ -382,13 +382,20 @@ describe('createTerrainEngine', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const badUrl = `https://dem.test/${ROOT_KEYS[0].z}/${ROOT_KEYS[0].x}/${ROOT_KEYS[0].y}.png`
     const deps = createFakeDeps({ failDem: (url) => url === badUrl })
-    const engine = engineWith(deps, {}, { retryDelayFrames: 3, maxLoadAttempts: 2 })
+    let t = 0
+    deps.now = () => t
+    const engine = engineWith(deps, {}, { retryDelayMs: 3000, maxLoadAttempts: 2 })
     const camera = cameraAbove(600_000)
     const badFetches = () => deps.fetched.filter((u) => u === badUrl).length
+    // one update per second
+    const tick = () => {
+      t += 1000
+      engine.update(camera, 1000)
+    }
 
-    engine.update(camera, 1000) // frame 1: first attempt
-    await settle() // fails during frame 1 -> retry allowed from frame 4
-    engine.update(camera, 1000) // frame 2
+    engine.update(camera, 1000) // 0 s: first attempt
+    await settle() // fails at 0 s -> retry allowed from 3 s
+    tick() // 1 s
     expect(engine.stats.failedTiles).toBe(1)
     expect(engine.stats.loadedTiles).toBe(ROOT_KEYS.length - 1)
     expect(badFetches()).toBe(1)
@@ -400,13 +407,21 @@ describe('createTerrainEngine', () => {
     expect(deps.signals[badIndex].aborted).toBe(true)
     expect(deps.signals.filter((s) => s.aborted)).toHaveLength(1)
 
-    engine.update(camera, 1000) // frame 3: retry frame not reached yet
+    tick() // 2 s: retry time not reached yet
     expect(badFetches()).toBe(1)
-    engine.update(camera, 1000) // frame 4: second attempt
+    tick() // 3 s: second attempt
     expect(badFetches()).toBe(2)
     expect(engine.stats.pendingTiles).toBe(1)
+    // the view (the export) does not wait for a retry, fetched after every first attempt and prefetch
+    expect(engine.stats.pendingVisibleTiles).toBe(0)
+    const ranks = vi
+      .mocked(deps.fetcher.fetchBitmap)
+      .mock.calls.filter(([url]) => url === badUrl)
+      .map(([, o]) => o?.priority ?? 0)
+    expect(ranks[0]).toBeLessThan(1_000_000)
+    expect(ranks[1]).toBeGreaterThanOrEqual(2_000_000)
     await settle()
-    for (let i = 0; i < 8; i++) engine.update(camera, 1000)
+    for (let i = 0; i < 8; i++) tick()
     // two attempts allowed: no third request, the tile stays failed
     expect(badFetches()).toBe(2)
     expect(engine.stats.failedTiles).toBe(1)
@@ -418,13 +433,18 @@ describe('createTerrainEngine', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const badUrl = `https://dem.test/${ROOT_KEYS[0].z}/${ROOT_KEYS[0].x}/${ROOT_KEYS[0].y}.png`
     const deps = createFakeDeps({ failDem: (url) => url === badUrl, demError: (url) => new TileFetchError(url, 404) })
-    const engine = engineWith(deps, {}, { retryDelayFrames: 2, maxLoadAttempts: 3 })
+    let t = 0
+    deps.now = () => t
+    const engine = engineWith(deps, {}, { retryDelayMs: 2000, maxLoadAttempts: 3 })
     const camera = cameraAbove(600_000)
     const badFetches = () => deps.fetched.filter((u) => u === badUrl).length
 
     engine.update(camera, 1000)
     await settle()
-    for (let i = 0; i < 12; i++) engine.update(camera, 1000) // well past every retry delay
+    for (let i = 0; i < 12; i++) {
+      t += 1000 // well past every retry delay
+      engine.update(camera, 1000)
+    }
     expect(badFetches()).toBe(1)
     expect(engine.stats.loadedTiles).toBe(ROOT_KEYS.length - 1)
     expect(engine.stats.failedTiles).toBe(0)
@@ -443,12 +463,15 @@ describe('createTerrainEngine', () => {
       corrupt = false
       return { width: 4, height: 4, data: undefined as unknown as Float32Array } // crashes the sampler
     })
-    const engine = engineWith(deps, {}, { retryDelayFrames: 4, maxConcurrentLoads: ROOT_KEYS.length })
+    let t = 0
+    deps.now = () => t
+    const engine = engineWith(deps, {}, { retryDelayMs: 4000, maxConcurrentLoads: ROOT_KEYS.length })
     const camera = cameraAbove(600_000)
 
-    engine.update(camera, 1000) // frame 1
+    engine.update(camera, 1000) // 0 s
     await settle()
-    engine.update(camera, 1000) // frame 2
+    t = 1000
+    engine.update(camera, 1000)
     expect(engine.stats.failedTiles).toBe(1)
     expect(engine.stats.loadedTiles).toBe(ROOT_KEYS.length - 1)
     expect(engine.stats.pendingTiles).toBe(0) // not stuck in 'loading'
@@ -456,7 +479,10 @@ describe('createTerrainEngine', () => {
     expect(warn).toHaveBeenCalledTimes(1)
 
     // Retry after the delay: the next decode is fine and the tile recovers.
-    for (let i = 0; i < 3; i++) engine.update(camera, 1000) // frames 3-5, retry at frame 5
+    engine.update(camera, 1000) // any number of updates before the delay: no retry
+    expect(engine.stats.pendingTiles).toBe(0)
+    t = 4000 // retry at 4 s
+    engine.update(camera, 1000)
     expect(engine.stats.pendingTiles).toBe(1)
     await settle()
     engine.update(camera, 1000)
@@ -552,8 +578,10 @@ describe('createTerrainEngine', () => {
 
   it('unloads nodes that are no longer visited and keeps their ancestors', async () => {
     const deps = createFakeDeps()
+    let t = 0
+    deps.now = () => t
     // errorTargetPx 8: the 4 km camera refines (it sits inside the root spheres), the 600 km one does not
-    const engine = engineWith(deps, { maxZoom: ROOT_ZOOM + 1 }, { unloadAfterFrames: 3, sweepEveryFrames: 1 })
+    const engine = engineWith(deps, { maxZoom: ROOT_ZOOM + 1 }, { unloadAfterMs: 3000, sweepEveryFrames: 1 })
     const near = cameraAbove(4000)
     for (let i = 0; i < 4; i++) {
       engine.update(near, 1000)
@@ -572,6 +600,10 @@ describe('createTerrainEngine', () => {
       engine.update(far, 1000)
       await settle() // a root that was never on screen while zoomed in loads now
     }
+    // the delay is a time, not a number of updates (the export's tile waits update every 16 ms)
+    for (const mesh of childMeshes) expect(engine.group.children).toContain(mesh)
+    t = 3001
+    engine.update(far, 1000)
 
     const remaining = meshesOf(engine)
     expect(remaining.every((m) => m.name.startsWith(`${ROOT_ZOOM}/`))).toBe(true)
@@ -580,6 +612,27 @@ describe('createTerrainEngine', () => {
     expect(engine.stats.loadedTiles).toBeLessThan(loadedBefore)
     expect(cb).toHaveBeenCalled()
     for (const mesh of childMeshes) expect(engine.group.children).not.toContain(mesh)
+  })
+
+  it('keeps the tiles of a prefetch for prefetchKeepMs, longer than the unload delay of the view', async () => {
+    const deps = createFakeDeps()
+    let t = 0
+    deps.now = () => t
+    const engine = engineWith(deps, { maxZoom: ROOT_ZOOM + 1 }, { unloadAfterMs: 1000, prefetchKeepMs: 10_000, sweepEveryFrames: 1 })
+    const far = cameraAbove(600_000)
+    engine.update(far, 1000)
+    await settle()
+    expect(engine.prefetch?.(cameraAbove(4000), 1000)).toBeGreaterThan(0)
+    await settle()
+    const prefetched = meshesOf(engine).filter((m) => m.name.startsWith(`${ROOT_ZOOM + 1}/`))
+    expect(prefetched.length).toBeGreaterThan(0)
+
+    t = 5000 // a frame of the export still waiting for its own tiles
+    engine.update(far, 1000)
+    for (const mesh of prefetched) expect(engine.group.children).toContain(mesh)
+    t = 10_001
+    engine.update(far, 1000)
+    for (const mesh of prefetched) expect(engine.group.children).not.toContain(mesh)
   })
 
   it('aborts in-flight loads and ignores their late results on dispose', async () => {

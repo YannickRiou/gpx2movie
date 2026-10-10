@@ -129,8 +129,8 @@ frames (16 on a phone or tablet, see "Device budget") (`previewCloudPass`, below
 capped at `MAX_FRAME_DELTA_S` = 0.25 s (`frameDelta`), and `wakeScene` resets the clock when the scene was asleep
 (`clock.getDelta()`): playback and reframing do not jump after a pause.
 The export keeps `frameloop 'never'` and draws its own frames. Measured with software rendering: no more frame requests
-once the margin has elapsed (~30 s there, one frame per second; ~0.5 s on a real graphics card). Engine delays
-counted in frames (retry of a failed tile, unloading) wait for the next frame.
+once the margin has elapsed (~30 s there, one frame per second; ~0.5 s on a real graphics card). The engine's delays
+(retry of a failed tile, unloading) are times, checked at the next frame.
 
 Cloud preview: lightened "bas" (low) preset (`PREVIEW_MARCH`: 120 steps of at least 150 m, 15 for shadows, instead of
 200, 100 m and 25), at full resolution, temporally upsampled while the view changes, averaged with the "bas" marches
@@ -172,10 +172,13 @@ once it is still (see "Volumetric clouds", Quality); the export goes back to the
    - Refinement by **replacement**: the parent stays displayed until its 4 children are ready (no holes).
      A child outside the frustum counts as ready for replacement (but is loaded at low priority).
    - Loading priority: decreasing sse. A tile is "ready" when DEM + texture are loaded (failed texture → gray material).
-   - Transient DEM failure (network, 5xx, corrupt tile): 3 attempts ~5 s apart, counted in `failedTiles`.
+   - Transient DEM failure (network, 5xx, corrupt tile): 3 attempts 5 s apart (`retryDelayMs`, engine clock `deps.now`),
+     counted in `failedTiles`. A retry is fetched after every first attempt and prefetch, and the view does not wait
+     for it (`pendingVisibleTiles`): unreachable tile hosts would otherwise hold every export frame until its timeout.
      DEM **4xx or outside coverage = "no data" leaf** (Mapterhorn stops at z12 outside high-resolution areas):
      never retried, not counted as an error, the parent stays displayed at its resolution.
-   - Unloading: nodes not visited for > 2 s and not ancestors of a visible node → dispose geometry/texture; the `HeightField`
+   - Unloading: nodes not visited for > 2 s (`unloadAfterMs`; 30 s after a prefetch, `prefetchKeepMs`, so the export's
+     tiles for the next frames outlast a frame waiting 5 s) and not ancestors of a visible node → dispose geometry/texture; the `HeightField`
      keeps ~400 grids at 256 px equivalent (LRU, i.e. ~100 MB; a 512 px grid counts as four; 160 on a phone or tablet).
    - Bounding sphere: from the geometry if loaded, otherwise from the tile bounds with heights [-500, 9000] m.
    - Material: `MeshStandardMaterial({ map, roughness: 1, metalness: 0 })`, `side: FrontSide`. `wireframe` option.
@@ -1498,10 +1501,9 @@ it, know at what time you will pass each point, where the sun will be and what t
   camera of the last render (`updateTiles`; the other layers load their data per track, not per view), then the frame
   is rendered again once the view has its tiles, or at the timeout. A (sub-)frame waiting for tiles costs 2 renders
   (3 with a re-drape) instead of one every 16 ms + render time, each with the clouds' noise slices (e2e, SwiftShader,
-  tiles answered after 300 ms: 320 → 36 renders for 20 frames; clouds and shutter open, 219 → 58 for 5 frames). During
-  the waits the engine's frame-counted delays (unload after 120 updates, retry after 300) run at the preview's pace:
-  a failed tile is retried after ~5 s and the frame waits for it again (tile hosts unreachable: 20 frames of 20 at
-  the timeout, 5 before, when the slow renders spaced the retries).
+  tiles answered after 300 ms: 320 → 36 renders for 20 frames; clouds and shutter open, 219 → 58 for 5 frames). The
+  engine's delays are times, not numbers of updates, so these 16 ms updates do not hurry them (tile hosts unreachable:
+  20 frames in 45–50 s instead of 82–107 s).
   The camera is repositioned (progress shifted by 1e-9) only if the final terrain moves it
   by more than 1 m, never after a timeout. Every 5 rendered frames, the tiles for frames +5 to +40 are
   requested ahead of time (`engine.prefetch`).
