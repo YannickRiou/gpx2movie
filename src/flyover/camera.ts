@@ -54,9 +54,11 @@ export const LINE_OF_SIGHT_MAX_FRACTION = 0.9
 /**
  * Smoothing scaled with the ground speed of the film (track length / flyover duration, metres per film second), so a
  * long track flown fast turns no faster than a short one: the heading is averaged over ± HEADING_SMOOTHING_FACTOR ×
- * « Lissage de la caméra » film seconds of track.
+ * « Lissage de la caméra » film seconds of track, the aim point and the camera's point of the track over
+ * POSITION_SMOOTHING_S (the corners of a sparse recording rounded off).
  */
 export const HEADING_SMOOTHING_FACTOR = 1.5
+export const POSITION_SMOOTHING_S = 0.5
 /** Fixed samples on each side of a smoothing window (weights sliding over them). */
 export const SMOOTHING_SAMPLES_PER_SIDE = 8
 
@@ -201,6 +203,29 @@ function smoothTurnAt(path: TrackPath, d: number, w: number, radiusM: number, fr
 }
 
 /**
+ * Point of the track (local frame, y = `heightM`) around `d`, averaged over ± `radiusM`: `bump` weights sliding
+ * over samples at fixed distances, so the corners of the polyline are rounded off (continuous velocity). The point
+ * at `d` without a radius.
+ */
+function smoothPointAt(path: TrackPath, d: number, radiusM: number, heightM: number, frame: LocalFrame): Vector3 {
+  if (!(radiusM > 0)) return anchorAt(path, d, heightM, frame)
+  const step = radiusM / SMOOTHING_SAMPLES_PER_SIDE
+  let x = 0
+  let z = 0
+  let weight = 0
+  for (let k = Math.floor((d - radiusM) / step) + 1; k * step < d + radiusM; k++) {
+    const wk = bump(k * step - d, radiusM)
+    const at = samplePath(path, clamp(k * step, 0, path.lengthM))
+    const p = frame.toLocal(at.lon, at.lat, 0, _corner)
+    x += wk * p.x
+    z += wk * p.z
+    weight += wk
+  }
+  const at = frame.toLonLat(_corner.set(x / weight, 0, z / weight))
+  return frame.toLocal(at.lon, at.lat, heightM)
+}
+
+/**
  * Signed turn of the path around `d` (radians, > 0 = to the right, clockwise seen from above): the turning
  * angles of the vertices within ]d - window, d + window[ weighted by the tent max(0, 1 - |s - d| / window).
  * A vertex enters and leaves the window with a zero weight, so the result is continuous in `d`; GPS jitter and
@@ -335,8 +360,9 @@ function placement(
  * Camera view at `progress` along `path` and film time `options.timeS`: looks at the aim point from `distance` away
  * at `pitch` above the horizon, then raised (pitch steepens) to stay MIN_GROUND_CLEARANCE_M above the smoothed terrain
  * (MIN_TERRAIN_CLEARANCE_M above the actual one) and until the sight line to the aim clears the terrain between.
- * Aim = marker x / z at the smoothed ground height (`trackGround`) + `liftM`. Heights: terrain sample, else recorded
- * elevation, else 0; times `exaggeration`. `aimProgress` / `cameraProgress`: see `timeSmoothing.ts`.
+ * Aim = the track at the aim's progress, corners rounded off (`smoothPointAt`), at the smoothed ground height
+ * (`trackGround`) + `liftM`. Heights: terrain sample, else recorded elevation, else 0; times `exaggeration`.
+ * `aimProgress` / `cameraProgress`: see `timeSmoothing.ts`.
  */
 export function computeCameraView(
   path: TrackPath,
@@ -356,17 +382,19 @@ export function computeCameraView(
   // time smoothing: the aim and the camera may follow their own progress along the track
   const dAim = options.aimProgress === undefined ? d : clamp(options.aimProgress, 0, 1) * path.lengthM
   const dCamera = options.cameraProgress === undefined ? d : clamp(options.cameraProgress, 0, 1) * path.lengthM
-  const aimAt = dAim === d ? at : samplePath(path, dAim)
-  const aim = dAim === d ? marker : frame.toLocal(aimAt.lon, aimAt.lat, groundAt(aimAt) + liftM)
+  const speedMps = path.lengthM / Math.max(1, durationS)
+  const pointRadiusM = (speedMps * POSITION_SMOOTHING_S) / 2
+  const aim = smoothPointAt(path, dAim, pointRadiusM, 0, frame)
   const cellM = Math.min(headingWindowM(path, camera) * GROUND_WINDOW_FRACTION, GROUND_WINDOW_MAX_M)
   const gridAtAim = sample ? gridGround(aim.x, aim.z, cellM, frame, sample) : undefined
   const aimGround = Math.max(trackGround(path, dAim, cellM, sample), gridAtAim ?? -Infinity) * exaggeration
+  const aimAt = frame.toLonLat(aim)
   const target = frame.toLocal(aimAt.lon, aimAt.lat, aimGround + liftM)
 
-  const place = placement(path, dCamera, timeS, frame, camera, path.lengthM / Math.max(1, durationS))
+  const place = placement(path, dCamera, timeS, frame, camera, speedMps)
   place.viewAngle += options.orbitRad ?? 0
   // placed around its own point of the track, at the aim's height
-  const from = dCamera === dAim ? target : anchorAt(path, dCamera, aimGround + liftM, frame)
+  const from = dCamera === dAim ? target : smoothPointAt(path, dCamera, pointRadiusM, aimGround + liftM, frame)
   const position = positionAround(from, place)
   if (sample) position.y = lowestClearY(position, target, frame, sample, exaggeration, cellM)
   return { target, position, marker }

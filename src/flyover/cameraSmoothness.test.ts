@@ -15,22 +15,26 @@ const sample = gpxTrack(sampleGpx)
 const max = (values: number[]) => values.reduce((a, b) => Math.max(a, b), 0)
 
 describe('camera smoothness', () => {
-  it('a 540 km raid in 4 min 30 s, chase: no swing around', () => {
+  it('a 540 km raid in 4 min 30 s, chase: no swing around, no jolt', () => {
     const film = flyFilm(raid, 270, hillySampler, DEFAULT_CAMERA, FPS)
     expect(quantile(film.turn, 0.95)).toBeLessThan(60)
     expect(max(film.turn)).toBeLessThan(120)
+    expect(quantile(film.turnAccel, 0.99)).toBeLessThan(150)
+    expect(max(film.turnAccel)).toBeLessThan(600)
   })
 
   it('every style keeps the raid calm', { timeout: 20_000 }, () => {
     for (const style of CAMERA_STYLES) {
       const film = flyFilm(raid, 270, hillySampler, { ...DEFAULT_CAMERA, style }, FPS)
       expect(max(film.turn), style).toBeLessThan(150)
+      expect(quantile(film.turnAccel, 0.99), style).toBeLessThan(250)
     }
   })
 
   it('the short sample stays close behind the marker', () => {
     const film = flyFilm(sample, 60, hillySampler, DEFAULT_CAMERA, FPS)
-    expect(max(film.turn)).toBeLessThan(60)
+    expect(max(film.turn)).toBeLessThan(40)
+    expect(quantile(film.turnAccel, 0.99)).toBeLessThan(150)
     // not sluggish: the view keeps to the direction of travel
     expect(quantile(film.lag, 0.5)).toBeLessThan(10)
     expect(quantile(film.lag, 0.95)).toBeLessThan(25)

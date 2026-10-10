@@ -155,8 +155,9 @@ describe('film camera smoothed in time', () => {
     for (const t of [clock.openingS, flightEnd]) {
       const raw = maxAcceleration(positions(clock, NONE, t - 1, t + 1))
       const smoothed = maxAcceleration(positions(clock, camera, t - 1, t + 1))
-      // the velocity jump of the raw flight view (still during the shots) is gone; what is left is the shot's own move
-      expect(smoothed).toBeLessThan(0.5 * raw)
+      // the velocity jump of the raw flight view (still during the shots, its corners rounded over half a second) is
+      // gone; what is left is the shot's own move
+      expect(smoothed).toBeLessThan(0.75 * raw)
     }
   })
 

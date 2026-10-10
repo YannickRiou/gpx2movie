@@ -362,7 +362,7 @@ describe('computeFilmView', () => {
   it('opening: the overview first, the flight view where the flight starts, the marker on the track', () => {
     const start = computeFilmView(path, descent, 0, 0, frame, flat, options)
     expectSameView(start, overviewView(path, frame, flat, 1, 16 / 9, flightAt(0, 0)))
-    expect(start.marker.distanceTo(flightAt(0, 0).target)).toBeLessThan(1e-9)
+    expect(start.marker.distanceTo(flightAt(0, 0).marker)).toBeLessThan(1e-9)
     const handOver = computeFilmView(path, descent, 6 - 1e-6, 0, frame, flat, options)
     expectSameView(handOver, flightAt(0, 0), 1e-3)
     expectSameView(computeFilmView(path, descent, 6, 0, frame, flat, options), flightAt(0, 0))
