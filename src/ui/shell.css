@@ -62,12 +62,16 @@
   opacity: 0.4;
 }
 
-.icon-btn:hover:not(:disabled) {
-  background: var(--surface-card);
+@media (hover: hover) {
+  .icon-btn:hover:not(:disabled) {
+    background: var(--surface-card);
+  }
 }
 
-.topbar .icon-btn:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.1);
+@media (hover: hover) {
+  .topbar .icon-btn:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.1);
+  }
 }
 
 .icon-btn--label {
@@ -83,8 +87,10 @@
   box-shadow: var(--shadow-pop);
 }
 
-.icon-btn--float:hover:not(:disabled) {
-  background: var(--color-ink-soft);
+@media (hover: hover) {
+  .icon-btn--float:hover:not(:disabled) {
+    background: var(--color-ink-soft);
+  }
 }
 
 .icon {
@@ -222,8 +228,10 @@
   opacity: 1;
 }
 
-.topbar__name:hover {
-  border-color: var(--color-ink-soft);
+@media (hover: hover) {
+  .topbar__name:hover {
+    border-color: var(--color-ink-soft);
+  }
 }
 
 .topbar__name:focus {
@@ -302,9 +310,11 @@
   cursor: pointer;
 }
 
-.format-switch__option:hover {
-  background: rgb(255 255 255 / 0.1);
-  color: var(--color-white);
+@media (hover: hover) {
+  .format-switch__option:hover {
+    background: rgb(255 255 255 / 0.1);
+    color: var(--color-white);
+  }
 }
 
 .format-switch__option:has(input:checked) {
@@ -372,10 +382,12 @@
   cursor: pointer;
 }
 
-.rail__tab:hover:not(:disabled),
-.rail__toggle:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.1);
-  color: var(--color-white);
+@media (hover: hover) {
+  .rail__tab:hover:not(:disabled),
+  .rail__toggle:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.1);
+    color: var(--color-white);
+  }
 }
 
 .rail__tab[aria-selected='true'] {
@@ -509,6 +521,16 @@
   gap: var(--space-2);
 }
 
+/* « + Ajouter » of the track list: its menu (the look of « Plus d'actions ») under the button */
+.tracks__add {
+  position: relative;
+}
+
+/* its head above the next sticky section header while the menu is open */
+.section-head:has(.tracks__add .track-menu) {
+  z-index: 3;
+}
+
 /* foldable sections (Montées, Météo) */
 .fold__summary {
   display: flex;
@@ -622,8 +644,10 @@
   color: var(--color-ink);
 }
 
-.view__safe-zones[aria-pressed='true']:hover:not(:disabled) {
-  background: var(--color-glacier);
+@media (hover: hover) {
+  .view__safe-zones[aria-pressed='true']:hover:not(:disabled) {
+    background: var(--color-glacier);
+  }
 }
 
 /* Safe zones over the framed preview (never exported): shaded hidden areas, outlined margins, tiny labels */
@@ -740,8 +764,10 @@
   cursor: pointer;
 }
 
-.empty__link:hover:not(:disabled) {
-  color: var(--color-accent-strong);
+@media (hover: hover) {
+  .empty__link:hover:not(:disabled) {
+    color: var(--color-accent-strong);
+  }
 }
 
 .empty__link:disabled {
@@ -824,10 +850,12 @@
   color: var(--color-glacier);
 }
 
-.toast__action:hover,
-.toast .icon-btn:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.1);
-  color: var(--color-white);
+@media (hover: hover) {
+  .toast__action:hover,
+  .toast .icon-btn:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.1);
+    color: var(--color-white);
+  }
 }
 
 .toast :focus-visible {
@@ -914,8 +942,10 @@
   cursor: pointer;
 }
 
-.format-tile:hover {
-  border-color: var(--color-ink);
+@media (hover: hover) {
+  .format-tile:hover {
+    border-color: var(--color-ink);
+  }
 }
 
 .format-tile:has(input:checked) {
@@ -1012,8 +1042,10 @@
   background: var(--color-line);
 }
 
-.anchor-picker__cell:hover::before {
-  background: var(--text-2);
+@media (hover: hover) {
+  .anchor-picker__cell:hover::before {
+    background: var(--text-2);
+  }
 }
 
 .anchor-picker__cell[aria-checked='true'] {
@@ -1042,8 +1074,10 @@
   font-size: 12px;
 }
 
-.film-tl__bar .icon-btn:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.1);
+@media (hover: hover) {
+  .film-tl__bar .icon-btn:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.1);
+  }
 }
 
 .film-tl__bar .film-tl__play {
@@ -1055,8 +1089,10 @@
   background: rgb(255 255 255 / 0.12);
 }
 
-.film-tl__bar .film-tl__play:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.22);
+@media (hover: hover) {
+  .film-tl__bar .film-tl__play:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.22);
+  }
 }
 
 .film-tl__sep {
@@ -1181,9 +1217,14 @@
   cursor: pointer;
 }
 
-.track-menu__item:hover,
 .track-menu__item:focus-visible {
   background: rgb(255 255 255 / 0.1);
+}
+
+@media (hover: hover) {
+  .track-menu__item:hover {
+    background: rgb(255 255 255 / 0.1);
+  }
 }
 
 /* « Point d'intérêt ici »: the name, then « Ajouter » */
@@ -1295,8 +1336,10 @@
   cursor: pointer;
 }
 
-.status__info:hover {
-  color: var(--color-white);
+@media (hover: hover) {
+  .status__info:hover {
+    color: var(--color-white);
+  }
 }
 
 /* « Sources et licences » */
@@ -1758,6 +1801,16 @@
     padding-bottom: calc(var(--space-1) + env(safe-area-inset-bottom));
     border-radius: var(--radius-md) var(--radius-md) 0 0;
     transform: none !important;
+  }
+
+  /* « + Ajouter » of the track list: under its button, inside the sheet (fixed, it would sit under the tab bar) */
+  .tracks__add .track-menu {
+    position: absolute;
+    top: calc(100% + 6px) !important;
+    bottom: auto;
+    left: auto !important;
+    padding-bottom: var(--space-1);
+    border-radius: var(--radius-md);
   }
 }
 

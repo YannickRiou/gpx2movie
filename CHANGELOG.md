@@ -7,8 +7,17 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
 
 - **Phones and tablets**: bottom sheets, tab bar, touch gestures, installable web app (offline shell, Android share
   target, « Partager / Enregistrer »), device budget for mobile GPUs.
+- **Flyover camera**: smooth on long, fast or sparsely recorded tracks (a 540 km raid in 4 min 30 s no longer swings
+  around the marker nor jolts at each corner): heading, aim and height smoothed at the film's ground speed.
+- **Phones, follow-ups**: lower pixel ratio while fingers move the 3D view; offline packs no finer than the phone
+  shows; no hover style left on a button after a tap; an open app looks for a new version every hour and when
+  shown again.
 - **Situation shot**: « Soleil » › « Plein jour » (default) lights the region view in daylight whatever the time of
   the outing, then joins the flight's sun; « Heure du survol » and « Accéléré » (the former « Faire bouger le soleil »).
+- **Timeline**: a narrow block (a 4 s stop on a phone) pressed in its middle is moved, no longer stretched by its edge.
+- **OpenStreetMap**: the memory cache of Overpass results keeps the 32 most recently used, no longer every track of the session.
+- **Simpler panels**: camera presets as the one choice (six shown, the rest under « Plus de préréglages »), the style
+  under « Plus de réglages »; Strava import in the « + Ajouter » menu of the track list.
 
 ## 0.1.0 (October 2026)
 

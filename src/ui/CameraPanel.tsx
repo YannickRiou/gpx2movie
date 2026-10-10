@@ -8,7 +8,7 @@ import {
   FLYOVER_DURATION_RANGE,
   turnSmoothingM,
 } from '../flyover/cameraSettings'
-import type { CameraSettings, CameraStyle } from '../flyover/cameraSettings'
+import type { CameraPreset, CameraSettings, CameraStyle } from '../flyover/cameraSettings'
 import { DEFAULT_FILM, SITUATION_DURATION_S } from '../film/model'
 import { addCameraKey, updateShot } from '../film/timeline'
 import { cameraKeyEaseM, keyedCamera } from '../flyover/cameraKeys'
@@ -59,6 +59,9 @@ const PRESET_ICONS: Record<string, IconName> = {
   Satellite: 'satellite',
 }
 
+/** Shown first: one preset per style plus a high view, from close to far; the others under « Plus de préréglages ». */
+const MAIN_PRESETS = new Set(['Poursuite', 'Oiseau', 'Orbite', 'Cinéma', 'Drone haut', 'Satellite'])
+
 /** Key figures of a preset tile: distance multiplier and tilt. */
 function presetFigures(camera: CameraSettings): string {
   return `×${formatNumber(camera.distance, 1)} · ${formatDegrees(camera.pitchDeg)}`
@@ -106,7 +109,7 @@ const SLIDERS: Slider[] = [
   {
     key: 'cameraSmoothingS',
     label: 'Lissage de la caméra',
-    tip: 'La caméra suit le marqueur en moyenne sur cette durée : elle anticipe arrêts et changements de vitesse au lieu de freiner sec.',
+    tip: 'La caméra suit le marqueur en moyenne sur cette durée : elle anticipe arrêts, changements de vitesse et virages au lieu de freiner ou de pivoter sec.',
     format: formatSmoothingS('Aucun'),
   },
   {
@@ -136,16 +139,7 @@ const PACING_SLIDERS: PacingSlider[] = [
   { key: 'pauseS', label: 'Pause aux temps forts', format: (v) => (v === 0 ? 'Aucune' : `${formatNumber(v, 1)} s`) },
 ]
 
-/** Style tiles: short label and icon. */
-const STYLE_TILES: Record<CameraStyle, { label: string; icon: IconName }> = {
-  chase: { label: 'Poursuite', icon: 'navigation' },
-  sway: { label: 'Balancement', icon: 'spline' },
-  orbit: { label: 'Orbite', icon: 'orbit' },
-  top: { label: 'Dessus', icon: 'locate-fixed' },
-  cinematic: { label: 'Cinéma', icon: 'clapperboard' },
-}
-
-/** One-line description of each style (hint under the style tiles). */
+/** One-line description of each style (hint under the preset tiles). */
 const STYLE_HINTS: Record<CameraStyle, string> = {
   chase: 'Derrière le marqueur, dans la direction du trajet.',
   sway: 'Se balance vers l’extérieur des virages, comme un hélicoptère.',
@@ -197,7 +191,7 @@ function SituationShotSwitches() {
 }
 
 /**
- * « Survol » tab: sections Caméra (preset, style tiles; fine parameters under « Plus de réglages ») and Durée et rythme
+ * « Survol » tab: sections Caméra (preset tiles; style and fine parameters under « Plus de réglages ») and Durée et rythme
  * (flyover duration, situation shots of the opening and closing, slow-downs on/off; their details under « Plus de
  * réglages »).
  */
@@ -210,6 +204,17 @@ export function CameraPanel() {
   const setSetting = useAppStore((s) => s.setSetting)
   const id = useId()
   const preset = findCameraPreset(camera)
+  // the current preset stays in the main grid when it is a folded one
+  const mainPresets = CAMERA_PRESETS.filter((p) => MAIN_PRESETS.has(p.name) || p === preset)
+  const morePresets = CAMERA_PRESETS.filter((p) => !mainPresets.includes(p))
+  const presetTile = (p: CameraPreset) => (
+    <label key={p.name} className="format-tile style-tile" title={CAMERA_STYLE_LABELS[p.camera.style]}>
+      <input type="radio" name={`${id}-preset`} value={p.name} checked={preset === p} onChange={() => setSetting('camera', { ...p.camera })} />
+      <Icon name={PRESET_ICONS[p.name]} size={20} />
+      <span className="format-tile__label">{p.name}</span>
+      <span className="preset-tile__figures">{presetFigures(p.camera)}</span>
+    </label>
+  )
   const update = (patch: Partial<CameraSettings>) => setSetting('camera', { ...camera, ...patch })
   const updatePacing = (patch: Partial<PacingSettings>) => setFlightTiming({ pacing: { ...pacing, ...patch } })
   const lengthM = useFilmTrack()?.stats.distanceM ?? 0
@@ -227,47 +232,23 @@ export function CameraPanel() {
         <fieldset className="field fieldset">
           <legend className="field__label">Préréglage</legend>
           <div className="style-tiles">
-            {CAMERA_PRESETS.map((p) => (
-              <label key={p.name} className="format-tile style-tile" title={CAMERA_STYLE_LABELS[p.camera.style]}>
-                <input
-                  type="radio"
-                  name={`${id}-preset`}
-                  value={p.name}
-                  checked={preset === p}
-                  onChange={() => setSetting('camera', { ...p.camera })}
-                />
-                <Icon name={PRESET_ICONS[p.name]} size={20} />
-                <span className="format-tile__label">{p.name}</span>
-                <span className="preset-tile__figures">{presetFigures(p.camera)}</span>
+            {mainPresets.map(presetTile)}
+            {!preset && (
+              <label className="format-tile style-tile" title="Réglages modifiés à la main">
+                <input type="radio" name={`${id}-preset`} checked readOnly />
+                <Icon name="sliders-horizontal" size={20} />
+                <span className="format-tile__label">Personnalisé</span>
+                <span className="preset-tile__figures">{presetFigures(camera)}</span>
               </label>
-            ))}
-            <label className="format-tile style-tile" title="Réglages modifiés à la main">
-              <input type="radio" name={`${id}-preset`} checked={!preset} readOnly />
-              <Icon name="sliders-horizontal" size={20} />
-              <span className="format-tile__label">Personnalisé</span>
-              <span className="preset-tile__figures">{preset ? 'vos réglages' : presetFigures(camera)}</span>
-            </label>
+            )}
           </div>
-        </fieldset>
-
-        <fieldset className="field fieldset">
-          <legend className="field__label">Style</legend>
-          <div className="style-tiles">
-            {CAMERA_STYLES.map((style) => (
-              <label key={style} className="format-tile style-tile" title={CAMERA_STYLE_LABELS[style]}>
-                <input
-                  type="radio"
-                  name={`${id}-style`}
-                  value={style}
-                  checked={camera.style === style}
-                  aria-describedby={`${id}-style-hint`}
-                  onChange={() => update({ style })}
-                />
-                <Icon name={STYLE_TILES[style].icon} size={20} />
-                <span className="format-tile__label">{STYLE_TILES[style].label}</span>
-              </label>
-            ))}
-          </div>
+          <details className="more-settings preset-more">
+            <summary className="more-settings__summary">
+              <span className="more-settings__label">Plus de préréglages</span>
+              <Icon name="chevron-down" size={16} />
+            </summary>
+            <div className="style-tiles">{morePresets.map(presetTile)}</div>
+          </details>
           <p id={`${id}-style-hint`} className="field__hint">
             {STYLE_HINTS[camera.style]}
           </p>
@@ -287,6 +268,7 @@ export function CameraPanel() {
 
         <MoreSettings
           paths={[
+            'camera.style',
             'camera.distance',
             'camera.pitchDeg',
             'camera.headingOffsetDeg',
@@ -297,6 +279,24 @@ export function CameraPanel() {
             'camera.endingS',
           ]}
         >
+          <div className="field">
+            <label className="field__label" htmlFor={`${id}-style`}>
+              Style
+            </label>
+            <select
+              id={`${id}-style`}
+              className="select"
+              value={camera.style}
+              aria-describedby={`${id}-style-hint`}
+              onChange={(e) => update({ style: e.currentTarget.value as CameraStyle })}
+            >
+              {CAMERA_STYLES.map((style) => (
+                <option key={style} value={style}>
+                  {CAMERA_STYLE_LABELS[style]}
+                </option>
+              ))}
+            </select>
+          </div>
           {SLIDERS.map(({ key, label, tip, format }) => {
             const range = CAMERA_RANGES[key]
             const inputId = `${id}-${key}`

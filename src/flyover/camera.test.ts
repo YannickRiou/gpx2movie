@@ -4,6 +4,7 @@ import type { TrackPoint } from '../core/types'
 import { createLocalFrame } from '../geo/ellipsoid'
 import { buildTrack } from '../import/stats'
 import {
+  AIM_GROUND_EASE_M,
   CHASE_DISTANCE_MIN_M,
   CINEMATIC_DISTANCE_FACTOR,
   CINEMATIC_PITCH_FACTOR,
@@ -133,7 +134,8 @@ describe('computeCameraView — chase (default)', () => {
 
   it('applies the exaggeration to the terrain height', () => {
     const view = computeCameraView(northbound, 0.5, frame, () => 2000, { ...options(), exaggeration: 2 })
-    expect(view.target.distanceTo(frame.toLocal(6.85, 45.9, 4000 + LIFT))).toBeLessThan(0.01)
+    // the track's ground and the grid's agree: eased together, a quarter of the band above
+    expect(view.target.distanceTo(frame.toLocal(6.85, 45.9, 2 * (2000 + AIM_GROUND_EASE_M / 4) + LIFT))).toBeLessThan(0.01)
   })
 
   it('scales the distance, sets the pitch and turns the viewing direction by the heading offset', () => {
@@ -214,7 +216,7 @@ describe('computeCameraView — styles', () => {
     const offset = start.position.clone().sub(start.target)
     expect(offset.length()).toBeCloseTo(CHASE_DISTANCE_MIN_M * CINEMATIC_DISTANCE_FACTOR, 3)
     expect(pitchDeg(start.position, start.target)).toBeCloseTo(30 * CINEMATIC_PITCH_FACTOR, 6)
-    expect(azimuthFromTarget(start.position, start.target)).toBeCloseTo(Math.PI, 3)
+    expect(Math.abs(azimuthFromTarget(start.position, start.target))).toBeCloseTo(Math.PI, 3)
     // a quarter period (10 s of 60) later: swung by the full amplitude
     const later = computeCameraView(northbound, 10 / 60, frame, null, options({ style: 'cinematic' }))
     expect(Math.abs(Math.abs(azimuthFromTarget(later.position, later.target)) - Math.PI)).toBeCloseTo((35 * Math.PI) / 180, 3)

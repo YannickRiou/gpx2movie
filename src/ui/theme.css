@@ -130,8 +130,10 @@ select {
   color: var(--color-white);
 }
 
-.btn--primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+@media (hover: hover) {
+  .btn--primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
 }
 
 .btn--secondary {
@@ -140,8 +142,10 @@ select {
   color: var(--color-ink);
 }
 
-.btn--secondary:hover:not(:disabled) {
-  border-color: var(--color-ink);
+@media (hover: hover) {
+  .btn--secondary:hover:not(:disabled) {
+    border-color: var(--color-ink);
+  }
 }
 
 .btn--block {

@@ -359,7 +359,19 @@ export async function runOverpassQuery<T = OsmFeature[]>(
 
 /** One request at a time for the whole application (usage policy: no parallel queries). */
 let queue: Promise<unknown> = Promise.resolve()
+/** Results kept in memory, the most recently used (a session may open many tracks; the storage keeps them all). */
+export const MEMORY_CACHE_ENTRIES = 32
+/** Insertion order is the use order: the first key is the least recently used. */
 const memoryCache = new Map<string, Promise<unknown[]>>()
+
+function remember(key: string, promise: Promise<unknown[]>): void {
+  memoryCache.delete(key)
+  memoryCache.set(key, promise)
+  for (const oldest of memoryCache.keys()) {
+    if (memoryCache.size <= MEMORY_CACHE_ENTRIES) break
+    memoryCache.delete(oldest)
+  }
+}
 
 function readCache<T>(storage: OverpassDeps['storage'], key: string, now: number): T[] | null {
   try {
@@ -404,11 +416,14 @@ export function cachedOverpassQuery<T>(
 ): Promise<T[]> {
   const key = hashQuery(query)
   const cached = memoryCache.get(key) as Promise<T[]> | undefined
-  if (cached) return cached
+  if (cached) {
+    remember(key, cached)
+    return cached
+  }
   const stored = readCache<T>(deps.storage, key, deps.now())
   if (stored) {
     const promise = Promise.resolve(stored)
-    memoryCache.set(key, promise)
+    remember(key, promise)
     return promise
   }
   const promise = queue
@@ -419,8 +434,8 @@ export function cachedOverpassQuery<T>(
       return features
     })
   queue = promise.catch(() => undefined)
-  memoryCache.set(key, promise)
-  promise.catch(() => memoryCache.delete(key))
+  remember(key, promise)
+  promise.catch(() => memoryCache.get(key) === promise && memoryCache.delete(key))
   // the promise is tied to this caller's signal: once aborted, a later caller must not get its AbortError
   signal?.addEventListener('abort', () => memoryCache.get(key) === promise && memoryCache.delete(key), { once: true })
   return promise

@@ -61,6 +61,12 @@ reproduce it next to the box.
 
 - [ ] Playback of the sample in the 5 camera styles: no stutter, no hole in the terrain, smooth slow-downs and stops,
       intro and outro (descent from the overview).
+- [ ] Long track (a few hundred km flown in 4–5 min, ideally a sparse tracker recording with rests, e.g. a raid):
+      "Poursuite" (chase) and the other styles with the default settings: the camera never swings around the marker
+      (loops, out-and-backs, rests), turns of the route take a few seconds, no jolt at the corners of the line and no
+      vertical bobbing over hills; with "Lissage de la caméra" at 0 s, the old direct behaviour; the sample in 60 s
+      still stays behind the marker in its bends. Same in the exported video. Note the frames per second (≈ 80 terrain
+      samples per frame).
 - [ ] Intro and outro "Depuis la région" (from the region) (16:9 and 9:16, short and long track): terrain loaded in time for the
       very high view (no terrain edge, no blurry tiles), dive toward the track and climb back without stutter.
 - [ ] "Depuis la région" with "Lieu" set to a park, an island or a range (e.g. « Parc naturel régional de Corse »):

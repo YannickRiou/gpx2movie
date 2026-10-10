@@ -27,6 +27,7 @@ import {
   formatSpeedFactor,
   hasFilmItem,
   photoFilmTime,
+  pressedGrip,
   recordedAtFilmTime,
   removeFilmItem,
   rulerStep,
@@ -176,6 +177,22 @@ describe('dragFilm', () => {
     const near = moved.stops[0].atM + 30
     expect(dragFilm(film, 'stop-1', 'move', 5, { ...ctx, targetsM: [near], snapS: 0.5 }).stops[0].atM).toBe(near)
     expect(dragFilm(film, 'stop-1', 'move', 5, { ...ctx, targetsM: [near + 370], snapS: 0.5 }).stops[0].atM).toBe(moved.stops[0].atM)
+  })
+
+  it('a press past the outer third of a narrow block moves it, even on a grip (touch grips, touch adjustment)', () => {
+    // a 4 s stop 24 px wide under a 16 px end grip: pressed in the middle or the left, it was stretched (and started
+    // earlier, the flight being shortened) instead of moved
+    const stopGrips = ['move', 'end'] as const
+    expect(pressedGrip('end', 12, 24, stopGrips)).toBe('move')
+    expect(pressedGrip('end', 6, 24, stopGrips)).toBe('move')
+    expect(pressedGrip('end', 20, 24, stopGrips)).toBe('end')
+    // a text: both edges, whichever grip the browser picked
+    const textGrips = ['start', 'move', 'end'] as const
+    expect(pressedGrip('end', 2, 17, textGrips)).toBe('start')
+    expect(pressedGrip('start', 8, 17, textGrips)).toBe('move')
+    expect(pressedGrip('end', 195, 200, textGrips)).toBe('end')
+    // a shot only stretches
+    expect(pressedGrip('end', 12, 24, ['end'])).toBe('end')
   })
 
   it('stretches a stop by its end edge, in proportion to the duration cap', () => {

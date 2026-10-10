@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import manifestText from '../../public/manifest.webmanifest?raw'
 import { pickerAccept } from './platform'
-import { sharedFileName, shouldRegisterServiceWorker, wantsIosInstallHint } from './webApp'
+import { sharedFileName, shouldRegisterServiceWorker, UPDATE_CHECK_MS, UPDATE_MIN_GAP_MS, wantsIosInstallHint, watchForUpdates } from './webApp'
 
 /** files of public/, as `icons/icon-192.png` */
 const PUBLIC_FILES = Object.keys(import.meta.glob('../../public/**/*.{png,svg}')).map((path) => path.replace('../../public/', ''))
@@ -101,5 +101,35 @@ describe('share target', () => {
     expect(share.enctype).toBe('multipart/form-data')
     expect(share.params.files[0].name).toBe('tracks')
     expect(share.params.files[0].accept).toEqual(expect.arrayContaining(['.gpx', '.fit', 'application/gpx+xml']))
+  })
+})
+
+describe('watchForUpdates', () => {
+  it('looks for a new version every hour and when shown again, never while hidden nor twice within the gap', () => {
+    vi.useFakeTimers()
+    const update = vi.fn(() => Promise.resolve())
+    const doc = Object.assign(new EventTarget(), { visibilityState: 'visible' as DocumentVisibilityState })
+    const stop = watchForUpdates({ update }, doc, () => Date.now())
+    const show = (state: DocumentVisibilityState) => {
+      doc.visibilityState = state
+      doc.dispatchEvent(new Event('visibilitychange'))
+    }
+    show('visible')
+    expect(update).toHaveBeenCalledTimes(0) // just registered
+    vi.advanceTimersByTime(UPDATE_CHECK_MS)
+    expect(update).toHaveBeenCalledTimes(1)
+    show('hidden')
+    vi.advanceTimersByTime(UPDATE_CHECK_MS)
+    expect(update).toHaveBeenCalledTimes(1)
+    show('visible')
+    expect(update).toHaveBeenCalledTimes(2)
+    vi.advanceTimersByTime(UPDATE_MIN_GAP_MS - 1)
+    show('visible')
+    expect(update).toHaveBeenCalledTimes(2)
+    stop()
+    vi.advanceTimersByTime(UPDATE_CHECK_MS)
+    show('visible')
+    expect(update).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
   })
 })

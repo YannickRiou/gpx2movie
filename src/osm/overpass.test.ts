@@ -4,8 +4,10 @@ import { buildTrack } from '../import/stats'
 import { keyValueStore, type KeyValueStore } from '../platform'
 import {
   MAX_LANDMARK_DISTANCE_M,
+  MEMORY_CACHE_ENTRIES,
   OverpassError,
   buildOverpassQuery,
+  cachedOverpassQuery,
   clearOverpassMemoryCache,
   corridorBoxes,
   fetchTrackFeatures,
@@ -282,6 +284,21 @@ describe('fetchTrackFeatures', () => {
     const track = northTrack(3, 1000)
     await fetchTrackFeatures(track, undefined, deps)
     expect([...storage.map.keys()]).toEqual(['openflyover.prefs', `openflyover.osm.v1.${hashQuery(trackQuery(track))}`])
+  })
+
+  it('keeps the most recently used results in memory', async () => {
+    const fetchMock = vi.fn(async () => json({ elements: [] }))
+    const deps: OverpassDeps = { fetch: fetchMock as unknown as typeof fetch, sleep: async () => {}, storage: null, now: () => 0 }
+    const query = (k: number) => cachedOverpassQuery(`Q${k}`, parseOverpass, undefined, deps)
+    for (let k = 0; k < MEMORY_CACHE_ENTRIES; k++) await query(k)
+    await query(0)
+    await query(MEMORY_CACHE_ENTRIES)
+    expect(fetchMock).toHaveBeenCalledTimes(MEMORY_CACHE_ENTRIES + 1)
+    // Q1, the least recently used, was dropped; Q0, used again, was kept
+    await query(0)
+    expect(fetchMock).toHaveBeenCalledTimes(MEMORY_CACHE_ENTRIES + 1)
+    await query(1)
+    expect(fetchMock).toHaveBeenCalledTimes(MEMORY_CACHE_ENTRIES + 2)
   })
 
   it('sends the queries one after the other', async () => {

@@ -1,7 +1,7 @@
 /**
- * « Importer depuis Strava » : a button and its dialog. First the connection with the user's own Strava application
- * (Client ID and Secret, src/strava/api.ts), then the list of their activities to import. Each button (track list,
- * welcome card) has its own dialog, drawn in the page body so a hidden panel never hides it.
+ * « Importer depuis Strava » : a dialog. First the connection with the user's own Strava application (Client ID and
+ * Secret, src/strava/api.ts), then the list of their activities to import. Each opener (« + Ajouter » of the track
+ * list, welcome card) has its own dialog, drawn in the page body so a hidden panel never hides it.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -31,10 +31,22 @@ import { formatAscent, formatDistance } from './format'
 import { Icon } from './icons'
 import { runImport } from './projectActions'
 
-/** `welcome`: the full-width button of the welcome card; otherwise the small one of the track list. */
-export function StravaImport({ welcome = false }: { welcome?: boolean }) {
+/** « Importer depuis Strava » of the welcome card. */
+export function StravaImport() {
   const loading = useAppStore((s) => s.loading)
   const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button type="button" className="btn btn--secondary" onClick={() => setOpen(true)} disabled={loading}>
+        Importer depuis Strava
+      </button>
+      <StravaDialog open={open} onClose={() => setOpen(false)} />
+    </>
+  )
+}
+
+/** The Strava dialog, drawn in the page body (« + Ajouter » of the track list, welcome card). */
+export function StravaDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const titleId = useId()
 
@@ -43,34 +55,20 @@ export function StravaImport({ welcome = false }: { welcome?: boolean }) {
     else dialog.current?.close()
   }, [open])
 
-  return (
-    <>
-      <button
-        type="button"
-        className={welcome ? 'btn btn--secondary' : 'btn btn--secondary btn--small'}
-        onClick={() => setOpen(true)}
-        disabled={loading}
-        data-tip={welcome ? undefined : 'Importer des activités Strava'}
-        data-tip-align={welcome ? undefined : 'end'}
-      >
-        {welcome ? 'Importer depuis Strava' : 'Strava'}
-      </button>
-      {createPortal(
-        <dialog ref={dialog} className="sources strava" aria-labelledby={titleId} onClose={() => setOpen(false)}>
-          <div className="sources__head">
-            <h2 id={titleId} className="sources__title">
-              Importer depuis Strava
-            </h2>
-            <button type="button" className="icon-btn" aria-label="Fermer" data-tip="Fermer (Échap)" data-tip-side="left" onClick={() => setOpen(false)}>
-              <Icon name="x" size={18} />
-            </button>
-          </div>
-          {/* mounted while open only: every opening starts again from the stored connection */}
-          {open && <StravaBody onImported={() => setOpen(false)} />}
-        </dialog>,
-        document.body,
-      )}
-    </>
+  return createPortal(
+    <dialog ref={dialog} className="sources strava" aria-labelledby={titleId} onClose={onClose}>
+      <div className="sources__head">
+        <h2 id={titleId} className="sources__title">
+          Importer depuis Strava
+        </h2>
+        <button type="button" className="icon-btn" aria-label="Fermer" data-tip="Fermer (Échap)" data-tip-side="left" onClick={onClose}>
+          <Icon name="x" size={18} />
+        </button>
+      </div>
+      {/* mounted while open only: every opening starts again from the stored connection */}
+      {open && <StravaBody onImported={onClose} />}
+    </dialog>,
+    document.body,
   )
 }
 

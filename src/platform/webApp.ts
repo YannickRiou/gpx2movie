@@ -1,7 +1,7 @@
 /**
  * Installable web app (website only, never in the desktop app): registers the service worker built from
- * `serviceWorker.js`, offers « Nouvelle version disponible » when a new one waits, and tells iOS users once how to add
- * the app to the home screen (iOS has no install prompt). See ARCHITECTURE.md "Installable web app".
+ * `serviceWorker.js`, looks for a new one while the app is open, offers « Nouvelle version disponible » when it waits,
+ * and tells iOS users once how to add the app to the home screen (iOS has no install prompt). See ARCHITECTURE.md "Installable web app".
  */
 import { showToast } from '../ui/toast'
 import { getPlatform } from './index'
@@ -13,6 +13,9 @@ const SHARE_CACHE = 'openflyover-share'
 const SHARE_PARAM = 'partage'
 const IOS_HINT_KEY = 'openflyover.iosInstallHint.v1'
 const IOS_HINT_DELAY_MS = 4000
+/** an open app looks for a new version this often, and when it is shown again (at most once per UPDATE_MIN_GAP_MS) */
+export const UPDATE_CHECK_MS = 60 * 60 * 1000
+export const UPDATE_MIN_GAP_MS = 10 * 60 * 1000
 
 export const UPDATE_TEXT = 'Nouvelle version disponible'
 export const IOS_INSTALL_TEXT = "Pour installer OpenFlyover : touchez Partager, puis « Sur l'écran d'accueil »."
@@ -50,6 +53,29 @@ function offerUpdate(registration: ServiceWorkerRegistration): void {
   })
 }
 
+/**
+ * Looks for a new version while the app stays open (an installed app may stay open for days): every UPDATE_CHECK_MS
+ * and when the page is shown again, never while hidden. A new worker found ends in `offerUpdate`. Returns the cleanup.
+ */
+export function watchForUpdates(
+  registration: { update(): Promise<unknown> },
+  doc: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>,
+  now: () => number = Date.now,
+): () => void {
+  let last = now()
+  const check = () => {
+    if (doc.visibilityState !== 'visible' || now() - last < UPDATE_MIN_GAP_MS) return
+    last = now()
+    registration.update().catch(() => undefined) // offline: next time
+  }
+  const timer = setInterval(check, UPDATE_CHECK_MS)
+  doc.addEventListener('visibilitychange', check)
+  return () => {
+    clearInterval(timer)
+    doc.removeEventListener('visibilitychange', check)
+  }
+}
+
 async function register(): Promise<void> {
   const base = import.meta.env.BASE_URL
   const registration = await navigator.serviceWorker.register(`${base}sw.js`, { scope: base })
@@ -60,6 +86,7 @@ async function register(): Promise<void> {
       if (worker.state === 'installed') offerUpdate(registration)
     })
   })
+  watchForUpdates(registration, document)
 }
 
 /**

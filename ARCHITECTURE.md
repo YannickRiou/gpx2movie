@@ -51,13 +51,13 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/marker*.ts` + `trackLineStyle.ts` | track and marker (see "Track and marker") | pure: `TrackStyle`, `DEFAULT_TRACK_STYLE`, `MarkerSettings`, `DEFAULT_MARKER`, `isValidTrackStyle`, `isValidMarker`, `withTrackStyleDefaults`, `withMarkerDefaults` (`markerSettings.ts`); `MARKER_FIGURE_PATHS`, `circlePath` (`markerFigures.ts`); `drawBadge`, `readableInk`, `squareCrop`, `fileToAvatarDataUrl`, `loadMarkerImage` (`markerBadge.ts`, 2D canvas); `markerBadge`, `badgeTexture`, `headsLeft`, `placeMarker`, `useMarkerImage`, `MARKER_SCREEN_FACTOR` (`markerSprite.ts`); `createGlowMaterial`, `applyDash`, `quantizedPixelSize`, `cumulativeDistances`, `cutAt`, `cutLine` (`trackLineStyle.ts`); `TrackMarkerSection` (`src/ui`) |
 | `src/flyover/path.ts` | flyover path | `buildTrackPath(track): TrackPath` (concatenated segments, cumulative distances, `time` in ms or NaN), `trackPathOf(track)` (same path, cached per track), `samplePath(path, distanceM): PathSample` (`ele` and `time` interpolated only if both neighbors have them), `recordedTimeAt(path, distanceM)` (fills points without a time), `elevationProfile(path, samples)`, `nearestOnPath(path, lonLat, timeMs?)`, `distanceAtTime(path, timeMs, toleranceMs?)`, `pickProjectedPath(screen, distM, px, py, maxPx)` (point of the projected track closest to the pointer) |
 | `src/flyover/smooth.ts` | track smoothing (see "Track and marker") | `smoothPoints(points, windowM)`, `smoothTrack(track, windowM)`, `smoothedTrackPath(track, windowM)` (smoothed positions, recorded distances and times) |
-| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad?, aimProgress?, cameraProgress? })` → `{ target, position, marker }`, `autoDistanceM`, `smoothedTurn`, `movesWithTime` |
+| `src/flyover/camera.ts` | flyover camera | `computeCameraView(path, progress, frame, sampler, { exaggeration, liftM, camera?, durationS?, timeS?, orbitRad?, aimProgress?, cameraProgress? })` → `{ target, position, marker }`, `autoDistanceM`, `smoothedTurn`, `smoothHeadingAt`, `movesWithTime` |
 | `src/flyover/cameraSettings.ts` | camera styles and presets | `CAMERA_STYLES`, `DEFAULT_CAMERA`, `CAMERA_RANGES`, `CAMERA_PRESETS`, `isValidCamera`, `withCameraDefaults`, `turnSmoothingM(camera, lengthM)`, `advanceProgress(progress, dt, speed, durationS)` |
 | `src/flyover/timeSmoothing.ts` | camera smoothing in film time | `timeSmoothing(clock, timeS, motionS, camera)` → `{ aimProgress, cameraProgress, timeS }`, `windowAverage`, `easedEndTimeS`, `smoothsInTime`, `TIME_SMOOTHING_SAMPLES` |
 | `src/flyover/climbs.ts` | detected climbs | `detectClimbs`, `climbsOf(track)` (cached per track), exported thresholds, `CATEGORY_THRESHOLDS` |
 | `src/scene/labelModel.ts` + `labelSources.ts` | 3D labels | `LandmarkLabel`, `LandmarkKind`, `LABEL_KIND_ACCENTS`, `labelOpacity`, `climbLabels`, `waypointLabels`, `resolveOverlaps`…; `setLabelSource(id, labels)` (prefixed, unique ids), `useLabelSources` |
 | `src/flyover/pacing.ts` | flyover pacing | `flightPacing(lengthM, highlightsM, durationS, settings, stops)` (pauses given by the film) → `totalTime`, `progressAtTime`, `timeAtProgress`, `positionAt`, `advance`; `pacingHighlights`, `pacingFromHighlights` (pauses at the highlights); `pausePositions`, `isHighlightLandmark`, `DEFAULT_PACING`, `PACING_RANGES`, `isValidPacing` |
-| `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha`, `START_HEIGHTS`, `START_HEIGHT_LABELS`, `highlightsRegion`; `autoStops`, `stopCandidates`, `materializeStops`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `attachToStop`, `followStops`, `edgeScrollSpeed`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
+| `src/film/*` | film and timeline (pure) | `Film`, `DEFAULT_FILM`, `isValidFilm`, `withFilmDefaults`, `nextFilmId`, `shotDurationS`, `shotCuts`, `shotDipColor`, `transitionDipAt`, `dipAlpha`, `START_HEIGHTS`, `START_HEIGHT_LABELS`, `highlightsRegion`; `autoStops`, `stopCandidates`, `materializeStops`, `filmStops`, `pickLandmarkTitles`, `withLandmarkTitles`, `withoutLandmarkTitles`, `sameLandmarkTitles`, `freezeLandmarkTitles`; `buildFilmClock`, `filmClockInputFor`, `filmClockFor` → `FilmClock` (`stateAt`, `totalTime`, `progressAtTime`, `timeAtProgress`, `advance`); `timeline.ts`: scale, ruler, snapping, `dragFilm`, `pressedGrip`, `stopPositionAt`, additions / removals (`removeFilmItem` sets a shot to 'aucune'), `hasFilmItem`, `addMedia`, `updateMedia`, `attachToStop`, `followStops`, `edgeScrollSpeed`, `photoFilmTime`, `clipSyncOffsetS`, `syncClipPlacement`, `syncClip`, `recordedAtFilmTime`, `clipRateAt`; `model.ts`: `clipTimeS`, `clipHasSound`, `FilmPoi`, `isValidPoi`, `VIDEO_SOUND_DEFAULTS`, `MediaSync`, `SYNC_OFFSET_RANGE`; `audio.ts`: music and video sound (`clipSounds`, `duckEnvelope`, `duckGainAt`, `filmMixPlan`, `mixFilmAudio`); `beats.ts`: music beats (`detectBeats`, `filmBeats`, `beatNear`, `snapFilmToBeats`, `beatTicksPath`); `pois.ts`: points of interest (`addPoi`, `renamePoi`, `removePoi`, `defaultPoiName`, `poiStopAtM`); `exif.ts`: `parseExif`, `photoTimeMs`, `mp4CreationTimeMs`, `quickTimeDateMs`; `media.ts` and `video.ts` (the only non-pure modules in the folder): `MediaAsset`, `MediaTable`, `MAX_VIDEO_BYTES`, `sanitizeMediaTable`, `usedMedia`, `isVideoAsset`, `useMediaStore`, `readPhoto`, `createMediaBitmaps`, `getMediaBitmaps`, `mediaToLoad`; `readMedia`, `readVideo`, `isMediaFile`, `createClipReader`, `createExportVideos`, `decodeClipSound`, `joinSoundChunks`, `createPreviewVideos`, `getPreviewVideos` |
 | `src/flyover/filmCamera.ts` | film camera | `computeFilmView(path, clock, timeS, progress, frame, sampler, options)` (`options.follow`: `FollowedFlight`), `markerAt`, `framedGroup`, `overviewView`, `regionView`, `situationTarget`, `situationFramingOf`, `regionDistanceM`, `regionHighlightOpacity`, `blendViews`, `shotBlend`, `shotWeight`, `stopOrbitRad`, `filmViewMovesWithTime` |
 | `src/flyover/sun.ts` | sun date, sunrise / sunset | `shotSunDate(clock, timeS, flightDate, daylight)`, `shotSunShiftMs(clock, timeS)`, `SHOT_SUN_HOURS`, `SHOT_DAYLIGHT_HOUR`, `solarHourToDate(dayMs, lon, solarHour)`, `solarHourOf(dayMs, lon, date)`, `sunDateAt(path \| null, progress, { sunFromTrack, solarHour, lon, dayMs }): Date`, `sunTimes(lat, lon, date)` → `{ sunrise, sunset, solarNoon, polar }`, `solarDay`, `sunDayMs(sunDate, startTime, today)`, `isSunDate`, `SUN_CHIPS`, `sunChipHour(chip, day)` |
 | `src/flyover/trackColor.ts` | track colored by a metric | `TRACK_COLOR_MODES`, `TrackColorBy`, `TRACK_METRICS` (label, unit, palette), `metricValues`, `trackMetricValues`, `hasMetric`, `robustRange`, `resampleValues`, `colorizeValues`, `VIRIDIS`, `MAGMA`, `MISSING_COLOR` |
@@ -79,9 +79,10 @@ full customization through a single project document, WebCodecs video export, Ta
 | `src/scene/grading.ts` + `gradingEffect.ts` + `GradingComposer.tsx` | color grading | `GradingSettings`, `DEFAULT_GRADING`, `GRADING_PRESETS`, `GRADING_RANGES`, `isValidGrading`, `isIdentityGrading`, `matchingPreset`, `gradingOfPreset`, `withGradingValue`, `gradingUniforms`; `GradingEffect`; `useGradingEffect`, `GradingComposer` |
 | `src/scene/lens.ts` + `useLensEffects.ts` + `flareEffect.ts` + `shutterEffect.ts` | « Objectif » lens effects (see "Lens") | pure, tested: `LensSettings`, `DEFAULT_LENS`, `LENS_RANGES`, `isValidLens`, `withLensDefaults`, `lensActive`, `bloomParams`, `depthOfFieldParams`, `SHUTTER_SUBFRAMES`, `shutterSamples`, `previewShutterWeight`, `radialBlurLength`, `setShutterSubFrame`, `shutterSubFrame`, `subFrameSlices`; `useLensEffects`, `FlareEffect`, `ShutterEffect`; `filmViewAt` (`filmView.ts`: the camera placement of `FlyoverRig` at a progress and film time, shared with the export); `LensPanel` (`src/ui`) |
 | `src/project/*` | project document, history, presets | `serializeProject(state, name)`, `parseProject(text): LoadedProject`, `sanitizeSettings(raw, base)`, `SETTING_CHECKS`, `migrateProject`, `MIGRATIONS`, `applyProject`, `applySettings`, `createHistory`, `getSettingsHistory`, `installHistoryShortcuts`, `installSliderGestures`, `createPresetStore`, `getPresetStore`, `presetSettings` |
-| `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`, `isProjectThumbnail`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import"); `webApp.ts`: `installWebApp`, pure, tested: `shouldRegisterServiceWorker`, `wantsIosInstallHint`, `sharedFileName`; `serviceWorker.js` (see "Installable web app and mobile"); `isAppleMobile`, `pickerAccept`, `touchScreen`, `SHARE_SAVE_LABEL` |
+| `src/platform/*` | website / desktop (see "Desktop application") | `getPlatform()` → `Platform` (`capabilities`, `storage`, `openFiles`, `saveFile`, `saveUrl`, `createWritableFile`, `droppedFiles`, `tileCache`, `projectLibrary`), `selectPlatform(scope)`, `videoEncoderMissingHint`; pure, tested: `isTauriRuntime`, `detectCapabilities`, `acceptAttribute`, `fileNameOf`, `extensionOf`, `mimeTypeOf`, `saveFilters`, `pickerTypes`, `keyValueStore`, `tileFileName`, `imageTypeOf`; `tileCache.ts`: `TileCache` (`get`, `has`, `put`, `deletePack`, `packs`, `size`), `createWebTileCache`, `createDesktopTileCache`; `projectLibrary.ts`: `ProjectLibrary` (`list`, `save`, `load`, `rename`, `remove`), `createProjectLibrary`, `createWebLibraryFiles`, `createDesktopLibraryFiles`, `projectFileNames`, `cleanProjectName`, `sortProjectEntries`, `parseProjectEntry`, `isProjectThumbnail`; `folder.ts`: `WritableFolder`, `canPickFolder`, `pickFolder`, `joinPath`; `oauthRedirect.ts`: `authorizeInBrowser` (see "Strava import"); `webApp.ts`: `installWebApp`, pure, tested: `shouldRegisterServiceWorker`, `wantsIosInstallHint`, `sharedFileName`, `watchForUpdates`; `serviceWorker.js` (see "Installable web app and mobile"); `isAppleMobile`, `pickerAccept`, `touchScreen`, `SHARE_SAVE_LABEL` |
 | `src/core/deviceBudget.ts` | GPU and memory budget of the device (see "Device budget") | `deviceBudget()`, pure, tested: `budgetFor`, `readDeviceTraits`, `DESKTOP_BUDGET`, `PHONE_MAX_SHORT_SIDE`, `LOW_MEMORY_GB` |
-| `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefixes` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
+| `src/scene/touchGesture.ts` | fingers moving the 3D view (lower pixel ratio, see "Device budget") | tested: `watchTouchGesture`, `TOUCH_SETTLE_MS` |
+| `src/offline/*` | offline tile packs (see "Offline packs") | pure, tested: `planOfflineTiles`, `packImageryLevel`, `splitDistanceM`, `CORRIDOR_WIDTHS_M`, `MAX_PACK_TILES` (`plan.ts`); `offlinePolicy`, `OFFLINE_POLICIES` (`policy.ts`); `startPackDownload`, `createDailyQuota` (`download.ts`); `createPackRegistry`, `createStoredTileReader`, `packIdFor`, `sourcePrefixes` (`packs.ts`); not pure: `useOfflineStore`, `installOfflineTiles`, `preparePack`, `pausePack`, `resumePack`, `cancelPack`, `deletePack` (`store.ts`), `OfflinePanel` (`src/ui`) |
 | `src/state/store.ts` | zustand state | `useAppStore`, `Settings`, `Playback`, `AppState`, `resetAppStore` |
 | `src/ui/*` + `src/App.tsx` | interface | `App` (shell); `shell.ts` (pure, tested: `frameRect`, `routeOpenedFiles`, `nextTabIndex`, `nextGridIndex`, `shellReducer`, `parseShellPrefs`, `effectiveProjectName`, `isProjectDirty`, `settleSheet`, `BOTTOM_SHEET_QUERY`, `COMPACT_QUERY`); `SheetHandle`; `TopBar`, `Stage`, `icons.tsx` (`Icon`, `AspectIcon`); `projectActions.ts` (`saveProject`, `openProject`, `chooseFilesToOpen`, `saveExportedFile`, `importTrackFiles`, `runImport`, `loadSample`, `chainLoadedTracks`); `importFlow.ts` (import orchestration without React, tested) |
 
@@ -270,7 +271,7 @@ ink, 7.3:1).
   Without a track, no framing: the welcome card (`EmptyState.tsx`) fills the center of the view ("Choisir un fichier" (choose a file),
   "Essayer avec l'exemple (Tour du Mont-Blanc)" (try the sample), "Ouvrir un projet…" (open a project), a single picker whose `accept` changes).
 - **Rail and panel**: vertical rail of icon + label tabs (64 px; `tablist`, roving focus, arrows / Home / End) and a
-  320 px panel, one tab at a time: **Trace** (track; track list with "+ Ajouter" (add), waiting message without a track,
+  320 px panel, one tab at a time: **Trace** (track; track list with "+ Ajouter" (add; a menu: « Fichiers GPX ou FIT… », « Activités Strava… »), waiting message without a track,
   collapsible Climbs and Weather), **Carte** (map; scene settings, OSM landmarks), **Survol** (flyover; camera, pacing),
   **Habillage** (overlay), **Projet** (project; presets). All tabs stay mounted (`hidden`): weather, landmarks and export have
   side effects. Flat sections separated by a rule, sticky section header (title + "modifié / Par défaut" (modified / default)). A click
@@ -363,16 +364,17 @@ ink, 7.3:1).
     options, tiles, menu items and timeline buttons; lanes 40 px, grips 16 px; a larger invisible hit area around ⓘ;
     16 px text in fields (iOS zooms into smaller ones); no callout or selection on the 3D canvas.
   - *No hover* (`hover: none`): `data-tip` tooltips do not stick after a tap; an ⓘ shows its sentence when tapped
-    (focus), a long press shows any other tip (`:active`).
+    (focus), a long press shows any other tip (`:active`). Every other `:hover` style sits in `@media (hover: hover)`,
+    in place (same cascade on a computer): no grey background or border left on a button after a tap.
 - **Sections of the Carte and Survol tabs** (`PanelSection.tsx`): `PanelSection` = flat collapsible section (`fold` classes,
   sticky header: title, "modifié / Par défaut" of its keys, chevron), open initially, then as last left: open / folded
   state remembered by title in the platform storage (`FOLDS_KEY` `openflyover.folds.v1`, `parseFoldPrefs` in `shell.ts`,
   read once on mount, written on `toggle`; without storage or with an unreadable value every section opens). Carte: "Fond de carte" (base map)
   (imagery), "Relief et trace" (terrain and track; exaggeration, track color), "Atmosphère et météo" (atmosphere and weather; atmosphere,
-  shadows, weather in the scene), "Lumière" (light; after the atmosphere switch it depends on), "Couleurs" (colors; color grading), "Objectif" (lens effects; `LensPanel`), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset, style as icon tiles, north up),
+  shadows, weather in the scene), "Lumière" (light; after the atmosphere switch it depends on), "Couleurs" (colors; color grading), "Objectif" (lens effects; `LensPanel`), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset tiles, each implying a style, north up),
   "Durée et rythme" (duration and pacing; duration, film duration, slow-downs on / off, « Plan de situation » switches for the opening and the closing), "Trace et marqueur" (track and marker; `TrackMarkerSection`). Rare settings are in `MoreSettings` ("Plus de
-  réglages", closed `<details>`): imagery detail, terrain source, wireframe, exposure, weather intensity, distance /
-  tilt / aim / smoothing, highlights and pacing parameters, transitions. Its summary shows "modifié" when a hidden setting
+  réglages", closed `<details>`): imagery detail, terrain source, wireframe, exposure, weather intensity, camera style
+  (a select), distance / tilt / aim / smoothing, highlights and pacing parameters, transitions. Its summary shows "modifié" when a hidden setting
   departs from the default (`modifiedPaths(settings, paths)` from `project/apply.ts`, paths `'key'` or `'key.field'`). Setting
   keys and behavior unchanged. `InfoTip` (ⓘ, one-sentence `data-tip` tooltip, focusable, `aria-label`) only
   on jargon: exaggeration, wireframe, exposure, highlights. Styles: delimited block at the end of `app.css`.
@@ -420,6 +422,15 @@ ink, 7.3:1).
   turning during pacing pauses; the other styles depend only on progress. Heading = chord
   [d − w, d + w] (2w = « Lissage des virages » `turnSmoothingM` in metres; 0 = « Auto »: w = 2% of the track,
   150 m–1.5 km, × the `smoothing` multiplier of the presets and older projects), automatic distance 4% of the track (600 m–4 km, × distance).
+  **Scaled with the film's ground speed** v = track length / flyover duration (2 km per film second for 540 km in
+  4 min 30 s, 280 m for the sample): the heading is that chord averaged along the track over ± 1.5 × « Lissage de la
+  caméra » × v (`smoothHeadingAt`; none at 0 s): chord directions tabulated once per path and step, unwrapped along it
+  (each against the last chord at least w / 2 long) and weighted by the chord length, so a loop, an out-and-back or a
+  GPS star at a rest turns the camera through instead of flipping it (the bare chord swung by up to 180° in a frame
+  there: 3,000 °/s); 'sway' measures its turn as the averaged direction w ahead minus w behind. The aim point and the
+  camera's point of the track are the track averaged over 0.5 s × v (`POSITION_SMOOTHING_S`): the corners of a sparse
+  recording (a point every 60 m–2 km) are rounded off instead of jolting the view at each one. Weights: squared raised
+  cosine sliding over fixed samples (8 per side), flat to the second derivative at the window edges.
   Styles (`settings.camera.style`): `chase` (behind the marker), `sway` (swing toward the outside of bends:
   50° · tanh(0.8 · T / 50°), T = sum of turn angles weighted by a tent over ±2w, continuous and calm), `orbit` (6°/s
   around the marker from the start heading), `top` (≥ 70°, distance × 2.5, north or heading up), `cinematic` (distance × 1.6,
@@ -428,14 +439,17 @@ ink, 7.3:1).
   **Steady heights** (no frame-to-frame state, so preview and export stay identical): the heights are read from
   terrain samples that stay put while the marker moves, so the camera follows the relief without riding each bump
   or a sight-line sample (whose height counts up to 10× near the marker). Ground radius / cell r = w / 4, at most
-  150 m (37.5 m below a 7.5 km track at smoothing 1: scaled with the track, so with the marker's step per frame).
-  The camera looks at the aim point, not the marker (`marker`, on the draped track): marker x / z at
-  max(`trackGround`, grid ground) + lift; `trackGround` = tent-weighted mean of the terrain at fixed track
-  distances (multiples of r / 4, ≤ 8 samples) over ±r. Clearance rules (80 m under the camera, the sight line to the
+  150 m (37.5 m below a 7.5 km track at smoothing 1: scaled with the track, so with the marker's step per frame), and
+  at least 0.25 s × v, at most 500 m (`GROUND_SPEED_S`: a fast film no longer rides the relief at a few frames a cell).
+  The camera looks at the aim point, not the marker (`marker`, on the draped track): the aim's x / z at
+  the smooth maximum (over 40 m, `AIM_GROUND_EASE_M`) of `trackGround` and the grid ground there + lift;
+  `trackGround` = mean of the terrain at fixed track distances (multiples of r / 4, ≤ 8 samples) over ±r, weighted
+  as above; the grid ground at the aim is a cubic B-spline over the 4 × 4 corners around it (exact on a plane, no
+  slope break at a cell edge, 16 samples). Clearance rules (80 m under the camera, the sight line to the
   aim) read the grid ground: bilinear between the terrain at the corners of a fixed r grid of the local frame (exact
   on a plane, cliffs softened over a cell); the floor is eased in (smooth maximum over 80 m, at most 20 m above),
   then the camera is kept `MIN_TERRAIN_CLEARANCE_M` (40 m) above the actual terrain below it (a bump narrower than a
-  cell). About 65 terrain samples per frame. On ±15 m bumps 30 m wide, the frame-to-frame height change drops from
+  cell). About 80 terrain samples per frame. On ±15 m bumps 30 m wide, the frame-to-frame height change drops from
   3–35 m to 0.16 m on flat ground, the change of vertical speed from 1–70 m to under 2.5 m on hills.
   **Smoothing in film time** (`src/flyover/timeSmoothing.ts`, applied by `computeFilmView`; still no frame-to-frame
   state): the aim point follows the marker's progress averaged over « Lissage de la visée » `aimSmoothingS` (0 by
@@ -458,7 +472,7 @@ ink, 7.3:1).
 - **Camera settings**: `settings.camera { style, distance, pitchDeg, headingOffsetDeg, smoothing, northUp, turnSmoothingM,
   aimSmoothingS, cameraSmoothingS, endingS }` (a camera saved before the last four gets them from `DEFAULT_CAMERA`,
   `withCameraDefaults` in `SETTING_UPGRADES`: « Auto » keeps its multiplier, so the turns look the same) and named
-  presets (`CAMERA_PRESETS`, 12: Poursuite (chase), Drone rapide, Oiseau, Hélicoptère, Orbite, Cinéma, Drone haut, Planeur, Montgolfière, Avion, Vue du dessus, Satellite; `findCameraPreset`; « Préréglage » is a grid of tiles with distance and tilt, plus a « Personnalisé » tile when the settings match no preset) in
+  presets (`CAMERA_PRESETS`, 12: Poursuite (chase), Drone rapide, Oiseau, Hélicoptère, Orbite, Cinéma, Drone haut, Planeur, Montgolfière, Avion, Vue du dessus, Satellite; `findCameraPreset`; « Préréglage » is a grid of tiles with distance and tilt: six first, one per style plus a high view (`MAIN_PRESETS` in `CameraPanel.tsx`: Poursuite, Oiseau, Orbite, Cinéma, Drone haut, Satellite), the others under « Plus de préréglages », the current one always in the first grid, plus a « Personnalisé » tile when the settings match no preset) in
   `src/flyover/cameraSettings.ts`; `settings.flyoverDurationS` (15–600 s, 60 by default) = duration at ×1, the timeline
   speed applies on top. "Survol" tab (`src/ui/CameraPanel.tsx`, "Caméra" and "Durée et rythme" sections; the
   smoothing sliders under the camera's « Plus de réglages », « Lissage des virages » showing the « Auto » length for
@@ -925,7 +939,9 @@ ink, 7.3:1).
   (`clock.progressAtTime`, to the meter). Snapping at 8 px (`snapTargets`: start and end of the film, edges of shots, stops,
   texts and photos, highlights, playhead; a moved stop snaps to highlights in meters); Alt disables it. Values
   bounded to the model ranges, rounded to the hundredth of a second (moved stop: to the meter). A press without moving
-  3 px only selects. The gesture is shown on the timeline only (local draft) and committed on release in **one
+  3 px only selects. On a block that moves, an edge grip only takes a press in the outer third of its side
+  (`pressedGrip`): a narrow block (a 4 s stop on a phone) is moved, not stretched, although the 16 px touch grips or
+  the browser's touch adjustment reach its middle. The gesture is shown on the timeline only (local draft) and committed on release in **one
   undo step** (`history.transaction`); the scale stays that of the committed film during the gesture. Keyboard on a block:
   arrows ±1 s (Shift ±0.1 s, steps merged like a slider), Delete / Backspace deletes (a shot becomes 'aucune'),
   Esc deselects; Space starts / stops playback outside fields and buttons. Ctrl+wheel zooms around the pointer
@@ -1304,8 +1320,8 @@ it, know at what time you will pass each point, where the sun will be and what t
   beyond a 40 km footprint), 10 tagged and named statements (summits / saddles, passes, huts, lakes, waterfalls, villages and
   hamlets, viewpoints, glaciers, springs; drinking water even without a name), `out center` to bring ways and relations down to a point. The `around:` form on a
   polyline exceeds the public server's timeout; the distance to the track is computed locally, so changing the types or the
-  distance never triggers a new request. Queue (one request at a time), memory cache + `getPlatform().storage` for 30 days per
-  request fingerprint, one retry on 429 / 504 (`Retry-After`, otherwise 15 s) then the other instance; a 200 response carrying an
+  distance never triggers a new request. Queue (one request at a time), memory cache (the 32 most recently used, `MEMORY_CACHE_ENTRIES`) +
+  `getPlatform().storage` for 30 days per request fingerprint, one retry on 429 / 504 (`Retry-After`, otherwise 15 s) then the other instance; a 200 response carrying an
   error `remark` (timeout exceeded) is an error.
 - **Pure post-processing** (`src/osm/landmarks.ts`): projection onto the path → distance and offset, filter by type and distance
   (`settings.landmarks`, default summits + passes + huts + lakes within 1.5 km), elevation from `ele` (free formats), priority in
@@ -1888,8 +1904,8 @@ it, know at what time you will pass each point, where the sun will be and what t
 
 ## Strava import
 
-"Importer depuis Strava" (import from Strava; "Strava" button of the track list, "Importer depuis Strava" on the home
-screen; `src/ui/StravaImport.tsx`): OAuth connection to Strava, list of the athlete's activities, import of the
+"Importer depuis Strava" (import from Strava; « + Ajouter » › « Activités Strava… » in the track list, "Importer depuis
+Strava" on the home screen; `src/ui/StravaImport.tsx`: `StravaDialog`, `StravaImport`): OAuth connection to Strava, list of the athlete's activities, import of the
 ticked ones.
 
 - **No PKCE at Strava** (checked in October 2026, developers.strava.com/docs/authentication): the code exchange and
@@ -2085,7 +2101,8 @@ of a flyover of the loaded tracks; the view and the export then read them withou
   roots over the whole area (the distant landscape), deeper only the children of the tiles that touch the
   corridor (2, 5 or 10 km wide, centered on the track). Outside the corridor the engine keeps the pack's coarser
   level (replacement waits for the four children, hence whole sets of children). Imagery: `planImagerySubtiles` of
-  each terrain tile, same zoom offset as the view (cropping beyond the source's max zoom). Estimate
+  each terrain tile, same zoom offset as the view (cropping beyond the source's max zoom), so never finer than the
+  device shows (`packImageryLevel`: « Fin » on a phone or tablet, said in the estimate). Estimate
   = number of tiles × average size measured per source (`policy.ts`). Order of magnitude, straight 20 km track in
   the Alps, Mapterhorn + IGN, offset 1, h = 400 m: 2 km → 10,500 tiles, ~450 MB; 5 km → 22,000, ~930 MB;
   10 km → 28,000, ~1.2 GB (Mapterhorn: ~150 KB per 512 px tile). Beyond 150,000 tiles, refused. Not in the
@@ -2159,13 +2176,17 @@ bug 300782, October 2025): the device budget below is conservative, to be measur
     have their own cache, the offline packs, under their terms) nor the Strava callback page;
   - navigation to the app: the precached page (any query), so it opens offline; the precache answers before the
     network, `ignoreVary` (servers send `Vary: Origin`, module scripts carry an `Origin`);
-  - update: a new build changes `sw.js` (its hash); the browser installs it in the background, the app shows
+  - update: a new build changes `sw.js` (its hash); the browser looks for it at each navigation, and an open app every
+    hour and when shown again, at most once per 10 min, never while hidden (`watchForUpdates`, `registration.update()`:
+    an installed app may stay open for days); it installs it in the background, the app shows
     « Nouvelle version disponible » › « Recharger » (`webApp.ts`: `SKIP_WAITING`, reload on `controllerchange`); on
     activation the worker deletes the older `openflyover-shell-` / `openflyover-sky-` caches only, never the offline
     packs (`openflyover-tiles-v1:`) nor « Mes projets » (`openflyover-projects-v1`).
   Verified in headless Chromium (Pixel 5 emulation, `vite preview` under `/gpx2movie/` and at `/`): manifest without
   errors, no installability error (`Page.getInstallabilityErrors`), worker active, second load with the server stopped
-  served from the cache.
+  served from the cache. Update while open (Pixel 5 emulation, `sw.js` changed on the server): no request
+  when shown again within the gap, one past it (clock moved forward), then the toast and « Recharger » reloads on the
+  new worker.
 - **iOS install hint**: iOS has no install prompt; once per device, in a Safari tab (`navigator.standalone` false), a
   message says « Pour installer OpenFlyover : touchez Partager, puis « Sur l'écran d'accueil ». » (toast, « Compris »).
 - **Files in**: Android (installed app): `share_target` (POST, multipart, field `tracks`, `.gpx`, `.fit` and the MIME
@@ -2197,15 +2218,19 @@ and short side < 600 CSS px; tablet = touch screen, larger; computer = everythin
 
 | Limit | Where | Computer | Tablet | Phone | ≤ 2 GB |
 |---|---|---|---|---|---|
-| pixel ratio cap / while playing | `FlyoverCanvas` (`dpr`, `MovingPixelRatio`) | 2 / 2 | 2 / 1.5 | 2 / 1.5 | 1.5 / 1 |
+| pixel ratio cap / while playing or touching | `FlyoverCanvas` (`dpr`, `MovingPixelRatio`) | 2 / 2 | 2 / 1.5 | 2 / 1.5 | 1.5 / 1 |
 | decoded tile bitmaps (LRU) | `createTileFetcher` | 600 | 200 | 200 | 120 |
 | height grids (256 px equivalents) | `DEFAULT_TUNING.heightCacheEntries` | 400 | 160 | 160 | 100 |
-| finest imagery (zoom offset) | `engineOptionsFromSettings` | « Très fin » (2) | « Fin » (1) | « Fin » (1) | « Fin » |
+| finest imagery (zoom offset) | `engineOptionsFromSettings`, offline packs (`packImageryLevel`) | « Très fin » (2) | « Fin » (1) | « Fin » (1) | « Fin » |
 | preview clouds: resolution, still frames | `CloudsLayer`, `CLOUD_SETTLE_FRAMES` | 1, 32 | 0.5, 16 | 0.5, 16 | 0.5, 16 |
 | sea of clouds by default | `DEFAULT_CLOUDS.seaRender` | volume | « Nappe » | « Nappe » | « Nappe » |
 | export short side | `videoSize` | 2160 (4K) | 1440 | 1080 | as the device |
 
 « Nappe » is one draw call, no ray march: far cheaper than the volumetric sea. Lens effects stay off by default (as on
 a computer). A larger export class comes out at the cap (`videoSize`), with `exportResolutionNote` to show next to the
-choice. Verified in headless Chromium: iPhone 15 emulation (DPR 3) draws at 2, 1.5 while playing, 2 again on pause;
-a desktop viewport at DPR 2 stays at 2. Not measured: memory and frame time on a real phone.
+choice. "Touching" = fingers moving the 3D view (`watchTouchGesture`, `scene/touchGesture.ts`: a finger past 6 px, a tap
+does not count), until 400 ms after the last one lifts (the controls' damping; a new touch in between keeps the lower
+ratio, so one drop and one return per gesture); the mouse never changes it. Verified in headless Chromium: iPhone 15
+emulation (DPR 3) draws at 2, 1.5 while playing, 2 again on pause; 1.5 during a one-finger orbit and a pinch, 2 again
+after release, one change each way, a tap changes nothing; a desktop viewport at DPR 2 stays at 2, mouse drag
+included. Not measured: memory and frame time on a real phone.

@@ -189,6 +189,18 @@ function speedRoom(speeds: readonly FilmSpeed[], own: Pick<FilmSpeed, 'id' | 'fr
 // Gestures
 // ---------------------------------------------------------------------------
 
+/**
+ * What a press on edge grip `grip`, `offsetPx` into a block `widthPx` wide with `grips`, drags: on a movable block,
+ * an edge only from the outer third of its side, else the block (on a narrow block the touch grips, or the
+ * browser's touch adjustment, reach past it).
+ */
+export function pressedGrip(grip: Grip, offsetPx: number, widthPx: number, grips: readonly Grip[]): Grip {
+  if (!grips.includes('move')) return grip
+  if (offsetPx <= widthPx / 3 && grips.includes('start')) return 'start'
+  if (offsetPx >= (2 * widthPx) / 3 && grips.includes('end')) return 'end'
+  return 'move'
+}
+
 export interface DragContext {
   /** clock of the film at the start of the gesture */
   clock: FilmClock

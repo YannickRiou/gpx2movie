@@ -8,6 +8,7 @@
  * `LANDSCAPE_LEVELS` levels over the whole area, deeper only the children of tiles touching the corridor, and for
  * each terrain tile its imagery sub-tiles (`planImagerySubtiles`). Overview shots and high orbits need coarser tiles.
  */
+import { deviceBudget } from '../core/deviceBudget'
 import type { ImagerySource, LonLat, LonLatBounds, TerrainSource, TileKey } from '../core/types'
 import { expandBounds } from '../geo/lonLat'
 import { childrenOf, tileBounds, tileGroundSizeM, tilesForBounds, zoomForTileBudget } from '../geo/mercator'
@@ -23,6 +24,24 @@ export const LANDSCAPE_LEVELS = 2
 export const CORRIDOR_WIDTHS_M = [2_000, 5_000, 10_000] as const
 /** a pack bigger than this is refused (narrow the corridor) */
 export const MAX_PACK_TILES = 150_000
+
+/** « Détail de l'imagerie » levels, by zoom offset */
+const IMAGERY_LEVELS = ['Normal', 'Fin', 'Très fin']
+
+/**
+ * Imagery zoom offset of a pack: the setting, never finer than this device shows (core/deviceBudget.ts, as the view);
+ * `note` says so when it is coarser, null otherwise.
+ */
+export function packImageryLevel(
+  setting: number,
+  maxShown: number = deviceBudget().maxImageryZoomOffset,
+): { zoomOffset: number; note: string | null } {
+  if (setting <= maxShown) return { zoomOffset: setting, note: null }
+  return {
+    zoomOffset: maxShown,
+    note: `Imagerie au niveau « ${IMAGERY_LEVELS[maxShown]} » : cet appareil n’affiche pas le niveau « ${IMAGERY_LEVELS[setting]} ».`,
+  }
+}
 
 export interface OfflinePlanInput {
   /** points of every track */
