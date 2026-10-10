@@ -717,7 +717,7 @@ export function Timeline() {
       <div className="film-tl__bar">
         <button
           type="button"
-          className="btn btn--primary film-tl__play"
+          className="icon-btn film-tl__play"
           onClick={() => setPlaying(!playing)}
           aria-label={playing ? 'Mettre en pause' : 'Lancer le film'}
           data-tip={withShortcut(playing ? 'Pause' : 'Lecture', 'play')}

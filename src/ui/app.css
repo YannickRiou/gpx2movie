@@ -122,7 +122,7 @@
 .track__badge {
   margin-left: var(--space-2);
   font-weight: 600;
-  color: var(--color-accent-strong);
+  color: var(--color-glacier-deep);
 }
 
 /* « Prévoir la sortie »: folded under the card, date and departure side by side */
@@ -299,9 +299,9 @@
 
 .modified__badge {
   padding: 1px var(--space-2);
-  border: 1px solid var(--color-accent-strong);
+  border: 1px solid var(--text-2);
   border-radius: 999px;
-  color: var(--color-accent-strong);
+  color: var(--text-2);
   font-size: 11px;
   font-weight: 600;
 }
@@ -336,32 +336,38 @@
 
 .segmented {
   display: flex;
-  gap: 0;
-  border: 1px solid var(--color-ink);
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: var(--color-white);
+  background: var(--surface-card);
 }
 
 .segmented__option {
   flex: 1 1 0;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 7px var(--space-2);
+  padding: 5px var(--space-2);
+  border-radius: 4px;
   font-size: 13px;
+  line-height: 1.2;
   font-weight: 600;
-  color: var(--color-ink);
+  color: var(--text-2);
   cursor: pointer;
   user-select: none;
 }
 
-.segmented__option + .segmented__option {
-  border-left: 1px solid var(--color-ink);
+.segmented__option:hover {
+  color: var(--text-1);
 }
 
 .segmented__option:has(input:checked) {
-  background: var(--color-ink);
-  color: var(--color-white);
+  background: var(--surface-control);
+  color: var(--text-1);
+  box-shadow: var(--shadow-card);
 }
 
 .segmented__option:has(input:focus-visible) {
@@ -385,7 +391,7 @@
 
 .range {
   flex: 1 1 auto;
-  accent-color: var(--color-ink);
+  accent-color: var(--accent);
   margin: 0;
 }
 
@@ -415,7 +421,7 @@
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: var(--color-ink);
+  accent-color: var(--accent);
 }
 
 .checkbox:has(input:disabled) {
@@ -473,8 +479,8 @@
 }
 
 .library__item--current {
-  border-color: var(--color-accent);
-  background: var(--color-card);
+  border-color: var(--accent);
+  background: var(--accent-tint);
 }
 
 .library__item > .project__row {
@@ -494,7 +500,7 @@
   margin-left: var(--space-2);
   font-size: 12px;
   font-weight: 400;
-  color: var(--color-accent-strong);
+  color: var(--color-glacier-deep);
 }
 
 /* « Hors ligne » packs: name and figures, then « Supprimer » */
@@ -544,13 +550,10 @@
   padding: 5px var(--space-2);
 }
 
-.overlay-widget__tabs .segmented__option + .segmented__option {
-  border-left: 1px solid var(--color-ink);
-}
-
 .overlay-widget__tabs .segmented__option[aria-pressed='true'] {
-  background: var(--color-ink);
-  color: var(--color-white);
+  background: var(--surface-control);
+  color: var(--text-1);
+  box-shadow: var(--shadow-card);
 }
 
 .overlay-widget__tabs .segmented__option:focus-visible {
@@ -623,8 +626,6 @@
 
 .film-tl__play {
   flex: none;
-  width: 32px;
-  min-height: 28px;
   padding: 0;
 }
 
@@ -691,8 +692,8 @@
 }
 
 .film-tl .modified__badge {
-  border-color: var(--color-accent-light);
-  color: var(--color-accent-light);
+  border-color: var(--text-on-dark-2);
+  color: var(--text-on-dark-2);
 }
 
 .film-tl__body {
@@ -1455,8 +1456,8 @@
 }
 
 .segmented__option:has(input:disabled) {
-  background: var(--surface-card);
   color: var(--text-2);
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
@@ -1489,7 +1490,7 @@
   width: 2px;
   margin-left: -1px;
   border-radius: 1px;
-  background: var(--color-accent-strong);
+  background: var(--text-2);
 }
 
 .sun-date {
@@ -1528,9 +1529,9 @@
 }
 
 .sun-chip[aria-pressed='true'] {
-  border-color: var(--color-ink);
-  background: var(--color-ink);
-  color: var(--color-white);
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--text-1);
 }
 
 .sun-chip:focus-visible {
@@ -1605,8 +1606,8 @@
 }
 
 .checkbox.checkbox--switch input:checked {
-  border-color: var(--color-ink);
-  background: var(--color-ink);
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .checkbox.checkbox--switch input:checked::before {
@@ -1656,13 +1657,14 @@
 }
 
 .chip:has(input:checked) {
-  border-color: var(--color-ink);
-  background: var(--color-ink);
-  color: var(--color-white);
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--text-1);
 }
 
 .chip:has(input:checked)::before {
   content: '✓';
+  color: var(--accent);
   font-size: 11px;
 }
 

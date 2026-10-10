@@ -1,16 +1,23 @@
 /* OpenFlyover — charte graphique (variables, typographie, focus). */
 :root {
-  /* « Carte alpine » : papier de carte topographique, encre, rouge de balisage, glacier. */
-  --color-paper: #f5f2ea;
-  --color-card: #eae4d6;
-  --color-ink: #1c2a33;
-  --color-ink-soft: #55626b;
-  --color-line: #d6cdbb;
-  --color-accent: #c23b22;
-  --color-accent-strong: #a3301a;
-  --color-accent-light: #ff8a5c;
+  /* « Carte alpine » : papier de carte topographique, encre, rouge de balisage, glacier, mousse. */
+  --color-paper: #f6f3ec;
+  --color-card: #ece7da;
+  --color-ink: #1b2832;
+  --color-ink-raised: #263540;
+  --color-ink-soft: #4e5c65;
+  --color-line: #ddd6c6;
+  --color-line-strong: #8e8777;
+  --color-accent: #b9391f;
+  --color-accent-strong: #962c15;
+  --color-accent-tint: #f7ddd3;
+  --color-accent-light: #ff9b73;
   --color-glacier: #a9ccd9;
-  --color-moss: #3f6b4a;
+  --color-glacier-deep: #2f5d70;
+  --color-moss: #3a6446;
+  --color-moss-light: #8fc79b;
+  --color-amber: #7a5200;
+  --color-amber-light: #f0c35e;
   --color-white: #ffffff;
 
   --font-heading: 'Fraunces', Georgia, serif;
@@ -25,26 +32,43 @@
   --space-5: 24px;
   --space-6: 32px;
 
-  /* semantic surfaces, mapped to the palette above (a dark variant would only remap these) */
+  /* semantic roles, mapped to the palette above (a dark variant would only remap these) */
   --surface-chrome: var(--color-ink);
+  --surface-chrome-raised: var(--color-ink-raised);
   --surface-panel: var(--color-paper);
   --surface-card: var(--color-card);
+  --surface-control: var(--color-white);
   --text-1: var(--color-ink);
   --text-2: var(--color-ink-soft);
+  --text-on-dark: var(--color-white);
+  --text-on-dark-2: var(--color-glacier);
   --line: var(--color-line);
+  --line-strong: var(--color-line-strong);
+  --accent: var(--color-accent);
+  --accent-hover: var(--color-accent-strong);
+  --accent-tint: var(--color-accent-tint);
+  --accent-on-dark: var(--color-accent-light);
+  /* status: attention (unsaved, tiles in error), ok (start, success), error (toasts); each with its on-dark variant */
+  --status-attention: var(--color-amber);
+  --status-attention-on-dark: var(--color-amber-light);
+  --status-ok: var(--color-moss);
+  --status-ok-on-dark: var(--color-moss-light);
+  --status-error: var(--color-accent-strong);
+  --status-error-on-dark: var(--color-accent-light);
 
   /* shell layout and density */
   --topbar-h: 48px;
-  --rail-w: 56px;
+  --rail-w: 64px;
   --panel-w: 320px;
   --dock-w: 300px;
   --statusbar-h: 24px;
   --control-h: 32px;
-  --shadow-pop: 0 8px 24px rgb(28 42 51 / 0.28);
+  --shadow-card: 0 1px 2px rgb(27 40 50 / 0.08);
+  --shadow-pop: 0 2px 6px rgb(27 40 50 / 0.12), 0 12px 32px rgb(27 40 50 / 0.18);
 
-  --focus-ring: 2px solid var(--color-accent);
-  /* on the ink chrome: 6.3:1 against --color-ink */
-  --focus-ring-on-dark: 2px solid var(--color-accent-light);
+  --focus-ring: 2px solid var(--accent);
+  /* on the ink chrome: 7.3:1 against --color-ink */
+  --focus-ring-on-dark: 2px solid var(--accent-on-dark);
 }
 
 h1,
@@ -102,12 +126,12 @@ select {
 }
 
 .btn--primary {
-  background: var(--color-accent);
+  background: var(--accent);
   color: var(--color-white);
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: var(--color-accent-strong);
+  background: var(--accent-hover);
 }
 
 .btn--secondary {
@@ -142,9 +166,9 @@ select {
   width: 100%;
   min-height: 36px;
   padding: 0 var(--space-3);
-  border: 1px solid var(--color-line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  background: var(--color-white);
+  background: var(--surface-control);
   color: var(--color-ink);
 }
 
