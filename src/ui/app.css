@@ -82,8 +82,10 @@
   cursor: pointer;
 }
 
-.track__fly:hover:not(:disabled) {
-  background: var(--color-line);
+@media (hover: hover) {
+  .track__fly:hover:not(:disabled) {
+    background: var(--color-line);
+  }
 }
 
 .track__name {
@@ -115,8 +117,10 @@
   cursor: pointer;
 }
 
-.track__delete:hover {
-  background: var(--color-line);
+@media (hover: hover) {
+  .track__delete:hover {
+    background: var(--color-line);
+  }
 }
 
 .track__badge {
@@ -232,8 +236,10 @@
   cursor: pointer;
 }
 
-.climb:hover {
-  border-color: var(--color-ink);
+@media (hover: hover) {
+  .climb:hover {
+    border-color: var(--color-ink);
+  }
 }
 
 .climb__badge {
@@ -317,8 +323,10 @@
   cursor: pointer;
 }
 
-.modified__reset:hover:not(:disabled) {
-  border-color: var(--color-ink);
+@media (hover: hover) {
+  .modified__reset:hover:not(:disabled) {
+    border-color: var(--color-ink);
+  }
 }
 
 .modified__reset:disabled {
@@ -360,8 +368,10 @@
   user-select: none;
 }
 
-.segmented__option:hover {
-  color: var(--text-1);
+@media (hover: hover) {
+  .segmented__option:hover {
+    color: var(--text-1);
+  }
 }
 
 .segmented__option:has(input:checked) {
@@ -588,9 +598,14 @@
   cursor: pointer;
 }
 
-.color-row__swatch:hover,
 .color-row__swatch[aria-pressed='true'] {
   box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 4px var(--color-ink);
+}
+
+@media (hover: hover) {
+  .color-row__swatch:hover {
+    box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 4px var(--color-ink);
+  }
 }
 
 .color-row__input:focus-visible,
@@ -668,8 +683,10 @@
   padding: 0 var(--space-1);
 }
 
-.film-tl__select:hover {
-  border-color: var(--color-white);
+@media (hover: hover) {
+  .film-tl__select:hover {
+    border-color: var(--color-white);
+  }
 }
 
 .film-tl__check {
@@ -927,9 +944,11 @@
   cursor: ew-resize;
 }
 
-.film-tl__grip:hover {
-  background: var(--color-ink);
-  opacity: 0.3;
+@media (hover: hover) {
+  .film-tl__grip:hover {
+    background: var(--color-ink);
+    opacity: 0.3;
+  }
 }
 
 .film-tl__grip--start {
@@ -1207,8 +1226,10 @@
   cursor: pointer;
 }
 
-.landmark:hover {
-  border-color: var(--color-ink);
+@media (hover: hover) {
+  .landmark:hover {
+    border-color: var(--color-ink);
+  }
 }
 
 .landmark__kind {
@@ -1306,8 +1327,10 @@
   grid-template-columns: 3em minmax(0, 1fr) 4.5em 4.5em;
 }
 
-.roadbook__row:hover {
-  border-color: var(--color-ink);
+@media (hover: hover) {
+  .roadbook__row:hover {
+    border-color: var(--color-ink);
+  }
 }
 
 .roadbook__head {
@@ -1318,8 +1341,10 @@
   cursor: default;
 }
 
-.roadbook__head:hover {
-  border-color: transparent;
+@media (hover: hover) {
+  .roadbook__head:hover {
+    border-color: transparent;
+  }
 }
 
 .roadbook__km,
@@ -1397,9 +1422,14 @@
   display: none;
 }
 
-.more-settings__summary:hover,
 .more-settings[open] > .more-settings__summary {
   color: var(--text-1);
+}
+
+@media (hover: hover) {
+  .more-settings__summary:hover {
+    color: var(--text-1);
+  }
 }
 
 .more-settings__summary:focus-visible {
@@ -1437,9 +1467,14 @@
   cursor: help;
 }
 
-.info-tip:hover,
 .info-tip:focus-visible {
   color: var(--text-1);
+}
+
+@media (hover: hover) {
+  .info-tip:hover {
+    color: var(--text-1);
+  }
 }
 
 .info-tip:focus-visible {
@@ -1524,8 +1559,10 @@
   cursor: pointer;
 }
 
-.sun-chip:hover:not(:disabled) {
-  border-color: var(--color-ink);
+@media (hover: hover) {
+  .sun-chip:hover:not(:disabled) {
+    border-color: var(--color-ink);
+  }
 }
 
 .sun-chip[aria-pressed='true'] {
@@ -1669,8 +1706,10 @@
   opacity: 0;
 }
 
-.chip:hover {
-  border-color: var(--color-ink);
+@media (hover: hover) {
+  .chip:hover {
+    border-color: var(--color-ink);
+  }
 }
 
 .chip:has(input:checked) {
@@ -1713,8 +1752,10 @@
   justify-content: center;
 }
 
-.track__delete:hover {
-  color: var(--text-1);
+@media (hover: hover) {
+  .track__delete:hover {
+    color: var(--text-1);
+  }
 }
 
 /* widget options: nested under their switch by a rule, the first widget of a section without its top rule */
@@ -1768,9 +1809,14 @@
   display: none;
 }
 
-.weather__details-summary:hover,
 .weather__details[open] > .weather__details-summary {
   color: var(--text-1);
+}
+
+@media (hover: hover) {
+  .weather__details-summary:hover {
+    color: var(--text-1);
+  }
 }
 
 .weather__details:not([open]) > .weather__details-summary > .icon {

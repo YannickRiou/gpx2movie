@@ -364,7 +364,8 @@ ink, 7.3:1).
     options, tiles, menu items and timeline buttons; lanes 40 px, grips 16 px; a larger invisible hit area around ⓘ;
     16 px text in fields (iOS zooms into smaller ones); no callout or selection on the 3D canvas.
   - *No hover* (`hover: none`): `data-tip` tooltips do not stick after a tap; an ⓘ shows its sentence when tapped
-    (focus), a long press shows any other tip (`:active`).
+    (focus), a long press shows any other tip (`:active`). Every other `:hover` style sits in `@media (hover: hover)`,
+    in place (same cascade on a computer): no grey background or border left on a button after a tap.
 - **Sections of the Carte and Survol tabs** (`PanelSection.tsx`): `PanelSection` = flat collapsible section (`fold` classes,
   sticky header: title, "modifié / Par défaut" of its keys, chevron), open initially, then as last left: open / folded
   state remembered by title in the platform storage (`FOLDS_KEY` `openflyover.folds.v1`, `parseFoldPrefs` in `shell.ts`,

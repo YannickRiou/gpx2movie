@@ -23,6 +23,8 @@
   cursor: pointer;
 }
 
-.poster__again:hover {
-  color: var(--color-ink);
+@media (hover: hover) {
+  .poster__again:hover {
+    color: var(--color-ink);
+  }
 }

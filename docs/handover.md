@@ -424,7 +424,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
     cache is unchanged.
   - *Leftovers: done* (10 October 2026): pixel ratio 1.5 while fingers move the 3D view, as while playing
     (`scene/touchGesture.ts`); « Hors ligne » plans the imagery no finer than the device shows (« Fin » on a phone,
-    said in the estimate, `packImageryLevel`). Checked in Chromium phone emulation only.
+    said in the estimate, `packImageryLevel`); hover styles only where the device hovers (`@media (hover: hover)`).
+    Checked in Chromium phone emulation only.
 
 **In the user's hands**
 9. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
