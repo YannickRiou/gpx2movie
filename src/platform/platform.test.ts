@@ -75,6 +75,16 @@ describe('detection', () => {
     expect(detectCapabilities({}).canStreamToDisk).toBe(false)
   })
 
+  it('saves through the share sheet on a touch screen without a save picker (iOS, older Android)', () => {
+    const touch = { navigator: { share: () => undefined }, matchMedia: (q: string) => ({ matches: q === '(pointer: coarse)' }) }
+    expect(detectCapabilities(touch).sharesFiles).toBe(true)
+    expect(detectCapabilities({ ...touch, showSaveFilePicker: () => undefined }).sharesFiles).toBe(false)
+    expect(detectCapabilities({ ...touch, matchMedia: () => ({ matches: false }) }).sharesFiles).toBe(false)
+    expect(detectCapabilities({ ...touch, navigator: {} }).sharesFiles).toBe(false)
+    expect(detectCapabilities({ ...touch, isTauri: true }).sharesFiles).toBe(false)
+    expect(detectCapabilities({}).sharesFiles).toBe(false)
+  })
+
   it('selects the desktop platform inside Tauri, the web one elsewhere', () => {
     expect(selectPlatform({ isTauri: true }).capabilities.isDesktop).toBe(true)
     expect(selectPlatform({}).capabilities.isDesktop).toBe(false)
@@ -84,7 +94,8 @@ describe('detection', () => {
     const caps = (isDesktop: boolean, videoEncoder: VideoEncoderKind) => ({ isDesktop, videoEncoder, canStreamToDisk: isDesktop })
     expect(videoEncoderMissingHint(caps(false, 'webcodecs'))).toBeNull()
     expect(videoEncoderMissingHint(caps(true, 'native'))).toMatch(/installez ffmpeg/)
-    expect(videoEncoderMissingHint(caps(false, null))).toMatch(/WebCodecs/)
+    expect(videoEncoderMissingHint(caps(false, null), false)).toMatch(/Firefox récent/)
+    expect(videoEncoderMissingHint(caps(false, null), true)).toMatch(/Chrome \(Android\) ou Safari 16\.4/)
   })
 })
 
@@ -202,6 +213,56 @@ describe('web platform', () => {
     expect(outcome).toEqual({ saved: true, fileName: 'a.json' })
     expect(click).toHaveBeenCalledTimes(1)
     click.mockRestore()
+  })
+
+  describe('share sheet (phones without a save picker)', () => {
+    const touch = { navigator: { share: () => undefined }, matchMedia: () => ({ matches: true }) }
+    const stub = (share: (data: ShareData) => Promise<void>, canShare = true) => {
+      Object.defineProperty(navigator, 'share', { value: vi.fn(share), configurable: true })
+      Object.defineProperty(navigator, 'canShare', { value: vi.fn(() => canShare), configurable: true })
+      return navigator.share as ReturnType<typeof vi.fn>
+    }
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, 'share')
+      Reflect.deleteProperty(navigator, 'canShare')
+    })
+
+    it('hands the file to the share sheet', async () => {
+      const share = stub(async () => undefined)
+      const outcome = await selectPlatform(touch).saveFile(new Blob(['{}'], { type: 'application/json' }), { fileName: 'Tour.openflyover.json' })
+      expect(outcome).toEqual({ saved: true, fileName: 'Tour.openflyover.json' })
+      const file = (share.mock.calls[0][0] as ShareData).files?.[0]
+      expect(file?.name).toBe('Tour.openflyover.json')
+      expect(file?.type).toBe('application/json')
+    })
+
+    it('nothing saved when the sheet is closed', async () => {
+      stub(async () => Promise.reject(new DOMException('closed', 'AbortError')))
+      expect(await selectPlatform(touch).saveFile(new Blob(['x']), { fileName: 'a.png' })).toEqual({ saved: false })
+    })
+
+    it('downloads when the sheet does not take the file or refuses (no click left)', async () => {
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+      URL.createObjectURL = vi.fn(() => 'blob:x')
+      URL.revokeObjectURL = vi.fn()
+      stub(async () => undefined, false)
+      expect(await selectPlatform(touch).saveFile(new Blob(['x']), { fileName: 'a.json' })).toEqual({ saved: true, fileName: 'a.json' })
+      stub(async () => Promise.reject(new DOMException('no gesture', 'NotAllowedError')))
+      expect(await selectPlatform(touch).saveFile(new Blob(['x']), { fileName: 'a.png' })).toEqual({ saved: true, fileName: 'a.png' })
+      expect(click).toHaveBeenCalledTimes(2)
+      click.mockRestore()
+    })
+
+    it('never on a computer: the download as before', async () => {
+      const share = stub(async () => undefined)
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+      URL.createObjectURL = vi.fn(() => 'blob:x')
+      URL.revokeObjectURL = vi.fn()
+      await selectPlatform({ ...touch, matchMedia: () => ({ matches: false }) }).saveFile(new Blob(['x']), { fileName: 'a.png' })
+      expect(share).not.toHaveBeenCalled()
+      expect(click).toHaveBeenCalledTimes(1)
+      click.mockRestore()
+    })
   })
 
   it('opens the picked files and nothing when the picker is closed', async () => {

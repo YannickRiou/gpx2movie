@@ -16,6 +16,7 @@ import { useFrame } from '@react-three/fiber'
 import { Vector3, type Camera, type Data3DTexture } from 'three'
 import { CloudLayers, type CloudsEffect } from '@takram/three-clouds'
 import { Clouds, type CloudsProps } from '@takram/three-clouds/r3f'
+import { deviceBudget } from '../core/deviceBudget'
 import { isExportBusy, useExportStore } from '../export/store'
 import { samplePath } from '../flyover/path'
 import { geoidUndulation } from '../geo/geoid'
@@ -38,10 +39,11 @@ import { useTerrainContext } from './TerrainLayer'
 
 const CLOUD_TEXTURES_URL = `${import.meta.env.BASE_URL}clouds/`
 /**
- * Resolution of the cloud pass in the preview (fraction of the canvas): full, so that the average of a still view is
- * as sharp as an exported frame; while the view moves, temporal upscaling still marches one pixel in 16 only.
+ * Resolution of the cloud pass in the preview (fraction of the canvas): full on a computer, so that the average of a
+ * still view is as sharp as an exported frame; half on a phone or tablet. While the view moves, temporal upscaling
+ * still marches one pixel in 16 only.
  */
-const PREVIEW_RESOLUTION_SCALE = 1
+const PREVIEW_RESOLUTION_SCALE = deviceBudget().cloudResolutionScale
 /**
  * Preview marches, cheaper than the 'low' preset (200 steps of at least 100 m, 25 for the shadows): the clouds of the
  * preview are a little coarser, the export keeps its quality (`qualityPreset` sets every value back).

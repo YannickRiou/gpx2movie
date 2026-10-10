@@ -161,6 +161,13 @@ const PATHS = {
       <path d="m6 6 12 12" />
     </>
   ),
+  ellipsis: (
+    <>
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </>
+  ),
   'chevron-down': <path d="m6 9 6 6 6-6" />,
   'chevron-up': <path d="m18 15-6-6-6 6" />,
   'panel-left-close': (

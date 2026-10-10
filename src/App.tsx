@@ -23,8 +23,19 @@ import { ProjectPanel } from './ui/ProjectPanel'
 import { RoadbookPanel } from './ui/RoadbookPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
 import { useSafeZonesStore } from './ui/SafeZones'
-import { ONE_SIDE_MAX_WIDTH, SHELL_TABS, isFileDrag, nextTabIndex, parseShellPrefs, shellReducer } from './ui/shell'
+import {
+  BOTTOM_SHEET_QUERY,
+  COMPACT_QUERY,
+  ONE_SIDE_MAX_WIDTH,
+  SHELL_TABS,
+  isFileDrag,
+  matchesQuery,
+  nextTabIndex,
+  parseShellPrefs,
+  shellReducer,
+} from './ui/shell'
 import type { ShellTab } from './ui/shell'
+import { SheetHandle } from './ui/SheetHandle'
 import { keyFocus, matchShortcut, seekTime, withShortcut } from './ui/shortcuts'
 import { Stage } from './ui/Stage'
 import { StatusBar } from './ui/StatusBar'
@@ -165,9 +176,9 @@ export default function App() {
   useEffect(() => {
     collapsedRef.current = shell.collapsed
     if (shell.collapsed) return
-    // drawer mode: a press outside the panel and its rail closes it
+    // drawer mode: a press outside the panel and its rail closes it (a bottom sheet leaves the view usable)
     const onPointerDown = (e: PointerEvent) => {
-      if (!isDrawer() || !(e.target instanceof Element)) return
+      if (!isDrawer() || matchesQuery(BOTTOM_SHEET_QUERY) || !(e.target instanceof Element)) return
       if (e.target.closest('#side-panel, .rail')) return
       dispatch({ type: 'toggle-panel', narrow: true })
     }
@@ -377,6 +388,7 @@ export default function App() {
         {/* every tab stays mounted: weather, landmarks and export have side effects */}
         {/* no change to the tracks or the settings while a film is being made: the export reads them live */}
         <aside id="side-panel" className="panel" aria-label="Réglages" hidden={shell.collapsed} inert={exporting}>
+          <SheetHandle onClose={() => dispatch({ type: 'fold' })} />
           {panel(
             'trace',
             <>
@@ -415,16 +427,23 @@ export default function App() {
             {!hasTracks && <EmptyState />}
             <Toaster />
           </Stage>
-          <Timeline />
+          <Timeline
+            sheetOpen={!shell.collapsed || shell.dockOpen}
+            onUnfold={() => {
+              if (matchesQuery(COMPACT_QUERY) && !isExporting()) dispatch({ type: 'fold' })
+            }}
+          />
         </main>
 
         <aside id="export-dock" className="dock" aria-label="Export" hidden={!shell.dockOpen}>
+          <SheetHandle onClose={() => !exporting && dispatch({ type: 'close-dock' })} />
           <Suspense fallback={<p className="field__hint">Chargement…</p>}>
             {dockMounted && <ExportPanel onClose={exporting ? undefined : () => dispatch({ type: 'close-dock' })} />}
           </Suspense>
         </aside>
         {/* the export drawer goes first */}
         <aside className="dock" aria-label="Inspecteur" hidden={shell.dockOpen || !shell.inspecting} inert={exporting}>
+          <SheetHandle onClose={() => useAppStore.getState().setFilmSelection(null)} />
           {shell.inspecting && !shell.dockOpen && (
             <Suspense>
               <FilmInspector />

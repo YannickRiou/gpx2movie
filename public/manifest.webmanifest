@@ -1,0 +1,31 @@
+{
+  "id": "./",
+  "name": "OpenFlyover",
+  "short_name": "OpenFlyover",
+  "description": "Films de survol 3D de vos traces GPX et FIT, calculés sur votre appareil.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#1b2832",
+  "background_color": "#f6f3ec",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "share_target": {
+    "action": "share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "tracks",
+          "accept": [".gpx", ".fit", "application/gpx+xml", "application/vnd.ant.fit", "application/xml", "text/xml", "application/octet-stream"]
+        }
+      ]
+    }
+  }
+}

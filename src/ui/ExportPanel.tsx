@@ -24,6 +24,7 @@ import {
   VIDEO_FPS,
   VIDEO_RESOLUTIONS,
   buildFrameSchedule,
+  exportResolutionNote,
   videoSize,
   type VideoQuality,
   type VideoSettings,
@@ -40,6 +41,7 @@ import {
   type StillType,
 } from '../export/store'
 import { getPlatform, videoEncoderMissingHint } from '../platform'
+import { SHARE_SAVE_LABEL } from '../platform/platform'
 import { canPickFolder, pickFolder, pickReadableFolder, type ReadableFolder, type WritableFolder } from '../platform/folder'
 import { startPoster } from '../poster/export'
 import { PosterPanel } from '../poster/PosterPanel'
@@ -85,9 +87,16 @@ function formatMegabytes(bytes: number): string {
   return `${formatNumber(bytes / 1e6, 1)} Mo`
 }
 
-/** Start a download of an object URL. */
+/** Phones without a save picker hand the file to the share sheet, which needs a tap: no automatic download there. */
+function sharesFiles(): boolean {
+  const { isDesktop, sharesFiles } = getPlatform().capabilities
+  return !isDesktop && !!sharesFiles
+}
+
+/** Start a download of an object URL (the share sheet on phones, from a tap). */
 function download(url: string, fileName: string): void {
   if (getPlatform().capabilities.isDesktop) return void saveExportedFile(url, fileName)
+  if (sharesFiles()) return void getPlatform().saveUrl(url, { fileName }).catch(() => undefined)
   const link = document.createElement('a')
   link.href = url
   link.download = fileName
@@ -124,6 +133,7 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
 
   const busy = isExportBusy(phase)
   const { width, height } = videoSize(video.aspect, video.resolution)
+  const resolutionNote = exportResolutionNote(video.resolution)
   const totalFrames = buildFrameSchedule({
     durationS,
     fps: video.fps,
@@ -159,13 +169,13 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
     const { url, fileName } = result
     // written straight to disk: already saved
     if (url === null) return void showToast({ kind: 'success', text: `Vidéo enregistrée dans ${fileName}` })
-    download(url, fileName)
-    if (result.mimeType.startsWith('image/')) showToast({ kind: 'success', text: 'Image prête' })
-    else {
-      const label = getPlatform().capabilities.isDesktop ? 'Enregistrer…' : 'Télécharger à nouveau'
-      const again = { label, run: () => download(url, fileName) }
-      showToast({ kind: 'success', text: 'Vidéo prête', action: again })
-    }
+    const share = sharesFiles()
+    if (!share) download(url, fileName)
+    const image = result.mimeType.startsWith('image/')
+    const label = share ? SHARE_SAVE_LABEL : getPlatform().capabilities.isDesktop ? 'Enregistrer…' : 'Télécharger à nouveau'
+    const action = { label, run: () => download(url, fileName) }
+    if (image && !share) showToast({ kind: 'success', text: 'Image prête' })
+    else showToast({ kind: 'success', text: image ? 'Image prête' : 'Vidéo prête', action })
   }, [result])
 
   useEffect(() => {
@@ -279,6 +289,7 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         </select>
         <p id={`${id}-size`} className="field__hint">
           {formatNumber(width)} × {formatNumber(height)} px
+          {resolutionNote && ` · ${resolutionNote}`}
         </p>
       </div>
 
@@ -372,9 +383,9 @@ function VideoExportPanel({ onClose, modes, hidden }: { onClose?: () => void; mo
         <p className="field__hint">
           {result.url === null ? (
             `Enregistrée dans ${result.fileName}`
-          ) : getPlatform().capabilities.isDesktop ? (
+          ) : getPlatform().capabilities.isDesktop || sharesFiles() ? (
             <button type="button" className="btn btn--secondary btn--small" onClick={() => result.url && download(result.url, result.fileName)}>
-              Enregistrer {result.fileName}…
+              {sharesFiles() ? `${SHARE_SAVE_LABEL} ${result.fileName}` : `Enregistrer ${result.fileName}…`}
             </button>
           ) : (
             <a href={result.url} download={result.fileName}>

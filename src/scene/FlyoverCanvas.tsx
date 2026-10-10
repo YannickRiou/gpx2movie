@@ -11,11 +11,13 @@
  * demand only (`renderOnDemand.ts`).
  */
 import { Suspense, lazy, useEffect, useMemo, type CSSProperties } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import type { RootState } from '@react-three/fiber'
+import { deviceBudget } from '../core/deviceBudget'
 import { useAppStore } from '../state/store'
 import { dismissToast, showToast } from '../ui/toast'
 import { ExportController } from '../export/ExportController'
+import { isExportBusy, useExportStore } from '../export/store'
 import { CAMERA_FOV_DEG } from '../flyover/filmCamera'
 import { createOverlayDrawer } from '../overlay/exportOverlay'
 import { CameraRig } from './CameraRig'
@@ -66,6 +68,20 @@ export interface FlyoverCanvasProps {
   style?: CSSProperties
 }
 
+/** Pixel ratio caps of this device: [1, 2] on a computer, lower while the film plays on a phone (core/deviceBudget.ts). */
+const BUDGET = deviceBudget()
+
+/** Phones and tablets: the lower pixel ratio while the film plays; the export sets its own. */
+function MovingPixelRatio() {
+  const playing = useAppStore((s) => s.playback.playing)
+  const exporting = useExportStore((s) => isExportBusy(s.phase))
+  const setDpr = useThree((s) => s.setDpr)
+  useEffect(() => {
+    if (!exporting) setDpr([1, playing ? BUDGET.movingPixelRatio : BUDGET.maxPixelRatio])
+  }, [playing, exporting, setDpr])
+  return null
+}
+
 /** Frames only while something moves (see renderOnDemand.ts). */
 function RenderOnDemand() {
   useRenderOnDemand()
@@ -113,13 +129,14 @@ export function FlyoverCanvas({ className, style }: FlyoverCanvasProps) {
 
   return (
     <div className={className} style={style ? { ...wrapperStyle, ...style } : wrapperStyle}>
-      <Canvas gl={GL} camera={CAMERA} dpr={[1, 2]} frameloop="demand" flat shadows="percentage" style={canvasStyle} onCreated={watchContextLoss}>
+      <Canvas gl={GL} camera={CAMERA} dpr={[1, BUDGET.maxPixelRatio]} frameloop="demand" flat shadows="percentage" style={canvasStyle} onCreated={watchContextLoss}>
         {!atmosphere && (
           <>
             <hemisphereLight color={HEMISPHERE_SKY} groundColor={HEMISPHERE_GROUND} intensity={HEMISPHERE_INTENSITY} />
             <directionalLight position={SUN_POSITION} intensity={SUN_INTENSITY} />
           </>
         )}
+        {BUDGET.movingPixelRatio !== BUDGET.maxPixelRatio && <MovingPixelRatio />}
         {hasTracks && (
           <TerrainLayer>
             <RenderOnDemand />

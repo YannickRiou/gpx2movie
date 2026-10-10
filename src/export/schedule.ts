@@ -6,6 +6,7 @@
  * (linear, or following the variable pacing of the flyover), optionally preceded and followed by frames held on
  * the first / last image.
  */
+import { deviceBudget } from '../core/deviceBudget'
 
 /**
  * Film aspect ratios (`x:y` = width:height). The size is the aspect × a resolution class defined by the short
@@ -48,6 +49,17 @@ export interface VideoSettings {
 
 export const DEFAULT_VIDEO_SETTINGS: VideoSettings = { aspect: '16:9', resolution: '1080p', fps: 30, quality: 'high' }
 
+/**
+ * Why a resolution class comes out smaller here (phones and tablets), null when it does not. To show next to the
+ * resolution choice.
+ */
+export function exportResolutionNote(resolution: VideoResolution, maxShortSide = deviceBudget().maxExportShortSide): string | null {
+  const shortSide = (VIDEO_RESOLUTIONS.find((r) => r.id === resolution) ?? VIDEO_RESOLUTIONS[1]).shortSide
+  if (shortSide <= maxShortSide) return null
+  const cap = VIDEO_RESOLUTIONS.find((r) => r.shortSide === maxShortSide)?.label ?? `${maxShortSide}p`
+  return `Sur cet appareil, l'export est limité à ${cap} (mémoire de la carte graphique) : le film sort en ${cap}.`
+}
+
 /** Frames held on the first image (lets the viewer settle) and on the last one (the arrival). */
 export const EXPORT_HOLD_START_S = 1
 export const EXPORT_HOLD_END_S = 2
@@ -57,9 +69,14 @@ export const EXPORT_HOLD_END_S = 2
  * to an even number (H.264 / HEVC need even sizes). Every combination is exact today: 1920 × 1080,
  * 2160 × 3840, 1080 × 1350, 2520 × 1080…
  */
-export function videoSize(aspect: VideoAspect, resolution: VideoResolution): { width: number; height: number } {
+export function videoSize(
+  aspect: VideoAspect,
+  resolution: VideoResolution,
+  maxShortSide = deviceBudget().maxExportShortSide,
+): { width: number; height: number } {
   const a = VIDEO_ASPECTS.find((v) => v.id === aspect) ?? VIDEO_ASPECTS[0]
-  const short = (VIDEO_RESOLUTIONS.find((r) => r.id === resolution) ?? VIDEO_RESOLUTIONS[1]).shortSide
+  // a phone or tablet renders at most 1080p / 1440p (GPU memory): the larger classes come out at that size
+  const short = Math.min((VIDEO_RESOLUTIONS.find((r) => r.id === resolution) ?? VIDEO_RESOLUTIONS[1]).shortSide, maxShortSide)
   const long = 2 * Math.round((short * Math.max(a.x, a.y)) / Math.min(a.x, a.y) / 2)
   return a.x >= a.y ? { width: long, height: short } : { width: short, height: long }
 }

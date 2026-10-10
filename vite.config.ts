@@ -1,5 +1,7 @@
 /// <reference types="vitest/config" />
+import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -50,6 +52,44 @@ function atmosphereAssets(): Plugin {
 }
 
 /**
+ * Service worker of the website (`src/platform/serviceWorker.js`), emitted as `sw.js` with its precache list: every
+ * build file and public file except the sky and cloud textures (cached on first use) and the Strava callback page.
+ * Names are relative to the scope, so the same worker serves under /gpx2movie/ or at a root. Build only.
+ */
+function serviceWorker(): Plugin {
+  const publicDir = fileURLToPath(new URL('./public/', import.meta.url))
+  const hash = (files: [string, string | Uint8Array][]) => {
+    const h = createHash('sha256')
+    for (const [name, source] of [...files].sort(([a], [b]) => a.localeCompare(b))) h.update(name).update(source)
+    return h.digest('hex').slice(0, 12)
+  }
+  return {
+    name: 'openflyover-service-worker',
+    apply: 'build',
+    enforce: 'post',
+    generateBundle(_, bundle) {
+      const built = Object.values(bundle).map((f): [string, string | Uint8Array] => [f.fileName, f.type === 'chunk' ? f.code : f.source])
+      const sky = built.filter(([name]) => /^(atmosphere|clouds)\//.test(name))
+      const publicFiles = readdirSync(publicDir, { recursive: true, withFileTypes: true })
+        .filter((d) => d.isFile())
+        .map((d): [string, Uint8Array] => {
+          const path = join(d.parentPath, d.name)
+          return [relative(publicDir, path).replaceAll('\\', '/'), readFileSync(path)]
+        })
+        .filter(([name]) => name !== 'oauth-callback.html')
+      const shell = [...built.filter(([name]) => !sky.some(([s]) => s === name)), ...publicFiles]
+      const precache = ['./', ...shell.map(([name]) => name).filter((name) => name !== 'index.html')]
+      const template = readFileSync(new URL('./src/platform/serviceWorker.js', import.meta.url), 'utf8')
+      const source = template
+        .replace('/* PRECACHE */ []', JSON.stringify(precache))
+        .replace("/* VERSION */ 'dev'", JSON.stringify(hash([...shell, ['sw.js', template]])))
+        .replace("/* SKY_VERSION */ 'dev'", JSON.stringify(hash(sky)))
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source })
+    },
+  }
+}
+
+/**
  * Dev proxy for tile sources that do not send CORS headers.
  * A source whose `urlTemplate` starts with `/tiles/<id>/` is rewritten to the upstream below.
  * Keep this list in sync with src/terrain/sources.ts.
@@ -76,7 +116,7 @@ const proxy = Object.fromEntries(
 export default defineConfig({
   // GitHub Pages serves the site under /gpx2movie/ (pages.yml); '/' everywhere else, desktop app included
   base: process.env.BASE_PATH ?? '/',
-  plugins: [react(), atmosphereAssets()],
+  plugins: [react(), atmosphereAssets(), serviceWorker()],
   // src-tauri/target (Rust build of the desktop app) is not watched
   server: { port: 5173, proxy, watch: { ignored: ['**/src-tauri/**'] } },
   build: {

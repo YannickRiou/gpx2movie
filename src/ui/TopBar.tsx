@@ -1,10 +1,11 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { VIDEO_ASPECTS } from '../export/schedule'
 import { useBatchStore } from '../export/batch'
 import { isExportBusy, useExportStore } from '../export/store'
 import { getSettingsHistory } from '../project/history'
 import { useAppStore } from '../state/store'
 import { AspectIcon, Icon } from './icons'
+import type { IconName } from './icons'
 import { saveProject } from './projectActions'
 import { effectiveProjectName, isProjectDirty } from './shell'
 import { withShortcut } from './shortcuts'
@@ -34,6 +35,64 @@ function FormatSwitcher({ disabled }: { disabled: boolean }) {
           <span className="visually-hidden">{a.label}</span>
         </label>
       ))}
+    </div>
+  )
+}
+
+interface MoreItem {
+  label: string
+  icon: IconName
+  onClick(): void
+  disabled: boolean
+}
+
+/** « Plus d'actions » (phone only, shown by shell.css): the actions of the bar that do not fit. */
+function MoreMenu({ items }: { items: MoreItem[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target instanceof Node) || !ref.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    return () => document.removeEventListener('pointerdown', onDown, true)
+  }, [open])
+
+  return (
+    <div
+      ref={ref}
+      className="topbar__more"
+      data-local-escape=""
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || !open) return
+        setOpen(false)
+        e.stopPropagation()
+      }}
+    >
+      <button type="button" className="icon-btn" aria-label="Plus d'actions" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name="ellipsis" />
+      </button>
+      {open && (
+        <div className="track-menu topbar__menu" role="menu" aria-label="Plus d'actions">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className="track-menu__item"
+              disabled={item.disabled}
+              onClick={() => {
+                setOpen(false)
+                item.onClick()
+              }}
+            >
+              <Icon name={item.icon} size={18} />
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -107,6 +166,14 @@ export function TopBar({ onOpen, exportOpen, onToggleExport, onHelp }: TopBarPro
         <button type="button" className="icon-btn" onClick={onHelp} aria-label="Raccourcis clavier" data-tip={withShortcut('Raccourcis clavier', 'help')}>
           <Icon name="circle-help" />
         </button>
+        <MoreMenu
+          items={[
+            { label: 'Annuler', icon: 'undo', onClick: history.undo, disabled: !canUndo || busy },
+            { label: 'Rétablir', icon: 'redo', onClick: history.redo, disabled: !canRedo || busy },
+            { label: 'Ouvrir…', icon: 'folder-open', onClick: onOpen, disabled: busy },
+            { label: 'Enregistrer', icon: 'save', onClick: saveProject, disabled: busy },
+          ]}
+        />
         {busy ? (
           <button
             type="button"

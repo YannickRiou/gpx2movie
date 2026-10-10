@@ -1201,6 +1201,30 @@
   font: 600 12px/1.2 var(--font-body);
 }
 
+/* Phone only (see the media queries at the end): grip of a bottom sheet, « Plus d'actions » of the top bar */
+.sheet-handle,
+.topbar__more {
+  display: none;
+}
+
+/* the menu of « Plus d'actions », under its button (the look of the track menu) */
+.topbar__menu {
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+}
+
+.topbar__menu .track-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.topbar__menu .track-menu__item:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 /* Status strip --------------------------------------------------------------- */
 .status {
   display: flex;
@@ -1470,7 +1494,7 @@
   }
 }
 
-/* the panel becomes a drawer over the view */
+/* the panel becomes a drawer over the view, the export drawer and the inspector too (on the right) */
 @media (max-width: 1023px) {
   .panel {
     position: absolute;
@@ -1481,10 +1505,151 @@
     width: min(var(--panel-w), calc(100% - var(--rail-w) - 16px));
     box-shadow: var(--shadow-pop);
   }
+
+  .dock {
+    position: absolute;
+    z-index: 8;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(var(--dock-w), calc(100% - var(--rail-w) - 16px));
+    box-shadow: var(--shadow-pop);
+  }
 }
 
-/* tabs in a bottom bar, panel and dock as sheets above it */
-@media (max-width: 699px) {
+/* Touch screens (phone, tablet): targets of 44 px at least (Apple HIG), 16 px text in fields (no zoom on focus in iOS) */
+@media (pointer: coarse) {
+  :root {
+    --topbar-h: 56px;
+    --control-h: 44px;
+  }
+
+  .btn,
+  .btn--small,
+  .select,
+  .input,
+  .film-tl__select,
+  .sun-chip,
+  .chip,
+  .segmented__option,
+  .checkbox,
+  .fold__summary,
+  .export__more-summary,
+  .track-menu__item {
+    min-height: 44px;
+  }
+
+  .track-menu__item {
+    height: auto;
+  }
+
+  .shell :is(input:not([type='range'], [type='checkbox'], [type='radio'], [type='color']), select, textarea) {
+    font-size: 16px;
+  }
+
+  .checkbox input {
+    width: 22px;
+    height: 22px;
+  }
+
+  .range {
+    height: 44px;
+  }
+
+  .format-switch__option {
+    width: 44px;
+    height: 44px;
+  }
+
+  .icon-btn--float,
+  .rail__toggle,
+  .track__fly,
+  .track__delete {
+    width: 44px;
+    height: 44px;
+  }
+
+  .view__safe-zones {
+    top: calc(var(--space-3) + 44px + var(--space-2));
+  }
+
+  .toast__action,
+  .toast .icon-btn {
+    min-width: 44px;
+    height: 44px;
+    margin-top: 0;
+  }
+
+  .anchor-picker__grid {
+    grid-template-columns: repeat(3, 44px);
+    grid-auto-rows: 44px;
+  }
+
+  /* small glyphs: a wider invisible hit area around them */
+  .info-tip,
+  .status__info {
+    position: relative;
+  }
+
+  .info-tip::before,
+  .status__info::before {
+    content: '';
+    position: absolute;
+    inset: -14px;
+  }
+
+  .film-tl__bar .icon-btn,
+  .film-tl__bar .film-tl__play {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .film-tl__head,
+  .film-tl__lane {
+    height: 40px;
+  }
+
+  .film-tl__head--ruler,
+  .film-tl__ruler {
+    height: 28px;
+  }
+
+  .film-tl__tick {
+    line-height: 28px;
+  }
+
+  .film-tl__grip {
+    width: 16px;
+  }
+
+  .film-tl__key {
+    width: 16px;
+    height: 16px;
+    margin: -9px 0 0 -9px;
+  }
+
+  /* the 3D view: no callout or text selection under a long press */
+  .view__stage canvas {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* No hover on touch: a tooltip would stay after a tap. A tap on an ⓘ shows its sentence, a long press any other. */
+@media (hover: none) {
+  [data-tip]:hover::after {
+    content: none;
+  }
+
+  [data-tip]:hover:active::after,
+  .info-tip[data-tip]:hover:focus::after {
+    content: attr(data-tip);
+  }
+}
+
+/* Phone, and touch tablet in portrait: undo / redo, open and save in « Plus d'actions » */
+@media (max-width: 1023px) and (pointer: coarse), (max-width: 699px), (max-height: 499px) {
   .topbar {
     display: flex;
     gap: var(--space-2);
@@ -1494,25 +1659,121 @@
     flex: 1 1 auto;
   }
 
-  .format-switch,
-  .topbar__state,
-  .topbar__sep {
+  .topbar__name {
+    flex: 1 1 auto;
+  }
+
+  .topbar__sep,
+  .topbar__start > .icon-btn {
     display: none;
   }
 
-  .topbar__export .icon-btn__text {
+  .topbar__more {
+    position: relative;
+    display: block;
+  }
+
+  .topbar__more > .icon-btn {
+    width: var(--control-h);
+  }
+}
+
+/* Phone, either way up: the essentials in the top bar, the timeline folded into a strip, dialogs full screen */
+@media (max-width: 699px), (max-height: 499px) {
+  :root {
+    /* no pull-to-refresh or bounce of the page behind the sheets */
+    overscroll-behavior: none;
+  }
+
+  .shell {
+    grid-template-rows:
+      calc(var(--topbar-h) + env(safe-area-inset-top)) minmax(0, 1fr)
+      calc(var(--statusbar-h) + env(safe-area-inset-bottom));
+    height: 100dvh;
+    padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  }
+
+  .topbar {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* no format picker (the export drawer has it) nor shortcuts */
+  .format-switch,
+  .topbar__state,
+  .topbar__end > .icon-btn {
+    display: none;
+  }
+
+  .status {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .view {
+    position: relative;
+  }
+
+  .film-tl--folded .film-tl__bar > :not(.film-tl__play, .film-tl__time, .film-tl__spacer, .film-tl__fold) {
+    display: none;
+  }
+
+  .film-tl:not(.film-tl--folded) {
     position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
+    z-index: 7;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-height: 85%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-top: 1px solid var(--color-ink-soft);
+    box-shadow: var(--shadow-pop);
   }
 
-  .topbar__export {
-    padding: 0 var(--space-2);
+  .sources {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    padding: calc(var(--space-3) + env(safe-area-inset-top)) calc(var(--space-4) + env(safe-area-inset-right))
+      calc(var(--space-5) + env(safe-area-inset-bottom)) calc(var(--space-4) + env(safe-area-inset-left));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 0;
+    border-radius: 0;
   }
 
+  .strava__list {
+    max-height: none;
+  }
+
+  /* the menu of a long press on the track: at the bottom of the screen, never clipped by a short framed view */
+  .track-menu {
+    position: fixed;
+    z-index: 30;
+    top: auto !important;
+    right: 0;
+    bottom: 0;
+    left: 0 !important;
+    padding-bottom: calc(var(--space-1) + env(safe-area-inset-bottom));
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    transform: none !important;
+  }
+}
+
+/* Landscape phone: the rail stays on the side, without its fold button (a tap on the open tab folds) */
+@media (max-height: 499px) and (min-width: 700px) {
+  .rail__toggle {
+    display: none;
+  }
+
+  .rail__tab {
+    height: 46px;
+  }
+}
+
+/* Portrait phone: tabs in a bottom bar, panel, export drawer and inspector as bottom sheets above it */
+@media (max-width: 699px) {
   .shell__body {
     flex-direction: column;
   }
@@ -1563,6 +1824,7 @@
     order: 1;
   }
 
+  /* heights: SHEET_SNAPS in shell.ts (peek 0.3, half 0.55, full) of the room above the tab bar */
   .panel,
   .dock {
     position: absolute;
@@ -1571,11 +1833,57 @@
     right: 0;
     bottom: 56px;
     left: 0;
+    display: flex;
+    flex-direction: column;
     width: auto;
-    height: min(60%, 480px);
+    height: calc((100% - 56px) * 0.55);
+    overflow: hidden;
     border: 0;
     border-top: 1px solid var(--line);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
     box-shadow: var(--shadow-pop);
+    transition: height 180ms ease;
+  }
+
+  .panel[data-snap='peek'],
+  .dock[data-snap='peek'] {
+    height: calc((100% - 56px) * 0.3);
+  }
+
+  .panel[data-snap='full'],
+  .dock[data-snap='full'] {
+    height: calc(100% - 56px);
+  }
+
+  .panel > :not(.sheet-handle),
+  .dock > :not(.sheet-handle) {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .sheet-handle,
+  .dock > .sheet-handle {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-panel);
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .sheet-handle__bar {
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--line-strong);
   }
 }
 

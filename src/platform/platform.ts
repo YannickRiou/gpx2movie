@@ -108,6 +108,20 @@ export interface Capabilities {
   videoEncoder: VideoEncoderKind
   /** `createWritableFile` works: desktop, or a browser with `showSaveFilePicker` (Chrome, Edge) */
   canStreamToDisk: boolean
+  /**
+   * Phones and tablets without `showSaveFilePicker` (iOS, older Android): `saveFile` / `saveUrl` open the share sheet
+   * (« Partager / Enregistrer »: Photos, Fichiers…) when it takes the file, else download it.
+   */
+  sharesFiles?: boolean
+}
+
+/** Label of the save button where files go through the share sheet. */
+export const SHARE_SAVE_LABEL = 'Partager / Enregistrer'
+
+/** Touch screen as the main pointer (phones, tablets). */
+export function touchScreen(scope: object): boolean {
+  const matchMedia = (scope as { matchMedia?: (query: string) => MediaQueryList }).matchMedia
+  return typeof matchMedia === 'function' && matchMedia.call(scope, '(pointer: coarse)').matches
 }
 
 export interface Platform {
@@ -159,7 +173,26 @@ export function detectCapabilities(scope: object): Capabilities {
       typeof (scope as { VideoEncoder?: unknown }).VideoEncoder === 'function' ? 'webcodecs' : isTauriRuntime(scope) ? 'native' : null,
     canStreamToDisk:
       isTauriRuntime(scope) || typeof (scope as { showSaveFilePicker?: unknown }).showSaveFilePicker === 'function',
+    sharesFiles:
+      !isTauriRuntime(scope) &&
+      typeof (scope as { showSaveFilePicker?: unknown }).showSaveFilePicker !== 'function' &&
+      typeof (scope as { navigator?: { share?: unknown } }).navigator?.share === 'function' &&
+      touchScreen(scope),
   }
+}
+
+/** iPhone, iPod or iPad (iPadOS reports a Mac with a touch screen). */
+export function isAppleMobile(nav: { userAgent: string; maxTouchPoints?: number }): boolean {
+  return /iPhone|iPad|iPod/.test(nav.userAgent) || (/Macintosh/.test(nav.userAgent) && (nav.maxTouchPoints ?? 0) > 1)
+}
+
+/**
+ * `accept` of the web file input: the filters' extensions, except for tracks on iOS, where Safari greys out the
+ * .gpx / .fit files it has no type for (Files, apps); the import checks the extension anyway.
+ */
+export function pickerAccept(filters: readonly FileFilter[], appleMobile: boolean): string {
+  const tracks = filters.some((f) => f.extensions.some((e) => /^(gpx|fit)$/i.test(e)))
+  return appleMobile && tracks ? '' : acceptAttribute(filters)
 }
 
 /** Filters -> `accept` attribute of a file input: ".gpx,.fit,.json". */

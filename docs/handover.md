@@ -401,6 +401,18 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   web app for GPX / FIT sent by Strava, Garmin or Komoot apps); export on mobile browsers (WebCodecs support and
   memory to check per browser, shorter or lower-resolution fallback); offline use as an installed web app. Check
   each browser's support (Safari iOS, Chrome Android) before choosing, and add a mobile scenario to `npm run e2e`.
+  Done (10 October 2026, `ARCHITECTURE.md` "Installable web app and mobile", support table from MDN
+  browser-compat-data 8.1.5): installable web app (manifest, icons, service worker, « Nouvelle version disponible »,
+  iOS home screen hint), Android share target for GPX / FIT, iOS track picker without `accept` filter, share sheet
+  instead of the download on phones without a save picker, device budget (pixel ratio, tile caches, imagery, preview
+  clouds, « Nappe », export up to 1080p / 1440p). Checked in headless Chromium with phone emulation only. The export drawer
+  now offers « Partager / Enregistrer » on such phones (from a tap: no automatic download) and shows the resolution
+  cap next to « Résolution ». Left: memory and frame time on a real iPhone and Android phone.
+  - *Layout and touch: done* (ARCHITECTURE.md "Interface", "Phone and tablet" and "Touch gestures"): bottom sheets with
+    snaps on a portrait phone, tab bar, « Plus d'actions » menu, timeline strip, full-screen dialogs, tablet side
+    sheets, 44 px targets, tap-reachable tips; double tap to fit, long press for the track menu, pinch on the
+    timeline; e2e scenario `mobile`. Checked in Chromium device emulation only (no real phone yet): to try on an
+    iPhone (Safari) and an Android phone, in particular the sheet drag, the safe areas and the long press.
 
 **In the user's hands**
 9. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,

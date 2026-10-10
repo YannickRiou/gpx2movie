@@ -127,6 +127,8 @@ export type ShellEvent =
   | { type: 'close-dock' }
   /** a timeline block is selected (`open`) or no longer */
   | { type: 'inspect'; open: boolean; narrow: boolean }
+  /** the phone timeline unfolds: panel and export drawer make room (one sheet at a time) */
+  | { type: 'fold' }
 
 /** The panel unfolds; on a narrow window it takes the place of the dock (drawer and inspector). */
 function unfold(state: ShellState, narrow: boolean): ShellState {
@@ -171,6 +173,8 @@ export function shellReducer(state: ShellState, event: ShellEvent): ShellState {
       if (event.open === state.inspecting) return state
       if (!event.open) return state.dockOpen ? { ...state, inspecting: false } : emptyDock({ ...state, inspecting: false })
       return state.dockOpen ? { ...state, inspecting: true } : fillDock({ ...state, inspecting: true }, event.narrow)
+    case 'fold':
+      return { ...state, collapsed: true, collapsedByDock: false, dockOpen: false }
   }
 }
 
@@ -204,4 +208,35 @@ export function parseFoldPrefs(raw: string | null): Record<string, boolean> {
   } catch {
     return {}
   }
+}
+
+// ---------------------------------------------------------------------------
+// Phone layouts (media queries of shell.css)
+// ---------------------------------------------------------------------------
+
+/** Portrait phone: tabs in a bottom bar, panels and drawers as bottom sheets. */
+export const BOTTOM_SHEET_QUERY = '(max-width: 699px)'
+/** Phone, either way up: top bar actions in a menu, timeline folded into a strip, dialogs full screen. */
+export const COMPACT_QUERY = '(max-width: 699px), (max-height: 499px)'
+
+export const matchesQuery = (query: string) => typeof window !== 'undefined' && (window.matchMedia?.(query).matches ?? false)
+
+/** Heights of a bottom sheet, as a fraction of the room above the tab bar. */
+export const SHEET_SNAPS = { peek: 0.3, half: 0.55, full: 1 } as const
+export type SheetSnap = keyof typeof SHEET_SNAPS
+/** How far a flick carries the sheet: its speed (rooms per second) times this (seconds). */
+const SHEET_FLICK_S = 0.2
+
+/**
+ * Where a bottom sheet released at `fraction` of the room settles, given its speed (rooms per second, up positive):
+ * the snap nearest to where the flick carries it, or null (closed) below half the peek.
+ */
+export function settleSheet(fraction: number, velocity: number): SheetSnap | null {
+  const projected = fraction + velocity * SHEET_FLICK_S
+  if (projected < SHEET_SNAPS.peek / 2) return null
+  let best: SheetSnap = 'peek'
+  for (const snap of Object.keys(SHEET_SNAPS) as SheetSnap[]) {
+    if (Math.abs(SHEET_SNAPS[snap] - projected) < Math.abs(SHEET_SNAPS[best] - projected)) best = snap
+  }
+  return best
 }

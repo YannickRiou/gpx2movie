@@ -6,6 +6,7 @@
  * wind is the one at the start of the outing, constant for the film: the drift is wind x film time, never an
  * accumulation over frames. Pure (no DOM, React or Three).
  */
+import { deviceBudget } from '../core/deviceBudget'
 import { withDefaults } from '../core/guards'
 import { clamp } from '../core/math'
 import { weatherAt, type WeatherSeries } from './series'
@@ -41,7 +42,8 @@ export interface CloudSettings {
   quality: CloudQuality
 }
 
-export const DEFAULT_CLOUDS: CloudSettings = { mode: 'meteo', coverage: 0.4, altitudeM: 1200, seaTopM: 2000, seaRender: 'volume', quality: 'medium' }
+/** `seaRender`: « Nappe » by default on a phone or tablet (core/deviceBudget.ts) */
+export const DEFAULT_CLOUDS: CloudSettings = { mode: 'meteo', coverage: 0.4, altitudeM: 1200, seaTopM: 2000, seaRender: deviceBudget().seaRender, quality: 'medium' }
 
 export const CLOUD_ALTITUDE_RANGE = { min: 200, max: 4000, step: 100 } as const
 export const SEA_TOP_RANGE = { min: 300, max: 5000, step: 50 } as const

@@ -53,6 +53,7 @@ import { Icon } from './icons'
 import type { IconName } from './icons'
 import { ModifiedMarker } from './ModifiedMarker'
 import { pickFiles } from './projectActions'
+import { COMPACT_QUERY, matchesQuery } from './shell'
 import { withShortcut } from './shortcuts'
 import { showToast } from './toast'
 
@@ -258,7 +259,11 @@ function FilmOptions({
   )
 }
 
-export function Timeline() {
+/**
+ * On a phone (`COMPACT_QUERY`) the timeline starts folded into a strip and unfolds as a sheet: it folds when a panel
+ * or the export drawer opens (`sheetOpen`), and `onUnfold` lets them make room.
+ */
+export function Timeline({ sheetOpen = false, onUnfold }: { sheetOpen?: boolean; onUnfold?(): void }) {
   const source = useFilmSource()
   const { track, film, durationS, pacing, landmarks } = source
   const sequence = useFilmSequence()
@@ -287,7 +292,12 @@ export function Timeline() {
   /** film being dragged (shown on the timeline only), committed on release */
   const [draft, setDraft] = useState<Film | null>(null)
   const [zoom, setZoom] = useState<number>(ZOOM_RANGE.min)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => matchesQuery(COMPACT_QUERY))
+  const [shownSheet, setShownSheet] = useState(sheetOpen)
+  if (sheetOpen !== shownSheet) {
+    setShownSheet(sheetOpen)
+    if (sheetOpen && matchesQuery(COMPACT_QUERY)) setCollapsed(true)
+  }
   const [width, setWidth] = useState(0)
   const [reading, setReading] = useState(false)
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -328,9 +338,42 @@ export function Timeline() {
       setZoom(next.zoom)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
+    // two fingers: pinching zooms around their middle, sliding them scrolls; the first finger's press is dropped
+    let pinch: { span: number; mid: number } | null = null
+    const measure = (t: TouchList) => ({ span: Math.max(10, Math.abs(t[0].clientX - t[1].clientX)), mid: (t[0].clientX + t[1].clientX) / 2 })
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return
+      pinch = measure(e.touches)
+      gestureRef.current = null
+      cancelAnimationFrame(edgeRef.current?.frame ?? 0)
+      edgeRef.current = null
+      setDraft(null)
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pinch || e.touches.length !== 2) return
+      e.preventDefault()
+      const now = measure(e.touches)
+      const scroll = (pendingScrollRef.current ?? el.scrollLeft) + pinch.mid - now.mid
+      const next = zoomAt(zoomRef.current, now.span / pinch.span, now.mid - el.getBoundingClientRect().left, scroll)
+      pendingScrollRef.current = next.scrollLeft
+      zoomRef.current = next.zoom
+      setZoom(next.zoom)
+      pinch = now
+    }
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinch = null
+    }
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd)
+    el.addEventListener('touchcancel', onTouchEnd)
     return () => {
       observer.disconnect()
       el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchEnd)
     }
   }, [collapsed, hasTrack])
 
@@ -530,13 +573,14 @@ export function Timeline() {
     setProgress(clock.progressAtTime(c), c < end ? c : null)
   }
   const onContentPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return
+    // a second finger is a pinch (touch listeners above)
+    if (e.button !== 0 || !e.isPrimary) return
     e.currentTarget.setPointerCapture(e.pointerId)
     gestureRef.current = { kind: 'scrub' }
     seek(timeAt(e.clientX))
   }
   const startEdit = (e: PointerEvent<HTMLElement>, item: TimelineItem, grip: Grip) => {
-    if (e.button !== 0) return
+    if (e.button !== 0 || !e.isPrimary) return
     e.stopPropagation()
     setSelected(item)
     contentRef.current?.setPointerCapture(e.pointerId)
@@ -693,7 +737,7 @@ export function Timeline() {
 
   return (
     <div
-      className="film-tl"
+      className={collapsed ? 'film-tl film-tl--folded' : 'film-tl'}
       role="group"
       aria-label={`Timeline du film : ${track.name}`}
       onDragOver={(e) => {
@@ -853,8 +897,11 @@ export function Timeline() {
         <FilmOptions autoStops={film.autoStops} onAutoStops={toggleAutoStops} onAddMusic={pickMusic} reading={reading} />
         <button
           type="button"
-          className="icon-btn"
-          onClick={() => setCollapsed(!collapsed)}
+          className="icon-btn film-tl__fold"
+          onClick={() => {
+            if (collapsed) onUnfold?.()
+            setCollapsed(!collapsed)
+          }}
           aria-expanded={!collapsed}
           aria-controls={`${id}-lanes`}
           aria-label={collapsed ? 'Déplier les pistes' : 'Replier les pistes'}

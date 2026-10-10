@@ -317,6 +317,50 @@ const SCENARIOS = [
       log(`    image : ${still.result.fileName}, ${png.size} octets, ${still.result.incompleteFrames} image(s) incomplète(s)`)
     },
   },
+  {
+    id: 'mobile',
+    title: 'Téléphone (390 × 844, tactile) : exemple, deux onglets en feuille, un réglage, la feuille d’export',
+    async run({ url, newPage }) {
+      // its own page: switching an open page to touch emulation reloads it
+      const page = await newPage()
+      try {
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: STEP_MS })
+        const tap = async (selector) => (await page.waitForSelector(selector, { visible: true, timeout: STEP_MS })).tap()
+        await tap("button::-p-text(Essayer avec l'exemple)")
+        // the timeline starts folded into a strip
+        await page.waitForSelector('.film-tl--folded .film-tl__play', { visible: true, timeout: STEP_MS })
+        /** the open panel or drawer is a bottom sheet above the tab bar, as wide as the screen */
+        const isBottomSheet = (selector) =>
+          until(
+            page,
+            (sel) => {
+              const sheet = document.querySelector(sel)
+              const bar = document.querySelector('.rail')?.getBoundingClientRect()
+              if (!sheet || sheet.hidden || !bar) return false
+              const r = sheet.getBoundingClientRect()
+              return r.width === innerWidth && Math.abs(r.bottom - bar.top) < 2 && r.height > 100 && r.top > 100
+            },
+            selector,
+          )
+        for (const tab of ['carte', 'survol']) {
+          await tap(`#tab-${tab}`)
+          await until(page, (t) => !document.getElementById(`tab-panel-${t}`)?.hidden, tab)
+          await isBottomSheet('#side-panel')
+        }
+        await tap('#tab-panel-survol label:has(input[value="Oiseau"])')
+        await until(page, () => document.querySelector('#tab-panel-survol input[value="Oiseau"]')?.checked === true)
+        await tap('button.topbar__export')
+        await page.waitForSelector('#export-dock:not([hidden]) button::-p-text(Image fixe)', { timeout: STEP_MS })
+        await isBottomSheet('#export-dock')
+        assert(await page.evaluate(() => document.getElementById('side-panel')?.hidden), 'le panneau est resté ouvert sous la feuille d’export')
+        const width = await page.evaluate(() => document.documentElement.scrollWidth)
+        assert(width === 390, `la page défile horizontalement (${width} px)`)
+      } finally {
+        await page.close()
+      }
+    },
+  },
 ]
 
 // ----------------------------------------------------------------------------------------------------- runner
@@ -351,21 +395,25 @@ async function main() {
   try {
     const cdp = await browser.target().createCDPSession()
     await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: DOWNLOADS })
-    const page = await browser.newPage()
-    page.setDefaultTimeout(STEP_MS)
-
     let errors = []
     const record = (text) => {
       if (!ALLOWED_ERRORS.some((re) => re.test(text))) errors.push(text)
     }
-    page.on('console', (msg) => {
-      // export timings (rendering, waiting for tiles, encoding)
-      if (msg.text().startsWith('[export]')) log(`    ${msg.text()}`)
-      if (msg.type() !== 'error') return
-      const where = msg.location()?.url
-      record(`${msg.text()}${where ? ` (${where})` : ''}`)
-    })
-    page.on('pageerror', (error) => record(`page : ${error.message}`))
+    /** a page of the run: its console errors fail the scenario */
+    const newPage = async () => {
+      const page = await browser.newPage()
+      page.setDefaultTimeout(STEP_MS)
+      page.on('console', (msg) => {
+        // export timings (rendering, waiting for tiles, encoding)
+        if (msg.text().startsWith('[export]')) log(`    ${msg.text()}`)
+        if (msg.type() !== 'error') return
+        const where = msg.location()?.url
+        record(`${msg.text()}${where ? ` (${where})` : ''}`)
+      })
+      page.on('pageerror', (error) => record(`page : ${error.message}`))
+      return page
+    }
+    const page = await newPage()
 
     for (const scenario of SCENARIOS) {
       if (ONLY.length > 0 && !ONLY.includes(scenario.id)) continue
@@ -379,7 +427,7 @@ async function main() {
         errors = []
         const t0 = Date.now()
         try {
-          await scenario.run({ page, url })
+          await scenario.run({ page, url, newPage })
           if (errors.length > 0) throw new Error(`erreurs dans la console :\n      ${errors.join('\n      ')}`)
           const ms = Date.now() - t0
           log(`✓ ${scenario.title} (${seconds(ms)}${attempt > 0 ? `, réussi à l'essai ${attempt + 1}` : ''})`)

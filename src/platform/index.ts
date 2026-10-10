@@ -8,7 +8,7 @@
  * bundle never loads them. Contract and pure helpers (tested): `platform.ts`.
  */
 import { createDesktopPlatform } from './desktop'
-import { detectCapabilities } from './platform'
+import { detectCapabilities, touchScreen } from './platform'
 import type { Capabilities, Platform } from './platform'
 import { createWebPlatform } from './web'
 
@@ -31,13 +31,18 @@ export function getPlatform(): Platform {
  * Why no video can be encoded here, null when WebCodecs is present (hint of the export panel, shown when no codec was
  * found). Desktop without WebCodecs: ffmpeg is missing.
  */
-export function videoEncoderMissingHint(capabilities: Capabilities = getPlatform().capabilities): string | null {
+export function videoEncoderMissingHint(
+  capabilities: Capabilities = getPlatform().capabilities,
+  touch = touchScreen(globalThis),
+): string | null {
   switch (capabilities.videoEncoder) {
     case 'webcodecs':
       return null
     case 'native':
       return "installez ffmpeg (sudo apt install ffmpeg), qui encode la vidéo sur ce système, puis relancez l'application ; l'image fixe reste disponible ici."
     default:
+      // Firefox for Android has no WebCodecs (MDN browser-compat-data 8.1.5)
+      if (touch) return "ce navigateur n'encode pas la vidéo (WebCodecs). Sur téléphone ou tablette, exportez depuis Chrome (Android) ou Safari 16.4 ou plus récent (iPhone, iPad) ; l'image fixe reste disponible ici."
       return "l'encodage vidéo (WebCodecs) manque. Exportez depuis Chrome, Edge ou un Firefox récent ; l'image fixe reste disponible ici."
   }
 }

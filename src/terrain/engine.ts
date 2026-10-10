@@ -18,6 +18,7 @@ import type {
   TileFetcher,
   TileKey,
 } from '../core/types'
+import { deviceBudget } from '../core/deviceBudget'
 import { boundsIntersect, tileGroundSizeM } from '../geo/mercator'
 import { decodeDem as defaultDecodeDem } from './dem'
 import { createTileFetcher, isNoDataError } from './fetch'
@@ -94,7 +95,8 @@ export const DEFAULT_TUNING: Readonly<EngineTuning> = {
   unloadAfterFrames: 120,
   sweepEveryFrames: 30,
   rebuildsPerFrame: 4,
-  heightCacheEntries: 400,
+  // 400 on a computer, fewer on a phone (core/deviceBudget.ts)
+  heightCacheEntries: deviceBudget().heightGrids,
   rootTileBudget: 16,
   maxLoadAttempts: 3,
   retryDelayFrames: 300,
