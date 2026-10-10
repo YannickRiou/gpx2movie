@@ -540,14 +540,6 @@ export function SettingsPanel() {
         </MoreSettings>
       </PanelSection>
 
-      <PanelSection title="Lumière" keys={['sunFromTrack', 'sunHour', 'sunDate']}>
-        {settings.atmosphere ? (
-          <SunTimeControl />
-        ) : (
-          <p className="field__hint">Activez l’atmosphère (section suivante) pour régler l’heure du soleil.</p>
-        )}
-      </PanelSection>
-
       <PanelSection title="Atmosphère et météo" keys={['atmosphere', 'shadows', 'exposureEv', 'weatherScene', 'clouds']}>
         <label className="checkbox checkbox--switch" htmlFor={atmosphereId}>
           <input
@@ -610,6 +602,14 @@ export function SettingsPanel() {
               />
             )}
           </MoreSettings>
+        )}
+      </PanelSection>
+
+      <PanelSection title="Lumière" keys={['sunFromTrack', 'sunHour', 'sunDate']}>
+        {settings.atmosphere ? (
+          <SunTimeControl />
+        ) : (
+          <p className="field__hint">Activez l’atmosphère (section précédente) pour régler l’heure du soleil.</p>
         )}
       </PanelSection>
 
