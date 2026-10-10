@@ -369,10 +369,10 @@ ink, 7.3:1).
   state remembered by title in the platform storage (`FOLDS_KEY` `openflyover.folds.v1`, `parseFoldPrefs` in `shell.ts`,
   read once on mount, written on `toggle`; without storage or with an unreadable value every section opens). Carte: "Fond de carte" (base map)
   (imagery), "Relief et trace" (terrain and track; exaggeration, track color), "Atmosphère et météo" (atmosphere and weather; atmosphere,
-  shadows, weather in the scene), "Lumière" (light; after the atmosphere switch it depends on), "Couleurs" (colors; color grading), "Objectif" (lens effects; `LensPanel`), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset, style as icon tiles, north up),
+  shadows, weather in the scene), "Lumière" (light; after the atmosphere switch it depends on), "Couleurs" (colors; color grading), "Objectif" (lens effects; `LensPanel`), then "Repères (OpenStreetMap)" (landmarks; `LandmarkPanel`, absent without a track) and "Points d'intérêt" (points of interest; `PoiPanel`, likewise). Survol: "Caméra" (camera; preset tiles, each implying a style, north up),
   "Durée et rythme" (duration and pacing; duration, film duration, slow-downs on / off, « Plan de situation » switches for the opening and the closing), "Trace et marqueur" (track and marker; `TrackMarkerSection`). Rare settings are in `MoreSettings` ("Plus de
-  réglages", closed `<details>`): imagery detail, terrain source, wireframe, exposure, weather intensity, distance /
-  tilt / aim / smoothing, highlights and pacing parameters, transitions. Its summary shows "modifié" when a hidden setting
+  réglages", closed `<details>`): imagery detail, terrain source, wireframe, exposure, weather intensity, camera style
+  (a select), distance / tilt / aim / smoothing, highlights and pacing parameters, transitions. Its summary shows "modifié" when a hidden setting
   departs from the default (`modifiedPaths(settings, paths)` from `project/apply.ts`, paths `'key'` or `'key.field'`). Setting
   keys and behavior unchanged. `InfoTip` (ⓘ, one-sentence `data-tip` tooltip, focusable, `aria-label`) only
   on jargon: exaggeration, wireframe, exposure, highlights. Styles: delimited block at the end of `app.css`.

@@ -136,16 +136,7 @@ const PACING_SLIDERS: PacingSlider[] = [
   { key: 'pauseS', label: 'Pause aux temps forts', format: (v) => (v === 0 ? 'Aucune' : `${formatNumber(v, 1)} s`) },
 ]
 
-/** Style tiles: short label and icon. */
-const STYLE_TILES: Record<CameraStyle, { label: string; icon: IconName }> = {
-  chase: { label: 'Poursuite', icon: 'navigation' },
-  sway: { label: 'Balancement', icon: 'spline' },
-  orbit: { label: 'Orbite', icon: 'orbit' },
-  top: { label: 'Dessus', icon: 'locate-fixed' },
-  cinematic: { label: 'Cinéma', icon: 'clapperboard' },
-}
-
-/** One-line description of each style (hint under the style tiles). */
+/** One-line description of each style (hint under the preset tiles). */
 const STYLE_HINTS: Record<CameraStyle, string> = {
   chase: 'Derrière le marqueur, dans la direction du trajet.',
   sway: 'Se balance vers l’extérieur des virages, comme un hélicoptère.',
@@ -197,7 +188,7 @@ function SituationShotSwitches() {
 }
 
 /**
- * « Survol » tab: sections Caméra (preset, style tiles; fine parameters under « Plus de réglages ») and Durée et rythme
+ * « Survol » tab: sections Caméra (preset tiles; style and fine parameters under « Plus de réglages ») and Durée et rythme
  * (flyover duration, situation shots of the opening and closing, slow-downs on/off; their details under « Plus de
  * réglages »).
  */
@@ -248,26 +239,6 @@ export function CameraPanel() {
               <span className="preset-tile__figures">{preset ? 'vos réglages' : presetFigures(camera)}</span>
             </label>
           </div>
-        </fieldset>
-
-        <fieldset className="field fieldset">
-          <legend className="field__label">Style</legend>
-          <div className="style-tiles">
-            {CAMERA_STYLES.map((style) => (
-              <label key={style} className="format-tile style-tile" title={CAMERA_STYLE_LABELS[style]}>
-                <input
-                  type="radio"
-                  name={`${id}-style`}
-                  value={style}
-                  checked={camera.style === style}
-                  aria-describedby={`${id}-style-hint`}
-                  onChange={() => update({ style })}
-                />
-                <Icon name={STYLE_TILES[style].icon} size={20} />
-                <span className="format-tile__label">{STYLE_TILES[style].label}</span>
-              </label>
-            ))}
-          </div>
           <p id={`${id}-style-hint`} className="field__hint">
             {STYLE_HINTS[camera.style]}
           </p>
@@ -287,6 +258,7 @@ export function CameraPanel() {
 
         <MoreSettings
           paths={[
+            'camera.style',
             'camera.distance',
             'camera.pitchDeg',
             'camera.headingOffsetDeg',
@@ -297,6 +269,24 @@ export function CameraPanel() {
             'camera.endingS',
           ]}
         >
+          <div className="field">
+            <label className="field__label" htmlFor={`${id}-style`}>
+              Style
+            </label>
+            <select
+              id={`${id}-style`}
+              className="select"
+              value={camera.style}
+              aria-describedby={`${id}-style-hint`}
+              onChange={(e) => update({ style: e.currentTarget.value as CameraStyle })}
+            >
+              {CAMERA_STYLES.map((style) => (
+                <option key={style} value={style}>
+                  {CAMERA_STYLE_LABELS[style]}
+                </option>
+              ))}
+            </select>
+          </div>
           {SLIDERS.map(({ key, label, tip, format }) => {
             const range = CAMERA_RANGES[key]
             const inputId = `${id}-${key}`
