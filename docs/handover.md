@@ -413,6 +413,10 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
     sheets, 44 px targets, tap-reachable tips; double tap to fit, long press for the track menu, pinch on the
     timeline; e2e scenario `mobile`. Checked in Chromium device emulation only (no real phone yet): to try on an
     iPhone (Safari) and an Android phone, in particular the sheet drag, the safe areas and the long press.
+  - Timeline fix: dragging the 4 s « Montée » stop to the right on a phone stretched it (16 px end grip, touch
+    adjustment) and, the flight shortened to keep the duration, its block grew to the left; an edge grip now only takes
+    the outer third of its side (`pressedGrip`). On a computer the block also seems to jump left on release: the
+    inspector opens and the timeline is fitted again (by design).
 
 **In the user's hands**
 9. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,

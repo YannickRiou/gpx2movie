@@ -35,6 +35,7 @@ import {
   formatSpeedFactor,
   hasFilmItem,
   photoFilmTime,
+  pressedGrip,
   removeFilmItem,
   rulerTicks,
   snapTargets,
@@ -588,6 +589,11 @@ export function Timeline({ sheetOpen = false, onUnfold }: { sheetOpen?: boolean;
     const scroll0 = scrollerRef.current?.scrollLeft ?? 0
     gestureRef.current = { kind: 'edit', item, grip, x0: e.clientX, scroll0, start, ctx: dragContext(item), result: null }
   }
+  /** a press on an edge grip, or past it on a narrow block (`pressedGrip`) */
+  const startGrip = (e: PointerEvent<HTMLElement>, item: TimelineItem, grip: Grip, grips: readonly Grip[]) => {
+    const rect = e.currentTarget.parentElement?.getBoundingClientRect()
+    startEdit(e, item, rect ? pressedGrip(grip, e.clientX - rect.left, rect.width, grips) : grip)
+  }
   /** the gesture at pointer `clientX` (the content may have scrolled under the pointer since the press) */
   const applyPointer = (clientX: number, altKey: boolean) => {
     const g = gestureRef.current
@@ -716,7 +722,7 @@ export function Timeline({ sheetOpen = false, onUnfold }: { sheetOpen?: boolean;
       onFocus={() => setSelected(item)}
       onKeyDown={(e) => onBlockKeyDown(e, item)}
     >
-      {grips.includes('start') && <span className="film-tl__grip film-tl__grip--start" onPointerDown={(e) => startEdit(e, item, 'start')} />}
+      {grips.includes('start') && <span className="film-tl__grip film-tl__grip--start" onPointerDown={(e) => startGrip(e, item, 'start', grips)} />}
       {extra}
       {thumb && <img className="film-tl__thumb" src={thumb} alt="" draggable={false} />}
       {icon && (
@@ -725,7 +731,7 @@ export function Timeline({ sheetOpen = false, onUnfold }: { sheetOpen?: boolean;
         </span>
       )}
       <span className="film-tl__label">{label}</span>
-      {grips.includes('end') && <span className="film-tl__grip film-tl__grip--end" onPointerDown={(e) => startEdit(e, item, 'end')} />}
+      {grips.includes('end') && <span className="film-tl__grip film-tl__grip--end" onPointerDown={(e) => startGrip(e, item, 'end', grips)} />}
     </div>
   )
   const opening = shownFilm.opening

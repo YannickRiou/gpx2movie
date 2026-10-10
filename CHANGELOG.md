@@ -9,6 +9,7 @@ Notable changes to OpenFlyover. The desktop installers of each version are on th
   target, « Partager / Enregistrer »), device budget for mobile GPUs.
 - **Situation shot**: « Soleil » › « Plein jour » (default) lights the region view in daylight whatever the time of
   the outing, then joins the flight's sun; « Heure du survol » and « Accéléré » (the former « Faire bouger le soleil »).
+- **Timeline**: a narrow block (a 4 s stop on a phone) pressed in its middle is moved, no longer stretched by its edge.
 
 ## 0.1.0 (October 2026)
 
