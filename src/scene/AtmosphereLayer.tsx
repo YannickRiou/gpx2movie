@@ -9,9 +9,9 @@
  * The scattering textures are served locally at /atmosphere/ (vite.config.ts): generating them at start-up runs in idle
  * callbacks, which never fire while a heavy scene keeps the main thread busy, and the lights would stay black.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Color, Vector3, type HemisphereLight } from 'three'
+import { Color, Vector3, type HemisphereLight, type Mesh } from 'three'
 import { EffectComposer, ToneMapping, disposePassWithoutEffects } from '@react-three/postprocessing'
 import { EffectPass, SMAAEffect, ToneMappingMode } from 'postprocessing'
 import type { AerialPerspectiveEffect, SkyLightProbe, SunDirectionalLight } from '@takram/three-atmosphere'
@@ -97,6 +97,8 @@ export function AtmosphereLayer() {
   const lens = useLensEffects(atmosphereRef)
   const smaa = useMemo(() => new SMAAEffect(), [])
   useEffect(() => () => smaa.dispose(), [smaa])
+  // the sky is drei's ScreenQuad, which never disposes its geometry: one GPU buffer per mount otherwise
+  const disposeSky = useCallback((sky: Mesh | null) => () => sky?.geometry.dispose(), [])
   const antialiasPass = useMemo(
     () => new EffectPass(camera, smaa, ...lens.effects, ...(grading.active ? [grading.effect] : [])),
     [camera, smaa, lens.effects, grading.active, grading.effect],
@@ -224,7 +226,7 @@ export function AtmosphereLayer() {
   if (!frame) return null
   return (
     <Atmosphere ref={atmosphereRef} textures={ATMOSPHERE_TEXTURES_URL}>
-      <Sky />
+      <Sky ref={disposeSky} />
       <Stars data={STARS_DATA_URL} />
       <hemisphereLight ref={nightFillRef} color={NIGHT_SKY_COLOR} groundColor={NIGHT_GROUND_COLOR} intensity={0} />
       <group position={[0, DEFAULT_GROUND_HEIGHT_M, 0]}>
