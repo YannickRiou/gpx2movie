@@ -1746,6 +1746,19 @@
   .strava__list {
     max-height: none;
   }
+
+  /* the menu of a long press on the track: at the bottom of the screen, never clipped by a short framed view */
+  .track-menu {
+    position: fixed;
+    z-index: 30;
+    top: auto !important;
+    right: 0;
+    bottom: 0;
+    left: 0 !important;
+    padding-bottom: calc(var(--space-1) + env(safe-area-inset-bottom));
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    transform: none !important;
+  }
 }
 
 /* Landscape phone: the rail stays on the side, without its fold button (a tap on the open tab folds) */
