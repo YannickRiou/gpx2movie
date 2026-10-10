@@ -333,8 +333,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
    of the list) and « En parallèle » (the ghost race, camera on the first track, the one ahead or all of them,
    leaderboard toggle); each stage with its own sun, clouds and weather. Left: no hold or camera move between stages
    (a stop placed before a cut gives one); to check on a GPU (`docs/tests-gpu.md`).
-8. Extensions approved on 9 October 2026, to build (those touching the export, the film model or the timeline after
-   the current lots): a built-in openh264 encoder (patents checked: recommended to drop). Dropped by the user: GoPro GPS time (GPMF).
+8. Extensions: all built, except those the user dropped (GoPro GPS time (GPMF); a built-in openh264 encoder, patents
+   checked on 9 October 2026: Cisco's licence covers only its own binaries).
 
 **Before the final release (`v0.1.0`), once the lots above are merged**
 - **Final review** (user's request): one full pass over the product before tagging. Code: dead code and unused
@@ -355,8 +355,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   `readAudio` (Web Audio fake), environment `node` with jsdom only where needed (run time ~41 s → ~18 s; 1,556 tests,
   lines 66.9 %, branches 61.9 %); the export loop (`ExportController.test.ts`: frame count, cancel deletes the file,
   error path); preview == export (`FlyoverRig` and the export both place the camera with `filmViewAt`, and playing
-  the film reaches the progress of every exported frame, `schedule.test.ts`). Left: 2–3 real FIT files (Garmin, Wahoo, Coros;
-  from the user).
+  the film reaches the progress of every exported frame, `schedule.test.ts`). A real Garmin file (`__fixtures__/lunch-run.fit`, 42 min run,
+  2,307 points with heart rate, cadence and temperature) is read in `fit.test.ts`.
 - **Review done** (branch `final-review`, 9 October 2026): docs checked against the code, ~450 comment lines cut,
   French messages for browser / system errors, error screen, WebGL 2 missing or context lost, file dialog failures
   shown, camera presets as a tile grid (12 presets), initial JS −16 kB gzip (overlay canvas and film inspector lazy).
@@ -364,7 +364,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   branch: Windows command line prints to the calling terminal (`AttachConsole`), atomic project writes, external links
   in the system browser, `'wasm-unsafe-eval'` removed from the CSP, Esri optional (never default nor offline, « Powered
   by Esri »), Strava attribution and « Déconnecter Strava », `THIRD_PARTY_NOTICES.md` (npm packages, Rust crates, assets;
-  no GPL / LGPL / AGPL). Open: frozen old projects with media / POIs / camera keys (a test).
+  no GPL / LGPL / AGPL). The overlay of the very first v1 projects (before the weather widget) is replaced by the default one with a warning, and frozen
+  old projects with media / POIs / camera keys are not tested: both accepted by the user on 10 October 2026.
 - **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
   and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
   lens effects), memory (tile and DEM caches, textures, long sessions), export speed (cloud renders per frame,
@@ -384,11 +385,13 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
 **In the user's hands**
 9. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
    steady camera, free camera, start / finish pins, export.
-10. Archive pull requests #1 to #11 (their commit tabs still show the pre-rewrite authors), or ask GitHub Support to
-   remove them; delete the old branches (`lot-suites`, `landmarks-hide`, `track-style`, `ui-polish`,
-   `timeline-polish`, `export-stream`, `timeline-videos`, `water`): the session cannot delete remote branches.
-11. Command-line rendering once on a real machine; Strava import on the website (done on the Windows desktop
-   application); signing certificates if wanted; then a first `v0.1.0` tag (release published by `desktop.yml`).
+10. Pull requests #1 to #11 (closed): their commit tabs still show the pre-rewrite authors; GitHub has no archive for
+   a pull request, only GitHub Support can remove those commits. The old branches are deleted; `export-loop-tests` and
+   `final-review` (merged) are still to delete from a local clone (`git push origin --delete export-loop-tests
+   final-review`): the session's proxy refuses branch deletion.
+11. Command-line rendering once on a real machine. Strava import: checked by the user. No signing certificate (paid).
+   `v0.1.0` tag once the optimisation and UI passes are merged (release published by `desktop.yml`); the GPU tests of
+   `docs/tests-gpu.md` come after, when the user has a machine.
 
 To watch, nothing to do now: the `THREE.Clock` warning comes from `@react-three/fiber` itself (9.8.1 is the latest
 version on 9 October 2026); check again at its next release.

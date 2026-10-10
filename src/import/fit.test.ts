@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FitField, FitMessage } from './__fixtures__/fit-activity'
+import { lunchRunFit } from './__fixtures__/lunch-run.fit'
 import {
   buildFitActivity,
   BYTE,
@@ -165,6 +166,26 @@ describe('parseFit', () => {
     ])
     const points = (await parseFit(file, 'nage.fit'))[0].segments[0].points
     expect(points.map((p) => p.hr)).toEqual([100, 101, 102, 103, 150, undefined])
+  })
+})
+
+describe('a real watch file', () => {
+  it('reads the lunch run: one track, 2,307 timed points with heart rate, cadence and temperature', async () => {
+    const tracks = await parseFit(lunchRunFit(), 'lunch-run.fit')
+    expect(tracks).toHaveLength(1)
+    const [track] = tracks
+    expect(track.name).toBe('lunch-run')
+    expect(track.segments).toHaveLength(1)
+    const points = track.segments[0].points
+    expect(points).toHaveLength(2307)
+    expect(points[0]).toMatchObject({ hr: expect.any(Number), cad: expect.any(Number), temp: expect.any(Number) })
+    expect(points.every((p) => Math.abs(p.lat - 43.56) < 0.05 && Math.abs(p.lon - 1.5) < 0.05)).toBe(true)
+    expect(points.every((p, i) => i === 0 || (p.time ?? 0) >= (points[i - 1].time ?? 0))).toBe(true)
+    expect((points[2306].time ?? 0) - (points[0].time ?? 0)).toBe(2_520_000)
+    // the watch misses the altitude on a few points; the decoder leaves them undefined instead of inventing one
+    const withEle = points.filter((p) => typeof p.ele === 'number')
+    expect(withEle.length).toBeGreaterThan(2300)
+    expect(withEle.every((p) => (p.ele as number) > 100 && (p.ele as number) < 300)).toBe(true)
   })
 })
 
