@@ -1306,8 +1306,8 @@ it, know at what time you will pass each point, where the sun will be and what t
   beyond a 40 km footprint), 10 tagged and named statements (summits / saddles, passes, huts, lakes, waterfalls, villages and
   hamlets, viewpoints, glaciers, springs; drinking water even without a name), `out center` to bring ways and relations down to a point. The `around:` form on a
   polyline exceeds the public server's timeout; the distance to the track is computed locally, so changing the types or the
-  distance never triggers a new request. Queue (one request at a time), memory cache + `getPlatform().storage` for 30 days per
-  request fingerprint, one retry on 429 / 504 (`Retry-After`, otherwise 15 s) then the other instance; a 200 response carrying an
+  distance never triggers a new request. Queue (one request at a time), memory cache (the 32 most recently used, `MEMORY_CACHE_ENTRIES`) +
+  `getPlatform().storage` for 30 days per request fingerprint, one retry on 429 / 504 (`Retry-After`, otherwise 15 s) then the other instance; a 200 response carrying an
   error `remark` (timeout exceeded) is an error.
 - **Pure post-processing** (`src/osm/landmarks.ts`): projection onto the path → distance and offset, filter by type and distance
   (`settings.landmarks`, default summits + passes + huts + lakes within 1.5 km), elevation from `ele` (free formats), priority in

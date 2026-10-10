@@ -417,6 +417,8 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
     adjustment) and, the flight shortened to keep the duration, its block grew to the left; an edge grip now only takes
     the outer third of its side (`pressedGrip`). On a computer the block also seems to jump left on release: the
     inspector opens and the timeline is fitted again (by design).
+  - Overpass memory cache bounded to the 32 most recently used results (`MEMORY_CACHE_ENTRIES`, LRU); the persistent
+    cache is unchanged.
 
 **In the user's hands**
 9. Tests on the machine with a GPU (`docs/tests-gpu.md`): clouds (volumetric vs « Nappe », low sun), region highlight,
