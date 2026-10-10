@@ -371,11 +371,26 @@ Updated on 9 October 2026 (afternoon). The roadmap is built; what remains, by ow
   by Esri »), Strava attribution and « Déconnecter Strava », `THIRD_PARTY_NOTICES.md` (npm packages, Rust crates, assets;
   no GPL / LGPL / AGPL). The overlay of the very first v1 projects (before the weather widget) is replaced by the default one with a warning, and frozen
   old projects with media / POIs / camera keys are not tested: both accepted by the user on 10 October 2026.
-- **Optimisation pass** (user's request), measured before and after, on a GPU machine where it matters: startup time
-  and bundle size (lazy chunks, unused dependencies), frame time in preview (render on demand, clouds, « Nappe »,
-  lens effects), memory (tile and DEM caches, textures, long sessions), export speed (cloud renders per frame,
-  motion-blur sub-frames, native encoder), size of the desktop installers, CI duration. Keep only changes with a
-  measured gain and no visible regression.
+- **Optimisation pass** (user's request): done on 10 October 2026 for what a machine without a GPU can measure
+  (headless Chromium, SwiftShader, tiles answered 404; scripts in the session's scratchpad), kept only with a measured
+  or provable gain:
+
+  | Measure (method) | Before | After |
+  |---|---|---|
+  | Downloaded before the first interaction (production preview, cold cache) | 2.60 MB, incl. mediabunny 695 kB and the export drawer | 1.86 MB (−29 %): the drawer and mediabunny load on its first opening |
+  | Initial JS (index + react + store + trackColor + shell + small files, gzip) | ~204 kB | unchanged (chunks already split: three.js core / renderer / Takram / mediabunny, no duplication) |
+  | Startup, median of 3 (shell interactive / first WebGL draw on the sample) | 0.37 s / 1.15 s | 0.43 s / 1.49 s: noise of this container (±0.5 s between runs), no claim |
+  | WebGL resources, sample opened, closed and reopened 5× (`gl.info.memory`, closed state) | geometries 2 → 7, buffers 3 → 7 (+1 per cycle: drei's `ScreenQuad` under Takram's `<Sky>` never disposes its geometry) | geometries 1, buffers 2, textures 1, flat; heap still +0.4 MB per cycle after warm-up (JS side, not pursued) |
+  | React commits during playback (devtools hook, PerformedWork flag) | one commit per frame re-renders `Timeline` only (+ `FilmOptions`, 8 `BarButton`, 11 `Icon`); idle 0 commits | unchanged (the playhead needs it; splitting the timeline waits for the UI redesign) |
+  | `computeFilmView` (vitest, sample track, 2,000 calls) | 43 µs per call (33 µs without time smoothing) | unchanged: skipping it in `FlyoverRig` would save 0.3 % of a frame, rejected |
+  | Export 320 × 180, 2 s, 10 i/s (`[export]` line, 2 runs) | 20 frames in 2.8–3.7 s: render 0.1 s, tile waits 0, encoding 2.2 s (software encoder) | unchanged (CPU path not touched) |
+  | `npx vitest run` (105 files, 1,587 tests) | 21.9 s, forked processes | 16.0–17.0 s, worker threads (`pool: 'threads'`, still one isolated worker per file) |
+  | CI `web` job (run 37999933851) | 58 s: npm ci 7 s, coverage 23 s, build 11 s; `rust` 54 s | unchanged |
+  | Desktop installers | `dist` 16 MB: atmosphere EXR 9.3 MB, clouds 2.8 MB (`shape.bin` 2 MB raw noise), JS / CSS 3.3 MB, fonts 340 kB; nothing shipped twice | not buildable here (no webkit2gtk); levers: one Windows installer instead of NSIS + MSI, NSIS lzma already the default |
+
+  Left to a GPU machine (`docs/tests-gpu.md`): preview frame time (clouds, « Nappe », lens effects, labels'
+  line-of-sight sampling), cloud renders and motion-blur sub-frames per exported frame, texture memory with real tiles
+  (bitmap cache 600 entries, height cache), the real export rate and the native encoder.
 
 **Next, right after the `v0.1.0` tag (user's request, 10 October 2026)**
 - **Web app highly usable on mobile** (large lot, user's request). Today the interface is built for a desktop screen,
